@@ -412,7 +412,10 @@ def _clip(
         CandidateEvidence(
             evidence_id=_child(mining_id, "transcript-evidence", item.hypothesis_id),
             kind=EvidenceKind.TRANSCRIPT,
-            detail=(f"Segments {segment_label}, {window.word_count} words; excerpt sha256-prefix {excerpt_hash}"),
+            detail=(
+                f"Segments {segment_label}, {window.word_count} words; "
+                f"excerpt sha256-prefix {excerpt_hash}"
+            ),
             source_start_us=window.start_us,
             source_end_us=window.end_us,
         ),
