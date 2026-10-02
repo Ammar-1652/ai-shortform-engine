@@ -108,7 +108,6 @@ def load_evidence_pair(database: Database, source_asset_id: str, work_root: Path
             "Candidate mining does not analyze video."
         )
     workspace = SourceWorkspace(root, source.project_id, source_asset_id)
-    workspace.ensure()
     transcript, transcript_record, transcript_job, transcript_sha = _load_transcript(
         database, workspace, manifest, transcript_row
     )
