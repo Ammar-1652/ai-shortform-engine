@@ -286,4 +286,3 @@ def _foreign_key_groups(connection: sqlite3.Connection, table: str) -> set[Expec
         columns = tuple((item[2], item[3]) for item in parts)
         found.add((parent, columns))
     return found
-
