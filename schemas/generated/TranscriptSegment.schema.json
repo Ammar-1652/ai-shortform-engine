@@ -1,8 +1,48 @@
 {
   "$defs": {
+    "SegmentDiagnostics": {
+      "additionalProperties": false,
+      "description": "Engine evidence for one segment. These are not quality scores.",
+      "properties": {
+        "avg_logprob": {
+          "title": "Avg Logprob",
+          "type": "number"
+        },
+        "compression_ratio": {
+          "minimum": 0,
+          "title": "Compression Ratio",
+          "type": "number"
+        },
+        "no_speech_prob": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "No Speech Prob",
+          "type": "number"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        }
+      },
+      "required": [
+        "avg_logprob",
+        "no_speech_prob",
+        "compression_ratio"
+      ],
+      "title": "SegmentDiagnostics",
+      "type": "object"
+    },
     "TranscriptWord": {
       "additionalProperties": false,
-      "description": "One word on the source clock. ``clock`` cannot be switched to output time.",
+      "description": "One word on the source clock. ``clock`` cannot be switched to output time.\n\n``text`` is the engine token, including leading spaces. ``confidence`` is\nthe engine word probability when the engine reported one. It is not an\naccuracy percentage.",
       "properties": {
         "clock": {
           "const": "source",
@@ -75,11 +115,28 @@
       "title": "Clock",
       "type": "string"
     },
+    "diagnostics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SegmentDiagnostics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "end_us": {
       "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
       "maximum": 604800000000,
       "minimum": 0,
       "title": "End Us",
+      "type": "integer"
+    },
+    "ordinal": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Ordinal",
       "type": "integer"
     },
     "schema_version": {

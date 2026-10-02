@@ -1,0 +1,175 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar for one published transcript. A hit requires every identity field.",
+  "properties": {
+    "artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Artifact Sha256",
+      "type": "string"
+    },
+    "asr_recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Asr Recipe Name",
+      "type": "string"
+    },
+    "asr_recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Asr Recipe Version",
+      "type": "string"
+    },
+    "compute_type": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Compute Type",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "ctranslate2_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Ctranslate2 Version",
+      "type": "string"
+    },
+    "decoding_fingerprint": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Decoding Fingerprint",
+      "type": "string"
+    },
+    "device": {
+      "enum": [
+        "cpu",
+        "cuda"
+      ],
+      "title": "Device",
+      "type": "string"
+    },
+    "faster_whisper_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Faster Whisper Version",
+      "type": "string"
+    },
+    "input_audio_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Audio Sha256",
+      "type": "string"
+    },
+    "job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "language": {
+      "maxLength": 16,
+      "minLength": 2,
+      "title": "Language",
+      "type": "string"
+    },
+    "model_requested": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Model Requested",
+      "type": "string"
+    },
+    "model_revision": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "model_source": {
+      "enum": [
+        "hub_snapshot",
+        "local_directory"
+      ],
+      "title": "Model Source",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Recipe Name",
+      "type": "string"
+    },
+    "recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "validation_status": {
+      "const": "passed",
+      "title": "Validation Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "transcript_id",
+    "job_id",
+    "source_sha256",
+    "input_audio_sha256",
+    "asr_recipe_name",
+    "asr_recipe_version",
+    "recipe_name",
+    "recipe_version",
+    "faster_whisper_version",
+    "ctranslate2_version",
+    "model_requested",
+    "model_revision",
+    "model_source",
+    "device",
+    "compute_type",
+    "language",
+    "decoding_fingerprint",
+    "artifact_sha256",
+    "size_bytes",
+    "validation_status",
+    "created_at"
+  ],
+  "title": "TranscriptionCacheRecord",
+  "type": "object"
+}

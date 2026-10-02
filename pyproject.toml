@@ -5,6 +5,7 @@ description = "Local-first short-form video production engine."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "faster-whisper==1.2.1",
     "pydantic>=2.10,<3",
     "typer>=0.15,<1",
 ]
@@ -28,6 +29,8 @@ testpaths = ["tests"]
 addopts = "-q"
 markers = [
     "media: tests that execute ffmpeg or ffprobe",
+    "transcription: deterministic transcription tests with a fake backend and no model download",
+    "model_smoke: local faster-whisper weight tests, excluded from CI",
 ]
 
 [tool.ruff]
@@ -53,3 +56,23 @@ warn_unused_ignores = true
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "faster_whisper",
+    "faster_whisper.*",
+    "ctranslate2",
+    "ctranslate2.*",
+    "huggingface_hub",
+    "huggingface_hub.*",
+    "av",
+    "av.*",
+    "tokenizers",
+    "tokenizers.*",
+    "onnxruntime",
+    "onnxruntime.*",
+    "tqdm",
+    "numpy",
+    "numpy.*",
+]
+ignore_missing_imports = true

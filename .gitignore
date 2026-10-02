@@ -36,6 +36,8 @@ data/audio/
 data/envato/
 data/models/
 data/transcripts/
+models/
+var/models/
 *.mp4
 *.mov
 *.mkv

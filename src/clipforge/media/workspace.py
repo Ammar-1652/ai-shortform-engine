@@ -37,6 +37,12 @@ class SourceWorkspace:
     def log_file(self, name: str) -> Path:
         return _join(self.source_root, "logs", _segment(name))
 
+    def transcript_file(self) -> Path:
+        return _join(self.source_root, "transcript", "transcript.json")
+
+    def transcript_sidecar(self) -> Path:
+        return self.metadata_file("transcript.recipe.json")
+
     def partial_for(self, final: Path) -> Path:
         ensure_within(self.root, final)
         name = f"{final.stem}{_PARTIAL_MARKER}{uuid.uuid4().hex}{final.suffix}"
@@ -47,7 +53,7 @@ class SourceWorkspace:
         root = self.root.resolve()
         root.mkdir(parents=True, exist_ok=True)
         ensure_within(root, root)
-        for relative in ("metadata", "audio", "proxy", "logs", "tmp"):
+        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp"):
             _mkdir_contained(root, _join(self.source_root, relative))
 
     def clear_partials(self) -> None:
@@ -63,6 +69,9 @@ class SourceWorkspace:
     def prepare_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "prepare.lock")
 
+    def transcribe_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "transcribe.lock")
+
 
 @contextmanager
 def prepare_lock(workspace: SourceWorkspace) -> Iterator[Path]:
@@ -72,8 +81,45 @@ def prepare_lock(workspace: SourceWorkspace) -> Iterator[Path]:
     lock, not the file's existence. A crash releases it. Another process's
     lock file is not deleted.
     """
+    busy = (
+        f"another media prepare is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second preparation so partial and final artifacts cannot race."
+    )
+    with _flock(workspace, workspace.prepare_lock_path(), exclusive=True, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def prepare_read_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Share ``prepare.lock`` while a reader needs the current ASR audio.
+
+    Media prepare takes the same file exclusively. A transcription that holds
+    this shared lock blocks replacement of ``audio/asr.flac``. Acquire this
+    before the exclusive transcription lock. Never acquire them in the other
+    order.
+    """
+    busy = (
+        f"another media prepare is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start transcription so the ASR audio cannot be replaced during inference."
+    )
+    with _flock(workspace, workspace.prepare_lock_path(), exclusive=False, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def transcribe_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source transcription lock until this context exits."""
+    busy = (
+        f"another transcription is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second transcription so transcript artifacts cannot race."
+    )
+    with _flock(workspace, workspace.transcribe_lock_path(), exclusive=True, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def _flock(workspace: SourceWorkspace, lock_path: Path, *, exclusive: bool, busy: str) -> Iterator[Path]:
     root = workspace.root.resolve()
-    lock_path = workspace.prepare_lock_path()
     ensure_within(root, lock_path)
     flags = os.O_CREAT | os.O_RDWR
     if hasattr(os, "O_NOFOLLOW"):
@@ -82,17 +128,15 @@ def prepare_lock(workspace: SourceWorkspace) -> Iterator[Path]:
         descriptor = os.open(lock_path, flags, 0o644)
     except OSError as exc:
         raise MediaError(
-            f"could not open the prepare lock for source {workspace.source_asset_id}: {exc}. "
+            f"could not open {lock_path.name} for source {workspace.source_asset_id}: {exc}. "
             "A symlink was not followed."
         ) from exc
+    mode = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
     try:
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(descriptor, mode | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise MediaError(
-                f"another media prepare is already active for source {workspace.source_asset_id}. "
-                "Clipforge refused to start a second preparation so partial and final artifacts cannot race."
-            ) from exc
+            raise MediaError(busy) from exc
         yield lock_path
     finally:
         with suppress(OSError):

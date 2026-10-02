@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "description": "Decoding choices that change transcript bytes.\n\nVAD stays off. The task is transcribe. Translation is not a valid profile.",
+  "properties": {
+    "beam_size": {
+      "default": 5,
+      "maximum": 16,
+      "minimum": 1,
+      "title": "Beam Size",
+      "type": "integer"
+    },
+    "condition_on_previous_text": {
+      "default": true,
+      "title": "Condition On Previous Text",
+      "type": "boolean"
+    },
+    "language": {
+      "maxLength": 16,
+      "minLength": 2,
+      "title": "Language",
+      "type": "string"
+    },
+    "model": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "profile_id": {
+      "const": "transcription-v1",
+      "default": "transcription-v1",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "task": {
+      "const": "transcribe",
+      "default": "transcribe",
+      "title": "Task",
+      "type": "string"
+    },
+    "temperature": {
+      "default": 0.0,
+      "title": "Temperature",
+      "type": "number"
+    },
+    "vad_filter": {
+      "const": false,
+      "default": false,
+      "title": "Vad Filter",
+      "type": "boolean"
+    },
+    "word_timestamps": {
+      "const": true,
+      "default": true,
+      "title": "Word Timestamps",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "model",
+    "language"
+  ],
+  "title": "TranscriptionProfile",
+  "type": "object"
+}

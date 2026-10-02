@@ -170,7 +170,7 @@ def _check_gpu() -> Check:
 def _acceleration_line(checks: list[Check]) -> str:
     gpu = next((check for check in checks if check.name == "gpu"), None)
     if gpu is not None and gpu.status == "PASS":
-        return "NVIDIA GPU visible to nvidia-smi. CUDA transcription is not implemented."
+        return "NVIDIA GPU visible to nvidia-smi. Run `clipforge transcript doctor` for the ASR runtime."
     if sys.platform == "darwin" and "arm" in sys.machine.lower():
         return "Apple Silicon host. GPU inference was not executed."
     return "CPU path only from the tools checked here. No CUDA device was confirmed."

@@ -21,7 +21,7 @@ Do not bypass a Pydantic model with an untyped dict in a pipeline "just for now"
 
 ## Tests
 
-`./scripts/validate.sh` is the full check: Ruff, mypy, pytest (unit and ffmpeg integration), schema check, renderer lint, typecheck, and tests. The integration tests need ffmpeg and ffprobe on `PATH`. CI runs them in a separate job that installs Ubuntu's ffmpeg package. `pytest -m "not media"` is the unit subset.
+`./scripts/validate.sh` is the full check: Ruff, mypy, pytest (unit, ffmpeg, and fake-backend transcription), schema check, renderer lint, typecheck, and tests. The integration tests need ffmpeg and ffprobe on `PATH`. CI runs ffmpeg tests in a separate job that installs Ubuntu's ffmpeg package, and transcription tests in a job with `HF_HUB_OFFLINE=1`. `pytest -m "not media and not transcription"` is the unit subset. `pytest -m model_smoke` is local only and is not part of CI.
 
 Run it before a commit that claims the branch is green. Do not skip a failing test or downgrade an error to a warning to satisfy CI.
 
