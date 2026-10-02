@@ -188,6 +188,13 @@ def _cache_ready(database: Database, pair: EvidencePair, profile: CandidateMinin
             return False
     try:
         path = path_from_file_uri(row.uri)
+        candidate_root = pair.workspace.candidate_root()
+        if candidate_root.is_symlink():
+            return False
+        ensure_within(pair.workspace.root, candidate_root)
+        ensure_within(candidate_root, path)
+        if path.is_symlink():
+            return False
         document = CandidateMiningDocument.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValidationError, ValueError, MediaError):
         return False
@@ -395,6 +402,19 @@ def _revert_artifact(
                 kind=KIND_CANDIDATE,
                 uri=uri,
                 provenance=provenance,
+            )
+        else:
+            connection.execute(
+                """
+                DELETE FROM artifacts
+                WHERE project_id = ? AND source_asset_id = ? AND kind = ? AND job_id = ?
+                """,
+                (
+                    pair.source.project_id,
+                    pair.source.source_asset_id,
+                    KIND_CANDIDATE,
+                    job.job_id,
+                ),
             )
         update_job(connection, failed)
 
