@@ -12,6 +12,10 @@ Ingest requires `--rights-status` of `owned`, `licensed`, or `campaign_provided`
 
 The rights row is inserted before the source row, in the same short transaction. The source URI is the original `file:` URI. The bytes are not copied.
 
+The same bytes in the same project deduplicate only when the selected video and audio streams match. A different selection is an error. Clipforge does not change the stored manifest and does not create a second stream variant in that project.
+
+`media prepare` holds an exclusive file lock on that source before it deletes partials or updates job rows. A second prepare of the same source fails while the first one is alive. A `running` job left behind by a crashed process is marked failed only after the new process holds the lock.
+
 ## Clock and streams
 
 Automatic video choice skips attached pictures, prefers `disposition.default`, then the lowest usable index. Automatic audio choice uses the same rule. `--video-stream` and `--audio-stream` take the ffprobe stream index. An index that is not a usable stream of that type fails. There is no fallback.

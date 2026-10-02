@@ -104,6 +104,7 @@ def ingest_source(
             get_project(connection, project_id)
             existing = find_source_manifest_by_hash(connection, project_id, digest)
             if existing is not None:
+                _require_same_stream_selection(existing, normalized)
                 return _result(existing, deduplicated=True)
             source_asset_id = str(uuid.uuid4())
             license_record_id = str(uuid.uuid4())
@@ -256,8 +257,33 @@ def _result(manifest: SourceIngestManifest, *, deduplicated: bool) -> IngestResu
 
 def _write_json(path: Path, payload: object, root: Path) -> None:
     partial = path.with_name(f"{path.name}.partial.{uuid.uuid4().hex}")
+    ensure_within(root, path)
+    ensure_within(root, partial)
     partial.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     atomic_replace(partial, path, root)
+
+
+def _require_same_stream_selection(existing: SourceIngestManifest, probe: NormalizedMediaProbe) -> None:
+    """Same bytes may deduplicate only when the selected streams are the same."""
+    video_matches = existing.video_stream_index == probe.selection.video_stream_index
+    audio_matches = existing.audio_stream_index == probe.selection.audio_stream_index
+    if video_matches and audio_matches:
+        return
+    raise MediaError(
+        "The same source bytes are already registered in this project with "
+        f"video stream {existing.video_stream_index} and "
+        f"audio stream {_stream_label(existing.audio_stream_index)}, "
+        "but this ingest selected "
+        f"video stream {probe.selection.video_stream_index} and "
+        f"audio stream {_stream_label(probe.selection.audio_stream_index)}. "
+        "Clipforge will not silently ignore an explicit stream selection or create a second "
+        "stream variant in the same project. Use the existing source if that selection is correct, "
+        "or use another project for now if a separate stream variant is required."
+    )
+
+
+def _stream_label(index: int | None) -> str:
+    return "none" if index is None else str(index)
 
 
 def _actor(explicit: str | None) -> str:

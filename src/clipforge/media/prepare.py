@@ -28,7 +28,7 @@ from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
 from clipforge.media.mutation import inspect_mutation
 from clipforge.media.process import MediaCancelled, ProcessRunner
 from clipforge.media.validate import validate_asr_audio, validate_proxy
-from clipforge.media.workspace import SourceWorkspace, atomic_replace
+from clipforge.media.workspace import SourceWorkspace, atomic_replace, prepare_lock
 from clipforge.schemas.governance import require_rights_cleared
 from clipforge.schemas.ingest import (
     DerivativeCacheRecord,
@@ -38,6 +38,7 @@ from clipforge.schemas.ingest import (
     VideoStreamInfo,
 )
 from clipforge.schemas.jobs import JobRecord, JobStatus
+from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.storage import (
     Database,
@@ -124,12 +125,45 @@ def prepare_source(
     require_disk_budget(disk.free_bytes, disk.reserve_bytes, estimate)
 
     actor = created_by.strip()[:200] if created_by and created_by.strip() else _actor()
+    workspace = SourceWorkspace(root, source.project_id, source_asset_id)
+    workspace.ensure()
+    with prepare_lock(workspace):
+        return _prepare_while_locked(
+            database=database,
+            source=source,
+            manifest=manifest,
+            path=path,
+            source_asset_id=source_asset_id,
+            root=root,
+            workspace=workspace,
+            active=active,
+            actor=actor,
+            estimate=estimate,
+        )
+
+
+def _prepare_while_locked(
+    *,
+    database: Database,
+    source: SourceAsset,
+    manifest: SourceIngestManifest,
+    path: Path,
+    source_asset_id: str,
+    root: Path,
+    workspace: SourceWorkspace,
+    active: ProcessRunner,
+    actor: str,
+    estimate: int,
+) -> PrepareResult:
+    """Run one prepare while this process holds the source lock.
+
+    Stale ``running`` rows are failed only after the lock is held, so a live
+    prepare in another process cannot be marked failed or have its partials removed.
+    """
+    workspace.clear_partials()
     ffmpeg = _resolve_ffmpeg()
     _resolve_ffprobe()
     ffmpeg_version = _version(active, ffmpeg)
-    workspace = SourceWorkspace(root, source.project_id, source_asset_id)
-    workspace.ensure()
-    workspace.clear_partials()
     now = datetime.now(UTC)
     job = JobRecord(
         job_id=str(uuid.uuid4()),
@@ -510,6 +544,8 @@ def _reuse(
         recipe_name=recipe_name,
         recipe_version=recipe_version,
         source_sha256=manifest.content_sha256,
+        project_id=manifest.project_id,
+        source_asset_id=manifest.source_asset_id,
         video_stream_index=manifest.video_stream_index,
         audio_stream_index=manifest.audio_stream_index,
         artifact_path=final,
@@ -632,8 +668,8 @@ def _fail_stale_jobs(
                     "status": JobStatus.FAILED,
                     "updated_at": now,
                     "error_message": (
-                        "interrupted before completion. A later prepare found this job still running. "
-                        "Partial outputs were not promoted."
+                        "interrupted before completion. The source lock was free, so this running "
+                        "job had no live prepare. Partial outputs were not promoted."
                     ),
                 }
             ),

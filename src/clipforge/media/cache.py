@@ -29,11 +29,15 @@ def cache_identity_matches(
     recipe_name: str,
     recipe_version: str,
     source_sha256: str,
+    project_id: str,
+    source_asset_id: str,
     video_stream_index: int,
     audio_stream_index: int | None,
     artifact_path: Path,
 ) -> bool:
     if record.recipe_name != recipe_name or record.recipe_version != recipe_version:
+        return False
+    if record.project_id != project_id or record.source_asset_id != source_asset_id:
         return False
     if record.source_sha256 != source_sha256:
         return False

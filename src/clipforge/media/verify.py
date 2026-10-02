@@ -18,6 +18,7 @@ from clipforge.media.validate import validate_asr_audio, validate_proxy
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.governance import require_rights_cleared
 from clipforge.schemas.ingest import SourceIngestManifest, VideoStreamInfo
+from clipforge.schemas.jobs import JobStatus
 from clipforge.storage import (
     Database,
     find_artifact,
@@ -133,7 +134,17 @@ def verify_source(
     ):
         lines.append(VerifyLine("FAIL", "ffprobe_artifact", "ffprobe artifact lineage does not match"))
     else:
-        lines.append(VerifyLine("PASS", "ffprobe_artifact", probe_row.artifact_id))
+        probe_path = path_from_file_uri(probe_row.uri)
+        if probe_path.is_file():
+            lines.append(VerifyLine("PASS", "ffprobe_artifact", probe_row.artifact_id))
+        else:
+            lines.append(
+                VerifyLine(
+                    "WARN",
+                    "ffprobe_artifact",
+                    "raw ffprobe JSON is missing. The normalized probe remains authoritative.",
+                )
+            )
 
     workspace = SourceWorkspace(work_root.resolve(), source.project_id, source_asset_id)
     video = _video(manifest)
@@ -234,11 +245,15 @@ def _check_derivative(
         recipe_name=recipe_name,
         recipe_version=recipe_version,
         source_sha256=manifest.content_sha256,
+        project_id=manifest.project_id,
+        source_asset_id=manifest.source_asset_id,
         video_stream_index=manifest.video_stream_index,
         audio_stream_index=manifest.audio_stream_index,
         artifact_path=path,
     ):
-        lines.append(VerifyLine("FAIL", name, "recipe, hash, size, or selected streams do not match the file"))
+        lines.append(
+            VerifyLine("FAIL", name, "recipe, hash, size, source, project, or selected streams do not match")
+        )
         return
     try:
         validate()
@@ -263,6 +278,19 @@ def _check_derivative(
     expected_tool = recipes.recipe_id(recipe_name, recipe_version)
     if job.kind != recipes.JOB_MEDIA_PREPARE:
         lines.append(VerifyLine("FAIL", name, f"job kind is {job.kind}"))
+        return
+    if job.status is not JobStatus.SUCCEEDED:
+        lines.append(
+            VerifyLine(
+                "FAIL",
+                name,
+                f"producing job {row_job} is {job.status.value}, expected succeeded",
+            )
+        )
+        return
+    payload_source = job.payload.get("source_asset_id")
+    if payload_source is not None and payload_source != manifest.source_asset_id:
+        lines.append(VerifyLine("FAIL", name, "producing job names a different source"))
         return
     lines.append(
         VerifyLine(

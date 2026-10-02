@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import os
 import sqlite3
 import sys
@@ -28,14 +29,15 @@ from clipforge.media.clock import (
     seconds_text_to_us,
     select_streams,
 )
-from clipforge.media.disk import estimate_prepare_bytes, require_disk_budget
+from clipforge.media.disk import DiskStatus, estimate_prepare_bytes, require_disk_budget
 from clipforge.media.hashing import sha256_file
+from clipforge.media.ingest import _write_json
 from clipforge.media.local_file import require_local_media_file
 from clipforge.media.mutation import inspect_mutation
 from clipforge.media.prepare import prepare_source
 from clipforge.media.process import ProcessResult, ProcessRunner, is_transcode
 from clipforge.media.tools import resolve_ffmpeg
-from clipforge.media.workspace import SourceWorkspace, safe_unlink
+from clipforge.media.workspace import SourceWorkspace, prepare_lock, safe_unlink
 from clipforge.schemas.ingest import (
     AudioStreamInfo,
     ColorMetadata,
@@ -53,7 +55,7 @@ from clipforge.schemas.ingest import (
     StreamSelection,
     VideoStreamInfo,
 )
-from clipforge.schemas.jobs import JobStatus
+from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.project import Project
 from clipforge.storage import (
@@ -61,6 +63,7 @@ from clipforge.storage import (
     get_project,
     get_source_manifest,
     insert_asset_license_record,
+    insert_job,
     insert_project,
     insert_source_asset,
     insert_source_manifest,
@@ -279,33 +282,33 @@ def test_cache_identity_rejects_corrupt_and_recipe_changes(tmp_path: Path) -> No
     )
     sidecar = tmp_path / "analysis-proxy.recipe.json"
     write_cache_record(sidecar, record, tmp_path)
-    assert cache_identity_matches(
-        record,
-        recipe_name="analysis-proxy",
-        recipe_version="1",
-        source_sha256="a" * 64,
-        video_stream_index=0,
-        audio_stream_index=None,
-        artifact_path=artifact,
-    )
+    identity = {
+        "recipe_name": "analysis-proxy",
+        "recipe_version": "1",
+        "source_sha256": "a" * 64,
+        "project_id": "project-1",
+        "source_asset_id": "source-1",
+        "video_stream_index": 0,
+        "audio_stream_index": None,
+    }
+    assert cache_identity_matches(record, artifact_path=artifact, **identity)
     artifact.write_bytes(b"corrupt")
+    assert not cache_identity_matches(record, artifact_path=artifact, **identity)
     assert not cache_identity_matches(
         record,
-        recipe_name="analysis-proxy",
-        recipe_version="1",
-        source_sha256="a" * 64,
-        video_stream_index=0,
-        audio_stream_index=None,
-        artifact_path=artifact,
+        artifact_path=tmp_path / "missing.mp4",
+        **{**identity, "recipe_version": "2"},
     )
     assert not cache_identity_matches(
         record,
-        recipe_name="analysis-proxy",
-        recipe_version="2",
-        source_sha256="a" * 64,
-        video_stream_index=0,
-        audio_stream_index=None,
-        artifact_path=tmp_path / "missing.mp4",
+        artifact_path=artifact,
+        **{**identity, "project_id": "project-other"},
+    )
+    artifact.write_bytes(b"proxy-bytes")
+    assert not cache_identity_matches(
+        record,
+        artifact_path=artifact,
+        **{**identity, "source_asset_id": "source-other"},
     )
 
 
@@ -579,3 +582,171 @@ def test_failed_prepare_is_not_left_running(tmp_path: Path, monkeypatch: pytest.
         / "analysis.mp4"
     )
     assert not os.path.exists(final_proxy)
+
+
+def test_active_prepare_lock_rejects_a_second_prepare(tmp_path: Path) -> None:
+    database, source_id, _manifest = _seed(tmp_path)
+    work = tmp_path / "work"
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    workspace.ensure()
+    partial = workspace.proxy_file("analysis.mp4").with_name("analysis.partial.kept.mp4")
+    partial.write_bytes(b"keep-this-partial")
+    workspace.prepare_lock_path().touch()
+    now = datetime.now(UTC)
+    with database.transaction() as connection:
+        insert_job(
+            connection,
+            JobRecord(
+                job_id="job-live",
+                project_id="project-1",
+                kind="media_prepare",
+                status=JobStatus.RUNNING,
+                created_at=now,
+                updated_at=now,
+                payload={"source_asset_id": source_id},
+            ),
+        )
+    context = multiprocessing.get_context("spawn")
+    ready = context.Event()
+    release = context.Event()
+    holder = context.Process(
+        target=_hold_prepare_lock,
+        args=(str(workspace.prepare_lock_path()), ready, release),
+    )
+    holder.start()
+    assert ready.wait(10)
+    runner = ProcessRunner()
+    try:
+        with pytest.raises(MediaError, match="another media prepare"):
+            prepare_source(
+                database=database,
+                source_asset_id=source_id,
+                work_root=work,
+                runner=runner,
+                disk_status=_roomy_disk(work),
+            )
+    finally:
+        release.set()
+        holder.join(10)
+    assert holder.exitcode == 0
+    assert runner.transcode_count == 0
+    assert partial.read_bytes() == b"keep-this-partial"
+    with database.connect() as connection:
+        jobs = list_jobs(connection, "project-1")
+    assert [job.job_id for job in jobs] == ["job-live"]
+    assert jobs[0].status is JobStatus.RUNNING
+
+
+def test_released_prepare_lock_allows_another_prepare(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    database, source_id, _manifest = _seed(tmp_path / "release")
+    work = tmp_path / "release" / "work"
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    workspace.ensure()
+    with prepare_lock(workspace):
+        pass
+    _stub_failing_encode(monkeypatch)
+    with pytest.raises(MediaError, match="synthetic failure"):
+        prepare_source(
+            database=database,
+            source_asset_id=source_id,
+            work_root=work,
+            disk_status=_roomy_disk(work),
+        )
+    with database.connect() as connection:
+        jobs = list_jobs(connection, "project-1")
+    assert jobs
+    assert jobs[-1].status is JobStatus.FAILED
+    assert "another media prepare" not in (jobs[-1].error_message or "")
+
+
+def test_stale_running_job_is_recovered_after_the_lock_is_acquired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database, source_id, _manifest = _seed(tmp_path / "stale")
+    now = datetime.now(UTC)
+    with database.transaction() as connection:
+        insert_job(
+            connection,
+            JobRecord(
+                job_id="job-stale",
+                project_id="project-1",
+                kind="media_prepare",
+                status=JobStatus.RUNNING,
+                created_at=now,
+                updated_at=now,
+                payload={"source_asset_id": source_id},
+            ),
+        )
+    _stub_failing_encode(monkeypatch)
+    with pytest.raises(MediaError, match="synthetic failure"):
+        prepare_source(
+            database=database,
+            source_asset_id=source_id,
+            work_root=tmp_path / "stale" / "work",
+            disk_status=_roomy_disk(tmp_path / "stale" / "work"),
+        )
+    with database.connect() as connection:
+        jobs = {job.job_id: job for job in list_jobs(connection, "project-1")}
+    assert jobs["job-stale"].status is JobStatus.FAILED
+    assert "no live prepare" in (jobs["job-stale"].error_message or "")
+    fresh = [job for job_id, job in jobs.items() if job_id != "job-stale"]
+    assert len(fresh) == 1
+    assert fresh[0].status is JobStatus.FAILED
+
+
+def test_symlink_escape_is_rejected_before_a_write(tmp_path: Path) -> None:
+    root = tmp_path / "work"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep")
+    workspace = SourceWorkspace(root, "project-1", "source-1")
+    workspace.ensure()
+    metadata = workspace.source_root / "metadata"
+    metadata.rmdir()
+    metadata.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(MediaError, match="symlink"):
+        workspace.ensure()
+    assert (outside / "keep.txt").read_text() == "keep"
+    assert not (outside / "ffprobe.json").exists()
+    linked = root / "linked"
+    linked.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(MediaError, match="outside"):
+        _write_json(linked / "note.json", {"ok": False}, root)
+    assert not (outside / "note.json").exists()
+    assert not (outside / "note.json.partial").exists()
+
+
+def _hold_prepare_lock(path: str, ready: object, release: object) -> None:
+    """Hold the source lock in another process until ``release`` is set."""
+    import fcntl
+
+    descriptor = os.open(path, os.O_RDWR)
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    ready.set()  # type: ignore[attr-defined]
+    release.wait(30)  # type: ignore[attr-defined]
+    fcntl.flock(descriptor, fcntl.LOCK_UN)
+    os.close(descriptor)
+
+
+def _roomy_disk(root: Path) -> DiskStatus:
+    return DiskStatus(
+        work_root=root,
+        filesystem="test",
+        total_bytes=100 * _GIB,
+        used_bytes=1,
+        free_bytes=100 * _GIB,
+        reserve_bytes=0,
+    )
+
+
+def _stub_failing_encode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("clipforge.media.prepare._resolve_ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr("clipforge.media.prepare._resolve_ffprobe", lambda: "ffprobe")
+    monkeypatch.setattr("clipforge.media.prepare._version", lambda _runner, _exe: "ffmpeg version test")
+
+    def explode(self: ProcessRunner, argv: list[str], **kwargs: object) -> ProcessResult:
+        if is_transcode(argv):
+            raise MediaError("ffmpeg exited 1. synthetic failure")
+        return ProcessResult(tuple(argv), 0, "ffmpeg version test\n", "", 0.01, None)
+
+    monkeypatch.setattr(ProcessRunner, "run", explode)

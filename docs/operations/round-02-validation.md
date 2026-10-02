@@ -49,9 +49,10 @@ pnpm lint && pnpm typecheck && pnpm test    # apps/renderer
 
 | Check | Result |
 | --- | --- |
-| pytest total | 105 passed |
-| media integration (`pytest -m media`) | 14 passed |
-| media unit tests | 16 passed, inside the 105 |
+| pytest total | 112 passed after the review follow-up |
+| media integration (`pytest -m media`) | 17 passed |
+| media unit tests | 20 passed, inside the 112 |
+| non-media tests | 95 passed |
 | ruff | pass |
 | ruff format | pass |
 | mypy | pass, 45 source files |
@@ -90,6 +91,17 @@ See [round-02-benchmark.md](round-02-benchmark.md).
 - Even H.264 dimensions can drop one pixel per side. That is not a picture crop.
 - Sources are referenced in place. Moving the file breaks later prepares.
 - The disk check uses the filesystem of the work root. A tmpfs work root is smaller than the root filesystem.
+
+## Independent review follow-up
+
+The review accepted migration 4, the video-time origin, the recipes, hashing, mutation detection, the disk reserve, atomic replacement, the argv process runner, the rights gate, and the ubuntu-24.04 media job. The follow-up fixes two blockers and three integrity checks. Schema version stays 4. Migrations 1–4 are unchanged.
+
+1. Stream-aware deduplication. The same project and the same SHA-256 still return the existing source when the selected video and audio indexes match. A different selection, including an explicit override, is a hard failure. The existing manifest and rights row are not changed, and a second source is not created. A separate stream variant belongs in another project for now.
+2. Per-source prepare lock. `media prepare` takes `fcntl.flock` `LOCK_EX | LOCK_NB` on `tmp/prepare.lock` after `workspace.ensure()` and before partials are deleted or job rows are changed. The kernel lock is the authority. The file may remain after exit. A crash releases it. A second live prepare fails immediately and does not start ffmpeg.
+3. Stale-job recovery. A `running` row is marked `failed` only after this process holds the source lock. That distinguishes a crashed prepare from one that is still encoding.
+4. Cache identity includes `project_id` and `source_asset_id` as well as the recipe, source hash, streams, size, and artifact hash. A copied sidecar from another source or project is a miss.
+5. `media verify` requires the producing `media_prepare` job to be `succeeded`. A failed, cancelled, running, blocked, or pending job fails verification. When the job payload names a source, that id must match. A missing raw ffprobe JSON file is a warning. The normalized probe stays authoritative.
+6. Ingest writes the final path and the partial path through the work-root check before opening the partial file. `SourceWorkspace.ensure()` refuses a symlink in the metadata, audio, proxy, logs, or tmp directory instead of following it.
 
 ## Round 3
 

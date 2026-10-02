@@ -16,8 +16,9 @@ from clipforge.media.ingest import IngestResult, ingest_source
 from clipforge.media.prepare import prepare_source
 from clipforge.media.process import ProcessRunner
 from clipforge.media.verify import verify_source
-from clipforge.storage import Database, get_source_manifest, list_source_assets
-from tests.media_factory import require_ffmpeg, synth_video
+from clipforge.schemas.jobs import JobStatus
+from clipforge.storage import Database, get_source_manifest, list_jobs, list_source_assets, update_job
+from tests.media_factory import require_ffmpeg, run_ffmpeg, synth_video
 
 pytestmark = pytest.mark.media
 
@@ -119,6 +120,150 @@ def test_proxy_duration_across_frame_rates(tmp_path: Path) -> None:
             source_asset_id=ingested.source_asset_id,
             work_root=tmp_path / "work",
         )
+
+
+def test_same_project_stream_conflict_does_not_reuse_the_wrong_manifest(tmp_path: Path) -> None:
+    database, project_id = _project(tmp_path)
+    path = synth_video(tmp_path, "multi.mp4", extra_audio=True, duration="1.2")
+    work = tmp_path / "work"
+    automatic = _ingest(database, project_id, path, work)
+    assert automatic.audio_stream_index is not None
+    other = 1 if automatic.audio_stream_index != 1 else 2
+    with pytest.raises(MediaError, match="already registered") as caught:
+        ingest_source(
+            database=database,
+            project_id=project_id,
+            source=str(path),
+            rights_status="campaign_provided",
+            rights_evidence=_evidence(tmp_path),
+            rights_name="Campaign provided footage",
+            confirm_rights=True,
+            work_root=work,
+            audio_stream=other,
+        )
+    message = str(caught.value)
+    assert f"audio stream {automatic.audio_stream_index}" in message
+    assert f"audio stream {other}" in message
+    with database.connect() as connection:
+        assets = list_source_assets(connection, project_id)
+        manifest_count = connection.execute(
+            "SELECT COUNT(*) FROM source_manifests WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        stored = get_source_manifest(connection, automatic.source_asset_id)
+    assert len(assets) == 1
+    assert manifest_count is not None and manifest_count[0] == 1
+    assert stored.audio_stream_index == automatic.audio_stream_index
+    assert stored.video_stream_index == automatic.video_stream_index
+    matched = ingest_source(
+        database=database,
+        project_id=project_id,
+        source=str(path),
+        rights_status="campaign_provided",
+        rights_evidence=_evidence(tmp_path),
+        rights_name="Campaign provided footage",
+        confirm_rights=True,
+        work_root=work,
+        audio_stream=automatic.audio_stream_index,
+    )
+    assert matched.deduplicated is True
+    assert matched.source_asset_id == automatic.source_asset_id
+
+
+def test_conflicting_video_stream_selection_is_rejected(tmp_path: Path) -> None:
+    database, project_id = _project(tmp_path)
+    path = _two_video_source(tmp_path)
+    work = tmp_path / "work"
+    automatic = _ingest(database, project_id, path, work)
+    other = 0 if automatic.video_stream_index != 0 else 1
+    with pytest.raises(MediaError, match="already registered"):
+        ingest_source(
+            database=database,
+            project_id=project_id,
+            source=str(path),
+            rights_status="campaign_provided",
+            rights_evidence=_evidence(tmp_path),
+            rights_name="Campaign provided footage",
+            confirm_rights=True,
+            work_root=work,
+            video_stream=other,
+        )
+    with database.connect() as connection:
+        assets = list_source_assets(connection, project_id)
+        stored = get_source_manifest(connection, automatic.source_asset_id)
+    assert len(assets) == 1
+    assert stored.video_stream_index == automatic.video_stream_index
+
+
+def test_verify_fails_when_the_producing_job_is_not_succeeded(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    database, project_id = _project(tmp_path)
+    path = synth_video(tmp_path, "job-status.mp4", audio=False, duration="1")
+    work = tmp_path / "work"
+    ingested = _ingest(database, project_id, path, work)
+    prepare_source(database=database, source_asset_id=ingested.source_asset_id, work_root=work)
+    passed = verify_source(database=database, source_asset_id=ingested.source_asset_id, work_root=work)
+    assert passed.status == "PASS"
+    with database.connect() as connection:
+        jobs = list_jobs(connection, project_id)
+    assert len(jobs) == 1
+    failed = jobs[0].model_copy(
+        update={
+            "status": JobStatus.FAILED,
+            "updated_at": datetime.now(UTC),
+            "error_message": "forced failure for verification",
+        }
+    )
+    with database.transaction() as connection:
+        update_job(connection, failed)
+    report = verify_source(database=database, source_asset_id=ingested.source_asset_id, work_root=work)
+    assert report.status == "FAIL"
+    assert any("expected succeeded" in line.detail for line in report.lines)
+
+
+def _two_video_source(directory: Path) -> Path:
+    ffmpeg = require_ffmpeg()
+    target = directory / "two-video.mp4"
+    run_ffmpeg(
+        [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=160x90:rate=30:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=80x80:rate=30:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:duration=1",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:v:0",
+            "-map",
+            "2:a:0",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            "-disposition:v:1",
+            "0",
+            str(target),
+        ]
+    )
+    return target
 
 
 def test_stream_overrides_and_invalid_indexes(tmp_path: Path) -> None:
