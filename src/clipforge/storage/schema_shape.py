@@ -253,11 +253,7 @@ def _unique_keys(connection: sqlite3.Connection, table: str) -> set[ExpectedUniq
     found: set[ExpectedUniqueKey] = set()
 
     table_info = connection.execute(f"PRAGMA table_info({table})").fetchall()
-    primary_key = sorted(
-        (int(row[5]), str(row[1]))
-        for row in table_info
-        if int(row[5]) > 0
-    )
+    primary_key = sorted((int(row[5]), str(row[1])) for row in table_info if int(row[5]) > 0)
     if primary_key:
         found.add(tuple(name for _, name in primary_key))
 
