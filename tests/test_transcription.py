@@ -612,10 +612,10 @@ def test_transcript_help_describes_the_round_3_limits() -> None:
     group = runner.invoke(app, ["transcript", "--help"])
     assert group.exit_code == 0
     for name in ("doctor", "run", "show", "verify"):
-        assert name in group.stdout
+        assert name in _plain(group.stdout)
     run_help = runner.invoke(app, ["transcript", "run", "--help"])
     assert run_help.exit_code == 0
-    lowered = run_help.stdout.lower()
+    lowered = _plain(run_help.stdout).lower()
     assert "asr" in lowered
     assert "provisional" in lowered
     assert "allow-model-download" in lowered
@@ -626,7 +626,7 @@ def test_transcript_help_describes_the_round_3_limits() -> None:
     assert doctor.exit_code == 0
     assert show.exit_code == 0
     assert verify.exit_code == 0
-    assert "download" in doctor.stdout.lower()
+    assert "download" in _plain(doctor.stdout).lower()
 
 
 def test_asr_packages_import_without_a_model() -> None:
@@ -849,6 +849,14 @@ def _cpu_facts() -> RuntimeFacts:
         cuda_compute_types=(),
         cuda_error="CTranslate2 CUDA is unavailable in this test",
     )
+
+
+def _plain(text: str) -> str:
+    """Drop ANSI and whitespace so a wrapped CI help line still matches."""
+    import re
+
+    cleaned = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return re.sub(r"\s+", "", cleaned)
 
 
 def _work_of(tmp_path: Path) -> Path:
