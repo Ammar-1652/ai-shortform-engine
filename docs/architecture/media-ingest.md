@@ -56,3 +56,5 @@ Duration must land within `max(100 ms, three frame periods)` of the canonical du
 `tests/media_factory.py` builds short files with ffmpeg in a temporary directory. Nothing binary is committed. The delayed-audio test measures silence with `volumedetect`, not by listening. The early-audio test puts 200 Hz before video `t=0` and 2000 Hz after it, then checks that the ASR file starts in the higher band. `pytest -m media` is the integration job. `pytest -m "not media"` is the unit job and does not need ffmpeg. Full `pytest` runs both.
 
 Rotation fixtures are remuxed with `-display_rotation` because this ffmpeg does not keep a `rotate` tag through libx264. HDR fixtures pass `x264-params` `transfer=smpte2084` for the same reason. Both are metadata tests. They are not graded HDR masters.
+
+The early-audio fixture shifts the picture with `setpts=PTS+0.5/TB` and concatenates a 200 Hz lead-in in front of a 2000 Hz tone. `itsoffset` on a lavfi input did not survive ffmpeg 6's MP4 muxer.

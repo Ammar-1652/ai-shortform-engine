@@ -187,7 +187,7 @@ def test_delayed_audio_has_leading_silence(tmp_path: Path) -> None:
 
 
 def test_early_audio_is_trimmed_to_video_time(tmp_path: Path) -> None:
-    path = synth_video(tmp_path, "early.mp4", duration="2", video_offset="0.5", early_tone=True, audio=False)
+    path = synth_video(tmp_path, "early.mp4", duration="2", early_tone=True)
     database, project_id = _project(tmp_path)
     ingested = _ingest(database, project_id, path, tmp_path / "work")
     assert ingested.audio_offset_us is not None

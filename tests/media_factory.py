@@ -40,6 +40,8 @@ def synth_video(
 ) -> Path:
     """Build a short H.264 file. ``audio_offset`` delays the audio input with ``-itsoffset``."""
     ffmpeg = require_ffmpeg()
+    if early_tone:
+        return _synth_early_audio(directory, name, ffmpeg, size=size, rate=rate, duration=duration)
     target = directory / name
     video = f"testsrc=size={size}:rate={rate}:duration={duration}"
     argv: list[str] = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
@@ -118,4 +120,60 @@ def synth_video(
         ]
     )
     encoded.unlink()
+    return target
+
+
+def _synth_early_audio(
+    directory: Path,
+    name: str,
+    ffmpeg: str,
+    *,
+    size: str,
+    rate: str,
+    duration: str,
+) -> Path:
+    """Audio starts 0.5 s before the video, with a video duration ffprobe can read.
+
+    ``setpts`` moves the picture. An MP4 edit list or ``-itsoffset`` on lavfi
+    collapsed that lead-in to zero on ffmpeg 6.
+    """
+    target = directory / name
+    if target.suffix.lower() != ".mp4":
+        target = target.with_suffix(".mp4")
+    run_ffmpeg(
+        [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"testsrc=size={size}:rate={rate}:duration={duration}",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=200:sample_rate=48000:duration=0.5",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=2000:sample_rate=48000:duration=2.5",
+            "-filter_complex",
+            "[0:v]setpts=PTS+0.5/TB[v];[1:a][2:a]concat=n=2:v=0:a=1[a]",
+            "-map",
+            "[v]",
+            "-map",
+            "[a]",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            str(target),
+        ]
+    )
     return target
