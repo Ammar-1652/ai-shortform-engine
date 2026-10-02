@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "rule_id": "policy-source-rights",
+  "name": "Source rights required",
+  "description": "A clip cannot proceed when source rights are unknown, prohibited, or missing evidence.",
+  "severity": "block"
+}

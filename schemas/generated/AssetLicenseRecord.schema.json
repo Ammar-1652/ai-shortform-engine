@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "RightsStatus": {
+      "enum": [
+        "owned",
+        "licensed",
+        "campaign_provided",
+        "unknown",
+        "prohibited"
+      ],
+      "title": "RightsStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Rights for one asset. ``unknown`` and ``prohibited`` cannot be used in an edit.",
+  "properties": {
+    "asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Asset Id",
+      "type": "string"
+    },
+    "evidence_uri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Uri"
+    },
+    "license_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Name"
+    },
+    "license_record_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "License Record Id",
+      "type": "string"
+    },
+    "notes": {
+      "default": "",
+      "title": "Notes",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RightsStatus"
+    }
+  },
+  "required": [
+    "license_record_id",
+    "asset_id",
+    "status"
+  ],
+  "title": "AssetLicenseRecord",
+  "type": "object"
+}

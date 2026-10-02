@@ -1,0 +1,374 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "CandidateEvidence": {
+      "additionalProperties": false,
+      "description": "One reason a candidate exists. The kind says whether it is spoken, visual, or other.",
+      "properties": {
+        "detail": {
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "evidence_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source End Us"
+        },
+        "source_start_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Start Us"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "kind",
+        "detail"
+      ],
+      "title": "CandidateEvidence",
+      "type": "object"
+    },
+    "CandidateStatus": {
+      "enum": [
+        "proposed",
+        "visual_pending",
+        "ready_for_review",
+        "rejected"
+      ],
+      "title": "CandidateStatus",
+      "type": "string"
+    },
+    "ComplianceResult": {
+      "additionalProperties": false,
+      "description": "One rule applied to one subject. ``evidence`` is required for every status.",
+      "properties": {
+        "evidence": {
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "result_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Result Id",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ComplianceStatus"
+        }
+      },
+      "required": [
+        "result_id",
+        "rule_id",
+        "status",
+        "evidence"
+      ],
+      "title": "ComplianceResult",
+      "type": "object"
+    },
+    "ComplianceStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "insufficient_evidence"
+      ],
+      "title": "ComplianceStatus",
+      "type": "string"
+    },
+    "EvidenceKind": {
+      "enum": [
+        "transcript",
+        "visual",
+        "audio",
+        "campaign_fit",
+        "human"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "TimeMapDocument": {
+      "additionalProperties": false,
+      "description": "Ordered source ranges. This is the only persisted jump-cut map.\n\nThe JSON Schema title is ``TimeMap``. Output intervals are a pure function\nof this list via ``to_time_map`` and are not stored separately.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/TimelineSegment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "time_map_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Time Map Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time_map_id",
+        "segments"
+      ],
+      "title": "TimeMap",
+      "type": "object"
+    },
+    "TimelineSegment": {
+      "additionalProperties": false,
+      "description": "One kept source range. Output position is the index of this segment in its time map.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "segment_id",
+        "source_start_us",
+        "source_end_us"
+      ],
+      "title": "TimelineSegment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A possible short. ``creative_score`` does not clear compliance.\n\n``ready_for_review`` requires transcript evidence, visual evidence, and a\nfully passed compliance gate. There is no path that adds the two together\ninto one publish score.",
+  "properties": {
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "compliance": {
+      "items": {
+        "$ref": "#/$defs/ComplianceResult"
+      },
+      "minItems": 1,
+      "title": "Compliance",
+      "type": "array"
+    },
+    "creative_score": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creative Score"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/CandidateEvidence"
+      },
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/CandidateStatus"
+    },
+    "time_map": {
+      "$ref": "#/$defs/TimeMapDocument"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "project_id",
+    "source_asset_id",
+    "status",
+    "time_map",
+    "evidence",
+    "compliance",
+    "provenance"
+  ],
+  "title": "CandidateClip",
+  "type": "object"
+}

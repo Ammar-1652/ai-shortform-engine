@@ -1,0 +1,80 @@
+"""Models written to ``schemas/generated`` for later TypeScript consumers."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from clipforge.schemas.editorial import (
+    AudioEvent,
+    BrollEvent,
+    CandidateClip,
+    CandidateEvidence,
+    CaptionCue,
+    EditPlan,
+    MotionEvent,
+    OutputInterval,
+)
+from clipforge.schemas.governance import (
+    AssetLicenseRecord,
+    AssetReference,
+    CampaignProfile,
+    ComplianceResult,
+    ComplianceRule,
+    ReviewDecision,
+)
+from clipforge.schemas.jobs import JobRecord, QACheck, QAResult, RenderArtifact, RenderJob
+from clipforge.schemas.media import (
+    FaceObservation,
+    MediaProbe,
+    Scene,
+    SourceAsset,
+    Transcript,
+    TranscriptSegment,
+    TranscriptWord,
+)
+from clipforge.schemas.project import Project
+from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
+
+CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
+    Project,
+    SourceAsset,
+    MediaProbe,
+    SourceTimeRange,
+    TimelineSegment,
+    TimeMapDocument,
+    TranscriptWord,
+    TranscriptSegment,
+    Transcript,
+    Scene,
+    FaceObservation,
+    CandidateEvidence,
+    CandidateClip,
+    CampaignProfile,
+    ComplianceRule,
+    ComplianceResult,
+    EditPlan,
+    CaptionCue,
+    MotionEvent,
+    BrollEvent,
+    AudioEvent,
+    OutputInterval,
+    AssetReference,
+    AssetLicenseRecord,
+    RenderJob,
+    RenderArtifact,
+    QACheck,
+    QAResult,
+    ReviewDecision,
+    JobRecord,
+    ArtifactProvenance,
+)
+
+
+def schema_title(model: type[BaseModel]) -> str:
+    """File stem for a model. ``TimeMapDocument`` is published as ``TimeMap``."""
+    schema = model.model_json_schema()
+    title = schema.get("title")
+    if not isinstance(title, str) or not title:
+        return model.__name__
+    return title

@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "A restriction that blocks. Severity cannot be downgraded to a weight.",
+  "properties": {
+    "description": {
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "rule_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "severity": {
+      "const": "block",
+      "default": "block",
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rule_id",
+    "name",
+    "description"
+  ],
+  "title": "ComplianceRule",
+  "type": "object"
+}

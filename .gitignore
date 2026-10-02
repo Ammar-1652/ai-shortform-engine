@@ -1,0 +1,56 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+credentials.json
+.secrets/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+apps/renderer/dist/
+
+# Local state and media. Small JSON fixtures under tests/fixtures stay tracked.
+var/
+*.sqlite
+*.sqlite3
+*.db
+data/sources/
+data/renders/
+data/proxies/
+data/audio/
+data/envato/
+data/models/
+data/transcripts/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.avi
+*.wav
+*.mp3
+*.flac
+*.pt
+*.bin
+*.onnx
+*.safetensors
+*.gguf
+
+# OS and logs
+.DS_Store
+Thumbs.db
+*.log

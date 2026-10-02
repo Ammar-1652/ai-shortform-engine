@@ -1,0 +1,26 @@
+{
+  "additionalProperties": false,
+  "description": "A source-clock interval. Both ends are integer microseconds and ``end_us`` is later than ``start_us``.",
+  "properties": {
+    "end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "End Us",
+      "type": "integer"
+    },
+    "start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Start Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "start_us",
+    "end_us"
+  ],
+  "title": "SourceTimeRange",
+  "type": "object"
+}

@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "QAStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "insufficient_evidence"
+      ],
+      "title": "QAStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "evidence": {
+      "minLength": 1,
+      "title": "Evidence",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/QAStatus"
+    }
+  },
+  "required": [
+    "name",
+    "status",
+    "evidence"
+  ],
+  "title": "QACheck",
+  "type": "object"
+}

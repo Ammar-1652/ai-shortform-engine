@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "profile-organic",
+  "name": "Organic short-form",
+  "mode": "organic",
+  "objective": "Find distinct moments and hold them for human review.",
+  "policy_ids": ["policy-source-rights"]
+}

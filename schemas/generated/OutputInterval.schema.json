@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "An interval on the output timeline produced by the candidate's time map.",
+  "properties": {
+    "clock": {
+      "const": "output",
+      "default": "output",
+      "title": "Clock",
+      "type": "string"
+    },
+    "output_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "output_start_us",
+    "output_end_us"
+  ],
+  "title": "OutputInterval",
+  "type": "object"
+}

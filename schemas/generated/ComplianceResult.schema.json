@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "ComplianceStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "insufficient_evidence"
+      ],
+      "title": "ComplianceStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One rule applied to one subject. ``evidence`` is required for every status.",
+  "properties": {
+    "evidence": {
+      "minLength": 1,
+      "title": "Evidence",
+      "type": "string"
+    },
+    "result_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Result Id",
+      "type": "string"
+    },
+    "rule_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ComplianceStatus"
+    }
+  },
+  "required": [
+    "result_id",
+    "rule_id",
+    "status",
+    "evidence"
+  ],
+  "title": "ComplianceResult",
+  "type": "object"
+}
