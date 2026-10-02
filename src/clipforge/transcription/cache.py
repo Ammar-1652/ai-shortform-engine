@@ -10,6 +10,7 @@ from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
 from clipforge.schemas.media import Transcript
 from clipforge.schemas.transcription import TranscriptionCacheRecord
+from clipforge.transcription.integrity import document_sidecar_problems
 from clipforge.transcription.io import read_text
 from clipforge.transcription.models import ModelIdentity
 from clipforge.transcription.profile import DecodingProfile
@@ -75,8 +76,6 @@ def cache_identity_matches(
         return False
     if document.project_id != project_id or document.source_asset_id != source_asset_id:
         return False
-    if document.asr_audio_sha256 != input_audio_sha256:
+    if document_sidecar_problems(document, record):
         return False
-    if document.model_revision != model.revision or document.device != runtime.device:
-        return False
-    return document.alignment == "approximate" and document.timing_quality == "provisional"
+    return document.model_revision == model.revision and document.device == runtime.device

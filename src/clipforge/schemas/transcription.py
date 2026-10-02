@@ -35,6 +35,8 @@ class TranscriptionCacheRecord(Versioned):
 
     project_id: EntityId
     source_asset_id: EntityId
+    transcript_id: EntityId
+    job_id: EntityId
     source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     input_audio_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     asr_recipe_name: str = Field(min_length=1, max_length=80)

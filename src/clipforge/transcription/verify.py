@@ -17,7 +17,7 @@ from clipforge.media.mutation import inspect_mutation
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.governance import require_rights_cleared
 from clipforge.schemas.ingest import SourceIngestManifest
-from clipforge.schemas.jobs import JobStatus
+from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.media import Transcript
 from clipforge.storage import (
     ArtifactRow,
@@ -29,7 +29,8 @@ from clipforge.storage import (
     get_source_manifest,
 )
 from clipforge.transcription.cache import read_transcript_cache
-from clipforge.transcription.constants import JOB_TRANSCRIBE, KIND_TRANSCRIPT, RECIPE_NAME, RECIPE_VERSION
+from clipforge.transcription.constants import KIND_TRANSCRIPT, RECIPE_NAME, RECIPE_VERSION
+from clipforge.transcription.integrity import document_sidecar_problems, producer_binding_problems
 from clipforge.transcription.io import read_text
 from clipforge.transcription.models import model_is_cached
 
@@ -95,8 +96,8 @@ def verify_transcript(
         lines.append(VerifyLine("FAIL", "eligibility", "source is not transcription-eligible"))
         return TranscriptVerifyReport(source_asset_id, tuple(lines))
     workspace = SourceWorkspace(work_root.resolve(), source.project_id, source_asset_id)
-    _check_asr(lines, database, workspace, manifest, audio_row)
-    _check_transcript(lines, database, workspace, manifest, transcript_row, model_root)
+    current_asr_sha256 = _check_asr(lines, database, workspace, manifest, audio_row)
+    _check_transcript(lines, database, workspace, manifest, transcript_row, model_root, current_asr_sha256)
     return TranscriptVerifyReport(source_asset_id, tuple(lines))
 
 
@@ -113,7 +114,7 @@ def _check_asr(
     workspace: SourceWorkspace,
     manifest: SourceIngestManifest,
     audio_row: ArtifactRow | None,
-) -> None:
+) -> str | None:
     path = workspace.audio_file("asr.flac")
     sidecar = workspace.metadata_file("asr-audio.recipe.json")
     record = read_cache_record(sidecar)
@@ -133,19 +134,19 @@ def _check_asr(
         )
     ):
         lines.append(VerifyLine("FAIL", "asr_audio", "ASR file, hash, or recipe does not match this source"))
-        return
+        return None
     if audio_row is None or audio_row.job_id is None:
         lines.append(VerifyLine("FAIL", "asr_audio", "ASR artifact row is missing"))
-        return
+        return None
     if audio_row.provenance.job_id != audio_row.job_id:
         lines.append(VerifyLine("FAIL", "asr_audio", "ASR artifact job id does not match provenance"))
-        return
+        return None
     try:
         with database.connect() as connection:
             job = get_job(connection, audio_row.job_id)
     except StorageError as exc:
         lines.append(VerifyLine("FAIL", "asr_audio", str(exc)))
-        return
+        return None
     if job.kind != recipes.JOB_MEDIA_PREPARE or job.status is not JobStatus.SUCCEEDED:
         lines.append(
             VerifyLine(
@@ -154,11 +155,12 @@ def _check_asr(
                 f"producing job {job.job_id} is {job.status.value}, expected succeeded",
             )
         )
-        return
+        return None
     if job.project_id != manifest.project_id:
         lines.append(VerifyLine("FAIL", "asr_audio", "producing job is in another project"))
-        return
+        return None
     lines.append(VerifyLine("PASS", "asr_audio", f"sha256 {record.artifact_sha256[:12]} recipe asr-audio-v1"))
+    return record.artifact_sha256
 
 
 def _check_transcript(
@@ -168,6 +170,7 @@ def _check_transcript(
     manifest: SourceIngestManifest,
     transcript_row: ArtifactRow | None,
     model_root: Path | None,
+    current_asr_sha256: str | None,
 ) -> None:
     path = workspace.transcript_file()
     sidecar_path = workspace.transcript_sidecar()
@@ -200,52 +203,43 @@ def _check_transcript(
             VerifyLine("FAIL", "transcript_hash", "transcript size or SHA-256 does not match the sidecar")
         )
         return
-    if document.asr_audio_sha256 != record.input_audio_sha256:
-        lines.append(VerifyLine("FAIL", "transcript_input", "transcript ASR hash does not match the sidecar"))
-        return
     if document.project_id != manifest.project_id or document.source_asset_id != manifest.source_asset_id:
         lines.append(VerifyLine("FAIL", "transcript_lineage", "transcript names another project or source"))
         return
-    if document.canonical_duration_us != manifest.canonical_duration_us:
-        lines.append(VerifyLine("FAIL", "duration", "transcript duration does not match the source manifest"))
-        return
-    if document.alignment != "approximate" or document.timing_quality != "provisional":
-        lines.append(VerifyLine("FAIL", "timing_quality", "first-pass transcript must stay provisional"))
-        return
-    if document.task != "transcribe" or document.vad_filter:
-        lines.append(VerifyLine("FAIL", "profile", "transcript task must be transcribe and VAD must stay off"))
-        return
-    if transcript_row is None or transcript_row.job_id is None:
-        lines.append(VerifyLine("FAIL", "artifact", "transcript artifact row is missing"))
-        return
-    if transcript_row.provenance.job_id != transcript_row.job_id:
-        lines.append(VerifyLine("FAIL", "artifact", "artifact job id does not match provenance.job_id"))
-        return
-    if manifest.source_asset_id not in transcript_row.provenance.source_asset_ids:
-        lines.append(VerifyLine("FAIL", "artifact", "provenance does not name this source"))
-        return
-    if transcript_row.provenance.inputs_sha256 not in {None, record.input_audio_sha256}:
-        lines.append(VerifyLine("FAIL", "artifact", "provenance input digest is not the ASR audio hash"))
-        return
-    try:
-        with database.connect() as connection:
-            job = get_job(connection, transcript_row.job_id)
-    except StorageError as exc:
-        lines.append(VerifyLine("FAIL", "job", str(exc)))
-        return
-    job_ok = job.kind == JOB_TRANSCRIBE and job.status is JobStatus.SUCCEEDED
-    if not job_ok or job.project_id != manifest.project_id:
-        lines.append(
-            VerifyLine(
-                "FAIL",
-                "job",
-                f"producing job {job.job_id} is {job.kind}/{job.status.value}, expected transcribe/succeeded",
+    problems = document_sidecar_problems(document, record, manifest)
+    job: JobRecord | None = None
+    if transcript_row is not None and transcript_row.job_id is not None:
+        try:
+            with database.connect() as connection:
+                job = get_job(connection, transcript_row.job_id)
+        except StorageError as exc:
+            problems.append(str(exc))
+    if current_asr_sha256 is None:
+        problems.append(
+            "current ASR audio identity is not available, so the transcript input cannot be confirmed"
+        )
+    else:
+        problems.extend(
+            producer_binding_problems(
+                document=document,
+                record=record,
+                manifest=manifest,
+                current_asr_sha256=current_asr_sha256,
+                artifact_job_id=None if transcript_row is None else transcript_row.job_id,
+                artifact_provenance_job_id=(
+                    None if transcript_row is None else transcript_row.provenance.job_id
+                ),
+                artifact_inputs_sha256=(
+                    None if transcript_row is None else transcript_row.provenance.inputs_sha256
+                ),
+                artifact_source_ids=(
+                    () if transcript_row is None else tuple(transcript_row.provenance.source_asset_ids)
+                ),
+                job=job,
             )
         )
-        return
-    payload_source = job.payload.get("source_asset_id")
-    if payload_source is not None and payload_source != manifest.source_asset_id:
-        lines.append(VerifyLine("FAIL", "job", "producing job names a different source"))
+    if problems:
+        lines.append(VerifyLine("FAIL", "transcript", "; ".join(problems)))
         return
     lines.append(
         VerifyLine(

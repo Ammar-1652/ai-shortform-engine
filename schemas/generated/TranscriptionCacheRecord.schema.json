@@ -61,6 +61,12 @@
       "title": "Input Audio Sha256",
       "type": "string"
     },
+    "job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
     "language": {
       "maxLength": 16,
       "minLength": 2,
@@ -127,6 +133,12 @@
       "title": "Source Sha256",
       "type": "string"
     },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
     "validation_status": {
       "const": "passed",
       "title": "Validation Status",
@@ -136,6 +148,8 @@
   "required": [
     "project_id",
     "source_asset_id",
+    "transcript_id",
+    "job_id",
     "source_sha256",
     "input_audio_sha256",
     "asr_recipe_name",

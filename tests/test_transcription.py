@@ -12,8 +12,9 @@ import pytest
 from typer.testing import CliRunner
 
 from clipforge.cli.main import app
-from clipforge.errors import ComplianceGateError, MediaError
+from clipforge.errors import ComplianceGateError, MediaError, StorageError
 from clipforge.media import recipes
+from clipforge.media.disk import DiskStatus
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.governance import RightsStatus
 from clipforge.schemas.ingest import (
@@ -29,7 +30,7 @@ from clipforge.schemas.ingest import (
     StreamSelection,
 )
 from clipforge.schemas.jobs import JobRecord, JobStatus
-from clipforge.schemas.media import SourceAsset
+from clipforge.schemas.media import SourceAsset, Transcript
 from clipforge.schemas.project import Project
 from clipforge.storage import (
     Database,
@@ -48,11 +49,13 @@ from clipforge.transcription.backend import RawSegment, RawWord
 from clipforge.transcription.cache import cache_identity_matches, read_transcript_cache
 from clipforge.transcription.constants import KIND_TRANSCRIPT
 from clipforge.transcription.document import build_transcript, display_text
-from clipforge.transcription.models import ModelIdentity
+from clipforge.transcription.io import dump_json
+from clipforge.transcription.models import ModelIdentity, ensure_model, require_download_budget
 from clipforge.transcription.profile import TranscriptionRequest, decoding_profile
 from clipforge.transcription.runtime import RuntimeFacts, resolve_runtime
 from clipforge.transcription.service import transcribe_source
 from clipforge.transcription.timeutil import seconds_to_microseconds
+from clipforge.transcription.verify import verify_transcript
 from tests.helpers import license_record, provenance, stamp
 from tests.test_media_unit import _video
 from tests.transcription_fakes import FakeTranscriptionBackend
@@ -559,7 +562,6 @@ def test_verify_and_show_do_not_need_the_model(tmp_path: Path) -> None:
     backend = FakeTranscriptionBackend()
     _run(database, source_id, tmp_path, backend)
     from clipforge.transcription.show import format_transcript, load_transcript
-    from clipforge.transcription.verify import verify_transcript
 
     document = load_transcript(database=database, source_asset_id=source_id, work_root=work)
     text = format_transcript(document, as_json=False)
@@ -575,6 +577,7 @@ def test_verify_and_show_do_not_need_the_model(tmp_path: Path) -> None:
     )
     assert report.status == "WARN"
     assert any(line.name == "model_cache" and line.status == "WARN" for line in report.lines)
+    assert not (tmp_path / "empty-models").exists()
     update_target = get_job_outside(database, source_id)
     with database.transaction() as connection:
         update_job(
@@ -661,6 +664,225 @@ def test_english_only_model_rejects_auto_language() -> None:
         from clipforge.transcription.profile import normalize_request
 
         normalize_request(TranscriptionRequest(model="small.en", language="auto"))
+
+
+def test_crash_files_are_not_validated_by_the_old_job(tmp_path: Path) -> None:
+    database, source_id, work = _ready(tmp_path)
+    backend = FakeTranscriptionBackend()
+    first = _run(database, source_id, tmp_path, backend)
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    original = Transcript.model_validate_json(workspace.transcript_file().read_text(encoding="utf-8"))
+    crashed = original.model_copy(
+        update={
+            "transcript_id": "transcript-crashed",
+            "provenance": original.provenance.model_copy(update={"job_id": "job-crashed"}),
+        }
+    )
+    _publish_pair(workspace, crashed, transcript_id="transcript-crashed", job_id="job-crashed")
+    report = verify_transcript(database=database, source_asset_id=source_id, work_root=work, model_root=None)
+    assert report.status == "FAIL"
+    assert any("job" in line.detail or "artifact" in line.detail for line in report.lines)
+    again = _run(database, source_id, tmp_path, backend)
+    assert again.cache_hit is False
+    assert backend.calls == 2
+    assert first.job_id != "job-crashed"
+
+
+def test_job_and_sidecar_ids_must_match_the_document(tmp_path: Path) -> None:
+    database, source_id, work = _ready(tmp_path)
+    backend = FakeTranscriptionBackend()
+    _run(database, source_id, tmp_path, backend)
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    document = Transcript.model_validate_json(workspace.transcript_file().read_text(encoding="utf-8"))
+    with database.connect() as connection:
+        job = get_job(connection, document.provenance.job_id or "")
+    payload = dict(job.payload)
+    payload["transcript_id"] = "not-this-transcript"
+    with database.transaction() as connection:
+        update_job(connection, job.model_copy(update={"payload": payload}))
+    assert _verify_fails(database, source_id, work)
+    _restore_job_payload(database, job)
+    record = read_transcript_cache(workspace.transcript_sidecar())
+    assert record is not None
+    _write_sidecar(workspace, record.model_copy(update={"transcript_id": "sidecar-other"}))
+    assert _verify_fails(database, source_id, work)
+    _write_sidecar(workspace, record.model_copy(update={"job_id": "job-sidecar-other"}))
+    assert _verify_fails(database, source_id, work)
+    drifted = document.model_copy(
+        update={"provenance": document.provenance.model_copy(update={"job_id": "job-document-other"})}
+    )
+    _publish_pair(workspace, drifted, transcript_id=record.transcript_id, job_id=record.job_id)
+    assert _verify_fails(database, source_id, work)
+
+
+def test_regenerated_asr_audio_invalidates_the_transcript(tmp_path: Path) -> None:
+    database, source_id, work = _ready(tmp_path)
+    backend = FakeTranscriptionBackend()
+    _run(database, source_id, tmp_path, backend)
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    audio = workspace.audio_file("asr.flac")
+    audio.write_bytes(b"regenerated-asr-flac")
+    digest = hashlib.sha256(b"regenerated-asr-flac").hexdigest()
+    sidecar = workspace.metadata_file("asr-audio.recipe.json")
+    media = DerivativeCacheRecord.model_validate_json(sidecar.read_text(encoding="utf-8"))
+    sidecar.write_text(
+        dump_json(media.model_copy(update={"artifact_sha256": digest, "size_bytes": audio.stat().st_size})),
+        encoding="utf-8",
+    )
+    assert _verify_fails(database, source_id, work)
+    _run(database, source_id, tmp_path, backend)
+    assert backend.calls == 2
+
+
+def test_document_metadata_must_match_the_sidecar(tmp_path: Path) -> None:
+    database, source_id, work = _ready(tmp_path)
+    _run(database, source_id, tmp_path, FakeTranscriptionBackend())
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    for field, value in (
+        ("compute_type", "float32"),
+        ("model_revision", "rev-other"),
+        ("faster_whisper_version", "9.9.9"),
+        ("language_requested", "fr"),
+        ("condition_on_previous_text", False),
+    ):
+        document = Transcript.model_validate_json(workspace.transcript_file().read_text(encoding="utf-8"))
+        record = read_transcript_cache(workspace.transcript_sidecar())
+        assert record is not None
+        changed = document.model_copy(update={field: value})
+        text = dump_json(changed)
+        workspace.transcript_file().write_text(text, encoding="utf-8")
+        encoded = text.encode()
+        _write_sidecar(
+            workspace,
+            record.model_copy(
+                update={
+                    "artifact_sha256": hashlib.sha256(encoded).hexdigest(),
+                    "size_bytes": len(encoded),
+                }
+            ),
+        )
+        assert _verify_fails(database, source_id, work)
+        assert not cache_identity_matches(
+            read_transcript_cache(workspace.transcript_sidecar()) or record,
+            project_id="project-1",
+            source_asset_id=source_id,
+            source_sha256=record.source_sha256,
+            input_audio_sha256=record.input_audio_sha256,
+            asr_recipe_name=record.asr_recipe_name,
+            asr_recipe_version=record.asr_recipe_version,
+            recipe_name=record.recipe_name,
+            recipe_version=record.recipe_version,
+            faster_whisper_version=record.faster_whisper_version,
+            ctranslate2_version=record.ctranslate2_version,
+            model=_identity(),
+            runtime=resolve_runtime(requested_device="cpu", requested_compute_type="int8", facts=_cpu_facts()),
+            profile=decoding_profile("en"),
+            transcript_path=workspace.transcript_file(),
+        )
+        _publish_pair(workspace, document, transcript_id=record.transcript_id, job_id=record.job_id)
+
+
+def test_log_failure_restores_the_previous_transcript(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    database, source_id, work = _ready(tmp_path)
+    backend = FakeTranscriptionBackend()
+    _run(database, source_id, tmp_path, backend)
+    workspace = SourceWorkspace(work, "project-1", source_id)
+    original = workspace.transcript_file().read_bytes()
+    original_sidecar = workspace.transcript_sidecar().read_bytes()
+
+    def explode(*_args: object, **_kwargs: object) -> None:
+        raise OSError("log disk full")
+
+    monkeypatch.setattr("clipforge.transcription.service._write_log", explode)
+    with pytest.raises(MediaError, match="log disk full"):
+        _run(database, source_id, tmp_path, backend, force=True)
+    assert workspace.transcript_file().read_bytes() == original
+    assert workspace.transcript_sidecar().read_bytes() == original_sidecar
+    with database.connect() as connection:
+        jobs = list_jobs(connection, "project-1")
+    assert any(job.status is JobStatus.FAILED and "log disk full" in (job.error_message or "") for job in jobs)
+    report = verify_transcript(database=database, source_asset_id=source_id, work_root=work, model_root=None)
+    assert report.status == "PASS"
+
+
+def test_rollback_failure_still_closes_the_job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    database, source_id, _work = _ready(tmp_path)
+    _run(database, source_id, tmp_path, FakeTranscriptionBackend())
+
+    def explode_restore(*_args: object, **_kwargs: object) -> None:
+        raise MediaError("restore refused")
+
+    def explode_persist(*_args: object, **_kwargs: object) -> None:
+        raise StorageError("db write failed")
+
+    monkeypatch.setattr("clipforge.transcription.service._restore", explode_restore)
+    monkeypatch.setattr("clipforge.transcription.service._persist", explode_persist)
+    with pytest.raises(StorageError, match="db write failed"):
+        _run(database, source_id, tmp_path, FakeTranscriptionBackend(), force=True)
+    with database.connect() as connection:
+        jobs = list_jobs(connection, "project-1")
+    assert all(job.status is not JobStatus.RUNNING for job in jobs)
+    failed = [job for job in jobs if job.status is JobStatus.FAILED]
+    assert failed
+    assert "db write failed" in (failed[-1].error_message or "")
+
+
+def test_verify_does_not_create_a_missing_model_root(tmp_path: Path) -> None:
+    database, source_id, work = _ready(tmp_path)
+    _run(database, source_id, tmp_path, FakeTranscriptionBackend())
+    missing = tmp_path / "missing-model-root"
+    report = verify_transcript(database=database, source_asset_id=source_id, work_root=work, model_root=missing)
+    assert report.status == "WARN"
+    assert any(line.name == "model_cache" for line in report.lines)
+    assert not missing.exists()
+
+
+def test_symlinked_model_root_is_refused(tmp_path: Path) -> None:
+    real = tmp_path / "real_models"
+    real.mkdir()
+    link = tmp_path / "models_link"
+    link.symlink_to(real, target_is_directory=True)
+    with pytest.raises(MediaError, match="symlink"):
+        ensure_model("small.en", link, allow_download=True)
+    assert list(real.iterdir()) == []
+
+
+def test_model_download_reserve_is_enforced(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_download(_requested: str, root: Path) -> Path:
+        calls.append("download")
+        dest = root / "snapshots" / ("a" * 40)
+        dest.mkdir(parents=True)
+        (dest / "config.json").write_text("{}\n", encoding="utf-8")
+        return dest
+
+    monkeypatch.setattr("clipforge.transcription.models._cached_snapshot", lambda *_a, **_k: None)
+    monkeypatch.setattr("clipforge.transcription.models._download", fake_download)
+    monkeypatch.setattr(
+        "clipforge.transcription.models._remote_size_bytes",
+        lambda _requested: 2 * 1024**3,
+    )
+    monkeypatch.setattr(
+        "clipforge.transcription.models.read_disk",
+        lambda root: DiskStatus(root, "test", 20 * 1024**3, 1, 13 * 1024**3, 10 * 1024**3),
+    )
+    ensure_model("small.en", tmp_path / "models-ok", allow_download=True)
+    assert calls == ["download"]
+    calls.clear()
+    monkeypatch.setattr(
+        "clipforge.transcription.models._remote_size_bytes",
+        lambda _requested: 4 * 1024**3,
+    )
+    with pytest.raises(MediaError, match="refusing to download"):
+        ensure_model("small.en", tmp_path / "models-big", allow_download=True)
+    assert calls == []
+    monkeypatch.setattr("clipforge.transcription.models._remote_size_bytes", lambda _requested: None)
+    with pytest.raises(MediaError, match="could not determine the model download size"):
+        ensure_model("small.en", tmp_path / "models-unknown", allow_download=True)
+    assert calls == []
+    with pytest.raises(MediaError, match="could not determine the model download size"):
+        require_download_budget(13 * 1024**3, 10 * 1024**3, None, "small.en")
 
 
 def _run(
@@ -909,6 +1131,43 @@ def _build_kwargs() -> dict[str, object]:
 def get_job_outside(database: Database, source_id: str) -> JobRecord:
     with database.connect() as connection:
         return get_job(connection, _producer_job(database, source_id))
+
+
+def _verify_fails(database: Database, source_id: str, work: Path) -> bool:
+    report = verify_transcript(database=database, source_asset_id=source_id, work_root=work, model_root=None)
+    return report.status == "FAIL"
+
+
+def _publish_pair(workspace: SourceWorkspace, document: Transcript, *, transcript_id: str, job_id: str) -> None:
+    text = dump_json(document)
+    workspace.transcript_file().write_text(text, encoding="utf-8")
+    record = read_transcript_cache(workspace.transcript_sidecar())
+    assert record is not None
+    encoded = text.encode()
+    _write_sidecar(
+        workspace,
+        record.model_copy(
+            update={
+                "transcript_id": transcript_id,
+                "job_id": job_id,
+                "artifact_sha256": hashlib.sha256(encoded).hexdigest(),
+                "size_bytes": len(encoded),
+            }
+        ),
+    )
+
+
+def _write_sidecar(workspace: SourceWorkspace, record: object) -> None:
+    from clipforge.schemas.transcription import TranscriptionCacheRecord
+
+    if not isinstance(record, TranscriptionCacheRecord):
+        raise AssertionError("sidecar record was lost")
+    workspace.transcript_sidecar().write_text(dump_json(record), encoding="utf-8")
+
+
+def _restore_job_payload(database: Database, job: JobRecord) -> None:
+    with database.transaction() as connection:
+        update_job(connection, job)
 
 
 def _producer_job(database: Database, source_id: str) -> str:

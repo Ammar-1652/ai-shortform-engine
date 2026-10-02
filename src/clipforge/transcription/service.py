@@ -63,6 +63,7 @@ from clipforge.transcription.cache import cache_identity_matches as transcript_c
 from clipforge.transcription.cache import read_transcript_cache
 from clipforge.transcription.constants import JOB_TRANSCRIBE, KIND_TRANSCRIPT, RECIPE_NAME, RECIPE_VERSION
 from clipforge.transcription.document import build_transcript
+from clipforge.transcription.integrity import document_sidecar_problems, producer_binding_problems
 from clipforge.transcription.io import publish_json
 from clipforge.transcription.models import ModelIdentity, ensure_model, resolve_cached_model
 from clipforge.transcription.profile import (
@@ -262,11 +263,22 @@ def _locked(
         backups.append((_backup(final, root), final))
         backups.append((_backup(sidecar, root), sidecar))
         digest, size = publish_json(final, document, root, transcript_partial)
-        record = _cache_record(context, resolved, runtime, profile, engine, digest, size, finished)
+        record = _cache_record(
+            context,
+            resolved,
+            runtime,
+            profile,
+            engine,
+            digest,
+            size,
+            finished,
+            transcript_id=document.transcript_id,
+            job_id=job.job_id,
+        )
         publish_json(sidecar, record, root, sidecar_partial)
+        _write_log(context, job.job_id, resolved, runtime, profile, engine, document, infer_seconds, handle)
         _persist(database, context, job, document, final, actor, finished, resolved, runtime, profile)
         _drop_backups(backups, root)
-        _write_log(context, job.job_id, resolved, runtime, profile, engine, document, infer_seconds, handle)
         return _result_from_document(
             document,
             job_id=job.job_id,
@@ -278,25 +290,25 @@ def _locked(
             warning=runtime.warning,
         )
     except KeyboardInterrupt:
-        _rewind(backups, partials, root)
-        _close(
+        _abandon(
             database,
             job,
             JobStatus.CANCELLED,
             "interrupted by SIGINT. Partial transcript was not promoted.",
+            backups,
+            partials,
+            root,
         )
         raise MediaCancelled(
             "transcription was interrupted. The job was marked cancelled. "
             "A previous valid transcript was left in place."
         ) from None
     except (MediaError, StorageError, ComplianceGateError) as exc:
-        _rewind(backups, partials, root)
-        _close(database, job, JobStatus.FAILED, str(exc))
+        _abandon(database, job, JobStatus.FAILED, str(exc), backups, partials, root)
         raise
     except Exception as exc:
         message = str(exc).strip() or exc.__class__.__name__
-        _rewind(backups, partials, root)
-        _close(database, job, JobStatus.FAILED, message)
+        _abandon(database, job, JobStatus.FAILED, message, backups, partials, root)
         raise MediaError(message) from exc
 
 
@@ -382,8 +394,21 @@ def _cache_ready(
         return False
     if job.status is not JobStatus.SUCCEEDED:
         return False
-    payload_source = job.payload.get("source_asset_id")
-    return payload_source is None or payload_source == context.source.source_asset_id
+    document = Transcript.model_validate_json(context.workspace.transcript_file().read_text(encoding="utf-8"))
+    if document_sidecar_problems(document, record, context.manifest):
+        return False
+    problems = producer_binding_problems(
+        document=document,
+        record=record,
+        manifest=context.manifest,
+        current_asr_sha256=context.audio_sha256,
+        artifact_job_id=row.job_id,
+        artifact_provenance_job_id=row.provenance.job_id,
+        artifact_inputs_sha256=row.provenance.inputs_sha256,
+        artifact_source_ids=tuple(row.provenance.source_asset_ids),
+        job=job,
+    )
+    return not problems
 
 
 def _cache_result(database: Database, context: _Context, runtime: ResolvedRuntime) -> TranscriptResult:
@@ -551,10 +576,15 @@ def _cache_record(
     digest: str,
     size: int,
     created_at: datetime,
+    *,
+    transcript_id: str,
+    job_id: str,
 ) -> TranscriptionCacheRecord:
     return TranscriptionCacheRecord(
         project_id=context.source.project_id,
         source_asset_id=context.source.source_asset_id,
+        transcript_id=transcript_id,
+        job_id=job_id,
         source_sha256=context.manifest.content_sha256,
         input_audio_sha256=context.audio_sha256,
         asr_recipe_name=recipes.ASR_AUDIO_NAME,
@@ -701,6 +731,24 @@ def _fail_stale_rows(connection: sqlite3.Connection, context: _Context, now: dat
         )
 
 
+def _abandon(
+    database: Database,
+    job: JobRecord,
+    status: JobStatus,
+    message: str,
+    backups: list[tuple[Path | None, Path]],
+    partials: list[Path],
+    root: Path,
+) -> None:
+    """Restore files, then always try to close the job. Cleanup errors do not skip that close."""
+    notes = _rewind(backups, partials, root)
+    detail = message if not notes else f"{message} Cleanup also failed: {'; '.join(notes)}"
+    try:
+        _close(database, job, status, detail)
+    except Exception:
+        return
+
+
 def _close(database: Database, job: JobRecord, status: JobStatus, message: str) -> None:
     updated = job.model_copy(
         update={"status": status, "updated_at": datetime.now(UTC), "error_message": message[:2000]}
@@ -739,24 +787,32 @@ def _restore(backup: Path | None, final: Path, root: Path) -> None:
         safe_unlink(root, final)
 
 
-def _rewind(backups: list[tuple[Path | None, Path]], partials: list[Path], root: Path) -> None:
+def _rewind(backups: list[tuple[Path | None, Path]], partials: list[Path], root: Path) -> list[str]:
+    """Best-effort restore. MediaError and OSError are reported, not raised."""
+    notes: list[str] = []
     for backup, final in reversed(backups):
         try:
             _restore(backup, final, root)
-        except OSError:
-            continue
+        except (OSError, MediaError) as exc:
+            notes.append(str(exc))
     for partial in partials:
         try:
             if partial.is_file():
                 safe_unlink(root, partial)
-        except OSError:
-            continue
+        except (OSError, MediaError) as exc:
+            notes.append(str(exc))
+    return notes
 
 
 def _drop_backups(backups: list[tuple[Path | None, Path]], root: Path) -> None:
+    """Deleting a backup must not invalidate a transcript that is already committed."""
     for backup, _final in backups:
-        if backup is not None and backup.is_file():
+        if backup is None or not backup.is_file():
+            continue
+        try:
             safe_unlink(root, backup)
+        except (OSError, MediaError):
+            continue
 
 
 def _write_log(

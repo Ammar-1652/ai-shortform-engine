@@ -77,10 +77,10 @@ ASR FLAC time 0 is canonical source time 0. Seconds become microseconds with `De
 | Database failure after publish | pass. Previous bytes restored |
 | Missing model | pass. No download helper call |
 | Explicit CUDA and auto CPU | pass |
-| pytest | 132 passed |
+| pytest | 141 passed after the review follow-up |
 | Non-media, non-transcription | 95 |
 | Media, including one delayed-audio transcript | 18 |
-| Transcription, fake backend, no weights | 19 |
+| Transcription, fake backend, no weights | 28 |
 | Ruff | pass |
 | Format | pass |
 | mypy | pass |
@@ -88,6 +88,18 @@ ASR FLAC time 0 is canonical source time 0. Seconds become microseconds with `De
 | Renderer | run by `scripts/validate.sh` |
 | `clipforge doctor` | pass. Schema version 4 |
 | `transcript doctor` | WARN. CPU pass, CUDA libraries missing, `small.en` not cached |
+
+## Independent review follow-up
+
+The transcript, sidecar, artifact row, and producing job are one chain. `transcript_id` and `job_id` are on the sidecar. The job payload stores the same `transcript_id`. A new transcript file left behind a crash, with the old artifact row still pointing at the old succeeded job, fails verify and is a cache miss.
+
+The transcript input hash must equal the current ASR FLAC hash, including both provenance input digests. Regenerating ASR audio makes the old transcript stale.
+
+The document and the sidecar must agree on model id, revision, source, engine versions, device, compute type, language, and the decoding fingerprint. Changing one of those in the document and updating only the file hash is still a miss and a verify failure.
+
+The log is written before the database commit, while backups of the previous transcript still exist. A log error restores those backups and marks the new job failed. A restore error is kept on the job and does not leave the job `running`.
+
+`transcript verify` does not create a missing model root. A symlinked model root is rejected before download. Remote download size comes from Hugging Face `files_metadata`. Unknown size does not start a download.
 
 ## Known limitations
 

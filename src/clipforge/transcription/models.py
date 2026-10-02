@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from clipforge.errors import MediaError
-from clipforge.media.disk import format_bytes, read_disk, require_disk_budget
+from clipforge.media.disk import read_disk, require_disk_budget
 
 _METADATA_NAMES = frozenset(
     {
@@ -45,9 +45,13 @@ def model_root_status(root: Path) -> tuple[Path, int, int]:
     return path, status.free_bytes, status.reserve_bytes
 
 
-def resolve_cached_model(requested: str, root: Path) -> ModelIdentity | None:
+def resolve_cached_model(requested: str, root: Path, *, create_root: bool = True) -> ModelIdentity | None:
     """Return a local identity, or None when the model is not cached. No download."""
-    path = _prepare_root(root)
+    if root.is_symlink():
+        raise MediaError(f"model root {root} is a symlink. Refusing to follow it.")
+    if not create_root and not root.exists():
+        return None
+    path = _prepare_root(root, create=create_root)
     local = _local_directory(requested)
     if local is not None:
         return _identity(requested, local, source="local_directory")
@@ -74,15 +78,20 @@ def ensure_model(requested: str, root: Path, *, allow_download: bool) -> ModelId
     return _identity(requested, downloaded, source="hub_snapshot")
 
 
-def _prepare_root(root: Path) -> Path:
-    try:
-        root.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
-        raise MediaError(f"could not create the model root {root}: {exc}") from exc
-    resolved = root.resolve()
-    if resolved.is_symlink():
+def _prepare_root(root: Path, *, create: bool = True) -> Path:
+    """Reject a symlinked model root before following it. Optionally create a real directory."""
+    if root.is_symlink():
         raise MediaError(f"model root {root} is a symlink. Refusing to follow it.")
-    return resolved
+    if create:
+        try:
+            root.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise MediaError(f"could not create the model root {root}: {exc}") from exc
+    if root.is_symlink():
+        raise MediaError(f"model root {root} is a symlink. Refusing to follow it.")
+    if not root.exists():
+        raise MediaError(f"model root {root} does not exist")
+    return root.resolve()
 
 
 def _local_directory(requested: str) -> Path | None:
@@ -133,27 +142,33 @@ def _download(requested: str, root: Path) -> Path:
 
 def _require_download_room(root: Path, requested: str) -> None:
     status = read_disk(_prepare_root(root))
-    expected = _remote_size_bytes(requested)
-    if expected is None:
-        if status.free_bytes <= status.reserve_bytes:
-            raise MediaError(
-                "not enough free disk to download a model. "
-                f"Free space is {format_bytes(status.free_bytes)} and the reserve is "
-                f"{format_bytes(status.reserve_bytes)}. "
-                "The model size is not known before download, so Clipforge will not start a download "
-                "that could cross the reserve. No files were fetched."
-            )
-        return
+    require_download_budget(status.free_bytes, status.reserve_bytes, _remote_size_bytes(requested), requested)
+
+
+def require_download_budget(
+    free_bytes: int, reserve_bytes: int, expected_bytes: int | None, requested: str
+) -> None:
+    """Refuse a download that is not proven to leave the reserve free.
+
+    ``expected_bytes`` is the sum of the model files Hugging Face reports with
+    ``files_metadata=True``. Unknown size fails closed. A local model directory
+    does not call this.
+    """
+    if expected_bytes is None:
+        raise MediaError(
+            "Clipforge could not determine the model download size, so it cannot prove "
+            "the configured disk reserve will remain intact. Model download was not started."
+        )
     try:
-        require_disk_budget(status.free_bytes, status.reserve_bytes, expected)
+        require_disk_budget(free_bytes, reserve_bytes, expected_bytes)
     except MediaError as exc:
         raise MediaError(
-            f"refusing to download model {requested}. {exc} The model size estimate is {expected} bytes."
+            f"refusing to download model {requested}. {exc} The model size is {expected_bytes} bytes."
         ) from exc
 
 
 def _remote_size_bytes(requested: str) -> int | None:
-    """Best-effort sibling sum. Unknown size is reported by returning None."""
+    """Sum the files faster-whisper would fetch. None when any size is missing."""
     try:
         from faster_whisper.utils import _MODELS
         from huggingface_hub import HfApi
@@ -163,28 +178,39 @@ def _remote_size_bytes(requested: str) -> int | None:
     if not isinstance(repo_id, str):
         return None
     try:
-        info = HfApi().model_info(repo_id)
+        info = HfApi().model_info(repo_id, files_metadata=True)
     except Exception:
         return None
     siblings = getattr(info, "siblings", None) or []
     total = 0
-    saw_size = False
+    saw_file = False
     for sibling in siblings:
+        name = str(getattr(sibling, "rfilename", "") or "")
+        if not _is_downloaded_model_file(name):
+            continue
         size = getattr(sibling, "size", None)
-        if isinstance(size, int) and size >= 0:
-            total += size
-            saw_size = True
-    if not saw_size:
+        if not isinstance(size, int) or size < 0:
+            return None
+        total += size
+        saw_file = True
+    if not saw_file:
         return None
-    return total + 8 * 1024 * 1024
+    return total
+
+
+def _is_downloaded_model_file(name: str) -> bool:
+    base = name.rsplit("/", 1)[-1]
+    if base in {"config.json", "preprocessor_config.json", "model.bin", "tokenizer.json"}:
+        return True
+    return base.startswith("vocabulary.")
 
 
 def _identity(
     requested: str, path: Path, *, source: Literal["hub_snapshot", "local_directory"]
 ) -> ModelIdentity:
+    if path.is_symlink():
+        raise MediaError(f"refusing to follow symlinked model directory {path}")
     resolved = path.resolve()
-    if resolved.is_symlink():
-        raise MediaError(f"refusing to follow symlinked model directory {resolved}")
     revision_name = _revision(resolved) if source == "hub_snapshot" else None
     if revision_name is not None:
         origin: Literal["hub_snapshot", "local_directory"] = "hub_snapshot"
@@ -225,7 +251,8 @@ def fingerprint_directory(path: Path) -> str:
 
 
 def model_is_cached(requested: str, root: Path) -> bool:
+    """Report a cached model without creating the model root or downloading."""
     try:
-        return resolve_cached_model(requested, root) is not None
+        return resolve_cached_model(requested, root, create_root=False) is not None
     except MediaError:
         return False
