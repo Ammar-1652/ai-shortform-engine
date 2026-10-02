@@ -171,8 +171,14 @@ def _synth_early_audio(
             "yuv420p",
             "-preset",
             "ultrafast",
+            "-fps_mode",
+            "passthrough",
             "-c:a",
             "aac",
+            "-muxdelay",
+            "0",
+            "-muxpreload",
+            "0",
             str(target),
         ]
     )

@@ -57,4 +57,4 @@ Duration must land within `max(100 ms, three frame periods)` of the canonical du
 
 Rotation fixtures are remuxed with `-display_rotation` because this ffmpeg does not keep a `rotate` tag through libx264. HDR fixtures pass `x264-params` `transfer=smpte2084` for the same reason. Both are metadata tests. They are not graded HDR masters.
 
-The early-audio fixture shifts the picture with `setpts=PTS+0.5/TB` and concatenates a 200 Hz lead-in in front of a 2000 Hz tone. `itsoffset` on a lavfi input did not survive ffmpeg 6's MP4 muxer.
+The early-audio fixture shifts the picture with `setpts=PTS+0.5/TB`, keeps those timestamps with `-fps_mode passthrough`, and sets `-muxdelay 0`. Without that, ffmpeg 6's MP4 muxer reported both streams at start 0. The audio is 0.5 seconds of 200 Hz followed by 2000 Hz.
