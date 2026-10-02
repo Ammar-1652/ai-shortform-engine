@@ -51,6 +51,7 @@ from clipforge.schemas.media import (
     FaceObservation,
     MediaProbe,
     Scene,
+    SegmentDiagnostics,
     SourceAsset,
     Transcript,
     TranscriptSegment,
@@ -64,6 +65,7 @@ from clipforge.schemas.time import (
     TimeMapDocument,
     digest_time_map,
 )
+from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -104,6 +106,7 @@ __all__ = [
     "ReviewDecision",
     "RightsStatus",
     "Scene",
+    "SegmentDiagnostics",
     "SourceAsset",
     "SourceTimeRange",
     "TimeMapDocument",
@@ -111,6 +114,8 @@ __all__ = [
     "Transcript",
     "TranscriptSegment",
     "TranscriptWord",
+    "TranscriptionCacheRecord",
+    "TranscriptionProfile",
     "Versioned",
     "assert_schemas_current",
     "digest_time_map",

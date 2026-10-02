@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 2 adds local ingest and deterministic preprocessing. It does not transcribe or cut.
+Clipforge turns authorized long-form video into short vertical edits. Round 3 adds a faster-whisper transcript of the canonical ASR audio. It does not align Hero captions or cut.
 
 ## Planes
 
@@ -8,7 +8,7 @@ Clipforge turns authorized long-form video into short vertical edits. Round 2 ad
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status.
+- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
 - State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
@@ -22,7 +22,7 @@ Owns bytes, clocks, and pictures.
 - ffprobe / ffmpeg: local ingest, the analysis proxy, ASR audio, and output validation. Commands are argv lists. `shell=True` is not used. See [docs/architecture/media-ingest.md](docs/architecture/media-ingest.md).
 - Source ingest: a referenced local file plus an `AssetLicenseRecord` and a `source_manifests` row. The normalized probe is the clock authority. `MediaProbe` stays the older summary contract.
 - Proxies and ASR audio: `analysis-proxy` v1 and `asr-audio` v1, cached by recipe, source hash, and artifact hash. Paths belong under the work root.
-- Transcription: `Transcript` with `alignment` of `approximate` or `forced`. faster-whisper will write `approximate`. WhisperX is reserved for `forced` alignment of selected Hero clips. Neither runs. The FLAC file is only an input.
+- Transcription: `Transcript` with `alignment` of `approximate` for the faster-whisper pass. The input is `audio/asr.flac`. Word times are provisional. WhisperX is reserved for `forced` alignment of selected Hero clips and is not installed. See [docs/architecture/transcription.md](docs/architecture/transcription.md).
 - Visual analysis: `Scene` and `FaceObservation`. A complete scene needs visual evidence and transcript evidence. A face observation cannot set a speaker. PySceneDetect, MediaPipe, and OpenCV are deferred.
 - Time mapping: implemented. See [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md).
 - Rendering and output validation: `RenderJob`, `RenderArtifact`, `QAResult`. Remotion is the selected renderer. The app under `apps/renderer` typechecks and does not compose a reel.
@@ -73,7 +73,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 | Pydantic v2 | Typed contracts and JSON Schema | Used |
 | SQLite | Projects, sources, jobs, artifacts, reviews | Used |
 | FFmpeg and ffprobe | Ingest, proxy, ASR audio, validation | Used for local files |
-| faster-whisper | Full-source approximate transcript | Deferred |
+| faster-whisper | Full-source approximate transcript of the ASR FLAC | Used |
 | WhisperX | Forced alignment of selected Hero clips | Deferred |
 | PySceneDetect | Scene boundaries | Deferred |
 | MediaPipe and OpenCV | Faces, pose, framing signals | Deferred |
@@ -89,7 +89,6 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 
 The following are not stubbed as successful commands:
 
-- faster-whisper pipeline
 - WhisperX integration
 - PySceneDetect integration
 - MediaPipe or OpenCV analysis

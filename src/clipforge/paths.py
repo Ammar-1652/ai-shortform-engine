@@ -35,6 +35,20 @@ def resolve_work_dir(explicit: Path | None = None) -> Path:
     return Path("var") / "work"
 
 
+def resolve_model_root(explicit: Path | None = None) -> Path:
+    """Return the model cache directory.
+
+    Order: explicit argument, ``CLIPFORGE_MODEL_ROOT``, then ``var/models``.
+    Model weights stay out of the work root and out of git.
+    """
+    if explicit is not None:
+        return explicit
+    env = os.environ.get("CLIPFORGE_MODEL_ROOT", "").strip()
+    if env:
+        return Path(env)
+    return Path("var") / "models"
+
+
 def resolve_disk_reserve_bytes(explicit: int | None = None) -> int:
     """Return the free-space reserve in bytes. The default is 10 GiB.
 

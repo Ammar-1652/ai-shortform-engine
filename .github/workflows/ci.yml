@@ -20,7 +20,7 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest -m "not media"
+        run: uv run pytest -m "not media and not transcription and not model_smoke"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
@@ -42,6 +42,24 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Media integration tests
         run: uv run pytest -m media
+
+  transcription:
+    runs-on: ubuntu-latest
+    env:
+      HF_HUB_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Import the ASR packages without loading a model
+        run: uv run python -c "import faster_whisper, ctranslate2"
+      - name: Deterministic transcription tests
+        run: uv run pytest -m transcription
 
   renderer:
     runs-on: ubuntu-latest

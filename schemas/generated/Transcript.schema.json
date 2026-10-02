@@ -88,6 +88,46 @@
       "title": "ArtifactProvenance",
       "type": "object"
     },
+    "SegmentDiagnostics": {
+      "additionalProperties": false,
+      "description": "Engine evidence for one segment. These are not quality scores.",
+      "properties": {
+        "avg_logprob": {
+          "title": "Avg Logprob",
+          "type": "number"
+        },
+        "compression_ratio": {
+          "minimum": 0,
+          "title": "Compression Ratio",
+          "type": "number"
+        },
+        "no_speech_prob": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "No Speech Prob",
+          "type": "number"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature"
+        }
+      },
+      "required": [
+        "avg_logprob",
+        "no_speech_prob",
+        "compression_ratio"
+      ],
+      "title": "SegmentDiagnostics",
+      "type": "object"
+    },
     "TranscriptSegment": {
       "additionalProperties": false,
       "description": "A source-clock transcript span. Words must sit inside the span.",
@@ -98,11 +138,28 @@
           "title": "Clock",
           "type": "string"
         },
+        "diagnostics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SegmentDiagnostics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "end_us": {
           "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
           "maximum": 604800000000,
           "minimum": 0,
           "title": "End Us",
+          "type": "integer"
+        },
+        "ordinal": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Ordinal",
           "type": "integer"
         },
         "schema_version": {
@@ -148,7 +205,7 @@
     },
     "TranscriptWord": {
       "additionalProperties": false,
-      "description": "One word on the source clock. ``clock`` cannot be switched to output time.",
+      "description": "One word on the source clock. ``clock`` cannot be switched to output time.\n\n``text`` is the engine token, including leading spaces. ``confidence`` is\nthe engine word probability when the engine reported one. It is not an\naccuracy percentage.",
       "properties": {
         "clock": {
           "const": "source",
@@ -213,7 +270,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A transcript document.\n\n``alignment`` is ``approximate`` for first-pass ASR timestamps and\n``forced`` only after a later alignment pass on a selected clip.",
+  "description": "A transcript document.\n\n``alignment`` is ``approximate`` for first-pass ASR timestamps and\n``forced`` only after a later alignment pass on a selected clip.\nRound 3 writes ``approximate`` and ``timing_quality = provisional``.\nDisplay text is the segment texts in order. There is no second rewritten copy.",
   "properties": {
     "alignment": {
       "enum": [
@@ -223,11 +280,256 @@
       "title": "Alignment",
       "type": "string"
     },
+    "asr_audio_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Asr Audio Sha256"
+    },
     "asr_model": {
       "maxLength": 200,
       "minLength": 1,
       "title": "Asr Model",
       "type": "string"
+    },
+    "asr_recipe_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Asr Recipe Name"
+    },
+    "asr_recipe_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Asr Recipe Version"
+    },
+    "beam_size": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Beam Size"
+    },
+    "canonical_duration_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Duration Us"
+    },
+    "clock": {
+      "const": "canonical_video_t0",
+      "default": "canonical_video_t0",
+      "title": "Clock",
+      "type": "string"
+    },
+    "compute_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compute Type"
+    },
+    "condition_on_previous_text": {
+      "default": true,
+      "title": "Condition On Previous Text",
+      "type": "boolean"
+    },
+    "ctranslate2_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ctranslate2 Version"
+    },
+    "detected_language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detected Language"
+    },
+    "device": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device"
+    },
+    "device_requested": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Device Requested"
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "const": "faster-whisper",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Engine"
+    },
+    "faster_whisper_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Faster Whisper Version"
+    },
+    "first_speech_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "First Speech Us"
+    },
+    "language_probability": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language Probability"
+    },
+    "language_requested": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language Requested"
+    },
+    "last_speech_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Speech Us"
+    },
+    "model_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Revision"
+    },
+    "model_source": {
+      "anyOf": [
+        {
+          "enum": [
+            "hub_snapshot",
+            "local_directory"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Source"
     },
     "project_id": {
       "description": "Stable id. UUID text is the usual value.",
@@ -244,6 +546,19 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "segment_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Segment Count"
+    },
     "segments": {
       "items": {
         "$ref": "#/$defs/TranscriptSegment"
@@ -257,11 +572,92 @@
       "title": "Source Asset Id",
       "type": "string"
     },
+    "speech_detected": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Speech Detected"
+    },
+    "speech_span_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Speech Span Us"
+    },
+    "task": {
+      "const": "transcribe",
+      "default": "transcribe",
+      "title": "Task",
+      "type": "string"
+    },
+    "temperature": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Temperature"
+    },
+    "timing_adjustments": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Timing Adjustments",
+      "type": "array"
+    },
+    "timing_quality": {
+      "const": "provisional",
+      "default": "provisional",
+      "title": "Timing Quality",
+      "type": "string"
+    },
     "transcript_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Transcript Id",
       "type": "string"
+    },
+    "vad_filter": {
+      "default": false,
+      "title": "Vad Filter",
+      "type": "boolean"
+    },
+    "word_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Word Count"
+    },
+    "word_timestamps": {
+      "default": true,
+      "title": "Word Timestamps",
+      "type": "boolean"
     }
   },
   "required": [

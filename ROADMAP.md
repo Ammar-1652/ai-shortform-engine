@@ -16,15 +16,15 @@ Rights records are stored. Source, artifact, and review foreign keys are enforce
 
 ## Round 2 — Media ingest
 
-Status: complete on this branch. See `docs/operations/round-02-validation.md`. Not merged. Round 3 has not started.
+Status: merged on main as `d9f227c90e933f319376a183dd407267d606602b`. See `docs/operations/round-02-validation.md`.
 
-Local ffprobe ingest, streaming SHA-256, referenced storage, explicit rights, canonical video time, an H.264 analysis proxy, and 16 kHz mono FLAC aligned to that clock. Transcription is not implemented. A missing ffmpeg, a bad exit, a changed source hash, unknown rights, or a disk reserve violation fails the job before or instead of publishing a file.
+Local ffprobe ingest, streaming SHA-256, referenced storage, explicit rights, canonical video time, an H.264 analysis proxy, and 16 kHz mono FLAC aligned to that clock. A missing ffmpeg, a bad exit, a changed source hash, unknown rights, or a disk reserve violation fails the job before or instead of publishing a file.
 
 ## Round 3 — faster-whisper transcription
 
-Status: not started.
+Status: complete on this branch. See `docs/operations/round-03-validation.md`. Not merged. Round 4 has not started.
 
-Full-source transcript with `alignment = approximate`. No WhisperX on the full file. Persist segments and words on the source clock. A failed chunk fails the job. The ASR audio from Round 2 is the intended input. This round does not start until Round 2 has been reviewed.
+Full-source transcript of the Round 2 ASR FLAC with `alignment = approximate`. Word timestamps are provisional. No WhisperX on the full file. A failed segment iterator fails the job and does not replace a previous valid transcript.
 
 ## Round 4 — Scene, visual, and face analysis
 

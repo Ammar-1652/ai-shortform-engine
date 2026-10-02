@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "description": "Engine evidence for one segment. These are not quality scores.",
+  "properties": {
+    "avg_logprob": {
+      "title": "Avg Logprob",
+      "type": "number"
+    },
+    "compression_ratio": {
+      "minimum": 0,
+      "title": "Compression Ratio",
+      "type": "number"
+    },
+    "no_speech_prob": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "No Speech Prob",
+      "type": "number"
+    },
+    "temperature": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Temperature"
+    }
+  },
+  "required": [
+    "avg_logprob",
+    "no_speech_prob",
+    "compression_ratio"
+  ],
+  "title": "SegmentDiagnostics",
+  "type": "object"
+}

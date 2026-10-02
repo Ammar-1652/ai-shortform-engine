@@ -48,7 +48,7 @@ def media_prepare(
         typer.echo(f"asr_audio_cache: {cache}")
     typer.echo(f"storage_estimate_bytes: {result.storage_estimate_bytes}")
     typer.echo(f"ffmpeg: {result.ffmpeg_version}")
-    typer.echo("transcription: not implemented")
+    typer.echo("next: clipforge transcript run")
 
 
 @media_app.command("verify")

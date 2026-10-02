@@ -47,6 +47,7 @@ from clipforge.schemas.media import (
     FaceObservation,
     MediaProbe,
     Scene,
+    SegmentDiagnostics,
     SourceAsset,
     Transcript,
     TranscriptSegment,
@@ -55,6 +56,7 @@ from clipforge.schemas.media import (
 from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
+from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     Project,
@@ -65,7 +67,10 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TimeMapDocument,
     TranscriptWord,
     TranscriptSegment,
+    SegmentDiagnostics,
     Transcript,
+    TranscriptionProfile,
+    TranscriptionCacheRecord,
     Scene,
     FaceObservation,
     CandidateEvidence,

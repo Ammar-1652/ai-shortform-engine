@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "One word on the source clock. ``clock`` cannot be switched to output time.",
+  "description": "One word on the source clock. ``clock`` cannot be switched to output time.\n\n``text`` is the engine token, including leading spaces. ``confidence`` is\nthe engine word probability when the engine reported one. It is not an\naccuracy percentage.",
   "properties": {
     "clock": {
       "const": "source",

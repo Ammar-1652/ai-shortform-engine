@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-Round 2 ingests a local video file and builds a review proxy plus transcription-ready audio. It does not transcribe, cut, score, or render a reel.
+Round 3 ingests a local video file, builds a review proxy and canonical ASR audio, and transcribes that audio with faster-whisper. It does not align Hero captions, cut, score, or render a reel.
 
 ## What works
 
@@ -17,11 +17,13 @@ Round 2 ingests a local video file and builds a review proxy plus transcription-
 - `clipforge media prepare` writes an H.264 analysis proxy and, when the source has audio, 16 kHz mono FLAC aligned to the video clock.
 - `clipforge media verify` reports source, rights, proxy, and audio state without repairing them.
 - `clipforge storage status` prints free space and the disk reserve.
+- `clipforge transcript doctor` reports the local ASR runtime and does not download a model.
+- `clipforge transcript run` transcribes the prepared ASR FLAC for one source. Word timestamps are provisional. A missing model downloads only with `--allow-model-download`.
+- `clipforge transcript verify` and `clipforge transcript show` read the stored transcript and do not load a model.
 
 ## What does not work yet
 
-- Transcription is not implemented. The FLAC file is an input for a later round.
-- faster-whisper and WhisperX alignment
+- WhisperX alignment
 - Scene, face, or motion analysis
 - Candidate mining and scoring
 - Rough or Hero rendering
@@ -39,7 +41,7 @@ Five planes share one core:
 | Plane | Round 1 role |
 | --- | --- |
 | Control | Typer CLI, SQLite jobs, profiles, policies, review records |
-| Media | Local ingest, canonical source clock, analysis proxy, ASR audio. No transcription. |
+| Media | Local ingest, canonical source clock, analysis proxy, ASR audio, faster-whisper transcript. |
 | AI decision | Contracts for evidence and scores. No model calls. |
 | Assets | License and provenance records. No downloads. |
 | Review | Human decisions are data. Nothing is published. |
@@ -97,9 +99,13 @@ uv run clipforge source ingest PROJECT_ID /path/to/video.mp4 \
   --confirm-rights
 uv run clipforge media prepare SOURCE_ID
 uv run clipforge media verify SOURCE_ID
+uv run clipforge transcript doctor
+uv run clipforge transcript run SOURCE_ID --allow-model-download
+uv run clipforge transcript verify SOURCE_ID
+uv run clipforge transcript show SOURCE_ID
 ```
 
-`--confirm-rights` records your assertion. It does not verify the license. The original file stays where it is. A second `media prepare` reuses a valid proxy and FLAC instead of transcoding again.
+`--confirm-rights` records your assertion. It does not verify the license. The original file stays where it is. A second `media prepare` reuses a valid proxy and FLAC instead of transcoding again. A second `transcript run` reuses a valid transcript instead of calling the model again. `--allow-model-download` is required only when the model is not already under `CLIPFORGE_MODEL_ROOT` (default `var/models`). Inference is local. The model download is the only optional network step.
 
 `clipforge doctor` exits `0` when every check is `PASS` or `WARN`. It exits `1` when a check is `FAIL` (Python older than 3.11, an unwritable work directory, or a broken SQLite library).
 
