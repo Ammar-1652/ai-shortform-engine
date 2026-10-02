@@ -120,4 +120,11 @@ Current-schema validation now checks required columns, the critical foreign-key 
 
 No candidate table was added. No ingest, transcription, or rendering code was added.
 
-Local validation after the follow-up: pytest 74 passed, Ruff passed, mypy reported no issues in 25 source files, schema check matched, renderer lint, typecheck, and 3 tests passed, and doctor reported schema version 3 with 10 pass, 0 warn, 0 fail. The GitHub Actions run for this follow-up commit is whatever the push of this documentation update triggers. This section does not claim that run is green until it is observed.
+Local validation after the follow-up: pytest 74 passed, Ruff passed, mypy reported no issues in 25 source files, schema check matched, renderer lint, typecheck, and 3 tests passed, and doctor reported schema version 3 with 10 pass, 0 warn, 0 fail.
+
+CI for `c9f8a9b` (fix: enforce project-bound lineage and schema integrity):
+
+- push run 36979590957: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/36979590957 success
+- pull request run 36979596174: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/36979596174 success
+
+Both the Python and renderer jobs passed. The only annotation was the hosted-runner notice that `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19. The Node 20 action-runtime warnings did not return.
