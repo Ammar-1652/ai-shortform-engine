@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "description": "Displayed-proxy coordinates. ``x`` and ``y`` are the top-left corner.",
+  "properties": {
+    "height": {
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "Height",
+      "type": "number"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "Width",
+      "type": "number"
+    },
+    "x": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "X",
+      "type": "number"
+    },
+    "y": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Y",
+      "type": "number"
+    }
+  },
+  "required": [
+    "x",
+    "y",
+    "width",
+    "height"
+  ],
+  "title": "NormalizedBoundingBox",
+  "type": "object"
+}

@@ -57,6 +57,19 @@ from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
+from clipforge.schemas.vision import (
+    ContactSheet,
+    EvidenceFile,
+    FaceDetectionSample,
+    FaceKeypoint,
+    FrameEvidence,
+    FrameVisualMetrics,
+    NormalizedBoundingBox,
+    SceneVisualEvidence,
+    VisualAnalysisCacheRecord,
+    VisualAnalysisDocument,
+    VisualAnalysisSummary,
+)
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     Project,
@@ -73,6 +86,17 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TranscriptionCacheRecord,
     Scene,
     FaceObservation,
+    NormalizedBoundingBox,
+    FaceKeypoint,
+    FrameVisualMetrics,
+    EvidenceFile,
+    FrameEvidence,
+    FaceDetectionSample,
+    SceneVisualEvidence,
+    ContactSheet,
+    VisualAnalysisSummary,
+    VisualAnalysisDocument,
+    VisualAnalysisCacheRecord,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

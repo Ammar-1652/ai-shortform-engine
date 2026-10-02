@@ -1,0 +1,120 @@
+{
+  "additionalProperties": false,
+  "description": "Deterministic aggregates for one detector scene. No subjective label.",
+  "properties": {
+    "duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Duration Us",
+      "type": "integer"
+    },
+    "evidence_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "face_sample_count": {
+      "minimum": 1,
+      "title": "Face Sample Count",
+      "type": "integer"
+    },
+    "frames_with_faces": {
+      "minimum": 0,
+      "title": "Frames With Faces",
+      "type": "integer"
+    },
+    "largest_face_area_ratio_max": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Largest Face Area Ratio Max"
+    },
+    "max_face_count": {
+      "minimum": 0,
+      "title": "Max Face Count",
+      "type": "integer"
+    },
+    "mean_luma": {
+      "maximum": 255,
+      "minimum": 0,
+      "title": "Mean Luma",
+      "type": "number"
+    },
+    "mean_sharpness": {
+      "minimum": 0,
+      "title": "Mean Sharpness",
+      "type": "number"
+    },
+    "mean_visual_difference": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mean Visual Difference"
+    },
+    "representative_frame_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Representative Frame Ids",
+      "type": "array"
+    },
+    "sample_count": {
+      "minimum": 1,
+      "title": "Sample Count",
+      "type": "integer"
+    },
+    "scene_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "tracked_face_count": {
+      "minimum": 0,
+      "title": "Tracked Face Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "scene_id",
+    "representative_frame_ids",
+    "duration_us",
+    "sample_count",
+    "face_sample_count",
+    "frames_with_faces",
+    "max_face_count",
+    "mean_luma",
+    "mean_sharpness",
+    "tracked_face_count"
+  ],
+  "title": "SceneVisualEvidence",
+  "type": "object"
+}

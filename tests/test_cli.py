@@ -14,7 +14,7 @@ runner = CliRunner()
 def test_help_lists_foundation_commands_and_not_pipelines() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for name in ("doctor", "project", "schema", "db", "source", "media", "storage", "transcript"):
+    for name in ("doctor", "project", "schema", "db", "source", "media", "storage", "transcript", "vision"):
         assert name in result.stdout
     for absent in ("publish", "transcribe", "render"):
         assert absent not in result.stdout

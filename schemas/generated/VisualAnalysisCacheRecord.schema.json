@@ -1,0 +1,179 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar for one published visual analysis. ``created_at`` is not identity.",
+  "properties": {
+    "analysis_artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Analysis Artifact Sha256",
+      "type": "string"
+    },
+    "analysis_artifact_size": {
+      "minimum": 0,
+      "title": "Analysis Artifact Size",
+      "type": "integer"
+    },
+    "analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_manifest_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Manifest Digest",
+      "type": "string"
+    },
+    "face_model_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Face Model Sha256",
+      "type": "string"
+    },
+    "face_profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Face Profile Fingerprint",
+      "type": "string"
+    },
+    "job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "mediapipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Mediapipe Version",
+      "type": "string"
+    },
+    "opencv_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Opencv Version",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "proxy_recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Proxy Recipe Name",
+      "type": "string"
+    },
+    "proxy_recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Proxy Recipe Version",
+      "type": "string"
+    },
+    "proxy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Proxy Sha256",
+      "type": "string"
+    },
+    "pyav_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Pyav Version",
+      "type": "string"
+    },
+    "pyscenedetect_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Pyscenedetect Version",
+      "type": "string"
+    },
+    "recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Recipe Name",
+      "type": "string"
+    },
+    "recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "sampling_profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sampling Profile Fingerprint",
+      "type": "string"
+    },
+    "scene_backend": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Scene Backend",
+      "type": "string"
+    },
+    "scene_profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Scene Profile Fingerprint",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "tracking_profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tracking Profile Fingerprint",
+      "type": "string"
+    },
+    "validation_status": {
+      "const": "passed",
+      "title": "Validation Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "analysis_id",
+    "job_id",
+    "source_sha256",
+    "proxy_sha256",
+    "proxy_recipe_name",
+    "proxy_recipe_version",
+    "recipe_name",
+    "recipe_version",
+    "pyscenedetect_version",
+    "scene_backend",
+    "scene_profile_fingerprint",
+    "pyav_version",
+    "opencv_version",
+    "mediapipe_version",
+    "face_model_sha256",
+    "face_profile_fingerprint",
+    "sampling_profile_fingerprint",
+    "tracking_profile_fingerprint",
+    "analysis_artifact_sha256",
+    "analysis_artifact_size",
+    "evidence_manifest_digest",
+    "validation_status",
+    "created_at"
+  ],
+  "title": "VisualAnalysisCacheRecord",
+  "type": "object"
+}

@@ -1,0 +1,66 @@
+{
+  "additionalProperties": false,
+  "description": "One persisted evidence file inside the analysis run directory.",
+  "properties": {
+    "kind": {
+      "enum": [
+        "representative_frame",
+        "contact_sheet"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "relative_path": {
+      "pattern": "^(frames|contact-sheets)/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "scene_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scene Id"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "timestamp_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timestamp Us"
+    }
+  },
+  "required": [
+    "relative_path",
+    "sha256",
+    "size_bytes",
+    "kind"
+  ],
+  "title": "EvidenceFile",
+  "type": "object"
+}

@@ -16,6 +16,7 @@ from clipforge.cli.media_cmd import media_app
 from clipforge.cli.source import source_app
 from clipforge.cli.storage_cmd import storage_app
 from clipforge.cli.transcript_cmd import transcript_app
+from clipforge.cli.vision_cmd import vision_app
 from clipforge.doctor import exit_code, format_report, run_checks
 from clipforge.errors import ClipforgeError
 from clipforge.paths import find_repo_root, resolve_db_path
@@ -38,6 +39,7 @@ app.add_typer(source_app, name="source")
 app.add_typer(media_app, name="media")
 app.add_typer(storage_app, name="storage")
 app.add_typer(transcript_app, name="transcript")
+app.add_typer(vision_app, name="vision")
 
 
 def _version_callback(value: bool) -> None:

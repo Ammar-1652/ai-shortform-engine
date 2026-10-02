@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "A review image. It is not a timing source.",
+  "properties": {
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "relative_path": {
+      "pattern": "^(frames|contact-sheets)/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "scene_ordinals": {
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 1,
+      "title": "Scene Ordinals",
+      "type": "array"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "relative_path",
+    "sha256",
+    "size_bytes",
+    "width",
+    "height",
+    "scene_ordinals"
+  ],
+  "title": "ContactSheet",
+  "type": "object"
+}

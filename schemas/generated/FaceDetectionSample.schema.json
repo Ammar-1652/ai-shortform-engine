@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "FaceKeypoint": {
+      "additionalProperties": false,
+      "description": "A detector keypoint. It is not age, emotion, gender, or identity.",
+      "properties": {
+        "name": {
+          "enum": [
+            "left_eye",
+            "right_eye",
+            "nose",
+            "mouth_center"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "x",
+        "y"
+      ],
+      "title": "FaceKeypoint",
+      "type": "object"
+    },
+    "NormalizedBoundingBox": {
+      "additionalProperties": false,
+      "description": "Displayed-proxy coordinates. ``x`` and ``y`` are the top-left corner.",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "NormalizedBoundingBox",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One face box on one sampled frame. ``track_id`` is geometry inside that scene only.",
+  "properties": {
+    "area_ratio": {
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "Area Ratio",
+      "type": "number"
+    },
+    "bounding_box": {
+      "$ref": "#/$defs/NormalizedBoundingBox"
+    },
+    "center_x": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Center X",
+      "type": "number"
+    },
+    "center_y": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Center Y",
+      "type": "number"
+    },
+    "clamped": {
+      "default": false,
+      "title": "Clamped",
+      "type": "boolean"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "detection_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Detection Id",
+      "type": "string"
+    },
+    "keypoints": {
+      "items": {
+        "$ref": "#/$defs/FaceKeypoint"
+      },
+      "title": "Keypoints",
+      "type": "array"
+    },
+    "scene_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "timestamp_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Timestamp Us",
+      "type": "integer"
+    },
+    "track_id": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Track Id"
+    }
+  },
+  "required": [
+    "detection_id",
+    "scene_id",
+    "timestamp_us",
+    "confidence",
+    "bounding_box",
+    "center_x",
+    "center_y",
+    "area_ratio"
+  ],
+  "title": "FaceDetectionSample",
+  "type": "object"
+}

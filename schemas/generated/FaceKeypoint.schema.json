@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "description": "A detector keypoint. It is not age, emotion, gender, or identity.",
+  "properties": {
+    "name": {
+      "enum": [
+        "left_eye",
+        "right_eye",
+        "nose",
+        "mouth_center"
+      ],
+      "title": "Name",
+      "type": "string"
+    },
+    "x": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "X",
+      "type": "number"
+    },
+    "y": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Y",
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "x",
+    "y"
+  ],
+  "title": "FaceKeypoint",
+  "type": "object"
+}
