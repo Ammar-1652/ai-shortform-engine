@@ -6,6 +6,7 @@ profile produce the same candidates when ``mining_id`` is unchanged.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -406,12 +407,12 @@ def _clip(
         scene_ordinals[scene_id] for scene_id in item.measured.visual.scene_ids if scene_id in scene_ordinals
     ]
     scene_label = _index_label(scene_indexes)
-    excerpt_hash = uuid.uuid5(uuid.NAMESPACE_URL, window.excerpt).hex[:12]
+    excerpt_hash = hashlib.sha256(window.excerpt.encode("utf-8")).hexdigest()[:12]
     evidence = [
         CandidateEvidence(
             evidence_id=_child(mining_id, "transcript-evidence", item.hypothesis_id),
             kind=EvidenceKind.TRANSCRIPT,
-            detail=(f"Segments {segment_label}, {window.word_count} words; excerpt sha256 {excerpt_hash}"),
+            detail=(f"Segments {segment_label}, {window.word_count} words; excerpt sha256-prefix {excerpt_hash}"),
             source_start_us=window.start_us,
             source_end_us=window.end_us,
         ),
