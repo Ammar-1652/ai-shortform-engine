@@ -19,7 +19,7 @@ Treat footage as confidential to the rights holder even when the machine is a la
 
 ## Downloaded assets
 
-Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. Envato integration is not implemented. Do not drop downloaded zips into the tree.
+Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.
 
 ## Dependencies
 

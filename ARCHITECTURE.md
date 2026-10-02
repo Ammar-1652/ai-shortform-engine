@@ -10,10 +10,10 @@ Owns how work is requested, recorded, and stopped.
 
 - CLI: `clipforge` (Typer), implemented for doctor, projects, schema export, and database init.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`.
-- State: SQLite file, migrations, repositories in `clipforge.storage`. No global connection.
+- State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 2 adds `asset_license_records` and foreign keys. No global connection. A file that claims the current version but is missing a table is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
 - Policies: `ComplianceRule` with severity fixed to `block`. Example: `configs/policies/source-rights.json`.
-- Review decisions: `ReviewDecision`. Final approval names the artifact a person reviewed.
+- Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.
 
 ### Media plane
 
@@ -32,16 +32,16 @@ Owns bytes, clocks, and pictures.
 Owns judgment that is not a deterministic media tool. Agents orchestrate. They do not replace ffmpeg, the time map, or the compliance gate.
 
 - Campaign interpretation: `CampaignProfile` and policy ids. No interpreter yet.
-- Candidate discovery: `CandidateClip` plus `CandidateEvidence`. Ready for review requires transcript evidence and visual evidence.
+- Candidate discovery: `CandidateClip` plus `CandidateEvidence`. The time map must have a positive output duration. Ready for review requires transcript evidence and visual evidence.
 - Scoring: optional `creative_score` in `[0, 1]`. It is not combined with compliance.
-- Edit planning: `EditPlan` for stage `rough` or `hero`, bound to a time-map digest.
+- Edit planning: `EditPlan` for stage `rough` or `hero`, bound to a time-map digest. The map must have a positive output duration. `Scene` and `FaceObservation` provenance must include their own `source_asset_id`. A face is still not a speaker.
 - QA assistance: `QAResult` aggregates checks. The status cannot be stronger than the worst check.
 
 ### Asset plane
 
 Owns files that are not the long-form source, and the rights on every file including the source.
 
-- Source media: `SourceAsset.license_record_id`.
+- Source media: `SourceAsset.license_record_id` references `asset_license_records`, and that record's `asset_id` must be the source id. A version-1 file is migrated by inserting `unknown` placeholders. Those placeholders stay blocked.
 - Campaign assets, local assets, Envato assets, graphics, audio, fonts: `AssetKind` on `AssetReference`.
 - Rights: `AssetLicenseRecord`. `require_rights_cleared` blocks `unknown`, `prohibited`, and missing evidence.
 - Motion library: `MotionEvent.component_id` names a future Remotion component. No components are implemented.

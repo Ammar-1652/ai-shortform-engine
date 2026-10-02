@@ -8,8 +8,8 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           python-version: "3.11"
@@ -32,11 +32,11 @@ jobs:
       run:
         working-directory: apps/renderer
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm

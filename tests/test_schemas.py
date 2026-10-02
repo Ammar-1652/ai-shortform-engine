@@ -47,7 +47,7 @@ from clipforge.schemas import (
     require_compliance_cleared,
     require_rights_cleared,
 )
-from clipforge.schemas.common import Versioned
+from clipforge.schemas.common import ContractModel, Versioned
 from clipforge.schemas.registry import CONTRACT_MODELS
 from tests.helpers import jump_digest, jump_map, provenance, stamp
 
@@ -225,6 +225,8 @@ def test_compliance_and_rights_fail_closed() -> None:
                 license_record_id="lic-1",
                 asset_id="asset-1",
                 status=RightsStatus.UNKNOWN,
+                recorded_at=stamp(),
+                recorded_by="tester",
             )
         )
     with pytest.raises(ComplianceGateError, match="evidence"):
@@ -234,6 +236,8 @@ def test_compliance_and_rights_fail_closed() -> None:
                 asset_id="asset-1",
                 status=RightsStatus.LICENSED,
                 license_name="envato",
+                recorded_at=stamp(),
+                recorded_by="tester",
             )
         )
     require_rights_cleared(
@@ -242,6 +246,8 @@ def test_compliance_and_rights_fail_closed() -> None:
             asset_id="asset-1",
             status=RightsStatus.OWNED,
             evidence_uri="file:///licenses/owned.txt",
+            recorded_at=stamp(),
+            recorded_by="tester",
         )
     )
 
@@ -376,9 +382,29 @@ def test_aspect_helper_and_profile_files() -> None:
     assert rule.severity == "block"
 
 
-def test_versioned_models_are_exported() -> None:
-    missing = set(Versioned.__subclasses__()) - set(CONTRACT_MODELS)
-    assert not missing
+def _all_subclasses(root: type[ContractModel]) -> set[type[ContractModel]]:
+    found: set[type[ContractModel]] = set()
+    stack = list(root.__subclasses__())
+    while stack:
+        child = stack.pop()
+        if child in found:
+            continue
+        found.add(child)
+        stack.extend(child.__subclasses__())
+    return found
+
+
+def test_contract_registry_covers_every_concrete_model() -> None:
+    """ContractModel and Versioned are the only schema bases excluded from export."""
+    import clipforge.schemas  # noqa: F401
+
+    found = _all_subclasses(ContractModel)
+    exported = set(CONTRACT_MODELS)
+    excluded = {ContractModel, Versioned}
+    assert ContractModel not in exported
+    assert Versioned not in exported
+    assert not (found - exported - excluded)
+    assert not (exported - found)
 
 
 def test_export_then_check(tmp_path: Path) -> None:

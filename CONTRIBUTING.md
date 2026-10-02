@@ -47,10 +47,12 @@ Opening the database must not invent missing tables outside `initialize`.
 
 If a step cannot finish, raise `ClipforgeError` (or a subclass) or store `JobStatus.FAILED` with `error_message`. Do not catch an exception and continue. Do not return `None` from a time-map lookup.
 
+## Branches
+
+Do the work for a round on `round-XX-*`. Open a draft pull request into `main` and wait for review. Do not merge it yourself. Push follow-up fixes to that same branch. Do not force-push.
+
 ## Commits
 
-Use a conventional prefix and a specific subject, for example `feat: add source probe job`.
+Use a conventional prefix and a specific subject, for example `fix: harden foundation integrity before media ingest`.
 
 Do not commit `.env`, databases, footage, weights, renders, `.venv`, or `node_modules`.
-
-Do not force-push `main`.

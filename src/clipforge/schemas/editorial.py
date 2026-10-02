@@ -70,6 +70,11 @@ class CandidateClip(Versioned):
 
     @model_validator(mode="after")
     def ready_means_both_channels_and_a_clear_gate(self) -> Self:
+        if self.time_map.to_time_map().total_output_duration() <= 0:
+            raise ValueError(
+                "a candidate clip must have a time map with total_output_duration > 0. "
+                "An empty map is not a clip."
+            )
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("candidate provenance.source_asset_ids must include source_asset_id")
         if self.status is CandidateStatus.READY_FOR_REVIEW:
@@ -176,6 +181,10 @@ class EditPlan(Versioned):
         if not self.provenance.source_asset_ids:
             raise ValueError("edit plan provenance must list at least one source_asset_id")
         duration = self.time_map.to_time_map().total_output_duration()
+        if duration <= 0:
+            raise ValueError(
+                "an edit plan must have a time map with total_output_duration > 0. An empty map is not an edit."
+            )
         for label, interval in self._intervals():
             if interval.output_end_us > duration:
                 raise ValueError(

@@ -75,7 +75,12 @@ class AssetKind(StrEnum):
 
 
 class AssetLicenseRecord(Versioned):
-    """Rights for one asset. ``unknown`` and ``prohibited`` cannot be used in an edit."""
+    """Rights for one asset. ``unknown`` and ``prohibited`` cannot be used in an edit.
+
+    ``recorded_at`` and ``recorded_by`` were added before any license row existed.
+    The shared ``schema_version`` stays ``1.0.0``. ``require_rights_cleared`` still
+    blocks ``unknown``, including migration-2 legacy placeholders.
+    """
 
     license_record_id: EntityId
     asset_id: EntityId
@@ -83,6 +88,8 @@ class AssetLicenseRecord(Versioned):
     license_name: str | None = None
     evidence_uri: str | None = None
     notes: str = ""
+    recorded_at: AwareDatetime
+    recorded_by: str = Field(min_length=1, max_length=200)
 
 
 class AssetReference(Versioned):
@@ -112,12 +119,22 @@ class ReviewDecision(Versioned):
 
     @model_validator(mode="after")
     def subject_present(self) -> Self:
-        if self.artifact_id is None and self.candidate_id is None:
-            raise ValueError("review must reference an artifact_id or a candidate_id")
-        if self.subject_kind == "final" and self.decision == "approved" and self.artifact_id is None:
-            raise ValueError("final approval must name the artifact_id that was reviewed")
         if not self.reviewer_id.strip():
             raise ValueError("reviewer_id must not be blank")
+        # ADR 0006: candidate review and Hero promotion are reviews of a candidate.
+        # Caption, framing, and final reviews are reviews of a specific artifact.
+        # A rejected final review still names the artifact that was watched.
+        # The other id may be present as context. The primary id may not be absent.
+        if self.subject_kind in {"candidate", "hero"} and self.candidate_id is None:
+            raise ValueError(
+                f"subject_kind {self.subject_kind} requires candidate_id. "
+                "An artifact id alone does not identify the candidate under review."
+            )
+        if self.subject_kind in {"caption", "framing", "final"} and self.artifact_id is None:
+            raise ValueError(
+                f"subject_kind {self.subject_kind} requires artifact_id. "
+                "The review is of a specific media version, including when the decision is rejected."
+            )
         return self
 
 

@@ -39,7 +39,7 @@ def test_database_and_project_flow(tmp_path: Path) -> None:
 
     status = runner.invoke(app, ["db", "status", "--db", str(database)])
     assert status.exit_code == 0
-    assert "schema_version: 1" in status.stdout
+    assert "schema_version: 2" in status.stdout
     assert "projects: 0" in status.stdout
 
     empty = runner.invoke(app, ["project", "list", "--db", str(database)])

@@ -8,7 +8,15 @@ Status: complete. `docs/operations/round-01-validation.md` records the local val
 
 Repository layout, agent rules, ADRs, Pydantic contracts, JSON Schema export, canonical time map, SQLite, CLI, doctor, Python and TypeScript checks, CI. No media processing.
 
+## Round 1.1 — Foundation hardening
+
+Status: locally validated. See `docs/operations/round-01-hardening-validation.md`. The draft pull request is the review gate. Round 2 has not started.
+
+Rights records are stored. Source, artifact, and review foreign keys are enforced. Empty clips and contradictory provenance fail validation.
+
 ## Round 2 — Media ingest
+
+Status: not started.
 
 ffprobe ingest, duration and rational frame rate into `MediaProbe`, proxies, audio extraction. Fail the job when ffmpeg is missing or exits non-zero. Keep paths and hashes on the source asset.
 

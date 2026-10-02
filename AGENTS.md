@@ -48,7 +48,7 @@ A change is done when:
 
 ## Rights and campaign compliance rules
 
-- Every asset used in an edit needs an `AssetLicenseRecord` and a non-empty evidence URI before editorial use. `unknown` and `prohibited` block use.
+- Every asset used in an edit needs a persisted `AssetLicenseRecord` and a non-empty evidence URI before editorial use. `unknown` and `prohibited` block use. A migration placeholder with status `unknown` is not clearance.
 - `require_compliance_cleared` is the gate. An empty result list is not a pass. `insufficient_evidence` is not a pass.
 - Do not treat an LLM sentence that says "PASS" as compliance truth. Store the model text as evidence only, and keep the status at `insufficient_evidence` until a deterministic rule or a human review records a pass.
 - Do not download Envato or other third-party media without provenance fields and a license record.
@@ -82,7 +82,11 @@ A change is done when:
 
 ## Git policy
 
-- Work on `main` until a branch convention is adopted. Do not force-push and do not rewrite published history.
+- Each implementation round uses a dedicated `round-XX-*` branch. Do not commit that work directly on `main`.
+- Each round ends in a draft pull request targeting `main`. Stop after the draft PR and green CI.
+- Independent review happens before merge. Do not merge your own round.
+- Fixes for that round stay on the same branch and the same pull request.
+- Do not force-push. Do not rewrite published history.
 - Run the validation script before a commit that claims the suite is green.
 - Commit messages use a conventional prefix (`feat`, `fix`, `docs`, `test`, `chore`) and say what changed.
 - Do not commit generated media, `.venv`, `node_modules`, or `var/`.
@@ -96,6 +100,8 @@ A change is done when:
 ## Artifact provenance policy
 
 - Derived records include `ArtifactProvenance` and at least one `source_asset_id`.
+- `Scene.source_asset_id` and `FaceObservation.source_asset_id` must appear in their own provenance. A face observation stays `speaker_attribution = unknown`.
+- If an artifact row sets `source_asset_id`, provenance must list that same id. If the row sets `job_id`, `provenance.job_id` must be the same id.
 - Provenance names the tool and version that wrote the record.
 - A missing parent is a validation error. Do not invent a placeholder source id.
 - Hashes are sha256 hex when present. Do not store a hash you did not compute.
