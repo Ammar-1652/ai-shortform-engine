@@ -27,6 +27,7 @@ from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
 from clipforge.media.workspace import (
+    SourceWorkspace,
     candidate_lock,
     ensure_within,
     prepare_read_lock,
@@ -164,10 +165,8 @@ def mine_source(
     return _result(document, job_id=job.job_id, path=final, digest=digest, cache_hit=False, started=started)
 
 
-def _validate_candidate_workspace(workspace: object) -> None:
+def _validate_candidate_workspace(workspace: SourceWorkspace) -> None:
     """Reject unsafe existing candidate paths without creating any directories."""
-    if not hasattr(workspace, "candidate_root") or not hasattr(workspace, "root"):
-        raise MediaError("candidate workspace is invalid")
     candidate_root = workspace.candidate_root()
     root = workspace.root.resolve()
     if candidate_root.is_symlink():
