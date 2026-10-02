@@ -73,7 +73,7 @@ Local doctor: schema version 2, 10 pass, 0 warn, 0 fail. SQLite library 3.50.4.
 | `actions/checkout` | v4 | v7 | node24 |
 | `actions/setup-node` | v4 | v7 | node24 |
 | `pnpm/action-setup` | v4 | v6 | node24 |
-| `astral-sh/setup-uv` | v5 | v10 | node24 |
+| `astral-sh/setup-uv` | v5 | v10.2.0 | node24. There is no moving `v10` tag. |
 
 The first Actions run for this branch is the push that contains this file. This document does not claim that run is green.
 
