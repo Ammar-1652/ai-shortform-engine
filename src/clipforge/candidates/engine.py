@@ -408,11 +408,7 @@ def _clip(
     ]
     scene_label = _index_label(scene_indexes)
     excerpt_hash = hashlib.sha256(window.excerpt.encode("utf-8")).hexdigest()[:12]
-    transcript_detail = "Segments {}, {} words; excerpt sha256-prefix {}".format(
-        segment_label,
-        window.word_count,
-        excerpt_hash,
-    )
+    transcript_detail = f"Segments {segment_label}; words {window.word_count}; excerpt digest {excerpt_hash}"
     evidence = [
         CandidateEvidence(
             evidence_id=_child(mining_id, "transcript-evidence", item.hypothesis_id),
