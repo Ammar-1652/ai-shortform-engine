@@ -46,7 +46,11 @@ from clipforge.storage import (
     list_jobs,
     update_job,
 )
-from clipforge.transcription.backend import _segment as normalize_faster_whisper_segment, RawSegment, RawWord
+from clipforge.transcription.backend import (
+    RawSegment,
+    RawWord,
+    _segment as normalize_faster_whisper_segment,
+)
 from clipforge.transcription.cache import cache_identity_matches, read_transcript_cache
 from clipforge.transcription.constants import KIND_TRANSCRIPT
 from clipforge.transcription.document import build_transcript, display_text
