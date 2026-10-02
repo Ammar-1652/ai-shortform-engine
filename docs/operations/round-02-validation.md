@@ -1,6 +1,13 @@
 # Round 2 validation
 
-Local validation on 2026-10-02. CI run ids are added after the draft pull request is pushed.
+Local validation on 2026-10-02. The draft pull request is https://github.com/Ammar-1652/ai-shortform-engine/pull/2.
+
+CI on the branch head after the ffmpeg 6 early-audio fixture fix:
+
+- Push run: `36987833568` — https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/36987833568 — success
+- Pull request run: `36987839888` — https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/36987839888 — success
+
+Python, media integration on `ubuntu-24.04`, and the renderer job passed in both. An annotation says `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19. The media job stays pinned to `ubuntu-24.04` so apt's ffmpeg stays reproducible. The other jobs were not moved.
 
 ## Baseline
 
