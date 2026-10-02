@@ -182,7 +182,13 @@ def _download(url: str, directory: Path, *, expected_bytes: int | None) -> FaceM
             f"face detector manifest was not published safely: {exc}. "
             "The newly downloaded model was removed."
         ) from exc
-    return FaceModel(filename=FACE_MODEL_FILENAME, sha256=digest, source_url=url, path=final, size_bytes=size)
+    return FaceModel(
+        filename=FACE_MODEL_FILENAME,
+        sha256=digest,
+        source_url=url,
+        path=final,
+        size_bytes=size,
+    )
 
 
 def _open_exclusive_nofollow(path: Path) -> int:
