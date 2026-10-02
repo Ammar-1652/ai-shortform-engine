@@ -179,8 +179,7 @@ def _download(url: str, directory: Path, *, expected_bytes: int | None) -> FaceM
         if final.is_file() and not final.is_symlink():
             final.unlink()
         raise MediaError(
-            f"face detector manifest was not published safely: {exc}. "
-            "The newly downloaded model was removed."
+            f"face detector manifest was not published safely: {exc}. The newly downloaded model was removed."
         ) from exc
     return FaceModel(
         filename=FACE_MODEL_FILENAME,
