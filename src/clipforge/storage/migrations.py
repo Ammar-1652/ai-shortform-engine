@@ -535,9 +535,36 @@ def _review_subjects(connection: sqlite3.Connection) -> list[str]:
     ]
 
 
+SOURCE_MANIFESTS_SQL = """
+CREATE TABLE source_manifests (
+    source_asset_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    content_sha256 TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    original_filename TEXT NOT NULL,
+    storage_mode TEXT NOT NULL CHECK (storage_mode = 'referenced'),
+    transcription_eligible INTEGER NOT NULL CHECK (transcription_eligible IN (0, 1)),
+    video_stream_index INTEGER NOT NULL,
+    audio_stream_index INTEGER,
+    canonical_duration_us INTEGER NOT NULL CHECK (canonical_duration_us > 0),
+    video_origin_us INTEGER NOT NULL,
+    ingested_at TEXT NOT NULL,
+    probe_json TEXT NOT NULL,
+    UNIQUE (source_asset_id, project_id),
+    UNIQUE (project_id, content_sha256),
+    FOREIGN KEY (source_asset_id, project_id)
+        REFERENCES source_assets (source_asset_id, project_id)
+);
+
+CREATE INDEX idx_source_manifests_project ON source_manifests(project_id);
+"""
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial", INITIAL_SQL),
     Migration(2, "rights_and_lineage", RIGHTS_AND_LINEAGE_SQL, precheck_rights_and_lineage),
     Migration(3, "project_lineage_integrity", PROJECT_LINEAGE_SQL, precheck_project_lineage),
+    Migration(4, "source_manifests", SOURCE_MANIFESTS_SQL),
 )
 CURRENT_SCHEMA_VERSION = MIGRATIONS[-1].version

@@ -1,0 +1,43 @@
+{
+  "$defs": {
+    "FrameTimingClass": {
+      "enum": [
+        "cfr_likely",
+        "vfr_possible",
+        "unknown"
+      ],
+      "title": "FrameTimingClass",
+      "type": "string"
+    },
+    "HdrSignal": {
+      "description": "HDR evidence. ``none`` means no PQ/HLG tag, not a confirmed SDR grade.",
+      "enum": [
+        "none",
+        "pq",
+        "hlg"
+      ],
+      "title": "HdrSignal",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "frame_timing": {
+      "$ref": "#/$defs/FrameTimingClass"
+    },
+    "hdr": {
+      "$ref": "#/$defs/HdrSignal"
+    },
+    "transcription_eligible": {
+      "title": "Transcription Eligible",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "frame_timing",
+    "hdr",
+    "transcription_eligible"
+  ],
+  "title": "MediaClassification",
+  "type": "object"
+}

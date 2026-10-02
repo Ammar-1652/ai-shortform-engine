@@ -13,9 +13,13 @@ If a secret lands in a commit, rotate it, then remove it from history before any
 
 ## Local media
 
-Source videos, proxies, extracts, and renders are local files under the work root or an explicit path. They are gitignored. Do not copy them into `tests/fixtures`. Fixtures are small JSON.
+Source ingest accepts a local regular file and no remote URL. The original is referenced in place and is not copied into the work root. Proxies, FLAC files, partial outputs, and logs live under the work root and are gitignored. Cleanup refuses a path outside that root and does not delete the source. Do not commit footage, proxies, or FLAC files. Synthetic tests generate tiny files in a temporary directory and delete them with the test.
 
-Treat footage as confidential to the rights holder even when the machine is a laptop. Do not upload it to an unrelated service to "debug a render".
+FFmpeg is invoked with an argument list. User paths are not interpolated into a shell command. Logs store the argv and a bounded stderr tail. They do not dump the environment.
+
+Treat footage as confidential to the rights holder even when the machine is a laptop. Do not upload it to an unrelated service to debug a proxy.
+
+`--confirm-rights` stores the operator's assertion. It is not legal verification. `unknown` and `prohibited` remain blocked.
 
 ## Downloaded assets
 

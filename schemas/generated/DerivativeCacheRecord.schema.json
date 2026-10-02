@@ -1,0 +1,109 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar that decides whether a derived file can be reused.\n\n``created_at`` is recorded for provenance. It is not part of cache identity.\nA later run with the same recipe, source hash, and streams keeps the file\neven though the timestamp differs.",
+  "properties": {
+    "arguments": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Arguments",
+      "type": "array"
+    },
+    "artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Artifact Sha256",
+      "type": "string"
+    },
+    "audio_stream_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Stream Index"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "ffmpeg_version": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Ffmpeg Version",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Recipe Name",
+      "type": "string"
+    },
+    "recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "validation_status": {
+      "const": "passed",
+      "title": "Validation Status",
+      "type": "string"
+    },
+    "video_stream_index": {
+      "minimum": 0,
+      "title": "Video Stream Index",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "recipe_name",
+    "recipe_version",
+    "source_sha256",
+    "project_id",
+    "source_asset_id",
+    "video_stream_index",
+    "artifact_sha256",
+    "size_bytes",
+    "ffmpeg_version",
+    "arguments",
+    "validation_status",
+    "created_at"
+  ],
+  "title": "DerivativeCacheRecord",
+  "type": "object"
+}

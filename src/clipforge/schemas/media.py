@@ -27,7 +27,7 @@ def _require_this_source(provenance: ArtifactProvenance, source_asset_id: str, l
 
 
 class SourceAsset(Versioned):
-    """An ingested long-form file. Round 1 stores the record. It does not ingest bytes."""
+    """An ingested long-form file. The bytes stay at ``uri``. Ingest does not copy them."""
 
     source_asset_id: EntityId
     project_id: EntityId

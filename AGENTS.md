@@ -41,7 +41,7 @@ A change is done when:
 ## Media safety rules
 
 - Do not invent a second clock. Program time is the output timeline. Source time stays on the source. B-roll in-points use `broll_source_in_us`.
-- Do not call ffmpeg until the round that owns ingest. When you do, a non-zero exit, a missing binary, or a short output is a failed job with `error_message` set.
+- FFmpeg and ffprobe are called for local ingest and preprocessing only, as argv lists, never with `shell=True`. A non-zero exit, a missing binary, or a failed validation is a failed or cancelled job with `error_message` set. Do not transcode during a SQLite write transaction.
 - Do not drop a transcript span, a scene, or a caption because a parser was unsure. Fail the job and keep the input.
 - Do not mark a render succeeded when the output file is missing, zero bytes, or the wrong duration.
 - Proxies, extracts, and renders go under the work root, which is gitignored.

@@ -10,19 +10,21 @@ Repository layout, agent rules, ADRs, Pydantic contracts, JSON Schema export, ca
 
 ## Round 1.1 — Foundation hardening
 
-Status: locally validated. See `docs/operations/round-01-hardening-validation.md`. The draft pull request is the review gate. Round 2 has not started.
+Status: merged on main as `ff38583ed55e0b2ccffa05485074bfedfea8db9f`. See `docs/operations/round-01-hardening-validation.md`.
 
 Rights records are stored. Source, artifact, and review foreign keys are enforced. Empty clips and contradictory provenance fail validation.
 
 ## Round 2 — Media ingest
 
-Status: not started.
+Status: complete on this branch. See `docs/operations/round-02-validation.md`. Not merged. Round 3 has not started.
 
-ffprobe ingest, duration and rational frame rate into `MediaProbe`, proxies, audio extraction. Fail the job when ffmpeg is missing or exits non-zero. Keep paths and hashes on the source asset.
+Local ffprobe ingest, streaming SHA-256, referenced storage, explicit rights, canonical video time, an H.264 analysis proxy, and 16 kHz mono FLAC aligned to that clock. Transcription is not implemented. A missing ffmpeg, a bad exit, a changed source hash, unknown rights, or a disk reserve violation fails the job before or instead of publishing a file.
 
 ## Round 3 — faster-whisper transcription
 
-Full-source transcript with `alignment = approximate`. No WhisperX on the full file. Persist segments and words on the source clock. A failed chunk fails the job.
+Status: not started.
+
+Full-source transcript with `alignment = approximate`. No WhisperX on the full file. Persist segments and words on the source clock. A failed chunk fails the job. The ASR audio from Round 2 is the intended input. This round does not start until Round 2 has been reviewed.
 
 ## Round 4 — Scene, visual, and face analysis
 

@@ -1,3 +1,3 @@
-"""Clipforge control plane. Round 1 exposes contracts, time mapping, state, and the CLI."""
+"""Clipforge control plane. Round 2 adds local media ingest and preprocessing."""
 
 __version__ = "0.1.0"

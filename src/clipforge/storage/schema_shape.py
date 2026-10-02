@@ -94,6 +94,24 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "created_at",
         }
     ),
+    "source_manifests": frozenset(
+        {
+            "source_asset_id",
+            "project_id",
+            "content_sha256",
+            "size_bytes",
+            "mtime_ns",
+            "original_filename",
+            "storage_mode",
+            "transcription_eligible",
+            "video_stream_index",
+            "audio_stream_index",
+            "canonical_duration_us",
+            "video_origin_us",
+            "ingested_at",
+            "probe_json",
+        }
+    ),
 }
 
 REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
@@ -141,6 +159,17 @@ REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
             ),
         }
     ),
+    "source_manifests": frozenset(
+        {
+            (
+                "source_assets",
+                (
+                    ("source_asset_id", "source_asset_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+        }
+    ),
 }
 
 REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
@@ -171,6 +200,13 @@ REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
         }
     ),
     "reviews": frozenset({("review_id",)}),
+    "source_manifests": frozenset(
+        {
+            ("source_asset_id",),
+            ("source_asset_id", "project_id"),
+            ("project_id", "content_sha256"),
+        }
+    ),
 }
 
 REQUIRED_TABLES = frozenset(REQUIRED_COLUMNS)

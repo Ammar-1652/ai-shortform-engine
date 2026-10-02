@@ -1,0 +1,967 @@
+{
+  "$defs": {
+    "AudioStreamInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "bit_rate": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Rate"
+        },
+        "channel_layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel Layout"
+        },
+        "channels": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channels"
+        },
+        "codec_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codec Name"
+        },
+        "disposition": {
+          "$ref": "#/$defs/StreamDisposition"
+        },
+        "duration_ts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ts"
+        },
+        "duration_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Us"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "sample_fmt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Fmt"
+        },
+        "sample_rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Rate"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start_pts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Pts"
+        },
+        "start_time_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time Us"
+        },
+        "time_base": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "AudioStreamInfo",
+      "type": "object"
+    },
+    "ColorMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "color_primaries": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Primaries"
+        },
+        "color_range": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Range"
+        },
+        "color_space": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Space"
+        },
+        "color_transfer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Transfer"
+        }
+      },
+      "title": "ColorMetadata",
+      "type": "object"
+    },
+    "FrameTimingClass": {
+      "enum": [
+        "cfr_likely",
+        "vfr_possible",
+        "unknown"
+      ],
+      "title": "FrameTimingClass",
+      "type": "string"
+    },
+    "HdrSignal": {
+      "description": "HDR evidence. ``none`` means no PQ/HLG tag, not a confirmed SDR grade.",
+      "enum": [
+        "none",
+        "pq",
+        "hlg"
+      ],
+      "title": "HdrSignal",
+      "type": "string"
+    },
+    "MediaClassification": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_timing": {
+          "$ref": "#/$defs/FrameTimingClass"
+        },
+        "hdr": {
+          "$ref": "#/$defs/HdrSignal"
+        },
+        "transcription_eligible": {
+          "title": "Transcription Eligible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "frame_timing",
+        "hdr",
+        "transcription_eligible"
+      ],
+      "title": "MediaClassification",
+      "type": "object"
+    },
+    "MediaFormatInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "bit_rate": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Rate"
+        },
+        "duration_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Us"
+        },
+        "format_long_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Long Name"
+        },
+        "format_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Name"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "start_time_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time Us"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "object"
+        }
+      },
+      "title": "MediaFormatInfo",
+      "type": "object"
+    },
+    "MediaTimelineInfo": {
+      "additionalProperties": false,
+      "description": "Container and stream clocks, plus the Clipforge source clock.\n\n``video_origin_us`` is the container timestamp of canonical ``t=0``.\nIt may be negative. Canonical source time is microseconds after that origin.",
+      "properties": {
+        "audio_offset_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Offset Us"
+        },
+        "audio_start_assumed_zero": {
+          "default": false,
+          "title": "Audio Start Assumed Zero",
+          "type": "boolean"
+        },
+        "audio_start_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Start Us"
+        },
+        "canonical_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Canonical Duration Us",
+          "type": "integer"
+        },
+        "duration_evidence": {
+          "minLength": 1,
+          "title": "Duration Evidence",
+          "type": "string"
+        },
+        "video_origin_us": {
+          "title": "Video Origin Us",
+          "type": "integer"
+        },
+        "video_start_assumed_zero": {
+          "title": "Video Start Assumed Zero",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "video_origin_us",
+        "video_start_assumed_zero",
+        "canonical_duration_us",
+        "duration_evidence"
+      ],
+      "title": "MediaTimelineInfo",
+      "type": "object"
+    },
+    "NormalizedMediaProbe": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_streams": {
+          "items": {
+            "$ref": "#/$defs/AudioStreamInfo"
+          },
+          "title": "Audio Streams",
+          "type": "array"
+        },
+        "chapter_count": {
+          "minimum": 0,
+          "title": "Chapter Count",
+          "type": "integer"
+        },
+        "classification": {
+          "$ref": "#/$defs/MediaClassification"
+        },
+        "ffprobe_version": {
+          "minLength": 1,
+          "title": "Ffprobe Version",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/MediaFormatInfo"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/StreamSelection"
+        },
+        "timeline": {
+          "$ref": "#/$defs/MediaTimelineInfo"
+        },
+        "video_streams": {
+          "items": {
+            "$ref": "#/$defs/VideoStreamInfo"
+          },
+          "title": "Video Streams",
+          "type": "array"
+        }
+      },
+      "required": [
+        "format",
+        "video_streams",
+        "audio_streams",
+        "chapter_count",
+        "ffprobe_version",
+        "selection",
+        "timeline",
+        "classification"
+      ],
+      "title": "NormalizedMediaProbe",
+      "type": "object"
+    },
+    "RationalNumber": {
+      "additionalProperties": false,
+      "description": "An exact integer ratio. ``30000/1001`` is not stored as ``29.97``.",
+      "properties": {
+        "denominator": {
+          "exclusiveMinimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "numerator": {
+          "title": "Numerator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalNumber",
+      "type": "object"
+    },
+    "RotationMetadata": {
+      "additionalProperties": false,
+      "description": "Encoded rotation in degrees. ``None`` means ffprobe did not report one.",
+      "properties": {
+        "degrees": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Degrees"
+        }
+      },
+      "title": "RotationMetadata",
+      "type": "object"
+    },
+    "StreamDisposition": {
+      "additionalProperties": false,
+      "properties": {
+        "attached_pic": {
+          "default": false,
+          "title": "Attached Pic",
+          "type": "boolean"
+        },
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        }
+      },
+      "title": "StreamDisposition",
+      "type": "object"
+    },
+    "StreamSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_selection": {
+          "enum": [
+            "automatic",
+            "explicit",
+            "none"
+          ],
+          "title": "Audio Selection",
+          "type": "string"
+        },
+        "audio_stream_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Stream Index"
+        },
+        "video_selection": {
+          "enum": [
+            "automatic",
+            "explicit"
+          ],
+          "title": "Video Selection",
+          "type": "string"
+        },
+        "video_stream_index": {
+          "minimum": 0,
+          "title": "Video Stream Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "video_stream_index",
+        "video_selection",
+        "audio_selection"
+      ],
+      "title": "StreamSelection",
+      "type": "object"
+    },
+    "VideoStreamInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "avg_frame_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "bit_rate": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Rate"
+        },
+        "codec_long_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codec Long Name"
+        },
+        "codec_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codec Name"
+        },
+        "color": {
+          "$ref": "#/$defs/ColorMetadata"
+        },
+        "display_aspect_ratio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "display_height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Height"
+        },
+        "display_width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Width"
+        },
+        "disposition": {
+          "$ref": "#/$defs/StreamDisposition"
+        },
+        "duration_ts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ts"
+        },
+        "duration_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Us"
+        },
+        "field_order": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Order"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "pix_fmt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pix Fmt"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile"
+        },
+        "r_frame_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation": {
+          "$ref": "#/$defs/RotationMetadata"
+        },
+        "sample_aspect_ratio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "start_pts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Pts"
+        },
+        "start_time_us": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time Us"
+        },
+        "time_base": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RationalNumber"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "required": [
+        "index"
+      ],
+      "title": "VideoStreamInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Durable, queryable identity for one referenced source. Not a copied file.",
+  "properties": {
+    "audio_stream_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Stream Index"
+    },
+    "canonical_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Canonical Duration Us",
+      "type": "integer"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "ingested_at": {
+      "format": "date-time",
+      "title": "Ingested At",
+      "type": "string"
+    },
+    "mtime_ns": {
+      "minimum": 0,
+      "title": "Mtime Ns",
+      "type": "integer"
+    },
+    "original_filename": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Original Filename",
+      "type": "string"
+    },
+    "probe": {
+      "$ref": "#/$defs/NormalizedMediaProbe"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "storage_mode": {
+      "const": "referenced",
+      "default": "referenced",
+      "title": "Storage Mode",
+      "type": "string"
+    },
+    "transcription_eligible": {
+      "title": "Transcription Eligible",
+      "type": "boolean"
+    },
+    "video_origin_us": {
+      "title": "Video Origin Us",
+      "type": "integer"
+    },
+    "video_stream_index": {
+      "minimum": 0,
+      "title": "Video Stream Index",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "source_asset_id",
+    "project_id",
+    "content_sha256",
+    "size_bytes",
+    "mtime_ns",
+    "original_filename",
+    "transcription_eligible",
+    "video_stream_index",
+    "canonical_duration_us",
+    "video_origin_us",
+    "ingested_at",
+    "probe"
+  ],
+  "title": "SourceIngestManifest",
+  "type": "object"
+}

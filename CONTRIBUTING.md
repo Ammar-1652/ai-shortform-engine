@@ -21,7 +21,7 @@ Do not bypass a Pydantic model with an untyped dict in a pipeline "just for now"
 
 ## Tests
 
-`./scripts/validate.sh` is the full check: Ruff, mypy, pytest, schema check, renderer lint, typecheck, and tests.
+`./scripts/validate.sh` is the full check: Ruff, mypy, pytest (unit and ffmpeg integration), schema check, renderer lint, typecheck, and tests. The integration tests need ffmpeg and ffprobe on `PATH`. CI runs them in a separate job that installs Ubuntu's ffmpeg package. `pytest -m "not media"` is the unit subset.
 
 Run it before a commit that claims the branch is green. Do not skip a failing test or downgrade an error to a warning to satisfy CI.
 
@@ -39,7 +39,7 @@ Timing changes extend `tests/test_timeline.py`. Include a failure case, not only
 
 ## Migrations
 
-Add the next `Migration` in `src/clipforge/storage/migrations.py`. Do not rewrite migration 1 after someone has a file at version 1. `clipforge db init` applies pending versions. A file newer than the code is an error.
+Add the next `Migration` in `src/clipforge/storage/migrations.py`. Do not rewrite migrations 1, 2, or 3. `clipforge db init` applies pending versions. A file newer than the code is an error.
 
 Opening the database must not invent missing tables outside `initialize`.
 

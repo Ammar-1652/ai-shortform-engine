@@ -27,6 +27,21 @@ from clipforge.schemas.governance import (
     ComplianceRule,
     ReviewDecision,
 )
+from clipforge.schemas.ingest import (
+    AudioStreamInfo,
+    ColorMetadata,
+    DerivativeCacheRecord,
+    MediaClassification,
+    MediaFormatInfo,
+    MediaTimelineInfo,
+    NormalizedMediaProbe,
+    RationalNumber,
+    RotationMetadata,
+    SourceIngestManifest,
+    StreamDisposition,
+    StreamSelection,
+    VideoStreamInfo,
+)
 from clipforge.schemas.jobs import JobRecord, QACheck, QAResult, RenderArtifact, RenderJob
 from clipforge.schemas.media import (
     FaceObservation,
@@ -73,6 +88,19 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     ReviewDecision,
     JobRecord,
     ArtifactProvenance,
+    AudioStreamInfo,
+    ColorMetadata,
+    DerivativeCacheRecord,
+    MediaClassification,
+    MediaFormatInfo,
+    MediaTimelineInfo,
+    NormalizedMediaProbe,
+    RationalNumber,
+    RotationMetadata,
+    SourceIngestManifest,
+    StreamDisposition,
+    StreamSelection,
+    VideoStreamInfo,
 )
 
 

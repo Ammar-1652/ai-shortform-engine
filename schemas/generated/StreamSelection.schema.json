@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "audio_selection": {
+      "enum": [
+        "automatic",
+        "explicit",
+        "none"
+      ],
+      "title": "Audio Selection",
+      "type": "string"
+    },
+    "audio_stream_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Stream Index"
+    },
+    "video_selection": {
+      "enum": [
+        "automatic",
+        "explicit"
+      ],
+      "title": "Video Selection",
+      "type": "string"
+    },
+    "video_stream_index": {
+      "minimum": 0,
+      "title": "Video Stream Index",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "video_stream_index",
+    "video_selection",
+    "audio_selection"
+  ],
+  "title": "StreamSelection",
+  "type": "object"
+}

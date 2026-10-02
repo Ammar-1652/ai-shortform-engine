@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Full Round 1 check. Fails on the first error. Does not download models.
+# Full check. Fails on the first error. Does not download models.
+# pytest includes ffmpeg integration tests. Install ffmpeg from the OS if they fail at startup.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
