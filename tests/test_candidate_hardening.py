@@ -90,4 +90,4 @@ def test_candidate_excerpt_audit_uses_real_sha256_prefix(
     transcript_evidence = next(item for item in candidate.evidence if item.kind.value == "transcript")
     expected = hashlib.sha256(bundle.transcript_excerpt.encode("utf-8")).hexdigest()[:12]
 
-    assert f"excerpt sha256-prefix {expected}" in transcript_evidence.detail
+    assert f"excerpt digest {expected}" in transcript_evidence.detail
