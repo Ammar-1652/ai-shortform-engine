@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "description": "Weights for the editorial quality heuristic. They sum to 1.",
+  "properties": {
+    "boundary_completeness": {
+      "default": 0.2,
+      "title": "Boundary Completeness",
+      "type": "number"
+    },
+    "duration_fit": {
+      "default": 0.15,
+      "title": "Duration Fit",
+      "type": "number"
+    },
+    "information_density": {
+      "default": 0.1,
+      "title": "Information Density",
+      "type": "number"
+    },
+    "opening_structure": {
+      "default": 0.05,
+      "title": "Opening Structure",
+      "type": "number"
+    },
+    "speech_coverage": {
+      "default": 0.2,
+      "title": "Speech Coverage",
+      "type": "number"
+    },
+    "transcript_reliability": {
+      "default": 0.2,
+      "title": "Transcript Reliability",
+      "type": "number"
+    },
+    "visual_evidence_coverage": {
+      "default": 0.1,
+      "title": "Visual Evidence Coverage",
+      "type": "number"
+    }
+  },
+  "title": "QualityWeights",
+  "type": "object"
+}

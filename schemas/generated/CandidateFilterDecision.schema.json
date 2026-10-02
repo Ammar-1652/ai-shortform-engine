@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "CandidateFilterReason": {
+      "description": "Why a raw hypothesis was not published as a candidate.",
+      "enum": [
+        "too_short",
+        "too_long",
+        "too_few_words",
+        "no_transcript_evidence",
+        "no_visual_evidence",
+        "range_outside_source",
+        "empty_or_reversed",
+        "insufficient_score_coverage",
+        "pre_dedupe_pool",
+        "duplicate",
+        "output_cap"
+      ],
+      "title": "CandidateFilterReason",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Compact audit row for a hypothesis that was not selected.",
+  "properties": {
+    "hypothesis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hypothesis Id",
+      "type": "string"
+    },
+    "reason": {
+      "$ref": "#/$defs/CandidateFilterReason"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "hypothesis_id",
+    "source_start_us",
+    "source_end_us",
+    "reason"
+  ],
+  "title": "CandidateFilterDecision",
+  "type": "object"
+}

@@ -1,0 +1,1495 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "CandidateClip": {
+      "additionalProperties": false,
+      "description": "A possible short. ``creative_score`` does not clear compliance.\n\n``ready_for_review`` requires transcript evidence, visual evidence, and a\nfully passed compliance gate. There is no path that adds the two together\ninto one publish score.",
+      "properties": {
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "compliance": {
+          "items": {
+            "$ref": "#/$defs/ComplianceResult"
+          },
+          "minItems": 1,
+          "title": "Compliance",
+          "type": "array"
+        },
+        "creative_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Creative Score"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/CandidateEvidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "project_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ArtifactProvenance"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Asset Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CandidateStatus"
+        },
+        "time_map": {
+          "$ref": "#/$defs/TimeMapDocument"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "project_id",
+        "source_asset_id",
+        "status",
+        "time_map",
+        "evidence",
+        "compliance",
+        "provenance"
+      ],
+      "title": "CandidateClip",
+      "type": "object"
+    },
+    "CandidateDeduplicationDecision": {
+      "additionalProperties": false,
+      "description": "One kept-or-duplicate decision. Hypotheses are not dropped without a record.",
+      "properties": {
+        "containment_ratio": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Containment Ratio"
+        },
+        "disposition": {
+          "$ref": "#/$defs/DedupDisposition"
+        },
+        "duplicate_of_candidate_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duplicate Of Candidate Id"
+        },
+        "hypothesis_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "temporal_iou": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temporal Iou"
+        },
+        "token_similarity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Similarity"
+        }
+      },
+      "required": [
+        "hypothesis_id",
+        "disposition",
+        "reason"
+      ],
+      "title": "CandidateDeduplicationDecision",
+      "type": "object"
+    },
+    "CandidateEvidence": {
+      "additionalProperties": false,
+      "description": "One reason a candidate exists. The kind says whether it is spoken, visual, or other.",
+      "properties": {
+        "detail": {
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "evidence_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source End Us"
+        },
+        "source_start_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Start Us"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "kind",
+        "detail"
+      ],
+      "title": "CandidateEvidence",
+      "type": "object"
+    },
+    "CandidateEvidenceBundle": {
+      "additionalProperties": false,
+      "description": "Machine-readable evidence for one candidate. Prose details are not the ids.",
+      "properties": {
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "face_observation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Face Observation Ids",
+          "type": "array"
+        },
+        "representative_frame_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Representative Frame Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "transcript_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Transcript End Us",
+          "type": "integer"
+        },
+        "transcript_excerpt": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Transcript Excerpt",
+          "type": "string"
+        },
+        "transcript_segment_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Transcript Segment Ids",
+          "type": "array"
+        },
+        "transcript_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Transcript Start Us",
+          "type": "integer"
+        },
+        "transcript_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Transcript Word Ids",
+          "type": "array"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "transcript_segment_ids",
+        "transcript_excerpt",
+        "transcript_start_us",
+        "transcript_end_us",
+        "visual_scene_ids",
+        "source_start_us",
+        "source_end_us"
+      ],
+      "title": "CandidateEvidenceBundle",
+      "type": "object"
+    },
+    "CandidateFilterDecision": {
+      "additionalProperties": false,
+      "description": "Compact audit row for a hypothesis that was not selected.",
+      "properties": {
+        "hypothesis_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Hypothesis Id",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/CandidateFilterReason"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hypothesis_id",
+        "source_start_us",
+        "source_end_us",
+        "reason"
+      ],
+      "title": "CandidateFilterDecision",
+      "type": "object"
+    },
+    "CandidateFilterReason": {
+      "description": "Why a raw hypothesis was not published as a candidate.",
+      "enum": [
+        "too_short",
+        "too_long",
+        "too_few_words",
+        "no_transcript_evidence",
+        "no_visual_evidence",
+        "range_outside_source",
+        "empty_or_reversed",
+        "insufficient_score_coverage",
+        "pre_dedupe_pool",
+        "duplicate",
+        "output_cap"
+      ],
+      "title": "CandidateFilterReason",
+      "type": "string"
+    },
+    "CandidateMiningProfile": {
+      "additionalProperties": false,
+      "description": "Output-changing settings for one candidate-mining recipe.\n\n``soft_target_min`` is informational. Mining does not invent candidates to\nreach it. ``max_candidates`` is a real cap. There is no quality floor:\neligibility is the hard filters plus score-coverage, then dedupe.",
+      "properties": {
+        "boundary_algorithm_version": {
+          "const": "word-pad-v1",
+          "default": "word-pad-v1",
+          "title": "Boundary Algorithm Version",
+          "type": "string"
+        },
+        "boundary_padding_us": {
+          "default": 250000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Boundary Padding Us",
+          "type": "integer"
+        },
+        "containment_threshold": {
+          "default": 0.8,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Containment Threshold",
+          "type": "number"
+        },
+        "dedupe_version": {
+          "const": "temporal-jaccard-v1",
+          "default": "temporal-jaccard-v1",
+          "title": "Dedupe Version",
+          "type": "string"
+        },
+        "edit_weights": {
+          "$ref": "#/$defs/EditOpportunityWeights"
+        },
+        "hard_max_duration_us": {
+          "default": 65000000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Hard Max Duration Us",
+          "type": "integer"
+        },
+        "hard_min_duration_us": {
+          "default": 8000000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Hard Min Duration Us",
+          "type": "integer"
+        },
+        "max_candidates": {
+          "default": 25,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "maximum_raw_hypotheses": {
+          "default": 5000,
+          "minimum": 1,
+          "title": "Maximum Raw Hypotheses",
+          "type": "integer"
+        },
+        "minimum_quality_coverage": {
+          "default": 0.7,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Minimum Quality Coverage",
+          "type": "number"
+        },
+        "minimum_transcript_words": {
+          "default": 5,
+          "minimum": 1,
+          "title": "Minimum Transcript Words",
+          "type": "integer"
+        },
+        "pre_dedupe_pool_size": {
+          "default": 200,
+          "minimum": 1,
+          "title": "Pre Dedupe Pool Size",
+          "type": "integer"
+        },
+        "preferred_max_duration_us": {
+          "default": 45000000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Preferred Max Duration Us",
+          "type": "integer"
+        },
+        "preferred_min_duration_us": {
+          "default": 18000000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Preferred Min Duration Us",
+          "type": "integer"
+        },
+        "profile_id": {
+          "const": "candidate-mining-v1",
+          "default": "candidate-mining-v1",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "quality_weights": {
+          "$ref": "#/$defs/QualityWeights"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scoring_version": {
+          "const": "quality-edit-v1",
+          "default": "quality-edit-v1",
+          "title": "Scoring Version",
+          "type": "string"
+        },
+        "soft_target_min": {
+          "default": 15,
+          "minimum": 0,
+          "title": "Soft Target Min",
+          "type": "integer"
+        },
+        "temporal_iou_threshold": {
+          "default": 0.7,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Temporal Iou Threshold",
+          "type": "number"
+        },
+        "token_similarity_threshold": {
+          "default": 0.7,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Token Similarity Threshold",
+          "type": "number"
+        },
+        "tokenizer_version": {
+          "const": "unicode-regex-v1",
+          "default": "unicode-regex-v1",
+          "title": "Tokenizer Version",
+          "type": "string"
+        },
+        "window_algorithm_version": {
+          "const": "window-v1",
+          "default": "window-v1",
+          "title": "Window Algorithm Version",
+          "type": "string"
+        }
+      },
+      "title": "CandidateMiningProfile",
+      "type": "object"
+    },
+    "CandidateMiningSummary": {
+      "additionalProperties": false,
+      "description": "Counts for one mining run. A shortfall under the soft target is not a failure.",
+      "properties": {
+        "below_soft_target": {
+          "title": "Below Soft Target",
+          "type": "boolean"
+        },
+        "duplicate_count": {
+          "minimum": 0,
+          "title": "Duplicate Count",
+          "type": "integer"
+        },
+        "eligible_distinct_count": {
+          "minimum": 0,
+          "title": "Eligible Distinct Count",
+          "type": "integer"
+        },
+        "hard_filtered_count": {
+          "minimum": 0,
+          "title": "Hard Filtered Count",
+          "type": "integer"
+        },
+        "insufficient_evidence_count": {
+          "minimum": 0,
+          "title": "Insufficient Evidence Count",
+          "type": "integer"
+        },
+        "longest_selected_duration_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longest Selected Duration Us"
+        },
+        "max_candidates": {
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "mean_edit_opportunity_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Edit Opportunity Score"
+        },
+        "mean_quality_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Quality Score"
+        },
+        "mean_selected_duration_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Selected Duration Us"
+        },
+        "output_cap_count": {
+          "minimum": 0,
+          "title": "Output Cap Count",
+          "type": "integer"
+        },
+        "pre_dedupe_excluded_count": {
+          "minimum": 0,
+          "title": "Pre Dedupe Excluded Count",
+          "type": "integer"
+        },
+        "raw_hypothesis_cap_reached": {
+          "default": false,
+          "title": "Raw Hypothesis Cap Reached",
+          "type": "boolean"
+        },
+        "raw_hypothesis_count": {
+          "minimum": 0,
+          "title": "Raw Hypothesis Count",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scored_count": {
+          "minimum": 0,
+          "title": "Scored Count",
+          "type": "integer"
+        },
+        "selected_count": {
+          "minimum": 0,
+          "title": "Selected Count",
+          "type": "integer"
+        },
+        "shortest_selected_duration_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shortest Selected Duration Us"
+        },
+        "soft_target_min": {
+          "minimum": 0,
+          "title": "Soft Target Min",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "raw_hypothesis_count",
+        "hard_filtered_count",
+        "scored_count",
+        "insufficient_evidence_count",
+        "pre_dedupe_excluded_count",
+        "duplicate_count",
+        "eligible_distinct_count",
+        "output_cap_count",
+        "selected_count",
+        "soft_target_min",
+        "max_candidates",
+        "below_soft_target"
+      ],
+      "title": "CandidateMiningSummary",
+      "type": "object"
+    },
+    "CandidateScoreBreakdown": {
+      "additionalProperties": false,
+      "description": "Persisted features. Missing evidence stays null and is omitted from the weight.",
+      "properties": {
+        "boundary_completeness": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boundary Completeness"
+        },
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "duration_fit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Fit"
+        },
+        "edit_opportunity_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Edit Opportunity Score",
+          "type": "number"
+        },
+        "edit_opportunity_weight_coverage": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Edit Opportunity Weight Coverage",
+          "type": "number"
+        },
+        "face_layout_variation": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Face Layout Variation"
+        },
+        "information_density": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Information Density"
+        },
+        "multi_scene_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Multi Scene Signal"
+        },
+        "numeric_token_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numeric Token Signal"
+        },
+        "opening_structure": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opening Structure"
+        },
+        "punctuation_emphasis_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Punctuation Emphasis Signal"
+        },
+        "quality_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Quality Score",
+          "type": "number"
+        },
+        "quality_weight_coverage": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Quality Weight Coverage",
+          "type": "number"
+        },
+        "scene_change_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Change Signal"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scoring_version": {
+          "const": "quality-edit-v1",
+          "default": "quality-edit-v1",
+          "title": "Scoring Version",
+          "type": "string"
+        },
+        "speech_coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Speech Coverage"
+        },
+        "transcript_reliability": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcript Reliability"
+        },
+        "visual_difference_signal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Difference Signal"
+        },
+        "visual_evidence_coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visual Evidence Coverage"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "quality_score",
+        "quality_weight_coverage",
+        "edit_opportunity_score",
+        "edit_opportunity_weight_coverage"
+      ],
+      "title": "CandidateScoreBreakdown",
+      "type": "object"
+    },
+    "CandidateStatus": {
+      "enum": [
+        "proposed",
+        "visual_pending",
+        "ready_for_review",
+        "rejected"
+      ],
+      "title": "CandidateStatus",
+      "type": "string"
+    },
+    "ComplianceResult": {
+      "additionalProperties": false,
+      "description": "One rule applied to one subject. ``evidence`` is required for every status.",
+      "properties": {
+        "evidence": {
+          "minLength": 1,
+          "title": "Evidence",
+          "type": "string"
+        },
+        "result_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Result Id",
+          "type": "string"
+        },
+        "rule_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ComplianceStatus"
+        }
+      },
+      "required": [
+        "result_id",
+        "rule_id",
+        "status",
+        "evidence"
+      ],
+      "title": "ComplianceResult",
+      "type": "object"
+    },
+    "ComplianceStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "insufficient_evidence"
+      ],
+      "title": "ComplianceStatus",
+      "type": "string"
+    },
+    "DedupDisposition": {
+      "enum": [
+        "kept",
+        "duplicate"
+      ],
+      "title": "DedupDisposition",
+      "type": "string"
+    },
+    "EditOpportunityWeights": {
+      "additionalProperties": false,
+      "description": "Weights for editing opportunity. They do not enter the quality score.",
+      "properties": {
+        "face_layout_variation": {
+          "default": 0.15,
+          "title": "Face Layout Variation",
+          "type": "number"
+        },
+        "multi_scene_signal": {
+          "default": 0.1,
+          "title": "Multi Scene Signal",
+          "type": "number"
+        },
+        "numeric_token_signal": {
+          "default": 0.15,
+          "title": "Numeric Token Signal",
+          "type": "number"
+        },
+        "punctuation_emphasis_signal": {
+          "default": 0.1,
+          "title": "Punctuation Emphasis Signal",
+          "type": "number"
+        },
+        "scene_change_signal": {
+          "default": 0.25,
+          "title": "Scene Change Signal",
+          "type": "number"
+        },
+        "visual_difference_signal": {
+          "default": 0.25,
+          "title": "Visual Difference Signal",
+          "type": "number"
+        }
+      },
+      "title": "EditOpportunityWeights",
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "enum": [
+        "transcript",
+        "visual",
+        "audio",
+        "campaign_fit",
+        "human"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "QualityWeights": {
+      "additionalProperties": false,
+      "description": "Weights for the editorial quality heuristic. They sum to 1.",
+      "properties": {
+        "boundary_completeness": {
+          "default": 0.2,
+          "title": "Boundary Completeness",
+          "type": "number"
+        },
+        "duration_fit": {
+          "default": 0.15,
+          "title": "Duration Fit",
+          "type": "number"
+        },
+        "information_density": {
+          "default": 0.1,
+          "title": "Information Density",
+          "type": "number"
+        },
+        "opening_structure": {
+          "default": 0.05,
+          "title": "Opening Structure",
+          "type": "number"
+        },
+        "speech_coverage": {
+          "default": 0.2,
+          "title": "Speech Coverage",
+          "type": "number"
+        },
+        "transcript_reliability": {
+          "default": 0.2,
+          "title": "Transcript Reliability",
+          "type": "number"
+        },
+        "visual_evidence_coverage": {
+          "default": 0.1,
+          "title": "Visual Evidence Coverage",
+          "type": "number"
+        }
+      },
+      "title": "QualityWeights",
+      "type": "object"
+    },
+    "TimeMapDocument": {
+      "additionalProperties": false,
+      "description": "Ordered source ranges. This is the only persisted jump-cut map.\n\nThe JSON Schema title is ``TimeMap``. Output intervals are a pure function\nof this list via ``to_time_map`` and are not stored separately.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/TimelineSegment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "time_map_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Time Map Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time_map_id",
+        "segments"
+      ],
+      "title": "TimeMap",
+      "type": "object"
+    },
+    "TimelineSegment": {
+      "additionalProperties": false,
+      "description": "One kept source range. Output position is the index of this segment in its time map.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "segment_id",
+        "source_start_us",
+        "source_end_us"
+      ],
+      "title": "TimelineSegment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One immutable candidate-mining run for one source.",
+  "properties": {
+    "boundary_timing_quality": {
+      "const": "provisional",
+      "default": "provisional",
+      "title": "Boundary Timing Quality",
+      "type": "string"
+    },
+    "candidate_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Input Sha256",
+      "type": "string"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/CandidateClip"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "canonical_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Canonical Duration Us",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dedupe_decisions": {
+      "items": {
+        "$ref": "#/$defs/CandidateDeduplicationDecision"
+      },
+      "title": "Dedupe Decisions",
+      "type": "array"
+    },
+    "dedupe_version": {
+      "const": "temporal-jaccard-v1",
+      "default": "temporal-jaccard-v1",
+      "title": "Dedupe Version",
+      "type": "string"
+    },
+    "evidence_bundles": {
+      "items": {
+        "$ref": "#/$defs/CandidateEvidenceBundle"
+      },
+      "title": "Evidence Bundles",
+      "type": "array"
+    },
+    "filter_decisions": {
+      "items": {
+        "$ref": "#/$defs/CandidateFilterDecision"
+      },
+      "title": "Filter Decisions",
+      "type": "array"
+    },
+    "mining_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Mining Id",
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/CandidateMiningProfile"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "recipe_name": {
+      "const": "candidate-mining",
+      "default": "candidate-mining",
+      "title": "Recipe Name",
+      "type": "string"
+    },
+    "recipe_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "score_breakdowns": {
+      "items": {
+        "$ref": "#/$defs/CandidateScoreBreakdown"
+      },
+      "title": "Score Breakdowns",
+      "type": "array"
+    },
+    "scoring_version": {
+      "const": "quality-edit-v1",
+      "default": "quality-edit-v1",
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/CandidateMiningSummary"
+    },
+    "tokenizer_version": {
+      "const": "unicode-regex-v1",
+      "default": "unicode-regex-v1",
+      "title": "Tokenizer Version",
+      "type": "string"
+    },
+    "transcript_alignment": {
+      "const": "approximate",
+      "default": "approximate",
+      "title": "Transcript Alignment",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "transcript_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Job Id",
+      "type": "string"
+    },
+    "transcript_recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Transcript Recipe Name",
+      "type": "string"
+    },
+    "transcript_recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Transcript Recipe Version",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "transcript_timing_quality": {
+      "const": "provisional",
+      "default": "provisional",
+      "title": "Transcript Timing Quality",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    },
+    "visual_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Job Id",
+      "type": "string"
+    },
+    "visual_recipe_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Visual Recipe Name",
+      "type": "string"
+    },
+    "visual_recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Visual Recipe Version",
+      "type": "string"
+    },
+    "window_algorithm_version": {
+      "const": "window-v1",
+      "default": "window-v1",
+      "title": "Window Algorithm Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mining_id",
+    "project_id",
+    "source_asset_id",
+    "created_at",
+    "canonical_duration_us",
+    "source_sha256",
+    "transcript_id",
+    "transcript_sha256",
+    "transcript_job_id",
+    "transcript_recipe_name",
+    "transcript_recipe_version",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "visual_job_id",
+    "visual_recipe_name",
+    "visual_recipe_version",
+    "candidate_input_sha256",
+    "profile",
+    "profile_fingerprint",
+    "summary",
+    "provenance"
+  ],
+  "title": "CandidateMiningDocument",
+  "type": "object"
+}

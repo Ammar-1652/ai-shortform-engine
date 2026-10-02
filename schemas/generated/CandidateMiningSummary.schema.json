@@ -1,0 +1,165 @@
+{
+  "additionalProperties": false,
+  "description": "Counts for one mining run. A shortfall under the soft target is not a failure.",
+  "properties": {
+    "below_soft_target": {
+      "title": "Below Soft Target",
+      "type": "boolean"
+    },
+    "duplicate_count": {
+      "minimum": 0,
+      "title": "Duplicate Count",
+      "type": "integer"
+    },
+    "eligible_distinct_count": {
+      "minimum": 0,
+      "title": "Eligible Distinct Count",
+      "type": "integer"
+    },
+    "hard_filtered_count": {
+      "minimum": 0,
+      "title": "Hard Filtered Count",
+      "type": "integer"
+    },
+    "insufficient_evidence_count": {
+      "minimum": 0,
+      "title": "Insufficient Evidence Count",
+      "type": "integer"
+    },
+    "longest_selected_duration_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Longest Selected Duration Us"
+    },
+    "max_candidates": {
+      "minimum": 1,
+      "title": "Max Candidates",
+      "type": "integer"
+    },
+    "mean_edit_opportunity_score": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mean Edit Opportunity Score"
+    },
+    "mean_quality_score": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mean Quality Score"
+    },
+    "mean_selected_duration_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mean Selected Duration Us"
+    },
+    "output_cap_count": {
+      "minimum": 0,
+      "title": "Output Cap Count",
+      "type": "integer"
+    },
+    "pre_dedupe_excluded_count": {
+      "minimum": 0,
+      "title": "Pre Dedupe Excluded Count",
+      "type": "integer"
+    },
+    "raw_hypothesis_cap_reached": {
+      "default": false,
+      "title": "Raw Hypothesis Cap Reached",
+      "type": "boolean"
+    },
+    "raw_hypothesis_count": {
+      "minimum": 0,
+      "title": "Raw Hypothesis Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scored_count": {
+      "minimum": 0,
+      "title": "Scored Count",
+      "type": "integer"
+    },
+    "selected_count": {
+      "minimum": 0,
+      "title": "Selected Count",
+      "type": "integer"
+    },
+    "shortest_selected_duration_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shortest Selected Duration Us"
+    },
+    "soft_target_min": {
+      "minimum": 0,
+      "title": "Soft Target Min",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "raw_hypothesis_count",
+    "hard_filtered_count",
+    "scored_count",
+    "insufficient_evidence_count",
+    "pre_dedupe_excluded_count",
+    "duplicate_count",
+    "eligible_distinct_count",
+    "output_cap_count",
+    "selected_count",
+    "soft_target_min",
+    "max_candidates",
+    "below_soft_target"
+  ],
+  "title": "CandidateMiningSummary",
+  "type": "object"
+}

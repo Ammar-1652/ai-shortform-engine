@@ -28,19 +28,21 @@ Full-source transcript of the Round 2 ASR FLAC with `alignment = approximate`. W
 
 ## Round 4 — Scene, visual, and face analysis
 
-Status: complete on this branch. See `docs/operations/round-04-validation.md`. Not merged. Round 5 has not started.
+Status: merged on main as `00402a23ceac3f7814d1a4aa0019f815cf54554c`. See `docs/operations/round-04-validation.md`.
 
 PySceneDetect shot intervals, representative frames, luma and sharpness measurements, and MediaPipe face boxes. `speaker_attribution` stays `unknown`. No recognition and no candidate ranking.
 
 ## Round 5 — Candidate mining
 
-Status: not started.
+Status: complete on this branch. See `docs/operations/round-05-validation.md`. The draft PR is not merged.
 
-About 15–25 candidates is a target band, not a constant. Score, dedupe, and attach transcript and visual evidence. Compliance remains a gate. No fixed top 5.
+The current transcript and the current visual analysis are mined into one candidate-set artifact. Quality and edit opportunity stay separate. About 15–25 candidates is a target band, not a quota, and there is no fixed top 5. Compliance remains a gate.
 
 ## Round 6 — Rough Remotion renderer
 
-Cheap vertical previews and captions driven by the canonical time map. No second timing implementation inside React.
+Status: not started.
+
+Cheap vertical previews and captions driven by the canonical time map. No second timing implementation inside React. Not started.
 
 ## Round 7 — Candidate review
 

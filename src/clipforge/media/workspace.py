@@ -53,9 +53,10 @@ class SourceWorkspace:
         root = self.root.resolve()
         root.mkdir(parents=True, exist_ok=True)
         ensure_within(root, root)
-        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp", "vision"):
+        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp", "vision", "candidates"):
             _mkdir_contained(root, _join(self.source_root, relative))
         _mkdir_contained(root, _join(self.vision_root(), "runs"))
+        _mkdir_contained(root, _join(self.candidate_root(), "runs"))
 
     def clear_partials(self) -> None:
         """Delete ``*.partial.*`` under this source directory and nowhere else."""
@@ -84,6 +85,32 @@ class SourceWorkspace:
 
     def vision_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "vision.lock")
+
+    def candidate_root(self) -> Path:
+        return _join(self.source_root, "candidates")
+
+    def candidate_run_dir(self, mining_id: str) -> Path:
+        return _join(self.candidate_root(), "runs", _segment(mining_id))
+
+    def candidate_sidecar(self) -> Path:
+        return self.metadata_file("candidate-mining.recipe.json")
+
+    def candidate_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "candidate.lock")
+
+    def make_candidate_run(self, mining_id: str) -> Path:
+        """Create one immutable candidate run. Refuse a symlink at any component."""
+        self.ensure()
+        root = self.root.resolve()
+        run = self.candidate_run_dir(mining_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"candidate mining run {mining_id} already exists. "
+                "A new mining run uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        _mkdir_contained(root, _join(run, "logs"))
+        return run
 
     def make_vision_run(self, analysis_id: str) -> Path:
         """Create one immutable run directory. Refuse a symlink at any component."""
@@ -142,6 +169,47 @@ def vision_lock(workspace: SourceWorkspace) -> Iterator[Path]:
         "Clipforge refused to start a second visual analysis so evidence artifacts cannot race."
     )
     with _flock(workspace, workspace.vision_lock_path(), exclusive=True, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def transcribe_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> Iterator[Path]:
+    """Share ``transcribe.lock`` while a reader needs the current transcript.
+
+    Acquire this only after the shared prepare lock. An exclusive transcription
+    cannot start while this shared lock is held.
+    """
+    message = busy or (
+        f"another transcription is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the transcript while it can be replaced."
+    )
+    with _flock(workspace, workspace.transcribe_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def vision_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> Iterator[Path]:
+    """Share ``vision.lock`` while a reader needs the current visual analysis.
+
+    Acquire this only after the shared prepare lock and the shared transcription
+    lock. An exclusive visual analysis cannot start while this shared lock is held.
+    """
+    message = busy or (
+        f"another visual analysis is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the visual analysis while it can be replaced."
+    )
+    with _flock(workspace, workspace.vision_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def candidate_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source candidate-mining lock until this context exits."""
+    busy = (
+        f"another candidate mining run is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second mining run so candidate artifacts cannot race."
+    )
+    with _flock(workspace, workspace.candidate_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

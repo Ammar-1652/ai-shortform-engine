@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "description": "Weights for editing opportunity. They do not enter the quality score.",
+  "properties": {
+    "face_layout_variation": {
+      "default": 0.15,
+      "title": "Face Layout Variation",
+      "type": "number"
+    },
+    "multi_scene_signal": {
+      "default": 0.1,
+      "title": "Multi Scene Signal",
+      "type": "number"
+    },
+    "numeric_token_signal": {
+      "default": 0.15,
+      "title": "Numeric Token Signal",
+      "type": "number"
+    },
+    "punctuation_emphasis_signal": {
+      "default": 0.1,
+      "title": "Punctuation Emphasis Signal",
+      "type": "number"
+    },
+    "scene_change_signal": {
+      "default": 0.25,
+      "title": "Scene Change Signal",
+      "type": "number"
+    },
+    "visual_difference_signal": {
+      "default": 0.25,
+      "title": "Visual Difference Signal",
+      "type": "number"
+    }
+  },
+  "title": "EditOpportunityWeights",
+  "type": "object"
+}

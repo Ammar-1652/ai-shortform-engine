@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-Round 4 ingests a local video file, builds a review proxy and canonical ASR audio, transcribes that audio with faster-whisper, and records scene, frame, and face-detection evidence from the analysis proxy. It does not score candidates or render a reel.
+The local path is ingest, prepare, transcript, visual analysis, then candidate mining. Round 5 reads the stored transcript and the stored visual analysis and writes a candidate set. It does not render a reel. Round 6 will make rough previews from that set.
 
 ## What works
 
@@ -24,12 +24,14 @@ Round 4 ingests a local video file, builds a review proxy and canonical ASR audi
 - `clipforge vision model status` and `clipforge vision model fetch face-detector --allow-model-download` manage the official BlazeFace file. Nothing downloads without the flag.
 - `clipforge vision analyze` reads the analysis proxy for one source. Faces are detections only. Speaker attribution is not performed. Candidate mining is not performed.
 - `clipforge vision verify` and `clipforge vision show` read the stored analysis. Verify does not repair files or load the face model.
+- `clipforge candidate doctor` reports the candidate recipe, duration limits, and disk. It does not load a model.
+- `clipforge candidate mine SOURCE_ID` builds a candidate set from the current transcript and visual analysis. Scores are editorial heuristics. Edit opportunity is separate. There is no virality probability and the command does not publish.
+- `clipforge candidate list`, `clipforge candidate show`, and `clipforge candidate verify` read that set. `show` keeps word timing marked provisional. Verify does not repair or rescore.
 
 ## What does not work yet
 
 - WhisperX alignment
 - Active-speaker detection and face recognition
-- Candidate mining and scoring
 - Rough or Hero rendering
 - Envato search or download
 - A review UI
@@ -45,12 +47,12 @@ Five planes share one core:
 | Plane | Round 1 role |
 | --- | --- |
 | Control | Typer CLI, SQLite jobs, profiles, policies, review records |
-| Media | Local ingest, canonical source clock, analysis proxy, ASR audio, faster-whisper transcript, scene and face-detection evidence. |
+| Media | Local ingest, canonical source clock, analysis proxy, ASR audio, faster-whisper transcript, scene and face-detection evidence, candidate mining from those artifacts. |
 | AI decision | Contracts for evidence and scores. No model calls. |
 | Assets | License and provenance records. No downloads. |
 | Review | Human decisions are data. Nothing is published. |
 
-The normative timing rules are in [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md). Decisions are in [docs/adr](docs/adr). The map of later rounds is [ROADMAP.md](ROADMAP.md).
+The normative timing rules are in [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md). Candidate mining is in [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md). Decisions are in [docs/adr](docs/adr). The map of later rounds is [ROADMAP.md](ROADMAP.md).
 
 ## Requirements
 
