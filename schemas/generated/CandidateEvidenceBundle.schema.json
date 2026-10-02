@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "Machine-readable evidence for one candidate. Prose details are not the ids.",
+  "properties": {
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "face_observation_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Face Observation Ids",
+      "type": "array"
+    },
+    "representative_frame_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Representative Frame Ids",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "transcript_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Transcript End Us",
+      "type": "integer"
+    },
+    "transcript_excerpt": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Transcript Excerpt",
+      "type": "string"
+    },
+    "transcript_segment_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Transcript Segment Ids",
+      "type": "array"
+    },
+    "transcript_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Transcript Start Us",
+      "type": "integer"
+    },
+    "transcript_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Transcript Word Ids",
+      "type": "array"
+    },
+    "visual_scene_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Visual Scene Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "transcript_segment_ids",
+    "transcript_excerpt",
+    "transcript_start_us",
+    "transcript_end_us",
+    "visual_scene_ids",
+    "source_start_us",
+    "source_end_us"
+  ],
+  "title": "CandidateEvidenceBundle",
+  "type": "object"
+}

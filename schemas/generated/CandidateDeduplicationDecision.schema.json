@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "DedupDisposition": {
+      "enum": [
+        "kept",
+        "duplicate"
+      ],
+      "title": "DedupDisposition",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One kept-or-duplicate decision. Hypotheses are not dropped without a record.",
+  "properties": {
+    "containment_ratio": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Containment Ratio"
+    },
+    "disposition": {
+      "$ref": "#/$defs/DedupDisposition"
+    },
+    "duplicate_of_candidate_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duplicate Of Candidate Id"
+    },
+    "hypothesis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hypothesis Id",
+      "type": "string"
+    },
+    "reason": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "temporal_iou": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Temporal Iou"
+    },
+    "token_similarity": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Token Similarity"
+    }
+  },
+  "required": [
+    "hypothesis_id",
+    "disposition",
+    "reason"
+  ],
+  "title": "CandidateDeduplicationDecision",
+  "type": "object"
+}

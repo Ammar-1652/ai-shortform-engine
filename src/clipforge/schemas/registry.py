@@ -9,6 +9,18 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from clipforge.schemas.candidates import (
+    CandidateDeduplicationDecision,
+    CandidateEvidenceBundle,
+    CandidateFilterDecision,
+    CandidateMiningCacheRecord,
+    CandidateMiningDocument,
+    CandidateMiningProfile,
+    CandidateMiningSummary,
+    CandidateScoreBreakdown,
+    EditOpportunityWeights,
+    QualityWeights,
+)
 from clipforge.schemas.editorial import (
     AudioEvent,
     BrollEvent,
@@ -97,6 +109,16 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     VisualAnalysisSummary,
     VisualAnalysisDocument,
     VisualAnalysisCacheRecord,
+    QualityWeights,
+    EditOpportunityWeights,
+    CandidateMiningProfile,
+    CandidateEvidenceBundle,
+    CandidateScoreBreakdown,
+    CandidateDeduplicationDecision,
+    CandidateFilterDecision,
+    CandidateMiningSummary,
+    CandidateMiningDocument,
+    CandidateMiningCacheRecord,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

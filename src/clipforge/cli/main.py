@@ -12,6 +12,7 @@ import typer
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.media_cmd import media_app
 from clipforge.cli.source import source_app
 from clipforge.cli.storage_cmd import storage_app
@@ -40,6 +41,7 @@ app.add_typer(media_app, name="media")
 app.add_typer(storage_app, name="storage")
 app.add_typer(transcript_app, name="transcript")
 app.add_typer(vision_app, name="vision")
+app.add_typer(candidate_app, name="candidate")
 
 
 def _version_callback(value: bool) -> None:

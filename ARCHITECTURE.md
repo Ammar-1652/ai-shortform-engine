@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 4 adds scene, frame, and face-detection evidence from the analysis proxy. It does not choose candidates or treat a face as a speaker.
+Clipforge turns authorized long-form video into short vertical edits. Round 5 reads the current transcript and the current visual analysis and writes a candidate set. A face is still not a speaker. Rendering starts in Round 6.
 
 ## Planes
 
@@ -8,7 +8,7 @@ Clipforge turns authorized long-form video into short vertical edits. Round 4 ad
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify.
+- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
 - State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
@@ -32,8 +32,8 @@ Owns bytes, clocks, and pictures.
 Owns judgment that is not a deterministic media tool. Agents orchestrate. They do not replace ffmpeg, the time map, or the compliance gate.
 
 - Campaign interpretation: `CampaignProfile` and policy ids. No interpreter yet.
-- Candidate discovery: `CandidateClip` plus `CandidateEvidence`. The time map must have a positive output duration. Ready for review requires transcript evidence and visual evidence.
-- Scoring: optional `creative_score` in `[0, 1]`. It is not combined with compliance.
+- Candidate discovery: `clipforge candidate mine` writes one `CandidateMiningDocument` per source. Each selected `CandidateClip` has one source range, transcript evidence, and visual evidence. See [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md).
+- Scoring: `creative_score` is the quality heuristic in `[0, 1]`. `edit_opportunity_score` is stored beside it and is not added in. Neither score is compliance or a virality probability.
 - Edit planning: `EditPlan` for stage `rough` or `hero`, bound to a time-map digest. The map must have a positive output duration. `Scene` and `FaceObservation` provenance must include their own `source_asset_id`. A face is still not a speaker.
 - QA assistance: `QAResult` aggregates checks. The status cannot be stronger than the worst check.
 
@@ -75,8 +75,8 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 | FFmpeg and ffprobe | Ingest, proxy, ASR audio, validation | Used for local files |
 | faster-whisper | Full-source approximate transcript of the ASR FLAC | Used |
 | WhisperX | Forced alignment of selected Hero clips | Deferred |
-| PySceneDetect | Scene boundaries | Deferred |
-| MediaPipe and OpenCV | Faces, pose, framing signals | Deferred |
+| PySceneDetect | Scene boundaries on the analysis proxy | Used |
+| MediaPipe and OpenCV | Face boxes and frame measurements. No identity and no speaker label | Used |
 | Remotion, React, TypeScript | Programmatic 9:16 render | Scaffold only |
 | pnpm | JavaScript installs | Used by the scaffold |
 | pytest, Ruff, mypy | Python checks | Used |
@@ -90,9 +90,8 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 The following are not stubbed as successful commands:
 
 - WhisperX integration
-- PySceneDetect integration
-- MediaPipe or OpenCV analysis
 - Remotion reel compositions and actual rendering
+- Candidate review UI and Hero edit plans
 - Envato MCP
 - Review web UI and Remotion Player
 - Publishing APIs

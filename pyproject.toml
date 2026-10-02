@@ -50,6 +50,7 @@ markers = [
     "media: tests that execute ffmpeg or ffprobe",
     "transcription: deterministic transcription tests with a fake backend and no model download",
     "vision: PySceneDetect, PyAV, and OpenCV tests with a fake face backend and no model download",
+    "candidate: deterministic candidate-mining tests with no model download and no video decode",
     "model_smoke: local model-weight tests, excluded from CI",
 ]
 

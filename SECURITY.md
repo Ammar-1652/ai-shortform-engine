@@ -29,6 +29,10 @@ Inference runs on this machine. Clipforge does not send source audio to a remote
 
 Scene detection and face detection run on this machine against the local analysis proxy. Clipforge does not upload frames to a vision API. Stored face data is boxes, optional keypoints, and a scene-local track id. There is no face embedding, name, age, gender, or ethnicity field. Representative JPEGs and contact sheets stay under the work root and are gitignored. The MediaPipe model downloads only with `--allow-model-download` from the official `storage.googleapis.com` BlazeFace URL, into `CLIPFORGE_MODEL_ROOT`. MediaPipe Tasks runs the detector on device. Clipforge does not claim that MediaPipe itself never sends performance metrics.
 
+## Candidate mining
+
+Mining reads the local transcript and visual-analysis JSON. It does not upload either artifact, call a remote model, decode the proxy, or decode the ASR audio. It does not run face recognition or speaker inference. Candidate excerpts are slices of the stored transcript and stay under the work root. Do not commit `candidates.json` or other runtime JSON that contains transcript text.
+
 ## Downloaded assets
 
 Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.

@@ -1,0 +1,237 @@
+{
+  "$defs": {
+    "EditOpportunityWeights": {
+      "additionalProperties": false,
+      "description": "Weights for editing opportunity. They do not enter the quality score.",
+      "properties": {
+        "face_layout_variation": {
+          "default": 0.15,
+          "title": "Face Layout Variation",
+          "type": "number"
+        },
+        "multi_scene_signal": {
+          "default": 0.1,
+          "title": "Multi Scene Signal",
+          "type": "number"
+        },
+        "numeric_token_signal": {
+          "default": 0.15,
+          "title": "Numeric Token Signal",
+          "type": "number"
+        },
+        "punctuation_emphasis_signal": {
+          "default": 0.1,
+          "title": "Punctuation Emphasis Signal",
+          "type": "number"
+        },
+        "scene_change_signal": {
+          "default": 0.25,
+          "title": "Scene Change Signal",
+          "type": "number"
+        },
+        "visual_difference_signal": {
+          "default": 0.25,
+          "title": "Visual Difference Signal",
+          "type": "number"
+        }
+      },
+      "title": "EditOpportunityWeights",
+      "type": "object"
+    },
+    "QualityWeights": {
+      "additionalProperties": false,
+      "description": "Weights for the editorial quality heuristic. They sum to 1.",
+      "properties": {
+        "boundary_completeness": {
+          "default": 0.2,
+          "title": "Boundary Completeness",
+          "type": "number"
+        },
+        "duration_fit": {
+          "default": 0.15,
+          "title": "Duration Fit",
+          "type": "number"
+        },
+        "information_density": {
+          "default": 0.1,
+          "title": "Information Density",
+          "type": "number"
+        },
+        "opening_structure": {
+          "default": 0.05,
+          "title": "Opening Structure",
+          "type": "number"
+        },
+        "speech_coverage": {
+          "default": 0.2,
+          "title": "Speech Coverage",
+          "type": "number"
+        },
+        "transcript_reliability": {
+          "default": 0.2,
+          "title": "Transcript Reliability",
+          "type": "number"
+        },
+        "visual_evidence_coverage": {
+          "default": 0.1,
+          "title": "Visual Evidence Coverage",
+          "type": "number"
+        }
+      },
+      "title": "QualityWeights",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Output-changing settings for one candidate-mining recipe.\n\n``soft_target_min`` is informational. Mining does not invent candidates to\nreach it. ``max_candidates`` is a real cap. There is no quality floor:\neligibility is the hard filters plus score-coverage, then dedupe.",
+  "properties": {
+    "boundary_algorithm_version": {
+      "const": "word-pad-v1",
+      "default": "word-pad-v1",
+      "title": "Boundary Algorithm Version",
+      "type": "string"
+    },
+    "boundary_padding_us": {
+      "default": 250000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Boundary Padding Us",
+      "type": "integer"
+    },
+    "containment_threshold": {
+      "default": 0.8,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Containment Threshold",
+      "type": "number"
+    },
+    "dedupe_version": {
+      "const": "temporal-jaccard-v1",
+      "default": "temporal-jaccard-v1",
+      "title": "Dedupe Version",
+      "type": "string"
+    },
+    "edit_weights": {
+      "$ref": "#/$defs/EditOpportunityWeights"
+    },
+    "hard_max_duration_us": {
+      "default": 65000000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Hard Max Duration Us",
+      "type": "integer"
+    },
+    "hard_min_duration_us": {
+      "default": 8000000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Hard Min Duration Us",
+      "type": "integer"
+    },
+    "max_candidates": {
+      "default": 25,
+      "minimum": 1,
+      "title": "Max Candidates",
+      "type": "integer"
+    },
+    "maximum_raw_hypotheses": {
+      "default": 5000,
+      "minimum": 1,
+      "title": "Maximum Raw Hypotheses",
+      "type": "integer"
+    },
+    "minimum_quality_coverage": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Minimum Quality Coverage",
+      "type": "number"
+    },
+    "minimum_transcript_words": {
+      "default": 5,
+      "minimum": 1,
+      "title": "Minimum Transcript Words",
+      "type": "integer"
+    },
+    "pre_dedupe_pool_size": {
+      "default": 200,
+      "minimum": 1,
+      "title": "Pre Dedupe Pool Size",
+      "type": "integer"
+    },
+    "preferred_max_duration_us": {
+      "default": 45000000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Preferred Max Duration Us",
+      "type": "integer"
+    },
+    "preferred_min_duration_us": {
+      "default": 18000000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Preferred Min Duration Us",
+      "type": "integer"
+    },
+    "profile_id": {
+      "const": "candidate-mining-v1",
+      "default": "candidate-mining-v1",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "quality_weights": {
+      "$ref": "#/$defs/QualityWeights"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scoring_version": {
+      "const": "quality-edit-v1",
+      "default": "quality-edit-v1",
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "soft_target_min": {
+      "default": 15,
+      "minimum": 0,
+      "title": "Soft Target Min",
+      "type": "integer"
+    },
+    "temporal_iou_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Temporal Iou Threshold",
+      "type": "number"
+    },
+    "token_similarity_threshold": {
+      "default": 0.7,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Token Similarity Threshold",
+      "type": "number"
+    },
+    "tokenizer_version": {
+      "const": "unicode-regex-v1",
+      "default": "unicode-regex-v1",
+      "title": "Tokenizer Version",
+      "type": "string"
+    },
+    "window_algorithm_version": {
+      "const": "window-v1",
+      "default": "window-v1",
+      "title": "Window Algorithm Version",
+      "type": "string"
+    }
+  },
+  "title": "CandidateMiningProfile",
+  "type": "object"
+}

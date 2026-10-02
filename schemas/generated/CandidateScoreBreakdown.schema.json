@@ -1,0 +1,213 @@
+{
+  "additionalProperties": false,
+  "description": "Persisted features. Missing evidence stays null and is omitted from the weight.",
+  "properties": {
+    "boundary_completeness": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Boundary Completeness"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "duration_fit": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Fit"
+    },
+    "edit_opportunity_score": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Edit Opportunity Score",
+      "type": "number"
+    },
+    "edit_opportunity_weight_coverage": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Edit Opportunity Weight Coverage",
+      "type": "number"
+    },
+    "face_layout_variation": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Face Layout Variation"
+    },
+    "information_density": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Information Density"
+    },
+    "multi_scene_signal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Multi Scene Signal"
+    },
+    "numeric_token_signal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Numeric Token Signal"
+    },
+    "opening_structure": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Opening Structure"
+    },
+    "punctuation_emphasis_signal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Punctuation Emphasis Signal"
+    },
+    "quality_score": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Quality Score",
+      "type": "number"
+    },
+    "quality_weight_coverage": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Quality Weight Coverage",
+      "type": "number"
+    },
+    "scene_change_signal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scene Change Signal"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scoring_version": {
+      "const": "quality-edit-v1",
+      "default": "quality-edit-v1",
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "speech_coverage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Speech Coverage"
+    },
+    "transcript_reliability": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Transcript Reliability"
+    },
+    "visual_difference_signal": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Visual Difference Signal"
+    },
+    "visual_evidence_coverage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Visual Evidence Coverage"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "quality_score",
+    "quality_weight_coverage",
+    "edit_opportunity_score",
+    "edit_opportunity_weight_coverage"
+  ],
+  "title": "CandidateScoreBreakdown",
+  "type": "object"
+}

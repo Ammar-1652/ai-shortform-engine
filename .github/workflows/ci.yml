@@ -20,7 +20,7 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest -m "not media and not transcription and not vision and not model_smoke"
+        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not model_smoke"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
@@ -77,6 +77,19 @@ jobs:
         run: uv run python -c "import scenedetect, cv2, av, mediapipe"
       - name: Vision tests
         run: uv run pytest -m vision
+
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Candidate mining tests
+        run: uv run pytest -m candidate
 
   renderer:
     runs-on: ubuntu-latest

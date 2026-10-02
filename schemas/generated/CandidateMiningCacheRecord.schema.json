@@ -1,0 +1,154 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar for the current candidate set. ``created_at`` is not identity.",
+  "properties": {
+    "candidate_artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Artifact Sha256",
+      "type": "string"
+    },
+    "candidate_artifact_size": {
+      "minimum": 0,
+      "title": "Candidate Artifact Size",
+      "type": "integer"
+    },
+    "candidate_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Input Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dedupe_version": {
+      "const": "temporal-jaccard-v1",
+      "default": "temporal-jaccard-v1",
+      "title": "Dedupe Version",
+      "type": "string"
+    },
+    "job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "mining_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Mining Id",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "recipe_name": {
+      "const": "candidate-mining",
+      "default": "candidate-mining",
+      "title": "Recipe Name",
+      "type": "string"
+    },
+    "recipe_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scoring_version": {
+      "const": "quality-edit-v1",
+      "default": "quality-edit-v1",
+      "title": "Scoring Version",
+      "type": "string"
+    },
+    "selected_count": {
+      "minimum": 0,
+      "title": "Selected Count",
+      "type": "integer"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "tokenizer_version": {
+      "const": "unicode-regex-v1",
+      "default": "unicode-regex-v1",
+      "title": "Tokenizer Version",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "validation_status": {
+      "const": "passed",
+      "title": "Validation Status",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    },
+    "window_algorithm_version": {
+      "const": "window-v1",
+      "default": "window-v1",
+      "title": "Window Algorithm Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "mining_id",
+    "job_id",
+    "source_sha256",
+    "transcript_id",
+    "transcript_sha256",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "candidate_input_sha256",
+    "profile_fingerprint",
+    "candidate_artifact_sha256",
+    "candidate_artifact_size",
+    "selected_count",
+    "validation_status",
+    "created_at"
+  ],
+  "title": "CandidateMiningCacheRecord",
+  "type": "object"
+}
