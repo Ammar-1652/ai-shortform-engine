@@ -1,4 +1,4 @@
-"""Row access for the five Round 1 tables. Corrupt JSON is an error, not a skipped row."""
+"""Row access for the durable tables. Corrupt JSON is an error, not a skipped row."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, TypeVar
 from pydantic import ValidationError
 
 from clipforge.errors import StorageError
-from clipforge.schemas.governance import ReviewDecision
+from clipforge.schemas.governance import AssetLicenseRecord, ReviewDecision
 from clipforge.schemas.jobs import JobRecord
 from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.project import Project
@@ -51,6 +51,57 @@ def get_project(connection: sqlite3.Connection, project_id: str) -> Project:
     if row is None:
         raise StorageError(f"no project with id {project_id}. Run `clipforge project list` to see stored ids.")
     return _project_from_row(row)
+
+
+def insert_asset_license_record(connection: sqlite3.Connection, record: AssetLicenseRecord) -> None:
+    data = record.model_dump(mode="json")
+    _insert(
+        connection,
+        """
+        INSERT INTO asset_license_records (
+            license_record_id, asset_id, schema_version, status, license_name, evidence_uri,
+            notes, recorded_at, recorded_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            data["license_record_id"],
+            data["asset_id"],
+            data["schema_version"],
+            data["status"],
+            data["license_name"],
+            data["evidence_uri"],
+            data["notes"],
+            data["recorded_at"],
+            data["recorded_by"],
+        ),
+        f"asset license record {record.license_record_id}",
+    )
+
+
+def get_asset_license_record(connection: sqlite3.Connection, license_record_id: str) -> AssetLicenseRecord:
+    row = connection.execute(
+        "SELECT * FROM asset_license_records WHERE license_record_id = ?",
+        (license_record_id,),
+    ).fetchone()
+    if row is None:
+        raise StorageError(
+            f"no asset license record with id {license_record_id}. "
+            "Insert the rights record before storing a source that cites it."
+        )
+    return _license_from_row(row)
+
+
+def list_asset_license_records(
+    connection: sqlite3.Connection, asset_id: str | None = None
+) -> list[AssetLicenseRecord]:
+    if asset_id is None:
+        rows = connection.execute("SELECT * FROM asset_license_records ORDER BY license_record_id").fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT * FROM asset_license_records WHERE asset_id = ? ORDER BY license_record_id",
+            (asset_id,),
+        ).fetchall()
+    return [_license_from_row(row) for row in rows]
 
 
 def insert_source_asset(connection: sqlite3.Connection, asset: SourceAsset) -> None:
@@ -128,11 +179,49 @@ def insert_artifact(
     uri: str,
     provenance: ArtifactProvenance,
 ) -> None:
-    """Store an artifact pointer. The file at ``uri`` is not opened or created."""
+    """Store an artifact pointer. The file at ``uri`` is not opened or created.
+
+    When ``job_id`` is set, ``provenance.job_id`` is required and must be the same id.
+    When ``source_asset_id`` is set, that id must be listed in ``provenance.source_asset_ids``.
+    """
     if not kind.strip() or not uri.strip():
         raise StorageError("artifact kind and uri must be non-empty. The row was not written.")
     if source_asset_id is None and not provenance.source_asset_ids:
         raise StorageError(f"artifact {artifact_id} has no source asset. Refusing to store an unlinked file.")
+    if source_asset_id is not None and source_asset_id not in provenance.source_asset_ids:
+        raise StorageError(
+            f"artifact {artifact_id} source_asset_id is {source_asset_id} but "
+            f"provenance.source_asset_ids is {list(provenance.source_asset_ids)}. "
+            "Refusing to store contradictory lineage."
+        )
+    if (job_id or None) != (provenance.job_id or None):
+        raise StorageError(
+            f"artifact {artifact_id} job_id is {job_id!r} but provenance.job_id is {provenance.job_id!r}. "
+            "When an artifact names a producing job, provenance.job_id must be that same id. "
+            "The row was not written."
+        )
+    if source_asset_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="source_assets",
+            parent_id_column="source_asset_id",
+            parent_id=source_asset_id,
+            parent_label="source asset",
+        )
+    if job_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="jobs",
+            parent_id_column="job_id",
+            parent_id=job_id,
+            parent_label="job",
+        )
     data = provenance.model_dump(mode="json")
     _insert(
         connection,
@@ -166,6 +255,17 @@ def list_artifact_ids(connection: sqlite3.Connection, project_id: str) -> list[s
 
 
 def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> None:
+    if review.artifact_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="review",
+            child_id=review.review_id,
+            child_project=review.project_id,
+            parent_table="artifacts",
+            parent_id_column="artifact_id",
+            parent_id=review.artifact_id,
+            parent_label="artifact",
+        )
     data = review.model_dump(mode="json")
     _insert(
         connection,
@@ -199,6 +299,41 @@ def list_reviews(connection: sqlite3.Connection, project_id: str) -> list[Review
     return [_review_from_row(row) for row in rows]
 
 
+def _reject_cross_project(
+    connection: sqlite3.Connection,
+    *,
+    child_label: str,
+    child_id: str,
+    child_project: str,
+    parent_table: str,
+    parent_id_column: str,
+    parent_id: str,
+    parent_label: str,
+) -> None:
+    """Raise when a parent row exists and belongs to a different project.
+
+    A missing parent is left to the foreign key so this function does not invent a second
+    existence check. ``parent_table`` and ``parent_id_column`` are fixed by the caller.
+    """
+    if parent_table not in {"source_assets", "jobs", "artifacts"}:
+        raise StorageError(f"refusing to check an unknown parent table {parent_table}")
+    if parent_id_column not in {"source_asset_id", "job_id", "artifact_id"}:
+        raise StorageError(f"refusing to check an unknown parent column {parent_id_column}")
+    row = connection.execute(
+        f"SELECT project_id FROM {parent_table} WHERE {parent_id_column} = ?",
+        (parent_id,),
+    ).fetchone()
+    if row is None:
+        return
+    parent_project = str(row["project_id"])
+    if parent_project != child_project:
+        raise StorageError(
+            f"{child_label} {child_id} is in project {child_project} but {parent_label} {parent_id} "
+            f"belongs to project {parent_project}. A child record cannot point across projects. "
+            "The row was not written. Use the same project_id on both sides."
+        )
+
+
 def _insert(
     connection: sqlite3.Connection,
     sql: str,
@@ -209,7 +344,8 @@ def _insert(
         connection.execute(sql, parameters)
     except sqlite3.IntegrityError as exc:
         raise StorageError(
-            f"could not store {label}. The id may already exist, or a parent project/job is missing. "
+            f"could not store {label}. The id may already exist, or a parent project, job, "
+            "source asset, artifact, or rights record is missing or belongs to a different asset. "
             f"SQLite said: {exc}"
         ) from exc
     except sqlite3.Error as exc:
@@ -230,7 +366,7 @@ def _object(text: str, label: str) -> dict[str, Any]:
     return value
 
 
-_ModelT = TypeVar("_ModelT", Project, SourceAsset, JobRecord, ReviewDecision)
+_ModelT = TypeVar("_ModelT", Project, SourceAsset, JobRecord, ReviewDecision, AssetLicenseRecord)
 
 
 def _validate(model: type[_ModelT], payload: dict[str, Any], label: str) -> _ModelT:
@@ -240,6 +376,25 @@ def _validate(model: type[_ModelT], payload: dict[str, Any], label: str) -> _Mod
         raise StorageError(
             f"{label} is stored in a shape this version of clipforge cannot read: {exc}"
         ) from exc
+
+
+def _license_from_row(row: sqlite3.Row) -> AssetLicenseRecord:
+    label = f"asset license record {row['license_record_id']}"
+    return _validate(
+        AssetLicenseRecord,
+        {
+            "schema_version": row["schema_version"],
+            "license_record_id": row["license_record_id"],
+            "asset_id": row["asset_id"],
+            "status": row["status"],
+            "license_name": row["license_name"],
+            "evidence_uri": row["evidence_uri"],
+            "notes": row["notes"],
+            "recorded_at": row["recorded_at"],
+            "recorded_by": row["recorded_by"],
+        },
+        label,
+    )
 
 
 def _project_from_row(row: sqlite3.Row) -> Project:

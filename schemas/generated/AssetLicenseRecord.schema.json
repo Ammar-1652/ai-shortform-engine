@@ -13,7 +13,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Rights for one asset. ``unknown`` and ``prohibited`` cannot be used in an edit.",
+  "description": "Rights for one asset. ``unknown`` and ``prohibited`` cannot be used in an edit.\n\n``recorded_at`` and ``recorded_by`` were added before any license row existed.\nThe shared ``schema_version`` stays ``1.0.0``. ``require_rights_cleared`` still\nblocks ``unknown``, including migration-2 legacy placeholders.",
   "properties": {
     "asset_id": {
       "description": "Stable id. UUID text is the usual value.",
@@ -56,6 +56,17 @@
       "title": "Notes",
       "type": "string"
     },
+    "recorded_at": {
+      "format": "date-time",
+      "title": "Recorded At",
+      "type": "string"
+    },
+    "recorded_by": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Recorded By",
+      "type": "string"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
@@ -69,7 +80,9 @@
   "required": [
     "license_record_id",
     "asset_id",
-    "status"
+    "status",
+    "recorded_at",
+    "recorded_by"
   ],
   "title": "AssetLicenseRecord",
   "type": "object"

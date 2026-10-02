@@ -16,6 +16,7 @@ from clipforge.storage import (
     Database,
     get_project,
     insert_artifact,
+    insert_asset_license_record,
     insert_job,
     insert_project,
     insert_review,
@@ -25,7 +26,7 @@ from clipforge.storage import (
     list_reviews,
     list_source_assets,
 )
-from tests.helpers import provenance, stamp
+from tests.helpers import license_record, provenance, stamp
 
 
 def _project(project_id: str = "project-1") -> Project:
@@ -39,12 +40,13 @@ def _project(project_id: str = "project-1") -> Project:
 
 def test_init_is_idempotent_and_health_reports_version(tmp_path: Path) -> None:
     database = Database(tmp_path / "one.sqlite3")
-    assert database.initialize() == 1
-    assert database.initialize() == 1
+    assert database.initialize() == 3
+    assert database.initialize() == 3
     database.health_check()
     status = database.status()
-    assert status.schema_version == 1
-    assert status.migrations == ("initial",)
+    assert status.schema_version == 3
+    assert status.migrations == ("initial", "rights_and_lineage", "project_lineage_integrity")
+    assert status.counts["asset_license_records"] == 0
     assert status.counts["projects"] == 0
 
 
@@ -113,6 +115,7 @@ def test_related_rows_and_foreign_keys(tmp_path: Path) -> None:
     )
     with database.transaction() as connection:
         insert_project(connection, _project())
+        insert_asset_license_record(connection, license_record())
         insert_source_asset(connection, asset)
         insert_job(connection, job)
         insert_artifact(
@@ -123,7 +126,7 @@ def test_related_rows_and_foreign_keys(tmp_path: Path) -> None:
             source_asset_id="asset-1",
             kind="proxy",
             uri="file:///var/proxy.mp4",
-            provenance=provenance(["asset-1"]),
+            provenance=provenance(["asset-1"], job_id="job-1"),
         )
         insert_review(connection, review)
     with database.connect() as connection:

@@ -11,8 +11,16 @@ from pathlib import Path
 
 from clipforge.errors import StorageError
 from clipforge.storage.migrations import CURRENT_SCHEMA_VERSION, MIGRATIONS
+from clipforge.storage.schema_shape import assert_current_schema
 
-_REQUIRED_TABLES = frozenset({"schema_migrations", "projects", "source_assets", "jobs", "artifacts", "reviews"})
+_COUNTED_TABLES = (
+    "projects",
+    "source_assets",
+    "asset_license_records",
+    "jobs",
+    "artifacts",
+    "reviews",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,22 +65,33 @@ class Database:
                     f"{self.path} is at schema version {current}, newer than this build "
                     f"({CURRENT_SCHEMA_VERSION}). Upgrade clipforge before opening it."
                 )
+            if current == CURRENT_SCHEMA_VERSION:
+                assert_current_schema(connection, self.path)
             now = datetime.now(UTC).isoformat()
             for migration in MIGRATIONS:
                 if migration.version <= current:
                     continue
+                if migration.precheck is not None:
+                    migration.precheck(connection)
                 _execute_script(connection, migration.sql)
                 connection.execute(
                     "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
                     (migration.version, migration.name, now),
                 )
+            assert_current_schema(connection, self.path)
             connection.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             connection.commit()
         except StorageError:
-            connection.rollback()
+            _rollback_quietly(connection)
             raise
+        except sqlite3.DatabaseError as exc:
+            _rollback_quietly(connection)
+            raise StorageError(
+                f"{self.path} is not a readable SQLite database: {exc}. "
+                "Restore it from a backup or choose another path. It was not recreated."
+            ) from exc
         except sqlite3.Error as exc:
-            connection.rollback()
+            _rollback_quietly(connection)
             raise StorageError(
                 f"migration failed for {self.path}: {exc}. The transaction was rolled back."
             ) from exc
@@ -81,21 +100,33 @@ class Database:
         return CURRENT_SCHEMA_VERSION
 
     def health_check(self) -> None:
-        """Raise ``StorageError`` when the file cannot run ``SELECT 1`` or is missing tables."""
-        with self.connect() as connection:
-            row = connection.execute("SELECT 1").fetchone()
-            if row is None or row[0] != 1:
-                raise StorageError(f"SQLite health check failed for {self.path}")
-            present = {
-                item[0] for item in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-            }
-            missing = sorted(_REQUIRED_TABLES - present)
-            if missing:
-                raise StorageError(
-                    f"{self.path} is missing tables {missing}. "
-                    "Run `clipforge db init` on a new file, or restore this one from backup. "
-                    "The missing tables were not created silently."
-                )
+        """Raise ``StorageError`` when the file, its tables, or its foreign keys are unusable.
+
+        ``quick_check`` and ``foreign_key_check`` run here only. Ordinary queries do not.
+        """
+        try:
+            with self.connect() as connection:
+                row = connection.execute("SELECT 1").fetchone()
+                if row is None or row[0] != 1:
+                    raise StorageError(f"SQLite health check failed for {self.path}")
+                assert_current_schema(connection, self.path)
+                quick = [str(item[0]) for item in connection.execute("PRAGMA quick_check")]
+                if quick != ["ok"]:
+                    raise StorageError(
+                        f"SQLite quick_check failed for {self.path}: {quick}. "
+                        "The file was not repaired. Restore it from a backup."
+                    )
+                violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+                if violations:
+                    first = tuple(violations[0])
+                    raise StorageError(
+                        f"SQLite foreign_key_check found {len(violations)} violation(s) in {self.path}. "
+                        f"First violation: {first}. Rows were not deleted or rewritten."
+                    )
+        except StorageError:
+            raise
+        except sqlite3.Error as exc:
+            raise StorageError(f"SQLite health check failed for {self.path}: {exc}") from exc
 
     def status(self) -> DatabaseStatus:
         with self.connect() as connection:
@@ -105,7 +136,7 @@ class Database:
             )
             counts = {
                 table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-                for table in ("projects", "source_assets", "jobs", "artifacts", "reviews")
+                for table in _COUNTED_TABLES
             }
         return DatabaseStatus(
             path=self.path,
@@ -148,12 +179,20 @@ class Database:
             raise StorageError(f"could not open {self.path}: {exc}") from exc
         try:
             _prepare(connection)
-            if not _has_migrations_table(connection):
+            try:
+                if not _has_migrations_table(connection):
+                    raise StorageError(
+                        f"{self.path} is not a clipforge database (schema_migrations is missing). "
+                        "Point --db at a clipforge file, or run `clipforge db init` on a new path."
+                    )
+                version = _read_version(connection)
+                if version == CURRENT_SCHEMA_VERSION:
+                    assert_current_schema(connection, self.path)
+            except sqlite3.DatabaseError as exc:
                 raise StorageError(
-                    f"{self.path} is not a clipforge database (schema_migrations is missing). "
-                    "Point --db at a clipforge file, or run `clipforge db init` on a new path."
-                )
-            version = _read_version(connection)
+                    f"{self.path} is not a readable SQLite database: {exc}. "
+                    "Restore it from a backup or pass a different --db path. The file was not modified."
+                ) from exc
         finally:
             connection.close()
         if version < CURRENT_SCHEMA_VERSION:
@@ -167,6 +206,13 @@ class Database:
                 f"{self.path} is at schema version {version}, newer than this build "
                 f"({CURRENT_SCHEMA_VERSION}). Upgrade clipforge. The file was not modified."
             )
+
+
+def _rollback_quietly(connection: sqlite3.Connection) -> None:
+    try:
+        connection.rollback()
+    except sqlite3.Error:
+        return
 
 
 def _prepare(connection: sqlite3.Connection) -> None:

@@ -1,4 +1,9 @@
-"""Models written to ``schemas/generated`` for later TypeScript consumers."""
+"""Models written to ``schemas/generated`` for later TypeScript consumers.
+
+``ContractModel`` and ``Versioned`` are bases, not documents. They are the only
+schema classes excluded from ``CONTRACT_MODELS``. Every other concrete subclass
+must be listed there.
+"""
 
 from __future__ import annotations
 

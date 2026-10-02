@@ -18,9 +18,12 @@ from clipforge.schemas.time import SourceTimeRange
 from clipforge.timeline import FrameRate
 
 
-def _require_source(provenance: ArtifactProvenance, label: str) -> None:
-    if not provenance.source_asset_ids:
-        raise ValueError(f"{label} provenance must list at least one source_asset_id")
+def _require_this_source(provenance: ArtifactProvenance, source_asset_id: str, label: str) -> None:
+    if source_asset_id not in provenance.source_asset_ids:
+        raise ValueError(
+            f"{label} provenance.source_asset_ids must include source_asset_id {source_asset_id}. "
+            "A different source id is not lineage for this record."
+        )
 
 
 class SourceAsset(Versioned):
@@ -138,7 +141,7 @@ class Scene(Versioned):
 
     @model_validator(mode="after")
     def completeness(self) -> Self:
-        _require_source(self.provenance, "scene")
+        _require_this_source(self.provenance, self.source_asset_id, "scene")
         if self.analysis_complete and (not self.visual_evidence or not self.transcript_evidence):
             raise ValueError(
                 "analysis_complete requires visual_evidence and transcript_evidence. "
@@ -163,5 +166,5 @@ class FaceObservation(Versioned):
 
     @model_validator(mode="after")
     def links_source(self) -> Self:
-        _require_source(self.provenance, "face observation")
+        _require_this_source(self.provenance, self.source_asset_id, "face observation")
         return self
