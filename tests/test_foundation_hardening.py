@@ -220,7 +220,7 @@ def test_version_1_source_gains_a_blocked_legacy_rights_row(tmp_path: Path) -> N
     assert "asset_license_records" not in INITIAL_SQL
 
     database = Database(path)
-    assert database.initialize() == 2
+    assert database.initialize() == 3
     with database.connect() as connection:
         record = get_asset_license_record(connection, "lic-legacy")
         assert record.status.value == "unknown"

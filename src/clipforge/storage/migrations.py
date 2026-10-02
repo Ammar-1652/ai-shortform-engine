@@ -319,8 +319,225 @@ class Migration:
     precheck: Callable[[sqlite3.Connection], None] | None = None
 
 
+PROJECT_LINEAGE_SQL = """
+CREATE TABLE source_assets_new (
+    source_asset_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id),
+    uri TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    license_record_id TEXT NOT NULL,
+    provenance_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (source_asset_id, project_id),
+    FOREIGN KEY (license_record_id, source_asset_id)
+        REFERENCES asset_license_records (license_record_id, asset_id)
+);
+
+INSERT INTO source_assets_new (
+    source_asset_id, project_id, uri, schema_version, license_record_id, provenance_json, created_at
+)
+SELECT
+    source_asset_id, project_id, uri, schema_version, license_record_id, provenance_json, created_at
+FROM source_assets;
+
+CREATE TABLE jobs_new (
+    job_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id),
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (
+        status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+    ),
+    schema_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    error_message TEXT,
+    payload_json TEXT NOT NULL,
+    UNIQUE (job_id, project_id)
+);
+
+INSERT INTO jobs_new (
+    job_id, project_id, kind, status, schema_version, created_at, updated_at,
+    error_message, payload_json
+)
+SELECT
+    job_id, project_id, kind, status, schema_version, created_at, updated_at,
+    error_message, payload_json
+FROM jobs;
+
+CREATE TABLE artifacts_new (
+    artifact_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id),
+    job_id TEXT,
+    source_asset_id TEXT,
+    kind TEXT NOT NULL,
+    uri TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    provenance_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (artifact_id, project_id),
+    FOREIGN KEY (source_asset_id, project_id)
+        REFERENCES source_assets_new (source_asset_id, project_id),
+    FOREIGN KEY (job_id, project_id)
+        REFERENCES jobs_new (job_id, project_id)
+);
+
+INSERT INTO artifacts_new (
+    artifact_id, project_id, job_id, source_asset_id, kind, uri, schema_version,
+    provenance_json, created_at
+)
+SELECT
+    artifact_id, project_id, job_id, source_asset_id, kind, uri, schema_version,
+    provenance_json, created_at
+FROM artifacts;
+
+CREATE TABLE reviews_new (
+    review_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id),
+    artifact_id TEXT,
+    candidate_id TEXT,
+    subject_kind TEXT NOT NULL CHECK (
+        subject_kind IN ('candidate', 'hero', 'caption', 'framing', 'final')
+    ),
+    decision TEXT NOT NULL CHECK (
+        decision IN ('approved', 'rejected', 'changes_requested')
+    ),
+    reviewer_id TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    notes TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (artifact_id, project_id)
+        REFERENCES artifacts_new (artifact_id, project_id),
+    CHECK (
+        (
+            subject_kind IN ('candidate', 'hero')
+            AND candidate_id IS NOT NULL
+        )
+        OR (
+            subject_kind IN ('caption', 'framing', 'final')
+            AND artifact_id IS NOT NULL
+        )
+    )
+);
+
+INSERT INTO reviews_new (
+    review_id, project_id, artifact_id, candidate_id, subject_kind, decision,
+    reviewer_id, schema_version, notes, created_at
+)
+SELECT
+    review_id, project_id, artifact_id, candidate_id, subject_kind, decision,
+    reviewer_id, schema_version, notes, created_at
+FROM reviews;
+
+DROP TABLE reviews;
+DROP TABLE artifacts;
+DROP TABLE jobs;
+DROP TABLE source_assets;
+
+ALTER TABLE source_assets_new RENAME TO source_assets;
+ALTER TABLE jobs_new RENAME TO jobs;
+ALTER TABLE artifacts_new RENAME TO artifacts;
+ALTER TABLE reviews_new RENAME TO reviews;
+
+CREATE INDEX idx_source_assets_project ON source_assets(project_id);
+CREATE INDEX idx_jobs_project ON jobs(project_id);
+CREATE INDEX idx_artifacts_project ON artifacts(project_id);
+CREATE INDEX idx_reviews_project ON reviews(project_id);
+"""
+
+
+def precheck_project_lineage(connection: sqlite3.Connection) -> None:
+    """Stop migration 3 when a child row points at another project's parent.
+
+    Does not change ``project_id``, re-parent a row, or delete anything.
+    """
+    problems: list[str] = []
+    problems.extend(_cross_project_sources(connection))
+    problems.extend(_cross_project_jobs(connection))
+    problems.extend(_cross_project_reviews(connection))
+    problems.extend(_review_subjects(connection))
+    if problems:
+        listed = " ".join(problems)
+        raise StorageError(
+            "migration 3 stopped because project lineage is inconsistent. "
+            f"{listed} "
+            "Repair the rows so each child uses the same project_id as the row it references, "
+            "then run `clipforge db init` again. No project_id was changed and no rows were deleted."
+        )
+
+
+def _cross_project_sources(connection: sqlite3.Connection) -> list[str]:
+    rows = connection.execute(
+        """
+        SELECT artifacts.artifact_id, artifacts.project_id, artifacts.source_asset_id, source_assets.project_id
+        FROM artifacts
+        JOIN source_assets ON source_assets.source_asset_id = artifacts.source_asset_id
+        WHERE artifacts.source_asset_id IS NOT NULL
+          AND artifacts.project_id != source_assets.project_id
+        """
+    ).fetchall()
+    return [
+        (
+            f"artifact {row[0]} (child project {row[1]}) references source asset {row[2]} "
+            f"(parent project {row[3]})."
+        )
+        for row in rows
+    ]
+
+
+def _cross_project_jobs(connection: sqlite3.Connection) -> list[str]:
+    rows = connection.execute(
+        """
+        SELECT artifacts.artifact_id, artifacts.project_id, artifacts.job_id, jobs.project_id
+        FROM artifacts
+        JOIN jobs ON jobs.job_id = artifacts.job_id
+        WHERE artifacts.job_id IS NOT NULL
+          AND artifacts.project_id != jobs.project_id
+        """
+    ).fetchall()
+    return [
+        (f"artifact {row[0]} (child project {row[1]}) references job {row[2]} (parent project {row[3]}).")
+        for row in rows
+    ]
+
+
+def _cross_project_reviews(connection: sqlite3.Connection) -> list[str]:
+    rows = connection.execute(
+        """
+        SELECT reviews.review_id, reviews.project_id, reviews.artifact_id, artifacts.project_id
+        FROM reviews
+        JOIN artifacts ON artifacts.artifact_id = reviews.artifact_id
+        WHERE reviews.artifact_id IS NOT NULL
+          AND reviews.project_id != artifacts.project_id
+        """
+    ).fetchall()
+    return [
+        (f"review {row[0]} (child project {row[1]}) references artifact {row[2]} (parent project {row[3]}).")
+        for row in rows
+    ]
+
+
+def _review_subjects(connection: sqlite3.Connection) -> list[str]:
+    rows = connection.execute(
+        """
+        SELECT review_id, subject_kind, artifact_id, candidate_id
+        FROM reviews
+        WHERE subject_kind NOT IN ('candidate', 'hero', 'caption', 'framing', 'final')
+           OR (subject_kind IN ('candidate', 'hero') AND candidate_id IS NULL)
+           OR (subject_kind IN ('caption', 'framing', 'final') AND artifact_id IS NULL)
+        """
+    ).fetchall()
+    return [
+        (
+            f"review {row[0]} has subject_kind {row[1]!r} with artifact_id {row[2]!r} "
+            f"and candidate_id {row[3]!r}, which does not match the subject rule."
+        )
+        for row in rows
+    ]
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial", INITIAL_SQL),
     Migration(2, "rights_and_lineage", RIGHTS_AND_LINEAGE_SQL, precheck_rights_and_lineage),
+    Migration(3, "project_lineage_integrity", PROJECT_LINEAGE_SQL, precheck_project_lineage),
 )
 CURRENT_SCHEMA_VERSION = MIGRATIONS[-1].version

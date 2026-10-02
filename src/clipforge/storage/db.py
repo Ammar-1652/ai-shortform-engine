@@ -11,18 +11,8 @@ from pathlib import Path
 
 from clipforge.errors import StorageError
 from clipforge.storage.migrations import CURRENT_SCHEMA_VERSION, MIGRATIONS
+from clipforge.storage.schema_shape import assert_current_schema
 
-_REQUIRED_TABLES = frozenset(
-    {
-        "schema_migrations",
-        "projects",
-        "source_assets",
-        "asset_license_records",
-        "jobs",
-        "artifacts",
-        "reviews",
-    }
-)
 _COUNTED_TABLES = (
     "projects",
     "source_assets",
@@ -76,7 +66,7 @@ class Database:
                     f"({CURRENT_SCHEMA_VERSION}). Upgrade clipforge before opening it."
                 )
             if current == CURRENT_SCHEMA_VERSION:
-                _assert_current_shape(connection, self.path)
+                assert_current_schema(connection, self.path)
             now = datetime.now(UTC).isoformat()
             for migration in MIGRATIONS:
                 if migration.version <= current:
@@ -88,7 +78,7 @@ class Database:
                     "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
                     (migration.version, migration.name, now),
                 )
-            _assert_current_shape(connection, self.path)
+            assert_current_schema(connection, self.path)
             connection.execute(f"PRAGMA user_version = {CURRENT_SCHEMA_VERSION}")
             connection.commit()
         except StorageError:
@@ -119,7 +109,7 @@ class Database:
                 row = connection.execute("SELECT 1").fetchone()
                 if row is None or row[0] != 1:
                     raise StorageError(f"SQLite health check failed for {self.path}")
-                _assert_current_shape(connection, self.path)
+                assert_current_schema(connection, self.path)
                 quick = [str(item[0]) for item in connection.execute("PRAGMA quick_check")]
                 if quick != ["ok"]:
                     raise StorageError(
@@ -197,7 +187,7 @@ class Database:
                     )
                 version = _read_version(connection)
                 if version == CURRENT_SCHEMA_VERSION:
-                    _assert_current_shape(connection, self.path)
+                    assert_current_schema(connection, self.path)
             except sqlite3.DatabaseError as exc:
                 raise StorageError(
                     f"{self.path} is not a readable SQLite database: {exc}. "
@@ -216,20 +206,6 @@ class Database:
                 f"{self.path} is at schema version {version}, newer than this build "
                 f"({CURRENT_SCHEMA_VERSION}). Upgrade clipforge. The file was not modified."
             )
-
-
-def _assert_current_shape(connection: sqlite3.Connection, path: Path) -> None:
-    """Fail when a database claims the current version but is missing a required table.
-
-    Does not create the missing table.
-    """
-    present = {item[0] for item in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    missing = sorted(_REQUIRED_TABLES - present)
-    if missing:
-        raise StorageError(
-            f"{path} reports schema version {CURRENT_SCHEMA_VERSION} but is missing tables {missing}. "
-            "The file was not repaired and the missing tables were not recreated. Restore it from a backup."
-        )
 
 
 def _rollback_quietly(connection: sqlite3.Connection) -> None:

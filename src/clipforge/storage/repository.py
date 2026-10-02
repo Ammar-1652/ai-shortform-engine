@@ -200,6 +200,28 @@ def insert_artifact(
             "When an artifact names a producing job, provenance.job_id must be that same id. "
             "The row was not written."
         )
+    if source_asset_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="source_assets",
+            parent_id_column="source_asset_id",
+            parent_id=source_asset_id,
+            parent_label="source asset",
+        )
+    if job_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="jobs",
+            parent_id_column="job_id",
+            parent_id=job_id,
+            parent_label="job",
+        )
     data = provenance.model_dump(mode="json")
     _insert(
         connection,
@@ -233,6 +255,17 @@ def list_artifact_ids(connection: sqlite3.Connection, project_id: str) -> list[s
 
 
 def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> None:
+    if review.artifact_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="review",
+            child_id=review.review_id,
+            child_project=review.project_id,
+            parent_table="artifacts",
+            parent_id_column="artifact_id",
+            parent_id=review.artifact_id,
+            parent_label="artifact",
+        )
     data = review.model_dump(mode="json")
     _insert(
         connection,
@@ -264,6 +297,41 @@ def list_reviews(connection: sqlite3.Connection, project_id: str) -> list[Review
         (project_id,),
     ).fetchall()
     return [_review_from_row(row) for row in rows]
+
+
+def _reject_cross_project(
+    connection: sqlite3.Connection,
+    *,
+    child_label: str,
+    child_id: str,
+    child_project: str,
+    parent_table: str,
+    parent_id_column: str,
+    parent_id: str,
+    parent_label: str,
+) -> None:
+    """Raise when a parent row exists and belongs to a different project.
+
+    A missing parent is left to the foreign key so this function does not invent a second
+    existence check. ``parent_table`` and ``parent_id_column`` are fixed by the caller.
+    """
+    if parent_table not in {"source_assets", "jobs", "artifacts"}:
+        raise StorageError(f"refusing to check an unknown parent table {parent_table}")
+    if parent_id_column not in {"source_asset_id", "job_id", "artifact_id"}:
+        raise StorageError(f"refusing to check an unknown parent column {parent_id_column}")
+    row = connection.execute(
+        f"SELECT project_id FROM {parent_table} WHERE {parent_id_column} = ?",
+        (parent_id,),
+    ).fetchone()
+    if row is None:
+        return
+    parent_project = str(row["project_id"])
+    if parent_project != child_project:
+        raise StorageError(
+            f"{child_label} {child_id} is in project {child_project} but {parent_label} {parent_id} "
+            f"belongs to project {parent_project}. A child record cannot point across projects. "
+            "The row was not written. Use the same project_id on both sides."
+        )
 
 
 def _insert(

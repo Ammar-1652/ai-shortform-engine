@@ -40,12 +40,12 @@ def _project(project_id: str = "project-1") -> Project:
 
 def test_init_is_idempotent_and_health_reports_version(tmp_path: Path) -> None:
     database = Database(tmp_path / "one.sqlite3")
-    assert database.initialize() == 2
-    assert database.initialize() == 2
+    assert database.initialize() == 3
+    assert database.initialize() == 3
     database.health_check()
     status = database.status()
-    assert status.schema_version == 2
-    assert status.migrations == ("initial", "rights_and_lineage")
+    assert status.schema_version == 3
+    assert status.migrations == ("initial", "rights_and_lineage", "project_lineage_integrity")
     assert status.counts["asset_license_records"] == 0
     assert status.counts["projects"] == 0
 

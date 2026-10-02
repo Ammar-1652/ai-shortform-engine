@@ -17,6 +17,7 @@ Version-1 sources are given one placeholder rights row each:
 
 - `status = unknown`
 - `recorded_by = clipforge-migration-2`
+- `recorded_at` copied from that source row's `created_at`. It is not an independent time when someone verified the rights.
 - notes that say the rights were not verified
 
 `require_rights_cleared` still rejects `unknown`. If one license id is shared by two sources, migration 2 stops, rolls back, and deletes nothing. Orphan artifact or review pointers do the same. No placeholder is marked owned, licensed, or campaign-provided.

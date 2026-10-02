@@ -10,7 +10,7 @@ Owns how work is requested, recorded, and stopped.
 
 - CLI: `clipforge` (Typer), implemented for doctor, projects, schema export, and database init.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`.
-- State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 2 adds `asset_license_records` and foreign keys. No global connection. A file that claims the current version but is missing a table is rejected and not rebuilt.
+- State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 3 keeps rights rows and binds artifacts, jobs, sources, and reviews to one project. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
 - Policies: `ComplianceRule` with severity fixed to `block`. Example: `configs/policies/source-rights.json`.
 - Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.

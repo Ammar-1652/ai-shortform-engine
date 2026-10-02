@@ -107,3 +107,17 @@ ESLint, `tsc --noEmit`, and vitest (3 tests) passed.
 ## Round 2 readiness
 
 Not started. The draft pull request has to be reviewed before media ingest.
+
+## Independent review follow-up
+
+The review of `c920ac7` asked for two remaining integrity fixes. They are on the same branch and the same draft pull request.
+
+Cross-project lineage is schema version 3, migration `project_lineage_integrity`. Migrations 1 and 2 were not edited. An artifact source, an artifact job, and a review artifact must belong to the child row's project. SQLite enforces that with composite foreign keys. Null `job_id`, `source_asset_id`, and `artifact_id` stay optional. The repository returns `StorageError` with both project ids when it can see the mismatch. A version-2 file with a cross-project artifact fails migration 3, stays at `user_version` 2, and keeps its rows. A valid version-2 file built from the real migration SQL upgrades to version 3, keeps its rights row, and keeps its indexes. `initialize` twice stays at version 3.
+
+Migration-2 placeholders still use the source row's `created_at` as `recorded_at`. That is not a separate verification time. `status` remains `unknown`, and `require_rights_cleared` still blocks those rows. Migration 2 was not rewritten to change the timestamp.
+
+Current-schema validation now checks required columns, the critical foreign-key groups, and the migration history `1 initial`, `2 rights_and_lineage`, `3 project_lineage_integrity`. A missing column, a missing foreign key, a gap such as versions 1 and 3 without 2, or a wrong migration name fails closed and does not rewrite the file. `health_check` still runs `PRAGMA quick_check` and `PRAGMA foreign_key_check`.
+
+No candidate table was added. No ingest, transcription, or rendering code was added.
+
+Local validation after the follow-up: pytest 74 passed, Ruff passed, mypy reported no issues in 25 source files, schema check matched, renderer lint, typecheck, and 3 tests passed, and doctor reported schema version 3 with 10 pass, 0 warn, 0 fail. The GitHub Actions run for this follow-up commit is whatever the push of this documentation update triggers. This section does not claim that run is green until it is observed.
