@@ -12,10 +12,10 @@ from clipforge.candidates.cache import read_candidate_cache
 from clipforge.candidates.constants import KIND_CANDIDATE
 from clipforge.candidates.inputs import load_evidence_pair
 from clipforge.candidates.integrity import candidate_problems
-from clipforge.candidates.service import default_profile
 from clipforge.errors import ClipforgeError, MediaError, StorageError
 from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.mutation import inspect_mutation
+from clipforge.media.workspace import ensure_within
 from clipforge.schemas.candidates import CandidateMiningDocument
 from clipforge.schemas.governance import require_rights_cleared
 from clipforge.storage import (
@@ -105,6 +105,13 @@ def verify_candidate(
         return CandidateVerifyReport(source_asset_id, tuple(lines))
     try:
         path = path_from_file_uri(row.uri)
+        candidate_root = pair.workspace.candidate_root()
+        if candidate_root.is_symlink():
+            raise MediaError("candidate workspace root is a symlink")
+        ensure_within(root, candidate_root)
+        ensure_within(candidate_root, path)
+        if path.is_symlink():
+            raise MediaError("candidate artifact path is a symlink")
         document = CandidateMiningDocument.model_validate_json(read_text(path))
     except (OSError, ValidationError, ValueError, MediaError) as exc:
         lines.append(VerifyLine("FAIL", "candidate_document", str(exc)))
@@ -116,7 +123,7 @@ def verify_candidate(
         work_root=root,
         workspace=pair.workspace,
         pair=pair,
-        profile=default_profile(),
+        profile=document.profile,
         artifact_job_id=row.job_id,
         artifact_uri=row.uri,
         artifact_provenance_job_id=row.provenance.job_id,
