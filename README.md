@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-Round 3 ingests a local video file, builds a review proxy and canonical ASR audio, and transcribes that audio with faster-whisper. It does not align Hero captions, cut, score, or render a reel.
+Round 4 ingests a local video file, builds a review proxy and canonical ASR audio, transcribes that audio with faster-whisper, and records scene, frame, and face-detection evidence from the analysis proxy. It does not score candidates or render a reel.
 
 ## What works
 
@@ -20,11 +20,15 @@ Round 3 ingests a local video file, builds a review proxy and canonical ASR audi
 - `clipforge transcript doctor` reports the local ASR runtime and does not download a model.
 - `clipforge transcript run` transcribes the prepared ASR FLAC for one source. Word timestamps are provisional. A missing model downloads only with `--allow-model-download`.
 - `clipforge transcript verify` and `clipforge transcript show` read the stored transcript and do not load a model.
+- `clipforge vision doctor` reports PySceneDetect, PyAV, OpenCV, and MediaPipe. It does not download or load the face model.
+- `clipforge vision model status` and `clipforge vision model fetch face-detector --allow-model-download` manage the official BlazeFace file. Nothing downloads without the flag.
+- `clipforge vision analyze` reads the analysis proxy for one source. Faces are detections only. Speaker attribution is not performed. Candidate mining is not performed.
+- `clipforge vision verify` and `clipforge vision show` read the stored analysis. Verify does not repair files or load the face model.
 
 ## What does not work yet
 
 - WhisperX alignment
-- Scene, face, or motion analysis
+- Active-speaker detection and face recognition
 - Candidate mining and scoring
 - Rough or Hero rendering
 - Envato search or download
@@ -41,7 +45,7 @@ Five planes share one core:
 | Plane | Round 1 role |
 | --- | --- |
 | Control | Typer CLI, SQLite jobs, profiles, policies, review records |
-| Media | Local ingest, canonical source clock, analysis proxy, ASR audio, faster-whisper transcript. |
+| Media | Local ingest, canonical source clock, analysis proxy, ASR audio, faster-whisper transcript, scene and face-detection evidence. |
 | AI decision | Contracts for evidence and scores. No model calls. |
 | Assets | License and provenance records. No downloads. |
 | Review | Human decisions are data. Nothing is published. |

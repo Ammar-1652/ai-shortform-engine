@@ -68,7 +68,7 @@ A change is done when:
 
 - Python dependencies are declared in `pyproject.toml` and locked with `uv.lock`. The project interpreter is CPython 3.11.
 - JavaScript dependencies live in `apps/renderer` and are locked with `pnpm-lock.yaml`. Use pnpm. Node 22 LTS is the floor.
-- Do not download ASR weights in CI. A local smoke test may download a model only with an explicit allow flag. Do not install CUDA wheels or unofficial ffmpeg builds to force a GPU path.
+- Do not download ASR weights or the MediaPipe face model in CI. A local smoke test may download a model only with an explicit allow flag. Do not install CUDA wheels or unofficial ffmpeg builds to force a GPU path.
 - Add a dependency only when this repo calls it. Prefer the standard library for file and process work.
 
 ## Testing policy

@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "Numeric frame measurements. These are not quality or engagement scores.",
+  "properties": {
+    "difference_from_previous_sample": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Difference From Previous Sample"
+    },
+    "luma_stddev": {
+      "minimum": 0,
+      "title": "Luma Stddev",
+      "type": "number"
+    },
+    "mean_luma": {
+      "maximum": 255,
+      "minimum": 0,
+      "title": "Mean Luma",
+      "type": "number"
+    },
+    "metrics_version": {
+      "const": "1",
+      "default": "1",
+      "title": "Metrics Version",
+      "type": "string"
+    },
+    "sharpness_laplacian_variance": {
+      "minimum": 0,
+      "title": "Sharpness Laplacian Variance",
+      "type": "number"
+    }
+  },
+  "required": [
+    "mean_luma",
+    "luma_stddev",
+    "sharpness_laplacian_variance"
+  ],
+  "title": "FrameVisualMetrics",
+  "type": "object"
+}

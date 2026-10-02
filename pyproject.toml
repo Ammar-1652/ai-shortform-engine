@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "faster-whisper==1.2.1",
+    "mediapipe==1.0.1",
     "pydantic>=2.10,<3",
+    "scenedetect-headless==0.7.1",
     "typer>=0.15,<1",
 ]
 
@@ -24,13 +26,31 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv]
+# MediaPipe requires opencv-contrib-python. scenedetect-headless requires
+# opencv-python-headless. Both publish the cv2 package, so installing both
+# leaves namespace ownership to install order. Keep the contrib wheel, which
+# supplies the core cv2 API PySceneDetect calls, and do not install the
+# headless wheel beside it.
+[[tool.uv.dependency-metadata]]
+name = "scenedetect-headless"
+version = "0.7.1"
+requires-dist = [
+    "click!=8.3.0,~=8.0",
+    "numpy",
+    "opencv-contrib-python",
+    "platformdirs",
+    "tqdm",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 markers = [
     "media: tests that execute ffmpeg or ffprobe",
     "transcription: deterministic transcription tests with a fake backend and no model download",
-    "model_smoke: local faster-whisper weight tests, excluded from CI",
+    "vision: PySceneDetect, PyAV, and OpenCV tests with a fake face backend and no model download",
+    "model_smoke: local model-weight tests, excluded from CI",
 ]
 
 [tool.ruff]
@@ -74,5 +94,11 @@ module = [
     "tqdm",
     "numpy",
     "numpy.*",
+    "cv2",
+    "cv2.*",
+    "mediapipe",
+    "mediapipe.*",
+    "scenedetect",
+    "scenedetect.*",
 ]
 ignore_missing_imports = true

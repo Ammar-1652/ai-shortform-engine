@@ -22,15 +22,19 @@ Local ffprobe ingest, streaming SHA-256, referenced storage, explicit rights, ca
 
 ## Round 3 — faster-whisper transcription
 
-Status: complete on this branch. See `docs/operations/round-03-validation.md`. Not merged. Round 4 has not started.
+Status: merged on main as `826dfc3af2e181a1c8b73f1b683e1f08376ae459`. See `docs/operations/round-03-validation.md`.
 
-Full-source transcript of the Round 2 ASR FLAC with `alignment = approximate`. Word timestamps are provisional. No WhisperX on the full file. A failed segment iterator fails the job and does not replace a previous valid transcript.
+Full-source transcript of the Round 2 ASR FLAC with `alignment = approximate`. Word timestamps are provisional. No WhisperX on the full file.
 
 ## Round 4 — Scene, visual, and face analysis
 
-PySceneDetect, plus MediaPipe or OpenCV signals. Scenes are not complete without visual evidence. Face tracks stay `speaker_attribution = unknown` until a separate speaker model exists.
+Status: complete on this branch. See `docs/operations/round-04-validation.md`. Not merged. Round 5 has not started.
+
+PySceneDetect shot intervals, representative frames, luma and sharpness measurements, and MediaPipe face boxes. `speaker_attribution` stays `unknown`. No recognition and no candidate ranking.
 
 ## Round 5 — Candidate mining
+
+Status: not started.
 
 About 15–25 candidates is a target band, not a constant. Score, dedupe, and attach transcript and visual evidence. Compliance remains a gate. No fixed top 5.
 

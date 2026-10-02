@@ -1,0 +1,76 @@
+{
+  "additionalProperties": false,
+  "description": "Counts and durations. There is no best-scene or recommended-clip field.",
+  "properties": {
+    "face_detection_count": {
+      "minimum": 0,
+      "title": "Face Detection Count",
+      "type": "integer"
+    },
+    "face_sample_frame_count": {
+      "minimum": 1,
+      "title": "Face Sample Frame Count",
+      "type": "integer"
+    },
+    "face_track_count": {
+      "minimum": 0,
+      "title": "Face Track Count",
+      "type": "integer"
+    },
+    "frames_with_faces": {
+      "minimum": 0,
+      "title": "Frames With Faces",
+      "type": "integer"
+    },
+    "longest_scene_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Longest Scene Duration Us",
+      "type": "integer"
+    },
+    "max_simultaneous_faces": {
+      "minimum": 0,
+      "title": "Max Simultaneous Faces",
+      "type": "integer"
+    },
+    "mean_scene_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Mean Scene Duration Us",
+      "type": "integer"
+    },
+    "representative_frame_count": {
+      "minimum": 1,
+      "title": "Representative Frame Count",
+      "type": "integer"
+    },
+    "scene_count": {
+      "minimum": 1,
+      "title": "Scene Count",
+      "type": "integer"
+    },
+    "shortest_scene_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Shortest Scene Duration Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "scene_count",
+    "representative_frame_count",
+    "face_sample_frame_count",
+    "face_detection_count",
+    "face_track_count",
+    "frames_with_faces",
+    "max_simultaneous_faces",
+    "mean_scene_duration_us",
+    "shortest_scene_duration_us",
+    "longest_scene_duration_us"
+  ],
+  "title": "VisualAnalysisSummary",
+  "type": "object"
+}

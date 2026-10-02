@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "FrameVisualMetrics": {
+      "additionalProperties": false,
+      "description": "Numeric frame measurements. These are not quality or engagement scores.",
+      "properties": {
+        "difference_from_previous_sample": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difference From Previous Sample"
+        },
+        "luma_stddev": {
+          "minimum": 0,
+          "title": "Luma Stddev",
+          "type": "number"
+        },
+        "mean_luma": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Mean Luma",
+          "type": "number"
+        },
+        "metrics_version": {
+          "const": "1",
+          "default": "1",
+          "title": "Metrics Version",
+          "type": "string"
+        },
+        "sharpness_laplacian_variance": {
+          "minimum": 0,
+          "title": "Sharpness Laplacian Variance",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mean_luma",
+        "luma_stddev",
+        "sharpness_laplacian_variance"
+      ],
+      "title": "FrameVisualMetrics",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One representative scene frame. Face-only samples are not stored as images.",
+  "properties": {
+    "actual_timestamp_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Actual Timestamp Us",
+      "type": "integer"
+    },
+    "frame_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Frame Id",
+      "type": "string"
+    },
+    "height": {
+      "exclusiveMinimum": 0,
+      "title": "Height",
+      "type": "integer"
+    },
+    "labels": {
+      "items": {
+        "enum": [
+          "p20",
+          "mid",
+          "p80"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Labels",
+      "type": "array"
+    },
+    "matched_requests_us": {
+      "items": {
+        "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+        "maximum": 604800000000,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "minItems": 1,
+      "title": "Matched Requests Us",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/FrameVisualMetrics"
+    },
+    "relative_path": {
+      "pattern": "^(frames|contact-sheets)/[A-Za-z0-9][A-Za-z0-9._-]{0,120}$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "requested_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Requested Us",
+      "type": "integer"
+    },
+    "scene_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Scene Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "width": {
+      "exclusiveMinimum": 0,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "frame_id",
+    "scene_id",
+    "requested_us",
+    "matched_requests_us",
+    "actual_timestamp_us",
+    "labels",
+    "width",
+    "height",
+    "relative_path",
+    "sha256",
+    "size_bytes",
+    "metrics"
+  ],
+  "title": "FrameEvidence",
+  "type": "object"
+}

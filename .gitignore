@@ -53,6 +53,9 @@ var/models/
 *.onnx
 *.safetensors
 *.gguf
+*.jpg
+*.jpeg
+*.tflite
 
 # OS and logs
 .DS_Store

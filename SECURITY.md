@@ -25,6 +25,10 @@ Treat footage as confidential to the rights holder even when the machine is a la
 
 Inference runs on this machine. Clipforge does not send source audio to a remote transcription API. The only optional network step is an explicit model download into `CLIPFORGE_MODEL_ROOT` after `--allow-model-download`. A cached model is used offline. Logs must not print `HF_TOKEN` or the process environment. Model directories are not cleaned by a recursive delete command. faster-whisper is invoked in process, not through a shell.
 
+## Visual analysis
+
+Scene detection and face detection run on this machine against the local analysis proxy. Clipforge does not upload frames to a vision API. Stored face data is boxes, optional keypoints, and a scene-local track id. There is no face embedding, name, age, gender, or ethnicity field. Representative JPEGs and contact sheets stay under the work root and are gitignored. The MediaPipe model downloads only with `--allow-model-download` from the official `storage.googleapis.com` BlazeFace URL, into `CLIPFORGE_MODEL_ROOT`. MediaPipe Tasks runs the detector on device. Clipforge does not claim that MediaPipe itself never sends performance metrics.
+
 ## Downloaded assets
 
 Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.

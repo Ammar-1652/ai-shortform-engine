@@ -53,8 +53,9 @@ class SourceWorkspace:
         root = self.root.resolve()
         root.mkdir(parents=True, exist_ok=True)
         ensure_within(root, root)
-        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp"):
+        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp", "vision"):
             _mkdir_contained(root, _join(self.source_root, relative))
+        _mkdir_contained(root, _join(self.vision_root(), "runs"))
 
     def clear_partials(self) -> None:
         """Delete ``*.partial.*`` under this source directory and nowhere else."""
@@ -71,6 +72,33 @@ class SourceWorkspace:
 
     def transcribe_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "transcribe.lock")
+
+    def vision_root(self) -> Path:
+        return _join(self.source_root, "vision")
+
+    def vision_run_dir(self, analysis_id: str) -> Path:
+        return _join(self.vision_root(), "runs", _segment(analysis_id))
+
+    def vision_sidecar(self) -> Path:
+        return self.metadata_file("visual-analysis.recipe.json")
+
+    def vision_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "vision.lock")
+
+    def make_vision_run(self, analysis_id: str) -> Path:
+        """Create one immutable run directory. Refuse a symlink at any component."""
+        self.ensure()
+        root = self.root.resolve()
+        run = self.vision_run_dir(analysis_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"visual analysis run {analysis_id} already exists. "
+                "A new analysis uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        for name in ("frames", "contact-sheets", "logs"):
+            _mkdir_contained(root, _join(run, name))
+        return run
 
 
 @contextmanager
@@ -90,19 +118,30 @@ def prepare_lock(workspace: SourceWorkspace) -> Iterator[Path]:
 
 
 @contextmanager
-def prepare_read_lock(workspace: SourceWorkspace) -> Iterator[Path]:
-    """Share ``prepare.lock`` while a reader needs the current ASR audio.
+def prepare_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> Iterator[Path]:
+    """Share ``prepare.lock`` while a reader needs the current derived media.
 
-    Media prepare takes the same file exclusively. A transcription that holds
-    this shared lock blocks replacement of ``audio/asr.flac``. Acquire this
-    before the exclusive transcription lock. Never acquire them in the other
-    order.
+    Media prepare takes the same file exclusively. A reader that holds this
+    shared lock blocks replacement of ``audio/asr.flac`` and ``proxy/analysis.mp4``.
+    Acquire this before the caller's exclusive lock. Never acquire them in the
+    other order.
     """
-    busy = (
+    message = busy or (
         f"another media prepare is already active for source {workspace.source_asset_id}. "
         "Clipforge refused to start transcription so the ASR audio cannot be replaced during inference."
     )
-    with _flock(workspace, workspace.prepare_lock_path(), exclusive=False, busy=busy) as lock_path:
+    with _flock(workspace, workspace.prepare_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def vision_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source visual-analysis lock until this context exits."""
+    busy = (
+        f"another visual analysis is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second visual analysis so evidence artifacts cannot race."
+    )
+    with _flock(workspace, workspace.vision_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 
