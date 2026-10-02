@@ -1,0 +1,385 @@
+{
+  "$defs": {
+    "ColorMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "color_primaries": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Primaries"
+        },
+        "color_range": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Range"
+        },
+        "color_space": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Space"
+        },
+        "color_transfer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color Transfer"
+        }
+      },
+      "title": "ColorMetadata",
+      "type": "object"
+    },
+    "RationalNumber": {
+      "additionalProperties": false,
+      "description": "An exact integer ratio. ``30000/1001`` is not stored as ``29.97``.",
+      "properties": {
+        "denominator": {
+          "exclusiveMinimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "numerator": {
+          "title": "Numerator",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "title": "RationalNumber",
+      "type": "object"
+    },
+    "RotationMetadata": {
+      "additionalProperties": false,
+      "description": "Encoded rotation in degrees. ``None`` means ffprobe did not report one.",
+      "properties": {
+        "degrees": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Degrees"
+        }
+      },
+      "title": "RotationMetadata",
+      "type": "object"
+    },
+    "StreamDisposition": {
+      "additionalProperties": false,
+      "properties": {
+        "attached_pic": {
+          "default": false,
+          "title": "Attached Pic",
+          "type": "boolean"
+        },
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        }
+      },
+      "title": "StreamDisposition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "avg_frame_rate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalNumber"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "bit_rate": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bit Rate"
+    },
+    "codec_long_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Codec Long Name"
+    },
+    "codec_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Codec Name"
+    },
+    "color": {
+      "$ref": "#/$defs/ColorMetadata"
+    },
+    "display_aspect_ratio": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalNumber"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "display_height": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Height"
+    },
+    "display_width": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Width"
+    },
+    "disposition": {
+      "$ref": "#/$defs/StreamDisposition"
+    },
+    "duration_ts": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ts"
+    },
+    "duration_us": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Us"
+    },
+    "field_order": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Field Order"
+    },
+    "height": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Height"
+    },
+    "index": {
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "pix_fmt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pix Fmt"
+    },
+    "profile": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Profile"
+    },
+    "r_frame_rate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalNumber"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rotation": {
+      "$ref": "#/$defs/RotationMetadata"
+    },
+    "sample_aspect_ratio": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalNumber"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "start_pts": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Start Pts"
+    },
+    "start_time_us": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Start Time Us"
+    },
+    "time_base": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RationalNumber"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "width": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Width"
+    }
+  },
+  "required": [
+    "index"
+  ],
+  "title": "VideoStreamInfo",
+  "type": "object"
+}

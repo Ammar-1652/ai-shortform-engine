@@ -1,0 +1,17 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "attached_pic": {
+      "default": false,
+      "title": "Attached Pic",
+      "type": "boolean"
+    },
+    "default": {
+      "default": false,
+      "title": "Default",
+      "type": "boolean"
+    }
+  },
+  "title": "StreamDisposition",
+  "type": "object"
+}

@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "description": "Container and stream clocks, plus the Clipforge source clock.\n\n``video_origin_us`` is the container timestamp of canonical ``t=0``.\nIt may be negative. Canonical source time is microseconds after that origin.",
+  "properties": {
+    "audio_offset_us": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Offset Us"
+    },
+    "audio_start_assumed_zero": {
+      "default": false,
+      "title": "Audio Start Assumed Zero",
+      "type": "boolean"
+    },
+    "audio_start_us": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Start Us"
+    },
+    "canonical_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Canonical Duration Us",
+      "type": "integer"
+    },
+    "duration_evidence": {
+      "minLength": 1,
+      "title": "Duration Evidence",
+      "type": "string"
+    },
+    "video_origin_us": {
+      "title": "Video Origin Us",
+      "type": "integer"
+    },
+    "video_start_assumed_zero": {
+      "title": "Video Start Assumed Zero",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "video_origin_us",
+    "video_start_assumed_zero",
+    "canonical_duration_us",
+    "duration_evidence"
+  ],
+  "title": "MediaTimelineInfo",
+  "type": "object"
+}

@@ -1,0 +1,20 @@
+{
+  "additionalProperties": false,
+  "description": "Encoded rotation in degrees. ``None`` means ffprobe did not report one.",
+  "properties": {
+    "degrees": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Degrees"
+    }
+  },
+  "title": "RotationMetadata",
+  "type": "object"
+}

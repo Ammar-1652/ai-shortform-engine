@@ -1,0 +1,21 @@
+{
+  "additionalProperties": false,
+  "description": "An exact integer ratio. ``30000/1001`` is not stored as ``29.97``.",
+  "properties": {
+    "denominator": {
+      "exclusiveMinimum": 0,
+      "title": "Denominator",
+      "type": "integer"
+    },
+    "numerator": {
+      "title": "Numerator",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "numerator",
+    "denominator"
+  ],
+  "title": "RationalNumber",
+  "type": "object"
+}

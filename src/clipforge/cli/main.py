@@ -1,4 +1,4 @@
-"""clipforge command line. Round 1: doctor, projects, schema export, database init."""
+"""clipforge command line. Round 2 adds local ingest and derived-media preparation."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ import typer
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.cli.media_cmd import media_app
+from clipforge.cli.source import source_app
+from clipforge.cli.storage_cmd import storage_app
 from clipforge.doctor import exit_code, format_report, run_checks
 from clipforge.errors import ClipforgeError
 from clipforge.paths import find_repo_root, resolve_db_path
@@ -22,7 +25,7 @@ from clipforge.storage import Database, insert_project, list_projects
 app = typer.Typer(
     name="clipforge",
     no_args_is_help=True,
-    help="Local-first short-form production engine. Round 1 is the foundation only.",
+    help="Local-first short-form production engine.",
 )
 project_app = typer.Typer(no_args_is_help=True, help="Create and list projects.")
 db_app = typer.Typer(no_args_is_help=True, help="Initialize and inspect the SQLite database.")
@@ -30,6 +33,9 @@ schema_app = typer.Typer(no_args_is_help=True, help="Export or check JSON Schema
 app.add_typer(project_app, name="project")
 app.add_typer(db_app, name="db")
 app.add_typer(schema_app, name="schema")
+app.add_typer(source_app, name="source")
+app.add_typer(media_app, name="media")
+app.add_typer(storage_app, name="storage")
 
 
 def _version_callback(value: bool) -> None:

@@ -37,5 +37,9 @@ class SchemaExportError(ClipforgeError):
     """JSON Schema files are missing or do not match the Pydantic models."""
 
 
+class MediaError(ClipforgeError):
+    """A local media operation failed. The message says what to fix."""
+
+
 class ComplianceGateError(ClipforgeError):
     """Rights or campaign compliance blocked the operation. A score cannot override this."""

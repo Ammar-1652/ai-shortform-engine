@@ -90,7 +90,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "An ingested long-form file. Round 1 stores the record. It does not ingest bytes.",
+  "description": "An ingested long-form file. The bytes stay at ``uri``. Ingest does not copy them.",
   "properties": {
     "license_record_id": {
       "description": "Stable id. UUID text is the usual value.",

@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-Round 1 is the foundation: typed contracts, a canonical time map, SQLite state, a CLI, and a TypeScript scaffold. It does not transcribe, cut, score, or render video.
+Round 2 ingests a local video file and builds a review proxy plus transcription-ready audio. It does not transcribe, cut, score, or render a reel.
 
 ## What works
 
@@ -12,11 +12,16 @@ Round 1 is the foundation: typed contracts, a canonical time map, SQLite state, 
 - `clipforge schema export` and `clipforge schema check` write and verify JSON Schema.
 - The timeline mapper converts source time, output time, and frames for jump cuts.
 - Pydantic contracts reject illegal timing, missing provenance, weighted compliance, and automated final approval.
+- `clipforge source inspect` probes a local file without writing a database row.
+- `clipforge source ingest` stores a referenced source after an explicit rights assertion.
+- `clipforge media prepare` writes an H.264 analysis proxy and, when the source has audio, 16 kHz mono FLAC aligned to the video clock.
+- `clipforge media verify` reports source, rights, proxy, and audio state without repairing them.
+- `clipforge storage status` prints free space and the disk reserve.
 
 ## What does not work yet
 
-- Source ingest, proxies, and audio extraction
-- faster-whisper transcription and WhisperX alignment
+- Transcription is not implemented. The FLAC file is an input for a later round.
+- faster-whisper and WhisperX alignment
 - Scene, face, or motion analysis
 - Candidate mining and scoring
 - Rough or Hero rendering
@@ -34,7 +39,7 @@ Five planes share one core:
 | Plane | Round 1 role |
 | --- | --- |
 | Control | Typer CLI, SQLite jobs, profiles, policies, review records |
-| Media | Time mapping only. FFmpeg is detected, not called. |
+| Media | Local ingest, canonical source clock, analysis proxy, ASR audio. No transcription. |
 | AI decision | Contracts for evidence and scores. No model calls. |
 | Assets | License and provenance records. No downloads. |
 | Review | Human decisions are data. Nothing is published. |
@@ -47,7 +52,7 @@ The normative timing rules are in [docs/architecture/time-mapping.md](docs/archi
 - [uv](https://docs.astral.sh/uv/) 0.11 or newer
 - Git
 - Node.js 22 LTS or newer and pnpm, for the renderer scaffold
-- FFmpeg and ffprobe from your OS packages before Round 2. Round 1 only warns when they are missing.
+- FFmpeg and ffprobe from your OS packages. `clipforge doctor` warns when they are missing. `source` and `media` commands fail until they are installed.
 
 No Docker, Redis, Postgres, n8n, or paid inference API is required.
 
@@ -67,7 +72,7 @@ pnpm typecheck
 pnpm test
 ```
 
-Optional environment variables are listed in `.env.example`. The program does not read that file. Export `DATABASE_PATH` or `WORK_ROOT` in the shell when you want a non-default location. Defaults are `var/clipforge.sqlite3` and `var/work`. Both are gitignored.
+Optional environment variables are listed in `.env.example`. The program does not read that file. Export `DATABASE_PATH`, `CLIPFORGE_WORK_ROOT`, or `WORK_ROOT` when you want a non-default location. `CLIPFORGE_WORK_ROOT` wins over `WORK_ROOT`. Defaults are `var/clipforge.sqlite3` and `var/work`. `CLIPFORGE_DISK_RESERVE_GB` defaults to 10. Both directories are gitignored.
 
 ## Everyday commands
 
@@ -78,7 +83,23 @@ uv run clipforge db status
 uv run clipforge project create "Launch film"
 uv run clipforge project list
 uv run clipforge schema check
+uv run clipforge storage status
+uv run clipforge source inspect /path/to/video.mp4
 ```
+
+Ingest and prepare, after `db init` and `project create`:
+
+```bash
+uv run clipforge source ingest PROJECT_ID /path/to/video.mp4 \
+  --rights-status campaign_provided \
+  --rights-evidence /path/to/brief.pdf \
+  --rights-name "Campaign provided footage" \
+  --confirm-rights
+uv run clipforge media prepare SOURCE_ID
+uv run clipforge media verify SOURCE_ID
+```
+
+`--confirm-rights` records your assertion. It does not verify the license. The original file stays where it is. A second `media prepare` reuses a valid proxy and FLAC instead of transcoding again.
 
 `clipforge doctor` exits `0` when every check is `PASS` or `WARN`. It exits `1` when a check is `FAIL` (Python older than 3.11, an unwritable work directory, or a broken SQLite library).
 

@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "color_primaries": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Color Primaries"
+    },
+    "color_range": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Color Range"
+    },
+    "color_space": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Color Space"
+    },
+    "color_transfer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Color Transfer"
+    }
+  },
+  "title": "ColorMetadata",
+  "type": "object"
+}

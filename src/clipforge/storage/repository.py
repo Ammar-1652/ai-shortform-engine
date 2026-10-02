@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from pydantic import ValidationError
 
 from clipforge.errors import StorageError
 from clipforge.schemas.governance import AssetLicenseRecord, ReviewDecision
+from clipforge.schemas.ingest import SourceIngestManifest
 from clipforge.schemas.jobs import JobRecord
 from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.project import Project
@@ -135,6 +137,139 @@ def list_source_assets(connection: sqlite3.Connection, project_id: str) -> list[
     return [_source_from_row(row) for row in rows]
 
 
+def get_source_asset(connection: sqlite3.Connection, source_asset_id: str) -> SourceAsset:
+    row = connection.execute(
+        "SELECT * FROM source_assets WHERE source_asset_id = ?",
+        (source_asset_id,),
+    ).fetchone()
+    if row is None:
+        raise StorageError(
+            f"no source asset with id {source_asset_id}. "
+            "Run `clipforge source list PROJECT_ID` to see sources in a project."
+        )
+    return _source_from_row(row)
+
+
+def insert_source_manifest(connection: sqlite3.Connection, manifest: SourceIngestManifest) -> None:
+    """Store queryable source identity. ``probe_json`` is the normalized probe, not raw ffprobe."""
+    data = manifest.model_dump(mode="json")
+    probe = data["probe"]
+    if not isinstance(probe, dict):
+        raise StorageError(f"source manifest {manifest.source_asset_id} probe did not serialize to an object")
+    _insert(
+        connection,
+        """
+        INSERT INTO source_manifests (
+            source_asset_id, project_id, content_sha256, size_bytes, mtime_ns, original_filename,
+            storage_mode, transcription_eligible, video_stream_index, audio_stream_index,
+            canonical_duration_us, video_origin_us, ingested_at, probe_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            data["source_asset_id"],
+            data["project_id"],
+            data["content_sha256"],
+            data["size_bytes"],
+            data["mtime_ns"],
+            data["original_filename"],
+            data["storage_mode"],
+            1 if data["transcription_eligible"] else 0,
+            data["video_stream_index"],
+            data["audio_stream_index"],
+            data["canonical_duration_us"],
+            data["video_origin_us"],
+            data["ingested_at"],
+            _dump(probe),
+        ),
+        f"source manifest {manifest.source_asset_id}",
+    )
+
+
+def get_source_manifest(connection: sqlite3.Connection, source_asset_id: str) -> SourceIngestManifest:
+    row = connection.execute(
+        "SELECT * FROM source_manifests WHERE source_asset_id = ?",
+        (source_asset_id,),
+    ).fetchone()
+    if row is None:
+        raise StorageError(
+            f"no source manifest for {source_asset_id}. "
+            "The content hash is stored on the manifest, and this source does not have one."
+        )
+    return _manifest_from_row(row)
+
+
+def find_source_manifest_by_hash(
+    connection: sqlite3.Connection, project_id: str, content_sha256: str
+) -> SourceIngestManifest | None:
+    """Return the same-project source with this SHA-256, if one was already ingested."""
+    row = connection.execute(
+        """
+        SELECT * FROM source_manifests
+        WHERE project_id = ? AND content_sha256 = ?
+        """,
+        (project_id, content_sha256),
+    ).fetchone()
+    if row is None:
+        return None
+    return _manifest_from_row(row)
+
+
+def update_source_manifest_stats(
+    connection: sqlite3.Connection,
+    *,
+    source_asset_id: str,
+    project_id: str,
+    size_bytes: int,
+    mtime_ns: int,
+) -> None:
+    """Update size and mtime only. The content hash is identity and is not written here."""
+    cursor = connection.execute(
+        """
+        UPDATE source_manifests
+        SET size_bytes = ?, mtime_ns = ?
+        WHERE source_asset_id = ? AND project_id = ?
+        """,
+        (size_bytes, mtime_ns, source_asset_id, project_id),
+    )
+    if cursor.rowcount != 1:
+        raise StorageError(
+            f"could not refresh size and mtime for source {source_asset_id} in project {project_id}. "
+            "The content hash was not changed."
+        )
+
+
+def get_job(connection: sqlite3.Connection, job_id: str) -> JobRecord:
+    row = connection.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+    if row is None:
+        raise StorageError(f"no job with id {job_id}")
+    return _job_from_row(row)
+
+
+def update_job(connection: sqlite3.Connection, job: JobRecord) -> None:
+    """Replace status, timestamps, error, and payload. The job id and project stay put."""
+    data = job.model_dump(mode="json")
+    cursor = connection.execute(
+        """
+        UPDATE jobs
+        SET status = ?, updated_at = ?, error_message = ?, payload_json = ?
+        WHERE job_id = ? AND project_id = ?
+        """,
+        (
+            data["status"],
+            data["updated_at"],
+            data["error_message"],
+            _dump(data["payload"]),
+            data["job_id"],
+            data["project_id"],
+        ),
+    )
+    if cursor.rowcount != 1:
+        raise StorageError(
+            f"could not update job {job.job_id} in project {job.project_id}. "
+            "The row was not created and the project was not changed."
+        )
+
+
 def insert_job(connection: sqlite3.Connection, job: JobRecord) -> None:
     data = job.model_dump(mode="json")
     _insert(
@@ -168,6 +303,17 @@ def list_jobs(connection: sqlite3.Connection, project_id: str) -> list[JobRecord
     return [_job_from_row(row) for row in rows]
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactRow:
+    artifact_id: str
+    project_id: str
+    job_id: str | None
+    source_asset_id: str | None
+    kind: str
+    uri: str
+    provenance: ArtifactProvenance
+
+
 def insert_artifact(
     connection: sqlite3.Connection,
     *,
@@ -184,44 +330,16 @@ def insert_artifact(
     When ``job_id`` is set, ``provenance.job_id`` is required and must be the same id.
     When ``source_asset_id`` is set, that id must be listed in ``provenance.source_asset_ids``.
     """
-    if not kind.strip() or not uri.strip():
-        raise StorageError("artifact kind and uri must be non-empty. The row was not written.")
-    if source_asset_id is None and not provenance.source_asset_ids:
-        raise StorageError(f"artifact {artifact_id} has no source asset. Refusing to store an unlinked file.")
-    if source_asset_id is not None and source_asset_id not in provenance.source_asset_ids:
-        raise StorageError(
-            f"artifact {artifact_id} source_asset_id is {source_asset_id} but "
-            f"provenance.source_asset_ids is {list(provenance.source_asset_ids)}. "
-            "Refusing to store contradictory lineage."
-        )
-    if (job_id or None) != (provenance.job_id or None):
-        raise StorageError(
-            f"artifact {artifact_id} job_id is {job_id!r} but provenance.job_id is {provenance.job_id!r}. "
-            "When an artifact names a producing job, provenance.job_id must be that same id. "
-            "The row was not written."
-        )
-    if source_asset_id is not None:
-        _reject_cross_project(
-            connection,
-            child_label="artifact",
-            child_id=artifact_id,
-            child_project=project_id,
-            parent_table="source_assets",
-            parent_id_column="source_asset_id",
-            parent_id=source_asset_id,
-            parent_label="source asset",
-        )
-    if job_id is not None:
-        _reject_cross_project(
-            connection,
-            child_label="artifact",
-            child_id=artifact_id,
-            child_project=project_id,
-            parent_table="jobs",
-            parent_id_column="job_id",
-            parent_id=job_id,
-            parent_label="job",
-        )
+    _assert_artifact_lineage(
+        connection,
+        artifact_id=artifact_id,
+        project_id=project_id,
+        job_id=job_id,
+        source_asset_id=source_asset_id,
+        kind=kind,
+        uri=uri,
+        provenance=provenance,
+    )
     data = provenance.model_dump(mode="json")
     _insert(
         connection,
@@ -244,6 +362,84 @@ def insert_artifact(
         ),
         f"artifact {artifact_id}",
     )
+
+
+def find_artifact(
+    connection: sqlite3.Connection, project_id: str, source_asset_id: str, kind: str
+) -> ArtifactRow | None:
+    row = connection.execute(
+        """
+        SELECT * FROM artifacts
+        WHERE project_id = ? AND source_asset_id = ? AND kind = ?
+        ORDER BY created_at DESC, artifact_id DESC
+        LIMIT 1
+        """,
+        (project_id, source_asset_id, kind),
+    ).fetchone()
+    if row is None:
+        return None
+    return _artifact_from_row(row)
+
+
+def list_artifacts_for_source(
+    connection: sqlite3.Connection, project_id: str, source_asset_id: str
+) -> list[ArtifactRow]:
+    rows = connection.execute(
+        """
+        SELECT * FROM artifacts
+        WHERE project_id = ? AND source_asset_id = ?
+        ORDER BY kind, artifact_id
+        """,
+        (project_id, source_asset_id),
+    ).fetchall()
+    return [_artifact_from_row(row) for row in rows]
+
+
+def update_artifact(
+    connection: sqlite3.Connection,
+    *,
+    artifact_id: str,
+    project_id: str,
+    job_id: str | None,
+    source_asset_id: str | None,
+    kind: str,
+    uri: str,
+    provenance: ArtifactProvenance,
+) -> None:
+    """Point an existing artifact row at a new job and provenance. The project id does not change."""
+    _assert_artifact_lineage(
+        connection,
+        artifact_id=artifact_id,
+        project_id=project_id,
+        job_id=job_id,
+        source_asset_id=source_asset_id,
+        kind=kind,
+        uri=uri,
+        provenance=provenance,
+    )
+    data = provenance.model_dump(mode="json")
+    cursor = connection.execute(
+        """
+        UPDATE artifacts
+        SET job_id = ?, source_asset_id = ?, kind = ?, uri = ?, provenance_json = ?, created_at = ?
+        WHERE artifact_id = ? AND project_id = ?
+        """,
+        (
+            job_id,
+            source_asset_id,
+            kind,
+            uri,
+            _dump(data),
+            data["created_at"],
+            artifact_id,
+            project_id,
+        ),
+    )
+    if cursor.rowcount != 1:
+        raise StorageError(
+            f"could not update artifact {artifact_id} in project {project_id}. "
+            "The row was not inserted into another project."
+        )
 
 
 def list_artifact_ids(connection: sqlite3.Connection, project_id: str) -> list[str]:
@@ -297,6 +493,57 @@ def list_reviews(connection: sqlite3.Connection, project_id: str) -> list[Review
         (project_id,),
     ).fetchall()
     return [_review_from_row(row) for row in rows]
+
+
+def _assert_artifact_lineage(
+    connection: sqlite3.Connection,
+    *,
+    artifact_id: str,
+    project_id: str,
+    job_id: str | None,
+    source_asset_id: str | None,
+    kind: str,
+    uri: str,
+    provenance: ArtifactProvenance,
+) -> None:
+    if not kind.strip() or not uri.strip():
+        raise StorageError("artifact kind and uri must be non-empty. The row was not written.")
+    if source_asset_id is None and not provenance.source_asset_ids:
+        raise StorageError(f"artifact {artifact_id} has no source asset. Refusing to store an unlinked file.")
+    if source_asset_id is not None and source_asset_id not in provenance.source_asset_ids:
+        raise StorageError(
+            f"artifact {artifact_id} source_asset_id is {source_asset_id} but "
+            f"provenance.source_asset_ids is {list(provenance.source_asset_ids)}. "
+            "Refusing to store contradictory lineage."
+        )
+    if (job_id or None) != (provenance.job_id or None):
+        raise StorageError(
+            f"artifact {artifact_id} job_id is {job_id!r} but provenance.job_id is {provenance.job_id!r}. "
+            "When an artifact names a producing job, provenance.job_id must be that same id. "
+            "The row was not written."
+        )
+    if source_asset_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="source_assets",
+            parent_id_column="source_asset_id",
+            parent_id=source_asset_id,
+            parent_label="source asset",
+        )
+    if job_id is not None:
+        _reject_cross_project(
+            connection,
+            child_label="artifact",
+            child_id=artifact_id,
+            child_project=project_id,
+            parent_table="jobs",
+            parent_id_column="job_id",
+            parent_id=job_id,
+            parent_label="job",
+        )
 
 
 def _reject_cross_project(
@@ -366,7 +613,16 @@ def _object(text: str, label: str) -> dict[str, Any]:
     return value
 
 
-_ModelT = TypeVar("_ModelT", Project, SourceAsset, JobRecord, ReviewDecision, AssetLicenseRecord)
+_ModelT = TypeVar(
+    "_ModelT",
+    Project,
+    SourceAsset,
+    JobRecord,
+    ReviewDecision,
+    AssetLicenseRecord,
+    SourceIngestManifest,
+    ArtifactProvenance,
+)
 
 
 def _validate(model: type[_ModelT], payload: dict[str, Any], label: str) -> _ModelT:
@@ -447,6 +703,50 @@ def _job_from_row(row: sqlite3.Row) -> JobRecord:
             "payload": _object(row["payload_json"], f"{label} payload"),
         },
         label,
+    )
+
+
+def _manifest_from_row(row: sqlite3.Row) -> SourceIngestManifest:
+    label = f"source manifest {row['source_asset_id']}"
+    probe = _object(row["probe_json"], f"{label} probe")
+    return _validate(
+        SourceIngestManifest,
+        {
+            "schema_version": "1.0.0",
+            "source_asset_id": row["source_asset_id"],
+            "project_id": row["project_id"],
+            "content_sha256": row["content_sha256"],
+            "size_bytes": row["size_bytes"],
+            "mtime_ns": row["mtime_ns"],
+            "original_filename": row["original_filename"],
+            "storage_mode": row["storage_mode"],
+            "transcription_eligible": bool(row["transcription_eligible"]),
+            "video_stream_index": row["video_stream_index"],
+            "audio_stream_index": row["audio_stream_index"],
+            "canonical_duration_us": row["canonical_duration_us"],
+            "video_origin_us": row["video_origin_us"],
+            "ingested_at": row["ingested_at"],
+            "probe": probe,
+        },
+        label,
+    )
+
+
+def _artifact_from_row(row: sqlite3.Row) -> ArtifactRow:
+    label = f"artifact {row['artifact_id']}"
+    provenance = _validate(
+        ArtifactProvenance,
+        _object(row["provenance_json"], f"{label} provenance"),
+        label,
+    )
+    return ArtifactRow(
+        artifact_id=str(row["artifact_id"]),
+        project_id=str(row["project_id"]),
+        job_id=None if row["job_id"] is None else str(row["job_id"]),
+        source_asset_id=None if row["source_asset_id"] is None else str(row["source_asset_id"]),
+        kind=str(row["kind"]),
+        uri=str(row["uri"]),
+        provenance=provenance,
     )
 
 

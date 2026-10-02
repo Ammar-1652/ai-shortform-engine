@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 1 builds the contracts and the control plane those later stages must share. It does not process media.
+Clipforge turns authorized long-form video into short vertical edits. Round 2 adds local ingest and deterministic preprocessing. It does not transcribe or cut.
 
 ## Planes
 
@@ -8,9 +8,9 @@ Clipforge turns authorized long-form video into short vertical edits. Round 1 bu
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer), implemented for doctor, projects, schema export, and database init.
-- Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`.
-- State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 3 keeps rights rows and binds artifacts, jobs, sources, and reviews to one project. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
+- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status.
+- Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
+- State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
 - Policies: `ComplianceRule` with severity fixed to `block`. Example: `configs/policies/source-rights.json`.
 - Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.
@@ -19,10 +19,10 @@ Owns how work is requested, recorded, and stopped.
 
 Owns bytes, clocks, and pictures.
 
-- ffprobe / ffmpeg: selected for ingest, proxies, audio extraction, and output validation. Round 1 only detects the binaries in `clipforge doctor`.
-- Source ingest: `SourceAsset` plus `MediaProbe`. Not implemented.
-- Proxies and audio extraction: deferred. Paths belong under the work root.
-- Transcription: `Transcript` with `alignment` of `approximate` or `forced`. faster-whisper will write `approximate`. WhisperX is reserved for `forced` alignment of selected Hero clips. Neither runs in Round 1.
+- ffprobe / ffmpeg: local ingest, the analysis proxy, ASR audio, and output validation. Commands are argv lists. `shell=True` is not used. See [docs/architecture/media-ingest.md](docs/architecture/media-ingest.md).
+- Source ingest: a referenced local file plus an `AssetLicenseRecord` and a `source_manifests` row. The normalized probe is the clock authority. `MediaProbe` stays the older summary contract.
+- Proxies and ASR audio: `analysis-proxy` v1 and `asr-audio` v1, cached by recipe, source hash, and artifact hash. Paths belong under the work root.
+- Transcription: `Transcript` with `alignment` of `approximate` or `forced`. faster-whisper will write `approximate`. WhisperX is reserved for `forced` alignment of selected Hero clips. Neither runs. The FLAC file is only an input.
 - Visual analysis: `Scene` and `FaceObservation`. A complete scene needs visual evidence and transcript evidence. A face observation cannot set a speaker. PySceneDetect, MediaPipe, and OpenCV are deferred.
 - Time mapping: implemented. See [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md).
 - Rendering and output validation: `RenderJob`, `RenderArtifact`, `QAResult`. Remotion is the selected renderer. The app under `apps/renderer` typechecks and does not compose a reel.
@@ -72,7 +72,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 | Typer | CLI | Used |
 | Pydantic v2 | Typed contracts and JSON Schema | Used |
 | SQLite | Projects, sources, jobs, artifacts, reviews | Used |
-| FFmpeg and ffprobe | Media foundation | Detected only |
+| FFmpeg and ffprobe | Ingest, proxy, ASR audio, validation | Used for local files |
 | faster-whisper | Full-source approximate transcript | Deferred |
 | WhisperX | Forced alignment of selected Hero clips | Deferred |
 | PySceneDetect | Scene boundaries | Deferred |

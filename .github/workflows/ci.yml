@@ -20,11 +20,28 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest
+        run: uv run pytest -m "not media"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
         run: uv run clipforge doctor
+
+  # ubuntu-24.04 is pinned so apt's ffmpeg stays reproducible. ubuntu-latest
+  # moves to Ubuntu 26 on 2026-10-19. The other jobs stay on ubuntu-latest.
+  media:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Install FFmpeg from Ubuntu packages
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Media integration tests
+        run: uv run pytest -m media
 
   renderer:
     runs-on: ubuntu-latest

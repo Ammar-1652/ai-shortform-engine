@@ -20,6 +20,7 @@ _COUNTED_TABLES = (
     "jobs",
     "artifacts",
     "reviews",
+    "source_manifests",
 )
 
 

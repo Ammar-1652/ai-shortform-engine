@@ -14,10 +14,14 @@ runner = CliRunner()
 def test_help_lists_foundation_commands_and_not_pipelines() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for name in ("doctor", "project", "schema", "db"):
+    for name in ("doctor", "project", "schema", "db", "source", "media", "storage"):
         assert name in result.stdout
-    for absent in ("publish", "transcribe", "render", "ingest"):
+    for absent in ("publish", "transcribe", "render"):
         assert absent not in result.stdout
+    source_help = runner.invoke(app, ["source", "--help"])
+    assert source_help.exit_code == 0
+    assert "ingest" in source_help.stdout
+    assert "transcribe" not in source_help.stdout
 
 
 def test_version() -> None:
@@ -39,7 +43,7 @@ def test_database_and_project_flow(tmp_path: Path) -> None:
 
     status = runner.invoke(app, ["db", "status", "--db", str(database)])
     assert status.exit_code == 0
-    assert "schema_version: 3" in status.stdout
+    assert "schema_version: 4" in status.stdout
     assert "projects: 0" in status.stdout
 
     empty = runner.invoke(app, ["project", "list", "--db", str(database)])

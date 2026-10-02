@@ -222,7 +222,7 @@ def test_repository_rejects_cross_project_lineage(tmp_path: Path) -> None:
     connection.close()
 
 
-def test_valid_version_2_database_migrates_to_version_3(tmp_path: Path) -> None:
+def test_valid_version_2_database_migrates_to_current_schema(tmp_path: Path) -> None:
     path = tmp_path / "v2.sqlite3"
     _apply_through(path, 1)
     _insert_project_sql(path, "project-a")
@@ -244,8 +244,8 @@ def test_valid_version_2_database_migrates_to_version_3(tmp_path: Path) -> None:
 
     _insert_job_artifact_review(path)
     database = Database(path)
-    assert database.initialize() == 3
-    assert database.initialize() == 3
+    assert database.initialize() == 4
+    assert database.initialize() == 4
     database.health_check()
     with database.connect() as connection:
         record = get_asset_license_record(connection, "lic-a")

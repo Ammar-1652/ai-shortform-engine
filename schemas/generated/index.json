@@ -30,7 +30,20 @@
     "QAResult",
     "ReviewDecision",
     "JobRecord",
-    "ArtifactProvenance"
+    "ArtifactProvenance",
+    "AudioStreamInfo",
+    "ColorMetadata",
+    "DerivativeCacheRecord",
+    "MediaClassification",
+    "MediaFormatInfo",
+    "MediaTimelineInfo",
+    "NormalizedMediaProbe",
+    "RationalNumber",
+    "RotationMetadata",
+    "SourceIngestManifest",
+    "StreamDisposition",
+    "StreamSelection",
+    "VideoStreamInfo"
   ],
   "schema_version": "1.0.0"
 }
