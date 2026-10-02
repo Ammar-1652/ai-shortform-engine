@@ -152,22 +152,32 @@ def _segment(segment: object) -> RawSegment:
         words.append(
             RawWord(
                 text=str(getattr(word, "word", "")),
-                start_seconds=float(getattr(word, "start", 0.0)),
-                end_seconds=float(getattr(word, "end", 0.0)),
+                start_seconds=_required_timestamp(word, "start", "word"),
+                end_seconds=_required_timestamp(word, "end", "word"),
                 probability=float(probability),
             )
         )
     temperature = getattr(segment, "temperature", None)
     return RawSegment(
         text=str(getattr(segment, "text", "")),
-        start_seconds=float(getattr(segment, "start", 0.0)),
-        end_seconds=float(getattr(segment, "end", 0.0)),
+        start_seconds=_required_timestamp(segment, "start", "segment"),
+        end_seconds=_required_timestamp(segment, "end", "segment"),
         words=tuple(words),
         avg_logprob=_float_or_none(getattr(segment, "avg_logprob", None)),
         no_speech_prob=_float_or_none(getattr(segment, "no_speech_prob", None)),
         compression_ratio=_float_or_none(getattr(segment, "compression_ratio", None)),
         temperature=None if temperature is None else float(temperature),
     )
+
+
+def _required_timestamp(value: object, attribute: str, label: str) -> float:
+    timestamp = getattr(value, attribute, None)
+    if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)):
+        raise MediaError(
+            f"faster-whisper {label} is missing a numeric {attribute} timestamp. "
+            "Clipforge will not invent a timestamp."
+        )
+    return float(timestamp)
 
 
 def _float_or_none(value: object) -> float | None:
