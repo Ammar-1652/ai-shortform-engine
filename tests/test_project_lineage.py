@@ -364,6 +364,47 @@ def test_missing_column_fails_closed(tmp_path: Path) -> None:
     assert "notes" not in columns
 
 
+def test_missing_parent_unique_key_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "db.sqlite3"
+    database = Database(path)
+    database.initialize()
+    connection = sqlite3.connect(path)
+    connection.execute("PRAGMA foreign_keys = OFF")
+    connection.execute(
+        """
+        CREATE TABLE jobs_tampered (
+            job_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL REFERENCES projects(project_id),
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (
+                status IN ('pending', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+            ),
+            schema_version TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            error_message TEXT,
+            payload_json TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO jobs_tampered
+        SELECT job_id, project_id, kind, status, schema_version, created_at, updated_at,
+            error_message, payload_json
+        FROM jobs
+        """
+    )
+    connection.execute("DROP TABLE jobs")
+    connection.execute("ALTER TABLE jobs_tampered RENAME TO jobs")
+    connection.commit()
+    connection.close()
+
+    for call in (database.status, database.initialize, database.health_check):
+        with pytest.raises(StorageError, match="unique/primary key"):
+            call()
+
+
 def test_missing_foreign_key_fails_closed(tmp_path: Path) -> None:
     path = tmp_path / "db.sqlite3"
     database = Database(path)
