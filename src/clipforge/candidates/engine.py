@@ -408,9 +408,10 @@ def _clip(
     ]
     scene_label = _index_label(scene_indexes)
     excerpt_hash = hashlib.sha256(window.excerpt.encode("utf-8")).hexdigest()[:12]
-    transcript_detail = (
-        f"Segments {segment_label}, {window.word_count} words; "
-        f"excerpt sha256-prefix {excerpt_hash}"
+    transcript_detail = "Segments {}, {} words; excerpt sha256-prefix {}".format(
+        segment_label,
+        window.word_count,
+        excerpt_hash,
     )
     evidence = [
         CandidateEvidence(
