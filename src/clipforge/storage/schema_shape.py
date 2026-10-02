@@ -1,7 +1,8 @@
 """Semantic checks for a database that claims the current schema version.
 
 This is not a byte-for-byte copy of ``sqlite_master``. It checks migration
-history, required columns, and the foreign-key groups later code relies on.
+history, required columns, required unique/primary keys, and the foreign-key
+groups later code relies on.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from clipforge.storage.migrations import MIGRATIONS
 
 # Parent table, then (child column, parent column) in foreign_key_list seq order.
 ExpectedForeignKey = tuple[str, tuple[tuple[str, str], ...]]
+ExpectedUniqueKey = tuple[str, ...]
 
 REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "schema_migrations": frozenset({"version", "name", "applied_at"}),
@@ -141,6 +143,36 @@ REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
     ),
 }
 
+REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
+    "schema_migrations": frozenset({("version",)}),
+    "projects": frozenset({("project_id",)}),
+    "source_assets": frozenset(
+        {
+            ("source_asset_id",),
+            ("source_asset_id", "project_id"),
+        }
+    ),
+    "asset_license_records": frozenset(
+        {
+            ("license_record_id",),
+            ("license_record_id", "asset_id"),
+        }
+    ),
+    "jobs": frozenset(
+        {
+            ("job_id",),
+            ("job_id", "project_id"),
+        }
+    ),
+    "artifacts": frozenset(
+        {
+            ("artifact_id",),
+            ("artifact_id", "project_id"),
+        }
+    ),
+    "reviews": frozenset({("review_id",)}),
+}
+
 REQUIRED_TABLES = frozenset(REQUIRED_COLUMNS)
 
 
@@ -151,6 +183,7 @@ def assert_current_schema(connection: sqlite3.Connection, path: Path) -> None:
     """
     _assert_tables(connection, path)
     _assert_columns(connection, path)
+    _assert_unique_keys(connection, path)
     _assert_foreign_keys(connection, path)
     _assert_migration_history(connection, path)
 
@@ -174,6 +207,18 @@ def _assert_columns(connection: sqlite3.Connection, path: Path) -> None:
                 f"{path} claims the current schema version but table {table} is missing "
                 f"column(s) {missing}. The file was not rewritten and the columns were not added. "
                 "Restore it from a backup."
+            )
+
+
+def _assert_unique_keys(connection: sqlite3.Connection, path: Path) -> None:
+    for table, expected in REQUIRED_UNIQUE_KEYS.items():
+        found = _unique_keys(connection, table)
+        missing = sorted(expected - found)
+        if missing:
+            raise StorageError(
+                f"{path} claims the current schema version but table {table} is missing "
+                f"required unique/primary key(s) {missing}. Composite foreign keys depend on "
+                "their parent keys being unique. The file was not rewritten. Restore it from a backup."
             )
 
 
@@ -204,6 +249,35 @@ def _column_names(connection: sqlite3.Connection, table: str) -> set[str]:
     return {str(row[1]) for row in rows}
 
 
+def _unique_keys(connection: sqlite3.Connection, table: str) -> set[ExpectedUniqueKey]:
+    found: set[ExpectedUniqueKey] = set()
+
+    table_info = connection.execute(f"PRAGMA table_info({table})").fetchall()
+    primary_key = sorted(
+        (int(row[5]), str(row[1]))
+        for row in table_info
+        if int(row[5]) > 0
+    )
+    if primary_key:
+        found.add(tuple(name for _, name in primary_key))
+
+    for row in connection.execute(f"PRAGMA index_list({table})").fetchall():
+        is_unique = bool(row[2])
+        is_partial = bool(row[4]) if len(row) > 4 else False
+        if not is_unique or is_partial:
+            continue
+        index_name = str(row[1])
+        parts = connection.execute(
+            "SELECT name FROM pragma_index_info(?) ORDER BY seqno",
+            (index_name,),
+        ).fetchall()
+        if not parts or any(item[0] is None for item in parts):
+            continue
+        found.add(tuple(str(item[0]) for item in parts))
+
+    return found
+
+
 def _foreign_key_groups(connection: sqlite3.Connection, table: str) -> set[ExpectedForeignKey]:
     rows = connection.execute(f"PRAGMA foreign_key_list({table})").fetchall()
     grouped: dict[int, list[tuple[int, str, str, str]]] = {}
@@ -216,3 +290,4 @@ def _foreign_key_groups(connection: sqlite3.Connection, table: str) -> set[Expec
         columns = tuple((item[2], item[3]) for item in parts)
         found.add((parent, columns))
     return found
+
