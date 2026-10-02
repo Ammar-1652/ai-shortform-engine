@@ -46,11 +46,8 @@ from clipforge.storage import (
     list_jobs,
     update_job,
 )
-from clipforge.transcription.backend import (
-    RawSegment,
-    RawWord,
-    _segment as normalize_faster_whisper_segment,
-)
+from clipforge.transcription import backend as transcription_backend
+from clipforge.transcription.backend import RawSegment, RawWord
 from clipforge.transcription.cache import cache_identity_matches, read_transcript_cache
 from clipforge.transcription.constants import KIND_TRANSCRIPT
 from clipforge.transcription.document import build_transcript, display_text
@@ -103,7 +100,7 @@ def test_backend_refuses_missing_segment_or_word_timestamps() -> None:
         temperature=0.0,
     )
     with pytest.raises(MediaError, match=r"segment.*start timestamp"):
-        normalize_faster_whisper_segment(missing_segment_start)
+        transcription_backend._segment(missing_segment_start)
 
     missing_word_start = SimpleNamespace(word=" hello", end=0.5, probability=0.9)
     segment = SimpleNamespace(
@@ -117,7 +114,7 @@ def test_backend_refuses_missing_segment_or_word_timestamps() -> None:
         temperature=0.0,
     )
     with pytest.raises(MediaError, match=r"word.*start timestamp"):
-        normalize_faster_whisper_segment(segment)
+        transcription_backend._segment(segment)
 
 
 def test_timestamp_edges_fail_closed() -> None:
