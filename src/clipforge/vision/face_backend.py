@@ -61,12 +61,9 @@ class MediaPipeFaceDetectionBackend:
             )
             if normalized is None:
                 continue
-            score = 0.0
-            categories = getattr(detection, "categories", None) or []
-            if categories:
-                raw_score = getattr(categories[0], "score", None)
-                if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool):
-                    score = float(raw_score)
+            score = _category_score(detection)
+            if score is None:
+                continue
             scored = with_score(normalized, score, _keypoints(getattr(detection, "keypoints", None)))
             if scored is not None:
                 faces.append(scored)
@@ -101,6 +98,21 @@ def _open_detector(
         return FaceDetector.create_from_options(options)
     except Exception as exc:
         raise MediaError(f"could not load the MediaPipe face detector: {exc}") from exc
+
+
+def _category_score(detection: Any) -> float | None:
+    """Return the detector confidence, or None when MediaPipe did not provide one.
+
+    Face evidence requires a real detector score. Missing/invalid confidence is
+    not replaced with a fabricated zero.
+    """
+    categories = getattr(detection, "categories", None) or []
+    if not categories:
+        return None
+    raw_score = getattr(categories[0], "score", None)
+    if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+        return None
+    return float(raw_score)
 
 
 def _keypoints(points: Any) -> tuple[tuple[str, float, float], ...]:
