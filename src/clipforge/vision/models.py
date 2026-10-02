@@ -7,6 +7,7 @@ model root is refused before any write. Unknown remote size fails closed.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -137,9 +138,10 @@ def _download(url: str, directory: Path, *, expected_bytes: int | None) -> FaceM
     if final.is_file():
         raise MediaError(f"{final.name} already exists and was not overwritten")
     partial = directory / f"{FACE_MODEL_FILENAME}.partial.download"
+    descriptor = _open_exclusive_nofollow(partial)
     request = urllib.request.Request(url)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as handle:
+        with os.fdopen(descriptor, "wb") as handle, urllib.request.urlopen(request, timeout=60) as response:
             while True:
                 block = response.read(1024 * 1024)
                 if not block:
@@ -167,9 +169,34 @@ def _download(url: str, directory: Path, *, expected_bytes: int | None) -> FaceM
     }
     manifest_path = directory / "manifest.json"
     partial_manifest = directory / "manifest.json.partial"
-    partial_manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    atomic_replace(partial_manifest, manifest_path, directory)
+    try:
+        descriptor = _open_exclusive_nofollow(partial_manifest)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write((json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+        atomic_replace(partial_manifest, manifest_path, directory)
+    except (OSError, MediaError) as exc:
+        partial_manifest.unlink(missing_ok=True)
+        if final.is_file() and not final.is_symlink():
+            final.unlink()
+        raise MediaError(
+            f"face detector manifest was not published safely: {exc}. "
+            "The newly downloaded model was removed."
+        ) from exc
     return FaceModel(filename=FACE_MODEL_FILENAME, sha256=digest, source_url=url, path=final, size_bytes=size)
+
+
+def _open_exclusive_nofollow(path: Path) -> int:
+    """Create a new partial file without following a pre-existing symlink."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        return os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise MediaError(
+            f"refusing to write model partial {path.name}: {exc}. "
+            "Clipforge will not follow or overwrite an existing partial path."
+        ) from exc
 
 
 def _prepare_model_dir(root: Path) -> Path:
