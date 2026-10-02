@@ -95,6 +95,7 @@ def mine_source(
     root = work_root.resolve()
     active = profile or default_profile()
     pair = load_evidence_pair(database, source_asset_id, root)
+    _validate_candidate_workspace(pair.workspace)
     actor = created_by.strip()[:200] if created_by and created_by.strip() else _actor()
     started = perf_counter()
     prepare_busy = (
@@ -161,6 +162,25 @@ def mine_source(
             _abandon(database, job, JobStatus.FAILED, str(exc), run_dir, root)
             raise
     return _result(document, job_id=job.job_id, path=final, digest=digest, cache_hit=False, started=started)
+
+
+def _validate_candidate_workspace(workspace: object) -> None:
+    """Reject unsafe existing candidate paths without creating any directories."""
+    if not hasattr(workspace, "candidate_root") or not hasattr(workspace, "root"):
+        raise MediaError("candidate workspace is invalid")
+    candidate_root = workspace.candidate_root()
+    root = workspace.root.resolve()
+    if candidate_root.is_symlink():
+        raise MediaError(f"refusing to follow symlinked candidate workspace {candidate_root}")
+    if candidate_root.exists():
+        ensure_within(root, candidate_root)
+        if not candidate_root.is_dir():
+            raise MediaError(f"candidate workspace {candidate_root} exists and is not a directory")
+        runs = candidate_root / "runs"
+        if runs.is_symlink():
+            raise MediaError(f"refusing to follow symlinked candidate runs directory {runs}")
+        if runs.exists() and not runs.is_dir():
+            raise MediaError(f"candidate runs path {runs} exists and is not a directory")
 
 
 def _confirm_pair(database: Database, source_asset_id: str, root: Path, expected: EvidencePair) -> EvidencePair:
