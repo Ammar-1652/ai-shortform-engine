@@ -265,8 +265,20 @@ def _reference_problems(
             if not bundle.source_start_us <= frame.actual_timestamp_us < bundle.source_end_us:
                 problems.append(f"representative frame {frame_id} is outside the candidate interval")
         for face_id in bundle.face_observation_ids:
-            if face_id not in faces:
+            face = faces.get(face_id)
+            if face is None:
                 problems.append(f"candidate references unknown face observation {face_id}")
+                continue
+            if (
+                intersection_us(
+                    bundle.source_start_us,
+                    bundle.source_end_us,
+                    face.time_range.start_us,
+                    face.time_range.end_us,
+                )
+                <= 0
+            ):
+                problems.append(f"face observation {face_id} does not overlap the candidate")
         for detail in (bundle.transcript_excerpt,):
             problems.extend(_banned(detail))
     for candidate in document.candidates:
