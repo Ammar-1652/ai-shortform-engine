@@ -37,7 +37,12 @@ The Hero review browser smoke is `tests/test_hero_review_browser.py`. It uses th
 
 ## CI
 
-Draft pull request: recorded after push. This section is updated when the push and pull-request runs finish.
+Commit `25866cf8e7fec82cadf9d5c2ee15cfc79f8fa96f`. Every listed job passed: python, media, transcription, vision, candidate, preview, review, hero, and renderer.
+
+- Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37153634398
+- Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37153638133
+
+Draft pull request: https://github.com/Ammar-1652/ai-shortform-engine/pull/9
 
 ## Limitations
 
