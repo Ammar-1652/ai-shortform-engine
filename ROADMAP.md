@@ -40,9 +40,9 @@ The current transcript and the current visual analysis are mined into one candid
 
 ## Round 6 — Rough Remotion renderer
 
-Status: complete on branch `round-06-rough-renderer`. The draft PR is not merged. See `docs/operations/round-06-validation.md`.
+Status: merged on main as `1236c3fca71726e3bb9dedc2c0fc8509de0a668b`. Technical validation passed. Administrative acceptance criterion 75 failed because pull request 6 was merged. See the closure note in `docs/operations/round-06-validation.md`.
 
-The current candidate set is rendered from the analysis proxy and the ASR FLAC into 720×1280 review MP4s. Captions are provisional. The TimeMap stays the clock. Round 7 is not started.
+The current candidate set is rendered from the analysis proxy and the ASR FLAC into 720×1280 review MP4s. Captions are provisional. The TimeMap stays the clock. Round 7 starts from that merge.
 
 ## Round 7 — Candidate review
 

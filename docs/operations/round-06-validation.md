@@ -2,6 +2,21 @@
 
 Date: 2026-10-03. Branch `round-06-rough-renderer`. Starting commit `f9d3e6153b976a5509dac940b7780f7856322794`. These are the commands that were run, not a plan.
 
+## Closure correction
+
+Checked against GitHub on 2026-10-03, after pull request 6 left the draft state.
+
+Round 6 technical validation passed. The command results below are unchanged.
+
+Round 6 administrative acceptance criterion 75 failed. That criterion required the pull request to stay a draft and remain unmerged. Pull request 6 was merged.
+
+- Merge commit on `main`: `1236c3fca71726e3bb9dedc2c0fc8509de0a668b`
+- Pull request head that was merged: `242c00ea371ac0349c443a74b97fe5e5aabe76f1`
+- An earlier report named `1317cdeddc484835de4e78fcc059aa8aed6a6c03`. That commit exists. It is an ancestor of the pull request head, not the merged head. Later commits on the branch confined preview paths before the squash merge.
+- Verified `main` at the start of Round 7 is the merge commit above.
+- Round 6 is not a full PASS while criterion 75 is false.
+- Round 7 starts from this merged baseline.
+
 ## Environment
 
 - OS: EndeavourOS, Linux x86_64
