@@ -41,7 +41,6 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - Hero rendering, B-roll, music, and reframing
 - A review UI on any address other than loopback
 - Envato search or download
-- A review UI
 - Publishing
 - Analytics and learning
 
