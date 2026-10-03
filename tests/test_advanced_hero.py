@@ -395,6 +395,77 @@ def test_changed_sfx_hash_and_review_payload_are_safe(tmp_path: Path) -> None:
         )
 
 
+def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    _register_asset(fixture, "sfx-1", "audio", b"sfx-bytes")
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE asset_license_records SET evidence_uri = ? WHERE asset_id = ?",
+            ("https://example.invalid/evidence", "broll-1"),
+        )
+    with pytest.raises(MediaError, match="remote"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-1"],
+            sfx_asset_ids=["sfx-1"],
+        )
+    from clipforge.storage import list_jobs
+
+    with fixture.database.connect() as connection:
+        jobs = [item for item in list_jobs(connection, PROJECT_ID) if item.kind == "advanced_hero_render"]
+    assert jobs == []
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE asset_license_records SET evidence_uri = ? WHERE asset_id = ?",
+            ("file:///licenses/owned.txt", "broll-1"),
+        )
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+        sfx_asset_ids=["sfx-1"],
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    plan_path = fixture.workspace.advanced_plan_file(candidate_id)
+    stored = json.loads(plan_path.read_text(encoding="utf-8"))
+    hostile_name = "<img src=x onerror=alert(1)>"
+    hostile_label = "<script>alert(1)</script>"
+    for asset in stored["assets"]:
+        if asset["asset_id"] == "broll-1":
+            asset["display_name"] = hostile_name
+    stored["diagrams"][0]["payload"]["left_label"] = hostile_label
+    plan_path.write_text(json.dumps(stored), encoding="utf-8")
+    from clipforge.hero.advanced_service import advanced_review_board, advanced_review_card
+
+    board = advanced_review_board(fixture.database, SOURCE_ID, fixture.work)
+    draft = advanced_review_card(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+    broll = next(item for item in draft["broll"] if item["asset_id"] == "broll-1")
+    assert broll["display_name"] == hostile_name
+    assert draft["diagrams"][0]["left_label"] == hostile_label
+    encoded = json.dumps(board)
+    assert json.loads(encoded)["drafts"][0]["diagrams"][0]["left_label"] == hostile_label
+    assert "/home/" not in encoded
+    assert "/tmp/" not in encoded
+    page = (Path(__file__).parents[1] / "src/clipforge/review/static/advanced-review.js").read_text(
+        encoding="utf-8"
+    )
+    assert "textContent" in page
+    assert "innerHTML" not in page
+    assert "display_name" in page
+    assert "left_label" in page
+
+
 def test_profile_disallows_music() -> None:
     profile = AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="contain"))
     assert profile.music_allowed is False
