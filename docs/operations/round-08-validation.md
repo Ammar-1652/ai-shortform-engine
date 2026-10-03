@@ -53,6 +53,13 @@ Commit `a2f105a` skips that smoke unless the renderer packages are installed. Th
 - Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37140026025
 - Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37140028751
 
+The follow-up offline-alignment hardening in commit `1b88f406e2eb19d4e4c88aaaccfe9bc114bec957` and the mypy correction in `3a8ed0f9381b902c1749440c1e5e8e61821e61d5` also passed every listed job. The final runs were:
+
+- Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37145159495
+- Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37145161890
+
+The production adapter now checks local NLTK punkt data and blocks torch/torchaudio model downloads when `--allow-model-download` is absent.
+
 ## Limitations
 
 - WhisperX and its alignment model are not installed. `hero align` fails closed instead of using provisional times. CI does not install WhisperX.
