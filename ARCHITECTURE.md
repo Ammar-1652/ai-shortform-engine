@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 5 reads the current transcript and the current visual analysis and writes a candidate set. A face is still not a speaker. Rendering starts in Round 6.
+Clipforge turns authorized long-form video into short vertical edits. Round 5 reads the current transcript and the current visual analysis and writes a candidate set. Round 6 renders that set as rough 720×1280 review files. A face is still not a speaker. Hero editing is not started.
 
 ## Planes
 
@@ -8,7 +8,7 @@ Clipforge turns authorized long-form video into short vertical edits. Round 5 re
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify.
+- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify, preview doctor/render/list/show/verify.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
 - State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
@@ -25,7 +25,8 @@ Owns bytes, clocks, and pictures.
 - Transcription: `Transcript` with `alignment` of `approximate` for the faster-whisper pass. The input is `audio/asr.flac`. Word times are provisional. WhisperX is reserved for `forced` alignment of selected Hero clips and is not installed. See [docs/architecture/transcription.md](docs/architecture/transcription.md).
 - Visual analysis: `VisualAnalysisDocument` over the analysis proxy. `Scene.analysis_complete` stays false until transcript evidence exists. `FaceObservation.speaker_attribution` stays `unknown`. See [docs/architecture/visual-analysis.md](docs/architecture/visual-analysis.md).
 - Time mapping: implemented. See [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md).
-- Rendering and output validation: `RenderJob`, `RenderArtifact`, `QAResult`. Remotion is the selected renderer. The app under `apps/renderer` typechecks and does not compose a reel.
+- Rough preview: `RoughPreviewSetDocument` for the current candidate set. The picture is the analysis proxy and the speech is the ASR FLAC. Captions are provisional. See [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md).
+- Rendering and output validation: Remotion composites the rough review at 720×1280. `RenderJob` and `RenderArtifact` remain the later Hero records. FFmpeg probes the preview. It does not draw the captions.
 
 ### AI decision plane
 
@@ -44,7 +45,7 @@ Owns files that are not the long-form source, and the rights on every file inclu
 - Source media: `SourceAsset.license_record_id` references `asset_license_records`, and that record's `asset_id` must be the source id. A version-1 file is migrated by inserting `unknown` placeholders. Those placeholders stay blocked.
 - Campaign assets, local assets, Envato assets, graphics, audio, fonts: `AssetKind` on `AssetReference`.
 - Rights: `AssetLicenseRecord`. `require_rights_cleared` blocks `unknown`, `prohibited`, and missing evidence.
-- Motion library: `MotionEvent.component_id` names a future Remotion component. No components are implemented.
+- Motion library: `MotionEvent.component_id` names a future Hero component. Round 6 has one review composition and no motion package.
 
 ### Review plane
 
@@ -77,7 +78,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 | WhisperX | Forced alignment of selected Hero clips | Deferred |
 | PySceneDetect | Scene boundaries on the analysis proxy | Used |
 | MediaPipe and OpenCV | Face boxes and frame measurements. No identity and no speaker label | Used |
-| Remotion, React, TypeScript | Programmatic 9:16 render | Scaffold only |
+| Remotion, React, TypeScript | Rough 720×1280 review composition | Used for review previews |
 | pnpm | JavaScript installs | Used by the scaffold |
 | pytest, Ruff, mypy | Python checks | Used |
 | Vitest, ESLint, `tsc` | TypeScript checks | Used by the scaffold |
@@ -90,8 +91,8 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 The following are not stubbed as successful commands:
 
 - WhisperX integration
-- Remotion reel compositions and actual rendering
-- Candidate review UI and Hero edit plans
+- Hero edit plans and motion graphics
+- Candidate review UI
 - Envato MCP
 - Review web UI and Remotion Player
 - Publishing APIs

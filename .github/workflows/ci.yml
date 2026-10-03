@@ -20,7 +20,7 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not model_smoke"
+        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not model_smoke"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
@@ -90,6 +90,37 @@ jobs:
         run: uv sync --frozen --all-groups
       - name: Candidate mining tests
         run: uv run pytest -m candidate
+
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/renderer/pnpm-lock.yaml
+      - name: Install FFmpeg and a system browser
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          if ! command -v google-chrome && ! command -v google-chrome-stable && ! command -v chromium && ! command -v chromium-browser; then
+            sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          fi
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Install renderer dependencies
+        working-directory: apps/renderer
+        run: pnpm install --frozen-lockfile
+      - name: Rough preview tests
+        run: uv run pytest -m preview
 
   renderer:
     runs-on: ubuntu-latest

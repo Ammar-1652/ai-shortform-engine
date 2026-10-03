@@ -1,0 +1,132 @@
+/**
+ * Bundle RoughPreview once, then render each batch item in order.
+ *
+ * Python writes the batch. This process does not read SQLite, rank
+ * candidates, or accept an http(s) media URL. Staged analysis.mp4 and
+ * asr.flac are served from this run's staging directory.
+ */
+
+import { bundle } from "@remotion/bundler";
+import { renderMedia, selectComposition } from "@remotion/renderer";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const entryPoint = path.resolve(here, "../src/rough-preview/index.tsx");
+
+const batchPath = process.argv[2];
+const browserExecutable = process.argv[3];
+if (!batchPath || !browserExecutable) {
+  throw new Error("usage: node render-rough.mjs BATCH_JSON BROWSER_EXECUTABLE");
+}
+
+const batch = JSON.parse(readFileSync(batchPath, "utf8"));
+if (!batch || !Array.isArray(batch.items)) {
+  throw new Error("render batch is missing items");
+}
+
+const runDir = path.resolve(path.dirname(batchPath));
+const stagingDir = path.join(runDir, "staging");
+const chromiumOptions = { gl: "swangle" };
+
+function contained(filePath, root) {
+  const resolved = path.resolve(filePath);
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (resolved !== root && !resolved.startsWith(prefix)) {
+    throw new Error(`refusing to write outside the preview run: ${resolved}`);
+  }
+  return resolved;
+}
+
+for (const item of batch.items) {
+  if (!item || typeof item !== "object") {
+    throw new Error("render batch item was not an object");
+  }
+  contained(item.outputPath, runDir);
+  const input = item.input;
+  if (!input || typeof input !== "object") {
+    throw new Error("render batch item is missing input");
+  }
+  for (const key of ["video_path", "audio_path"]) {
+    const value = input[key];
+    if (typeof value !== "string") {
+      throw new Error(`render batch ${key} is missing`);
+    }
+    const lower = value.toLowerCase();
+    if (lower.startsWith("http://") || lower.startsWith("https://")) {
+      throw new Error(`refusing remote media URL in ${key}`);
+    }
+  }
+  const videoName = path.basename(input.video_path);
+  const audioName = path.basename(input.audio_path);
+  if (videoName !== "analysis.mp4" || audioName !== "asr.flac") {
+    throw new Error("rough preview media must be the staged analysis.mp4 and asr.flac");
+  }
+  contained(path.join(stagingDir, videoName), stagingDir);
+  contained(path.join(stagingDir, audioName), stagingDir);
+  if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
+    throw new Error("render batch h264Crf must be an integer from 0 to 51");
+  }
+}
+
+const bundleStarted = Date.now();
+const serveUrl = await bundle({
+  entryPoint,
+  webpackOverride: (config) => {
+    config.resolve = config.resolve ?? {};
+    config.resolve.extensionAlias = {
+      ".js": [".ts", ".tsx", ".js"],
+    };
+    return config;
+  },
+  publicDir: stagingDir,
+  symlinkPublicDir: true,
+  enableCaching: false,
+});
+const bundleSeconds = (Date.now() - bundleStarted) / 1000;
+
+let renderSeconds = 0;
+for (const item of batch.items) {
+  const started = Date.now();
+  const composition = await selectComposition({
+    serveUrl,
+    id: "RoughPreview",
+    inputProps: item.input,
+    browserExecutable,
+    chromiumOptions,
+  });
+  if (composition.durationInFrames !== item.input.duration_in_frames) {
+    throw new Error(
+      `composition duration ${composition.durationInFrames} does not match Python duration_in_frames ${item.input.duration_in_frames}`,
+    );
+  }
+  if (composition.width !== 720 || composition.height !== 1280) {
+    throw new Error(`composition size ${composition.width}x${composition.height} is not 720x1280`);
+  }
+  await renderMedia({
+    composition,
+    serveUrl,
+    codec: "h264",
+    outputLocation: path.resolve(item.outputPath),
+    inputProps: item.input,
+    browserExecutable,
+    chromiumOptions,
+    concurrency: 1,
+    crf: item.h264Crf,
+    pixelFormat: "yuv420p",
+    audioCodec: "aac",
+    overwrite: true,
+    muted: false,
+  });
+  renderSeconds += (Date.now() - started) / 1000;
+}
+
+process.stderr.write(
+  `${JSON.stringify({
+    event: "rough-preview-timing",
+    bundleSeconds,
+    renderSeconds,
+    candidateCount: batch.items.length,
+  })}\n`,
+);

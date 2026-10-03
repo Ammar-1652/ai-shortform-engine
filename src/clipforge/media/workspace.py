@@ -53,10 +53,21 @@ class SourceWorkspace:
         root = self.root.resolve()
         root.mkdir(parents=True, exist_ok=True)
         ensure_within(root, root)
-        for relative in ("metadata", "audio", "proxy", "logs", "transcript", "tmp", "vision", "candidates"):
+        for relative in (
+            "metadata",
+            "audio",
+            "proxy",
+            "logs",
+            "transcript",
+            "tmp",
+            "vision",
+            "candidates",
+            "previews",
+        ):
             _mkdir_contained(root, _join(self.source_root, relative))
         _mkdir_contained(root, _join(self.vision_root(), "runs"))
         _mkdir_contained(root, _join(self.candidate_root(), "runs"))
+        _mkdir_contained(root, _join(self.preview_root(), "runs"))
 
     def clear_partials(self) -> None:
         """Delete ``*.partial.*`` under this source directory and nowhere else."""
@@ -97,6 +108,38 @@ class SourceWorkspace:
 
     def candidate_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "candidate.lock")
+
+    def preview_root(self) -> Path:
+        return _join(self.source_root, "previews")
+
+    def preview_run_dir(self, preview_set_id: str) -> Path:
+        return _join(self.preview_root(), "runs", _segment(preview_set_id))
+
+    def preview_sidecar(self) -> Path:
+        return self.metadata_file("rough-preview.recipe.json")
+
+    def preview_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "preview.lock")
+
+    def preview_candidate_dir(self, preview_set_id: str, candidate_id: str) -> Path:
+        """One candidate directory inside a preview run. The id is a path segment, not a path."""
+        return _join(self.preview_run_dir(preview_set_id), "candidates", _segment(candidate_id))
+
+    def make_preview_run(self, preview_set_id: str) -> Path:
+        """Create one immutable preview run. Refuse a symlink at any component."""
+        self.ensure()
+        root = self.root.resolve()
+        run = self.preview_run_dir(preview_set_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"rough preview run {preview_set_id} already exists. "
+                "A new preview run uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        _mkdir_contained(root, _join(run, "logs"))
+        _mkdir_contained(root, _join(run, "candidates"))
+        _mkdir_contained(root, _join(run, "staging"))
+        return run
 
     def make_candidate_run(self, mining_id: str) -> Path:
         """Create one immutable candidate run. Refuse a symlink at any component."""
@@ -199,6 +242,32 @@ def vision_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> 
         "Clipforge refused to read the visual analysis while it can be replaced."
     )
     with _flock(workspace, workspace.vision_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def candidate_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> Iterator[Path]:
+    """Share ``candidate.lock`` while a reader needs the current candidate set.
+
+    Acquire this only after the shared prepare, transcription, and vision locks.
+    An exclusive candidate mining run cannot start while this shared lock is held.
+    """
+    message = busy or (
+        f"another candidate mining run is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the candidate set while it can be replaced."
+    )
+    with _flock(workspace, workspace.candidate_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def preview_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source rough-preview lock until this context exits."""
+    busy = (
+        f"another rough preview render is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second preview render so preview artifacts cannot race."
+    )
+    with _flock(workspace, workspace.preview_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

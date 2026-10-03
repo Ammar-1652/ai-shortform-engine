@@ -65,6 +65,15 @@ from clipforge.schemas.media import (
     TranscriptSegment,
     TranscriptWord,
 )
+from clipforge.schemas.preview import (
+    CandidateRoughPreview,
+    RoughCaptionCue,
+    RoughPreviewCacheRecord,
+    RoughPreviewProfile,
+    RoughPreviewRenderInput,
+    RoughPreviewSetDocument,
+    RoughPreviewSetSummary,
+)
 from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
@@ -119,6 +128,13 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CandidateMiningSummary,
     CandidateMiningDocument,
     CandidateMiningCacheRecord,
+    RoughPreviewProfile,
+    RoughCaptionCue,
+    RoughPreviewRenderInput,
+    CandidateRoughPreview,
+    RoughPreviewSetSummary,
+    RoughPreviewSetDocument,
+    RoughPreviewCacheRecord,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,
