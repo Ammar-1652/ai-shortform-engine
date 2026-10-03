@@ -18,6 +18,7 @@ from clipforge.media import recipes
 from clipforge.media.cache import cache_identity_matches, read_cache_record
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
+from clipforge.media.workspace import ensure_within
 from clipforge.schemas.candidates import CandidateMiningDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.storage import Database, find_artifact, get_job
@@ -193,6 +194,12 @@ def _require_candidates(
         )
     try:
         path = path_from_file_uri(row.uri)
+        expected = pair.workspace.candidate_run_dir(record.mining_id) / "candidates.json"
+        ensure_within(pair.workspace.root, path)
+        if path != expected or path.is_symlink() or not path.is_file():
+            raise MediaError(
+                "candidate artifact is not the candidates.json file inside this source's mining run"
+            )
         document = CandidateMiningDocument.model_validate_json(read_text(path))
         digest = sha256_file(path)
     except (OSError, ValidationError, ValueError, MediaError) as exc:
