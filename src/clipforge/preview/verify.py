@@ -113,9 +113,7 @@ def verify_preview(
         expected = workspace.preview_run_dir(record.preview_set_id) / "manifest.json"
         ensure_within(root, path)
         if path != expected or path.is_symlink() or not path.is_file():
-            raise MediaError(
-                "preview artifact is not manifest.json inside this source's preview run"
-            )
+            raise MediaError("preview artifact is not manifest.json inside this source's preview run")
         document = RoughPreviewSetDocument.model_validate_json(read_text(path))
     except (OSError, ValidationError, ValueError, MediaError) as exc:
         lines.append(VerifyLine("FAIL", "preview_document", str(exc)))
