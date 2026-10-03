@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 
 from clipforge.cli.main import app
 from clipforge.errors import MediaError, StorageError
-from clipforge.hero.alignment import FakeForcedAlignment, build_alignment
+from clipforge.hero.alignment import FakeForcedAlignment, _declares_model_cache_only, build_alignment
 from clipforge.hero.backend import FakeHeroRenderBackend
 from clipforge.hero.captions import hero_caption_cues
 from clipforge.hero.constants import KIND_HERO, MOTION_LIBRARY_VERSION
@@ -505,6 +505,17 @@ def test_stale_running_job_fails_only_while_the_lock_is_held(tmp_path: Path) -> 
     _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
     with fixture.database.connect() as connection:
         assert get_job(connection, stale.job_id).status is JobStatus.FAILED
+
+
+def test_cache_only_flag_is_not_inferred_from_var_keyword() -> None:
+    def wrapper(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    def explicit(*, model_cache_only: bool = False) -> None:
+        del model_cache_only
+
+    assert _declares_model_cache_only(wrapper) is False
+    assert _declares_model_cache_only(explicit) is True
 
 
 def test_caption_overlap_fails_closed() -> None:

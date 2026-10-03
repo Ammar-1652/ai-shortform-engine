@@ -42,11 +42,15 @@ def hero_doctor(work_root: Path) -> list[DoctorLine]:
         DoctorLine(
             "PASS",
             "offline",
-            "a normal align sets HF_HUB_OFFLINE=1 and does not download a model",
+            "a normal align sets HF_HUB_OFFLINE, TRANSFORMERS_OFFLINE, and HF_DATASETS_OFFLINE to 1",
         ),
     ]
     lines.append(DoctorLine("PASS", "python_compatibility", "project requires Python 3.11 or newer"))
     lines.extend(_whisperx())
+    lines.append(_package("torch"))
+    lines.append(_package("torchaudio"))
+    lines.append(_package("nltk"))
+    lines.append(_punkt())
     lines.append(_tool("ffmpeg", "CLIPFORGE_FFMPEG", "ffmpeg"))
     lines.append(_tool("ffprobe", "CLIPFORGE_FFPROBE", "ffprobe"))
     lines.append(_tool("node", "CLIPFORGE_NODE", "node"))
@@ -91,29 +95,80 @@ def _whisperx() -> list[DoctorLine]:
                 "not installed. Hero align fails closed and does not use provisional timings.",
             )
         ]
-    version = getattr(whisperx, "__version__", "")
+    del whisperx
+    try:
+        from importlib.metadata import version
+
+        found = version("whisperx")
+    except Exception:
+        found = ""
+    if not found:
+        found = "unknown"
+    return [DoctorLine("PASS", "whisperx", found)]
+
+
+def _package(name: str) -> DoctorLine:
+    try:
+        module = __import__(name)
+    except ImportError:
+        return DoctorLine(
+            "WARN",
+            name,
+            "not installed. It is not part of the default Clipforge environment.",
+        )
+    version = getattr(module, "__version__", "")
     if not isinstance(version, str) or not version:
         version = "unknown"
-    return [DoctorLine("PASS", "whisperx", version)]
+    return DoctorLine("PASS", name, version)
+
+
+def _punkt() -> DoctorLine:
+    try:
+        import nltk  # type: ignore[import-not-found]
+    except ImportError:
+        return DoctorLine("WARN", "nltk_punkt", "NLTK is not installed, so punkt data was not checked")
+    found: list[str] = []
+    for resource in ("tokenizers/punkt_tab/english/", "tokenizers/punkt/english.pickle"):
+        try:
+            found.append(str(nltk.data.find(resource)))
+        except LookupError:
+            continue
+    if found:
+        return DoctorLine("PASS", "nltk_punkt", found[0])
+    return DoctorLine(
+        "WARN",
+        "nltk_punkt",
+        "English punkt data is not cached. A normal align will not download it.",
+    )
 
 
 def _model() -> DoctorLine:
-    roots: list[Path] = []
+    hf_roots: list[Path] = []
     home = os.environ.get("HF_HOME")
     if home:
-        roots.append(Path(home) / "hub")
+        hf_roots.append(Path(home) / "hub")
     hub = os.environ.get("HUGGINGFACE_HUB_CACHE")
     if hub:
-        roots.append(Path(hub))
-    roots.append(Path.home() / ".cache" / "huggingface" / "hub")
+        hf_roots.append(Path(hub))
+    hf_roots.append(Path.home() / ".cache" / "huggingface" / "hub")
     needle = "models--" + _ALIGN_MODEL.replace("/", "--")
-    for root in roots:
+    for root in hf_roots:
         if (root / needle).exists():
             return DoctorLine("PASS", "alignment_model", f"{_ALIGN_MODEL} is present under {root}")
+    torch_home = Path(os.environ.get("TORCH_HOME", str(Path.home() / ".cache" / "torch")))
+    checkpoints = torch_home / "hub" / "checkpoints"
+    cached = sorted(checkpoints.glob("wav2vec2*.pth")) if checkpoints.is_dir() else []
+    if cached:
+        return DoctorLine(
+            "PASS",
+            "alignment_model",
+            f"WAV2VEC2_ASR_BASE_960H checkpoint {cached[0].name} is present under {checkpoints}",
+        )
     return DoctorLine(
         "WARN",
         "alignment_model",
-        f"{_ALIGN_MODEL} was not found in the local Hugging Face cache. A normal align will not download it.",
+        f"{_ALIGN_MODEL} and the torchaudio WAV2VEC2 checkpoint were not found. "
+        "A normal align will not download them.",
     )
 
 

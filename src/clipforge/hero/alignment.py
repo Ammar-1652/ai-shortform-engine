@@ -8,11 +8,12 @@ Hero alignment.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from clipforge.errors import MediaError
 from clipforge.hero.constants import FAKE_MODEL_NAME, FAKE_WHISPERX_VERSION
@@ -296,16 +297,7 @@ def align_span_with_whisperx(
     segments = [{"text": text, "start": 0.0, "end": duration_s}]
     try:
         with _block_model_downloads(allow_model_download):
-            model, metadata = whisperx.load_align_model(
-                language_code="en",
-                device="cpu",
-                model_cache_only=not allow_model_download,
-            )
-    except TypeError as exc:
-        raise MediaError(
-            "the installed WhisperX does not support its cache-only alignment option. "
-            "Upgrade WhisperX before running Hero alignment."
-        ) from exc
+            model, metadata = _load_align_model(whisperx, allow_model_download=allow_model_download)
     except MediaError:
         raise
     except Exception as exc:
@@ -343,6 +335,33 @@ def align_span_with_whisperx(
             )
         bounds.append((source_start_us + start, source_start_us + end))
     return bounds
+
+
+def _load_align_model(whisperx: Any, *, allow_model_download: bool) -> tuple[object, object]:
+    """Load the English aligner. Cache-only builds must not fetch weights."""
+    loader: Callable[..., Any] = whisperx.load_align_model
+    kwargs: dict[str, object] = {"language_code": "en", "device": "cpu"}
+    if _declares_model_cache_only(loader):
+        kwargs["model_cache_only"] = not allow_model_download
+    loaded = loader(**kwargs)
+    if not isinstance(loaded, tuple) or len(loaded) != 2:
+        raise MediaError("WhisperX load_align_model did not return a model and metadata")
+    return loaded[0], loaded[1]
+
+
+def _declares_model_cache_only(loader: Callable[..., Any]) -> bool:
+    """True only when the function itself names the cache-only argument.
+
+    WhisperX's public wrapper accepts ``**kwargs`` and forwards them. That is
+    not evidence the installed aligner implements ``model_cache_only``.
+    """
+    try:
+        parameters = inspect.signature(loader).parameters
+    except (TypeError, ValueError):
+        return False
+    if any(item.kind is inspect.Parameter.VAR_KEYWORD for item in parameters.values()):
+        return False
+    return "model_cache_only" in parameters
 
 
 def _require_cached_punkt() -> None:
@@ -401,7 +420,13 @@ def _whisperx_version() -> str:
             "WhisperX is not installed. Hero alignment does not fall back to provisional timings. "
             "Install WhisperX locally before hero align. Clipforge does not download it automatically."
         ) from exc
-    version = getattr(whisperx, "__version__", "")
-    if not isinstance(version, str) or not version:
+    del whisperx
+    try:
+        from importlib.metadata import version
+
+        found = version("whisperx")
+    except Exception:
+        found = ""
+    if not found:
         return "unknown"
-    return version
+    return found
