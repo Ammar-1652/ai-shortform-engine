@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from clipforge.cli.main import app
 from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
+from clipforge.media.local_file import path_to_file_uri
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.constants import KIND_PREVIEW
 from clipforge.preview.inputs import load_preview_inputs, preview_input_digest
@@ -397,6 +398,43 @@ def test_verify_is_read_only(tmp_path: Path) -> None:
     )
     assert listed.exit_code == 0
     assert _tree(fixture.work) == before_files
+
+
+def test_artifact_paths_are_confined_before_preview_reads(tmp_path: Path) -> None:
+    fixture, backend = _mined(tmp_path, 1)
+    outside_candidate = tmp_path / "outside-candidate.json"
+    outside_candidate.write_text("{not-json", encoding="utf-8")
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE artifacts SET uri = ? WHERE project_id = ? AND source_asset_id = ? AND kind = ?",
+            (
+                path_to_file_uri(outside_candidate),
+                PROJECT_ID,
+                SOURCE_ID,
+                "candidate_set_json",
+            ),
+        )
+    with pytest.raises(MediaError, match="outside the work root"):
+        render(fixture, backend)
+    assert _jobs(fixture.database) == []
+
+    fixture, backend = _mined(tmp_path / "preview", 1)
+    render(fixture, backend)
+    outside_preview = tmp_path / "outside-preview.json"
+    outside_preview.write_text("{not-json", encoding="utf-8")
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE artifacts SET uri = ? WHERE project_id = ? AND source_asset_id = ? AND kind = ?",
+            (
+                path_to_file_uri(outside_preview),
+                PROJECT_ID,
+                SOURCE_ID,
+                KIND_PREVIEW,
+            ),
+        )
+    report = verify_preview(database=fixture.database, source_asset_id=SOURCE_ID, work_root=fixture.work)
+    assert report.status == "FAIL"
+    assert any("outside the work root" in line.detail for line in report.lines)
 
 
 def test_candidate_ids_cannot_escape(tmp_path: Path) -> None:
