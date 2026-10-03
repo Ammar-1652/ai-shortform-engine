@@ -348,7 +348,7 @@ def align_span_with_whisperx(
 def _require_cached_punkt() -> None:
     """Fail before WhisperX can invoke nltk.download in offline mode."""
     try:
-        import nltk
+        import nltk  # type: ignore[import-not-found]
     except ImportError as exc:
         raise MediaError(
             "WhisperX requires NLTK punkt data for offline alignment. "
