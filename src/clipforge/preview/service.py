@@ -29,6 +29,7 @@ from clipforge.media.workspace import (
     ensure_within,
     prepare_read_lock,
     preview_lock,
+    safe_unlink,
     transcribe_read_lock,
     vision_read_lock,
 )
@@ -204,6 +205,7 @@ def _render_run(
         batch = run_dir / "render-batch.json"
         batch.write_text(json.dumps({"items": items}, sort_keys=True) + "\n", encoding="utf-8")
         backend.render_batch(batch, log_path=run_dir / "logs" / f"{job.job_id}.log")
+    _cleanup_transients(run_dir, root)
     previews: list[CandidateRoughPreview] = []
     for rank, (candidate, rendered, input_path, partial) in enumerate(built, start=1):
         previews.append(
@@ -218,7 +220,6 @@ def _render_run(
                 run_dir,
             )
         )
-    _cleanup_staging(run_dir, root)
     document = _document(inputs, profile, preview_set_id, job, actor, now, previews)
     manifest = run_dir / "manifest.json"
     publish_json(manifest, document, root, inputs.pair.workspace.partial_for(manifest))
@@ -388,6 +389,16 @@ def _cleanup_staging(run_dir: Path, root: Path) -> None:
     staging.rmdir()
 
 
+def _cleanup_transients(run_dir: Path, root: Path) -> None:
+    """Remove staged media and the batch file; neither is a persistent preview artifact."""
+    _cleanup_staging(run_dir, root)
+    batch = run_dir / "render-batch.json"
+    ensure_within(root, batch)
+    if batch.is_symlink():
+        raise MediaError("refusing to clean a symlinked preview render batch")
+    safe_unlink(root, batch)
+
+
 def _confirm(
     database: Database,
     source_asset_id: str,
@@ -434,6 +445,10 @@ def _cache_ready(database: Database, inputs: PreviewInputs, profile: RoughPrevie
             return False
     try:
         path = artifact_path(row.uri)
+        expected = inputs.pair.workspace.preview_run_dir(record.preview_set_id) / "manifest.json"
+        ensure_within(inputs.pair.workspace.root, path)
+        if path != expected or path.is_symlink() or not path.is_file():
+            return False
         document = RoughPreviewSetDocument.model_validate_json(read_text(path))
     except (OSError, ValidationError, ValueError, MediaError):
         return False
@@ -464,6 +479,15 @@ def _cache_result(database: Database, inputs: PreviewInputs, started: float) -> 
     if row is None or row.job_id is None:
         raise MediaError("preview cache matched but the artifact row disappeared before reuse")
     path = artifact_path(row.uri)
+    sidecar = inputs.pair.workspace.preview_sidecar()
+    try:
+        record = RoughPreviewCacheRecord.model_validate_json(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValidationError, ValueError) as exc:
+        raise MediaError("preview cache sidecar disappeared before reuse") from exc
+    expected = inputs.pair.workspace.preview_run_dir(record.preview_set_id) / "manifest.json"
+    ensure_within(inputs.pair.workspace.root, path)
+    if path != expected or path.is_symlink() or not path.is_file():
+        raise MediaError("preview cache manifest moved outside the expected preview run before reuse")
     document = RoughPreviewSetDocument.model_validate_json(path.read_text(encoding="utf-8"))
     return _result(
         document,
@@ -706,6 +730,11 @@ def _abandon(
 ) -> None:
     del inputs
     notes: list[str] = []
+    if run_dir is not None:
+        try:
+            _cleanup_transients(run_dir, root)
+        except (OSError, MediaError) as exc:
+            notes.append(str(exc))
     try:
         _cleanup_partials(run_dir, root)
     except (OSError, MediaError) as exc:
