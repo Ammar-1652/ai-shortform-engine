@@ -6,6 +6,16 @@ Date: 2026-10-03. Branch `round-07-candidate-review`. These are commands that we
 
 Round 7 starts from the merged Round 6 commit `1236c3fca71726e3bb9dedc2c0fc8509de0a668b`. The closure note in `round-06-validation.md` records that Round 6 technical checks passed and that acceptance criterion 75 failed because pull request 6 was merged.
 
+## Merge
+
+Pull request 7 was reviewed, marked ready, and merged after all CI jobs passed.
+
+- PR: https://github.com/Ammar-1652/ai-shortform-engine/pull/7
+- PR head: `a8fbfdea4f4d8c88cb3ad531434828240c5651f9`
+- Merge commit on main: `06783647073d8ef117ff0f0b04996e5a4a6e3bc9`
+- Merged: 2026-10-03
+- Round 8 is not started.
+
 ## Commands
 
 `uv run ruff check .` passed. `uv run ruff format --check .` passed. `uv run mypy` reported no issues in 124 source files.
