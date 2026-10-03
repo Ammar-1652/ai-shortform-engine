@@ -15,6 +15,7 @@ from clipforge.hero.service import render_hero_drafts
 from clipforge.hero.show import load_current_hero
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
+from clipforge.paths import find_repo_root
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.browser import resolve_browser
 from clipforge.review.service import DecisionContext, record_decision, review_board
@@ -30,6 +31,9 @@ def test_real_hero_render_is_portrait_and_captioned(tmp_path: Path, monkeypatch:
         resolve_browser()
     except MediaError as exc:
         pytest.skip(str(exc))
+    bundler = find_repo_root() / "apps" / "renderer" / "node_modules" / "@remotion" / "bundler"
+    if not bundler.is_dir():
+        pytest.skip("renderer dependencies are not installed, so the Hero smoke render was not started")
     landscape, speech = _synthetic_media(tmp_path / "source-media")
     spoken = segment(0, 0, 2_000_000, "Point 0 説明 costs $12.50 today.")
     fixture = ready_stack(
