@@ -123,30 +123,32 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
             """,
         )
         assert "reload before saving" in stale
-        _call(page, "Page.reload", {"ignoreCache": True})
+        _reload(page)
+        _wait_for_text(page, "Café")
         saved = _eval(
             page,
             """
             (async () => {
-              const deadline = Date.now() + 8000;
-              while (Date.now() < deadline && !document.body.innerText.includes("Café")) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-              }
               const article = document.querySelector("article");
+              if (!article) {
+                return "no article";
+              }
               article.querySelector("input").value = "ada";
-              article.querySelector("textarea").value = "<unsafe>&\\\"quoted\\\" Café 説明 $12.50";
+              const notes = "<unsafe>&\\"quoted\\" Café 説明 $12.50";
+              article.querySelector("textarea").value = notes;
               article.querySelector("input[value=approved]").checked = true;
               article.querySelector("button").click();
+              const deadline = Date.now() + 8000;
               const status = document.querySelector("#status");
-              while (Date.now() < deadline && !status.textContent.includes("Saved")) {
+              while (Date.now() < deadline && !(status && status.textContent.includes("Saved"))) {
                 await new Promise((resolve) => setTimeout(resolve, 100));
               }
-              return status.textContent;
+              return status ? status.textContent : "no status";
             })()
             """,
         )
-        assert "Saved hero approved" in saved
-        _call(page, "Page.reload", {"ignoreCache": True})
+        assert "Saved hero approved" in str(saved), saved
+        _reload(page)
         reloaded = _eval(
             page,
             """
@@ -175,6 +177,29 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
         chrome.wait(timeout=10)
         server.shutdown()
         server.server_close()
+
+
+def _reload(page: socket.socket) -> None:
+    _call(page, "Page.reload", {"ignoreCache": True})
+
+
+def _wait_for_text(page: socket.socket, needle: str) -> None:
+    literal = json.dumps(needle)
+    found = _eval(
+        page,
+        f"""
+        (async () => {{
+          const deadline = Date.now() + 8000;
+          while (Date.now() < deadline) {{
+            const text = document.body ? document.body.innerText : "";
+            if (text.includes({literal})) return text;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }}
+          return document.body ? document.body.innerText : "";
+        }})()
+        """,
+    )
+    assert needle in str(found), found
 
 
 def _free_port() -> int:

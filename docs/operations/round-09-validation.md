@@ -33,7 +33,7 @@ The manifest does not store an alignment checkpoint SHA, an alignment language, 
 
 `pnpm --dir apps/renderer lint`, `typecheck`, and `test` passed (21 Vitest tests). The repository documents pnpm for the renderer. That is the command CI runs.
 
-The Hero review browser smoke is `tests/test_hero_review_browser.py`. It uses the installed Chrome, FakeForcedAlignment, and the fake Hero encoder. It opened the loopback page, saw the portrait player without autoplay, read `Café`, `説明`, and `$12.50`, rejected a stale save after a new Hero set, saved `approved`, and showed that decision in history after reload. HTML-like notes stayed text. The run passed on this machine.
+The Hero review browser smoke is `tests/test_hero_review_browser.py`. It uses the installed Chrome, FakeForcedAlignment, and the fake Hero encoder. It opened the loopback page, saw the portrait player without autoplay, read `Café`, `説明`, and `$12.50`, rejected a stale save after a new Hero set, saved `approved`, and showed that decision in history after reload. HTML-like notes stayed text. The run passed on this machine. The smoke waits until the reloaded page shows the draft before it saves. A save that starts during navigation is not evidence.
 
 ## CI
 
