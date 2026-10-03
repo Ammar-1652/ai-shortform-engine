@@ -15,9 +15,9 @@ If none are approved, the command returns a no-op. It does not write an empty He
 
 ## Alignment
 
-The production adapter is WhisperX on the approved clip only. It trims `audio/asr.flac` with the candidate TimeMap and aligns the transcript words cited by that candidate. Text is copied. Unicode, numbers, and punctuation stay as stored. Word intervals must be positive, monotonic, non-overlapping, and inside the TimeMap. Output frames are the first Hero frame at or after each boundary.
+The production adapter is WhisperX on the approved clip only. Alignment v1 accepts one TimeMap segment and English text. It trims `audio/asr.flac` with that segment and aligns the transcript words cited by the candidate. Text is copied. Unicode, numbers, and punctuation stay as stored. Word intervals must be positive, monotonic, non-overlapping, and inside the TimeMap. Output frames are the first Hero frame at or after each boundary.
 
-`hero doctor` reports WhisperX, the Python runtime, model-cache presence, CPU or GPU, and that a normal run does not download. The adapter also blocks torchaudio and NLTK download paths when offline. `--allow-model-download` is the only download switch.
+`hero doctor` reports WhisperX, torch, torchaudio, NLTK, cached English punkt data, the torchaudio `WAV2VEC2_ASR_BASE_960H` checkpoint or a Hugging Face cache hit, CPU or CUDA, and that a normal run sets `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, and `HF_DATASETS_OFFLINE` to 1. WhisperX 3.4.5 does not declare `model_cache_only`. The adapter blocks `torch.hub` downloads instead. `--allow-model-download` is the only download switch. WhisperX stays out of the default lock.
 
 `FakeForcedAlignment` is for tests. It splits the candidate span into equal integer parts and does not read provisional timestamps.
 

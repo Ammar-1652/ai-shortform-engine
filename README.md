@@ -52,6 +52,21 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 
 `clipforge --help` only lists commands that run. There is no publish command.
 
+## Hero alignment runtime
+
+WhisperX is an optional local runtime. `uv sync` and CI do not install it, and it is not part of the locked default environment. That keeps the pinned `ctranslate2` used by faster-whisper unchanged.
+
+```text
+uv venv ~/.local/clipforge-hero-align --python 3.11
+UV_TORCH_BACKEND=cpu uv pip install --python ~/.local/clipforge-hero-align -e . 'whisperx==3.4.5'
+NLTK_DATA=~/.cache/nltk ~/.local/clipforge-hero-align/bin/python -c "import nltk; nltk.download('punkt_tab'); nltk.download('punkt')"
+~/.local/clipforge-hero-align/bin/python -c "import whisperx; whisperx.load_align_model(language_code='en', device='cpu')"
+```
+
+The last command is the explicit model download. After that, normal commands set `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_DATASETS_OFFLINE=1`, and `NLTK_DATA`. `--allow-model-download` remains the only switch that may fetch weights.
+
+The local CPU validation used WhisperX 3.4.5, torch 2.14.1+cpu, torchaudio 2.11.0+cpu, and NLTK 3.10.3. English alignment loads torchaudio `WAV2VEC2_ASR_BASE_960H` from `wav2vec2_fairseq_base_ls960_asr_ls960.pth`. WhisperX 3.4.5 does not implement `model_cache_only`; Clipforge blocks `torch.hub` downloads instead of pretending that flag exists. Alignment v1 is one TimeMap segment and English text.
+
 ## Architecture
 
 Five planes share one core:
