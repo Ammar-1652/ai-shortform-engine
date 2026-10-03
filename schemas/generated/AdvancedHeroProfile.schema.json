@@ -1,0 +1,281 @@
+{
+  "$defs": {
+    "ReframingStrategy": {
+      "additionalProperties": false,
+      "description": "Named crop strategy. It does not identify a speaker.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy_id": {
+          "enum": [
+            "contain",
+            "center_crop",
+            "manual_window",
+            "visual_safe_window",
+            "multi_face_safe_window",
+            "saliency_window"
+          ],
+          "title": "Strategy Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy_id"
+      ],
+      "title": "ReframingStrategy",
+      "type": "object"
+    },
+    "ReframingWindow": {
+      "additionalProperties": false,
+      "description": "One crop on the visual frame. Coordinates are pixels inside that frame.",
+      "properties": {
+        "frame_height": {
+          "minimum": 1,
+          "title": "Frame Height",
+          "type": "integer"
+        },
+        "frame_width": {
+          "minimum": 1,
+          "title": "Frame Width",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_height": {
+          "minimum": 1,
+          "title": "Source Height",
+          "type": "integer"
+        },
+        "source_width": {
+          "minimum": 1,
+          "title": "Source Width",
+          "type": "integer"
+        },
+        "source_x": {
+          "minimum": 0,
+          "title": "Source X",
+          "type": "integer"
+        },
+        "source_y": {
+          "minimum": 0,
+          "title": "Source Y",
+          "type": "integer"
+        },
+        "strategy_id": {
+          "$ref": "#/$defs/ReframingStrategy"
+        },
+        "window_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Window Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "strategy_id",
+        "output_start_us",
+        "output_end_us",
+        "source_x",
+        "source_y",
+        "source_width",
+        "source_height",
+        "frame_width",
+        "frame_height"
+      ],
+      "title": "ReframingWindow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Output-changing advanced Hero settings. This is not hero-draft-v1.",
+  "properties": {
+    "audio_codec": {
+      "const": "aac",
+      "default": "aac",
+      "title": "Audio Codec",
+      "type": "string"
+    },
+    "audio_sample_rate": {
+      "const": 48000,
+      "default": 48000,
+      "title": "Audio Sample Rate",
+      "type": "integer"
+    },
+    "background": {
+      "const": "neutral-dark-v1",
+      "default": "neutral-dark-v1",
+      "title": "Background",
+      "type": "string"
+    },
+    "broll_policy": {
+      "const": "rights_cleared_local",
+      "default": "rights_cleared_local",
+      "title": "Broll Policy",
+      "type": "string"
+    },
+    "caption_algorithm_version": {
+      "const": "advanced-caption-v1",
+      "default": "advanced-caption-v1",
+      "title": "Caption Algorithm Version",
+      "type": "string"
+    },
+    "diagram_version": {
+      "const": "advanced-diagram-v1",
+      "default": "advanced-diagram-v1",
+      "title": "Diagram Version",
+      "type": "string"
+    },
+    "duration_tolerance_us": {
+      "const": 100000,
+      "default": 100000,
+      "title": "Duration Tolerance Us",
+      "type": "integer"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "manual_window": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReframingWindow"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "max_broll_events": {
+      "default": 4,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Max Broll Events",
+      "type": "integer"
+    },
+    "max_gain_db": {
+      "const": 6,
+      "default": 6,
+      "title": "Max Gain Db",
+      "type": "integer"
+    },
+    "max_sfx_events": {
+      "default": 4,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Max Sfx Events",
+      "type": "integer"
+    },
+    "min_gain_db": {
+      "const": -24,
+      "default": -24,
+      "title": "Min Gain Db",
+      "type": "integer"
+    },
+    "motion_library_version": {
+      "const": "advanced-motion-v1",
+      "default": "advanced-motion-v1",
+      "title": "Motion Library Version",
+      "type": "string"
+    },
+    "music_allowed": {
+      "const": false,
+      "default": false,
+      "title": "Music Allowed",
+      "type": "boolean"
+    },
+    "pixel_format": {
+      "const": "yuv420p",
+      "default": "yuv420p",
+      "title": "Pixel Format",
+      "type": "string"
+    },
+    "profile_id": {
+      "const": "advanced-hero-v1",
+      "default": "advanced-hero-v1",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "reframing": {
+      "$ref": "#/$defs/ReframingStrategy"
+    },
+    "renderer_recipe_version": {
+      "const": "advanced-hero-renderer-v1",
+      "default": "advanced-hero-renderer-v1",
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sfx_policy": {
+      "const": "rights_cleared_local",
+      "default": "rights_cleared_local",
+      "title": "Sfx Policy",
+      "type": "string"
+    },
+    "typography_version": {
+      "const": "advanced-typography-v1",
+      "default": "advanced-typography-v1",
+      "title": "Typography Version",
+      "type": "string"
+    },
+    "video_codec": {
+      "const": "h264",
+      "default": "h264",
+      "title": "Video Codec",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "reframing"
+  ],
+  "title": "AdvancedHeroProfile",
+  "type": "object"
+}

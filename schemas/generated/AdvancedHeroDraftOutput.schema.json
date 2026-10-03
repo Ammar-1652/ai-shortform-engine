@@ -1,0 +1,171 @@
+{
+  "additionalProperties": false,
+  "description": "One rendered advanced draft.",
+  "properties": {
+    "advanced_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Advanced Plan Sha256",
+      "type": "string"
+    },
+    "alignment_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Alignment Id",
+      "type": "string"
+    },
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "detected_audio_codec": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Detected Audio Codec",
+      "type": "string"
+    },
+    "detected_audio_sample_rate": {
+      "minimum": 1,
+      "title": "Detected Audio Sample Rate",
+      "type": "integer"
+    },
+    "detected_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Detected Duration Us",
+      "type": "integer"
+    },
+    "detected_pixel_format": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Detected Pixel Format",
+      "type": "string"
+    },
+    "detected_video_codec": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Detected Video Codec",
+      "type": "string"
+    },
+    "duration_error_us": {
+      "title": "Duration Error Us",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "hero_plan_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hero Plan Id",
+      "type": "string"
+    },
+    "hero_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Plan Sha256",
+      "type": "string"
+    },
+    "hero_review_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Review Digest",
+      "type": "string"
+    },
+    "hero_review_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hero Review Id",
+      "type": "string"
+    },
+    "output_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Duration Us",
+      "type": "integer"
+    },
+    "output_fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Output Fps Denominator",
+      "type": "integer"
+    },
+    "output_fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Output Fps Numerator",
+      "type": "integer"
+    },
+    "preview_relative_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Preview Relative Path",
+      "type": "string"
+    },
+    "preview_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Preview Sha256",
+      "type": "string"
+    },
+    "preview_size_bytes": {
+      "minimum": 1,
+      "title": "Preview Size Bytes",
+      "type": "integer"
+    },
+    "rank": {
+      "minimum": 1,
+      "title": "Rank",
+      "type": "integer"
+    },
+    "render_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Render Input Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "rank",
+    "hero_review_id",
+    "hero_review_digest",
+    "alignment_id",
+    "alignment_sha256",
+    "hero_plan_id",
+    "hero_plan_sha256",
+    "advanced_plan_sha256",
+    "render_input_sha256",
+    "preview_relative_path",
+    "preview_sha256",
+    "preview_size_bytes",
+    "output_duration_us",
+    "detected_video_codec",
+    "detected_pixel_format",
+    "detected_audio_codec",
+    "detected_audio_sample_rate",
+    "detected_duration_us",
+    "duration_error_us"
+  ],
+  "title": "AdvancedHeroDraftOutput",
+  "type": "object"
+}

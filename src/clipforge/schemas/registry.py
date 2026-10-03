@@ -9,6 +9,22 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from clipforge.schemas.advanced import (
+    AdvancedHeroCacheRecord,
+    AdvancedHeroDraftOutput,
+    AdvancedHeroDraftSetDocument,
+    AdvancedHeroPlanDocument,
+    AdvancedHeroProfile,
+    AdvancedHeroRenderInput,
+    AssetBinding,
+    AudioMixEvent,
+    DiagramEvent,
+    DiagramPayload,
+    EmphasisEvent,
+    ReframingStrategy,
+    ReframingWindow,
+    TypographyEvent,
+)
 from clipforge.schemas.candidates import (
     CandidateDeduplicationDecision,
     CandidateEvidenceBundle,
@@ -153,6 +169,20 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     HeroDraftSetDocument,
     HeroCacheRecord,
     HeroPlanDocument,
+    AdvancedHeroProfile,
+    ReframingStrategy,
+    ReframingWindow,
+    TypographyEvent,
+    DiagramPayload,
+    DiagramEvent,
+    AssetBinding,
+    AudioMixEvent,
+    EmphasisEvent,
+    AdvancedHeroRenderInput,
+    AdvancedHeroDraftOutput,
+    AdvancedHeroDraftSetDocument,
+    AdvancedHeroCacheRecord,
+    AdvancedHeroPlanDocument,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

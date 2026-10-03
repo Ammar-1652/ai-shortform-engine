@@ -1,0 +1,684 @@
+{
+  "$defs": {
+    "AdvancedHeroDraftOutput": {
+      "additionalProperties": false,
+      "description": "One rendered advanced draft.",
+      "properties": {
+        "advanced_plan_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Advanced Plan Sha256",
+          "type": "string"
+        },
+        "alignment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Alignment Id",
+          "type": "string"
+        },
+        "alignment_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Alignment Sha256",
+          "type": "string"
+        },
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "detected_audio_codec": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Audio Codec",
+          "type": "string"
+        },
+        "detected_audio_sample_rate": {
+          "minimum": 1,
+          "title": "Detected Audio Sample Rate",
+          "type": "integer"
+        },
+        "detected_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Detected Duration Us",
+          "type": "integer"
+        },
+        "detected_pixel_format": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Pixel Format",
+          "type": "string"
+        },
+        "detected_video_codec": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Video Codec",
+          "type": "string"
+        },
+        "duration_error_us": {
+          "title": "Duration Error Us",
+          "type": "integer"
+        },
+        "height": {
+          "const": 1920,
+          "default": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "hero_plan_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Hero Plan Id",
+          "type": "string"
+        },
+        "hero_plan_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hero Plan Sha256",
+          "type": "string"
+        },
+        "hero_review_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hero Review Digest",
+          "type": "string"
+        },
+        "hero_review_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Hero Review Id",
+          "type": "string"
+        },
+        "output_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Duration Us",
+          "type": "integer"
+        },
+        "output_fps_denominator": {
+          "const": 1,
+          "default": 1,
+          "title": "Output Fps Denominator",
+          "type": "integer"
+        },
+        "output_fps_numerator": {
+          "const": 30,
+          "default": 30,
+          "title": "Output Fps Numerator",
+          "type": "integer"
+        },
+        "preview_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Preview Relative Path",
+          "type": "string"
+        },
+        "preview_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preview Sha256",
+          "type": "string"
+        },
+        "preview_size_bytes": {
+          "minimum": 1,
+          "title": "Preview Size Bytes",
+          "type": "integer"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "render_input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Render Input Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "width": {
+          "const": 1080,
+          "default": 1080,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "rank",
+        "hero_review_id",
+        "hero_review_digest",
+        "alignment_id",
+        "alignment_sha256",
+        "hero_plan_id",
+        "hero_plan_sha256",
+        "advanced_plan_sha256",
+        "render_input_sha256",
+        "preview_relative_path",
+        "preview_sha256",
+        "preview_size_bytes",
+        "output_duration_us",
+        "detected_video_codec",
+        "detected_pixel_format",
+        "detected_audio_codec",
+        "detected_audio_sample_rate",
+        "detected_duration_us",
+        "duration_error_us"
+      ],
+      "title": "AdvancedHeroDraftOutput",
+      "type": "object"
+    },
+    "AdvancedHeroProfile": {
+      "additionalProperties": false,
+      "description": "Output-changing advanced Hero settings. This is not hero-draft-v1.",
+      "properties": {
+        "audio_codec": {
+          "const": "aac",
+          "default": "aac",
+          "title": "Audio Codec",
+          "type": "string"
+        },
+        "audio_sample_rate": {
+          "const": 48000,
+          "default": 48000,
+          "title": "Audio Sample Rate",
+          "type": "integer"
+        },
+        "background": {
+          "const": "neutral-dark-v1",
+          "default": "neutral-dark-v1",
+          "title": "Background",
+          "type": "string"
+        },
+        "broll_policy": {
+          "const": "rights_cleared_local",
+          "default": "rights_cleared_local",
+          "title": "Broll Policy",
+          "type": "string"
+        },
+        "caption_algorithm_version": {
+          "const": "advanced-caption-v1",
+          "default": "advanced-caption-v1",
+          "title": "Caption Algorithm Version",
+          "type": "string"
+        },
+        "diagram_version": {
+          "const": "advanced-diagram-v1",
+          "default": "advanced-diagram-v1",
+          "title": "Diagram Version",
+          "type": "string"
+        },
+        "duration_tolerance_us": {
+          "const": 100000,
+          "default": 100000,
+          "title": "Duration Tolerance Us",
+          "type": "integer"
+        },
+        "fps_denominator": {
+          "const": 1,
+          "default": 1,
+          "title": "Fps Denominator",
+          "type": "integer"
+        },
+        "fps_numerator": {
+          "const": 30,
+          "default": 30,
+          "title": "Fps Numerator",
+          "type": "integer"
+        },
+        "height": {
+          "const": 1920,
+          "default": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "manual_window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReframingWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_broll_events": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Max Broll Events",
+          "type": "integer"
+        },
+        "max_gain_db": {
+          "const": 6,
+          "default": 6,
+          "title": "Max Gain Db",
+          "type": "integer"
+        },
+        "max_sfx_events": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Max Sfx Events",
+          "type": "integer"
+        },
+        "min_gain_db": {
+          "const": -24,
+          "default": -24,
+          "title": "Min Gain Db",
+          "type": "integer"
+        },
+        "motion_library_version": {
+          "const": "advanced-motion-v1",
+          "default": "advanced-motion-v1",
+          "title": "Motion Library Version",
+          "type": "string"
+        },
+        "music_allowed": {
+          "const": false,
+          "default": false,
+          "title": "Music Allowed",
+          "type": "boolean"
+        },
+        "pixel_format": {
+          "const": "yuv420p",
+          "default": "yuv420p",
+          "title": "Pixel Format",
+          "type": "string"
+        },
+        "profile_id": {
+          "const": "advanced-hero-v1",
+          "default": "advanced-hero-v1",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "reframing": {
+          "$ref": "#/$defs/ReframingStrategy"
+        },
+        "renderer_recipe_version": {
+          "const": "advanced-hero-renderer-v1",
+          "default": "advanced-hero-renderer-v1",
+          "title": "Renderer Recipe Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx_policy": {
+          "const": "rights_cleared_local",
+          "default": "rights_cleared_local",
+          "title": "Sfx Policy",
+          "type": "string"
+        },
+        "typography_version": {
+          "const": "advanced-typography-v1",
+          "default": "advanced-typography-v1",
+          "title": "Typography Version",
+          "type": "string"
+        },
+        "video_codec": {
+          "const": "h264",
+          "default": "h264",
+          "title": "Video Codec",
+          "type": "string"
+        },
+        "width": {
+          "const": 1080,
+          "default": 1080,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reframing"
+      ],
+      "title": "AdvancedHeroProfile",
+      "type": "object"
+    },
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "ReframingStrategy": {
+      "additionalProperties": false,
+      "description": "Named crop strategy. It does not identify a speaker.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy_id": {
+          "enum": [
+            "contain",
+            "center_crop",
+            "manual_window",
+            "visual_safe_window",
+            "multi_face_safe_window",
+            "saliency_window"
+          ],
+          "title": "Strategy Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy_id"
+      ],
+      "title": "ReframingStrategy",
+      "type": "object"
+    },
+    "ReframingWindow": {
+      "additionalProperties": false,
+      "description": "One crop on the visual frame. Coordinates are pixels inside that frame.",
+      "properties": {
+        "frame_height": {
+          "minimum": 1,
+          "title": "Frame Height",
+          "type": "integer"
+        },
+        "frame_width": {
+          "minimum": 1,
+          "title": "Frame Width",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_height": {
+          "minimum": 1,
+          "title": "Source Height",
+          "type": "integer"
+        },
+        "source_width": {
+          "minimum": 1,
+          "title": "Source Width",
+          "type": "integer"
+        },
+        "source_x": {
+          "minimum": 0,
+          "title": "Source X",
+          "type": "integer"
+        },
+        "source_y": {
+          "minimum": 0,
+          "title": "Source Y",
+          "type": "integer"
+        },
+        "strategy_id": {
+          "$ref": "#/$defs/ReframingStrategy"
+        },
+        "window_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Window Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "strategy_id",
+        "output_start_us",
+        "output_end_us",
+        "source_x",
+        "source_y",
+        "source_width",
+        "source_height",
+        "frame_width",
+        "frame_height"
+      ],
+      "title": "ReframingWindow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One immutable advanced Hero run. It does not replace the Hero v1 set.",
+  "properties": {
+    "advanced_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Advanced Input Sha256",
+      "type": "string"
+    },
+    "advanced_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Advanced Set Id",
+      "type": "string"
+    },
+    "candidate_set_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Set Artifact Id",
+      "type": "string"
+    },
+    "candidate_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Set Sha256",
+      "type": "string"
+    },
+    "drafts": {
+      "items": {
+        "$ref": "#/$defs/AdvancedHeroDraftOutput"
+      },
+      "minItems": 1,
+      "title": "Drafts",
+      "type": "array"
+    },
+    "hero_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hero Artifact Id",
+      "type": "string"
+    },
+    "hero_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Manifest Sha256",
+      "type": "string"
+    },
+    "hero_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hero Set Id",
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/AdvancedHeroProfile"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "reframing_config_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Reframing Config Sha256",
+      "type": "string"
+    },
+    "reframing_strategy": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Reframing Strategy",
+      "type": "string"
+    },
+    "rough_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Rough Manifest Sha256",
+      "type": "string"
+    },
+    "rough_preview_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rough Preview Artifact Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "advanced_set_id",
+    "project_id",
+    "source_asset_id",
+    "source_sha256",
+    "candidate_set_artifact_id",
+    "candidate_set_sha256",
+    "rough_preview_artifact_id",
+    "rough_manifest_sha256",
+    "hero_artifact_id",
+    "hero_set_id",
+    "hero_manifest_sha256",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "profile",
+    "profile_fingerprint",
+    "reframing_strategy",
+    "reframing_config_sha256",
+    "advanced_input_sha256",
+    "drafts",
+    "provenance"
+  ],
+  "title": "AdvancedHeroDraftSetDocument",
+  "type": "object"
+}

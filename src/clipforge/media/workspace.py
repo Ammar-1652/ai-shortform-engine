@@ -142,6 +142,50 @@ class SourceWorkspace:
     def hero_plan_file(self, candidate_id: str) -> Path:
         return _join(self.hero_root(), "plans", _segment(candidate_id), "plan.json")
 
+    def advanced_root(self) -> Path:
+        return _join(self.source_root, "advanced-hero")
+
+    def advanced_run_dir(self, advanced_set_id: str) -> Path:
+        return _join(self.advanced_root(), "runs", _segment(advanced_set_id))
+
+    def advanced_sidecar(self) -> Path:
+        return self.metadata_file("advanced-hero.recipe.json")
+
+    def advanced_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "advanced-hero.lock")
+
+    def advanced_asset_catalog(self) -> Path:
+        return self.metadata_file("advanced-assets.json")
+
+    def advanced_asset_file(self, asset_id: str) -> Path:
+        return _join(self.advanced_root(), "assets", _segment(asset_id), "media")
+
+    def advanced_plan_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "plan.json")
+
+    def prepare_advanced_file(self, path: Path) -> Path:
+        root = self.root.resolve()
+        _mkdir_contained(root, self.advanced_root())
+        _mkdir_contained(root, path.parent)
+        return path
+
+    def make_advanced_run(self, advanced_set_id: str) -> Path:
+        self.ensure()
+        root = self.root.resolve()
+        _mkdir_contained(root, self.advanced_root())
+        _mkdir_contained(root, _join(self.advanced_root(), "runs"))
+        run = self.advanced_run_dir(advanced_set_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"advanced Hero run {advanced_set_id} already exists. "
+                "A new run uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        _mkdir_contained(root, _join(run, "logs"))
+        _mkdir_contained(root, _join(run, "candidates"))
+        _mkdir_contained(root, _join(run, "staging"))
+        return run
+
     def prepare_hero_file(self, path: Path) -> Path:
         """Create the parent of one Hero file. Refuse a symlink on the way."""
         root = self.root.resolve()
@@ -319,6 +363,17 @@ def preview_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) ->
         "Clipforge refused to read the preview set while it can be replaced."
     )
     with _flock(workspace, workspace.preview_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def advanced_hero_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source advanced Hero lock until this context exits."""
+    busy = (
+        f"another advanced Hero edit is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second advanced Hero edit."
+    )
+    with _flock(workspace, workspace.advanced_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

@@ -1,0 +1,683 @@
+{
+  "$defs": {
+    "AudioMixEvent": {
+      "additionalProperties": false,
+      "description": "One SFX cue. Music is not a role in this schema.",
+      "properties": {
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "gain_db": {
+          "maximum": 6,
+          "minimum": -24,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "role": {
+          "const": "sfx",
+          "default": "sfx",
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "asset_id",
+        "gain_db"
+      ],
+      "title": "AudioMixEvent",
+      "type": "object"
+    },
+    "BrollEvent": {
+      "additionalProperties": false,
+      "description": "B-roll on the output clock, with an in-point on the B-roll asset's own clock.",
+      "properties": {
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "broll_source_in_us": {
+          "description": "In-point on the B-roll asset clock. Not a program-timeline time.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Broll Source In Us",
+          "type": "integer"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "asset_id",
+        "broll_source_in_us"
+      ],
+      "title": "BrollEvent",
+      "type": "object"
+    },
+    "DiagramEvent": {
+      "additionalProperties": false,
+      "description": "A local diagram. Geometry is numbers, not an SVG or HTML string.",
+      "properties": {
+        "component_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Component Id",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "height": {
+          "maximum": 600,
+          "minimum": 80,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "payload": {
+          "$ref": "#/$defs/DiagramPayload"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 900,
+          "minimum": 80,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "minimum": 48,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "minimum": 48,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "purpose",
+        "component_id",
+        "payload",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "DiagramEvent",
+      "type": "object"
+    },
+    "DiagramPayload": {
+      "additionalProperties": false,
+      "description": "Structured diagram facts. Unknown keys are rejected by the base model.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "number_comparison",
+            "two_step",
+            "callout"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "left_label": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Left Label",
+          "type": "string"
+        },
+        "left_value": {
+          "maximum": 1000000000,
+          "minimum": 0,
+          "title": "Left Value",
+          "type": "integer"
+        },
+        "right_label": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Right Label",
+          "type": "string"
+        },
+        "right_value": {
+          "maximum": 1000000000,
+          "minimum": 0,
+          "title": "Right Value",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "left_label",
+        "right_label",
+        "left_value",
+        "right_value"
+      ],
+      "title": "DiagramPayload",
+      "type": "object"
+    },
+    "EmphasisEvent": {
+      "additionalProperties": false,
+      "description": "One forced word selected by a named rule. Text is copied.",
+      "properties": {
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "output_end_frame_exclusive": {
+          "minimum": 1,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "rule_id": {
+          "enum": [
+            "number_or_currency",
+            "terminal_punctuation",
+            "diagram_label"
+          ],
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "word_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Word Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "word_id",
+        "text",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive",
+        "purpose",
+        "rule_id"
+      ],
+      "title": "EmphasisEvent",
+      "type": "object"
+    },
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    },
+    "ReframingStrategy": {
+      "additionalProperties": false,
+      "description": "Named crop strategy. It does not identify a speaker.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy_id": {
+          "enum": [
+            "contain",
+            "center_crop",
+            "manual_window",
+            "visual_safe_window",
+            "multi_face_safe_window",
+            "saliency_window"
+          ],
+          "title": "Strategy Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy_id"
+      ],
+      "title": "ReframingStrategy",
+      "type": "object"
+    },
+    "ReframingWindow": {
+      "additionalProperties": false,
+      "description": "One crop on the visual frame. Coordinates are pixels inside that frame.",
+      "properties": {
+        "frame_height": {
+          "minimum": 1,
+          "title": "Frame Height",
+          "type": "integer"
+        },
+        "frame_width": {
+          "minimum": 1,
+          "title": "Frame Width",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_height": {
+          "minimum": 1,
+          "title": "Source Height",
+          "type": "integer"
+        },
+        "source_width": {
+          "minimum": 1,
+          "title": "Source Width",
+          "type": "integer"
+        },
+        "source_x": {
+          "minimum": 0,
+          "title": "Source X",
+          "type": "integer"
+        },
+        "source_y": {
+          "minimum": 0,
+          "title": "Source Y",
+          "type": "integer"
+        },
+        "strategy_id": {
+          "$ref": "#/$defs/ReframingStrategy"
+        },
+        "window_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Window Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "window_id",
+        "strategy_id",
+        "output_start_us",
+        "output_end_us",
+        "source_x",
+        "source_y",
+        "source_width",
+        "source_height",
+        "frame_width",
+        "frame_height"
+      ],
+      "title": "ReframingWindow",
+      "type": "object"
+    },
+    "TypographyEvent": {
+      "additionalProperties": false,
+      "description": "On-screen text copied from alignment or a validated payload. It is not HTML.",
+      "properties": {
+        "color": {
+          "const": "#ffffff",
+          "default": "#ffffff",
+          "title": "Color",
+          "type": "string"
+        },
+        "component_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Component Id",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "font_size": {
+          "maximum": 96,
+          "minimum": 24,
+          "title": "Font Size",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1032,
+          "minimum": 48,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1872,
+          "minimum": 48,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "purpose",
+        "component_id",
+        "text",
+        "x",
+        "y",
+        "font_size"
+      ],
+      "title": "TypographyEvent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Facts for one advanced composition. Paths are local staging names, not URLs.",
+  "properties": {
+    "advanced_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Advanced Plan Sha256",
+      "type": "string"
+    },
+    "advanced_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Advanced Set Id",
+      "type": "string"
+    },
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "asset_names": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Asset Names",
+      "type": "object"
+    },
+    "base_video_name": {
+      "const": "analysis.mp4",
+      "default": "analysis.mp4",
+      "title": "Base Video Name",
+      "type": "string"
+    },
+    "broll": {
+      "items": {
+        "$ref": "#/$defs/BrollEvent"
+      },
+      "title": "Broll",
+      "type": "array"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "composition_id": {
+      "const": "AdvancedHeroDraft",
+      "default": "AdvancedHeroDraft",
+      "title": "Composition Id",
+      "type": "string"
+    },
+    "diagrams": {
+      "items": {
+        "$ref": "#/$defs/DiagramEvent"
+      },
+      "title": "Diagrams",
+      "type": "array"
+    },
+    "duration_in_frames": {
+      "minimum": 1,
+      "title": "Duration In Frames",
+      "type": "integer"
+    },
+    "emphasis": {
+      "items": {
+        "$ref": "#/$defs/EmphasisEvent"
+      },
+      "title": "Emphasis",
+      "type": "array"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "hero_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Plan Sha256",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "reframing_config_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Reframing Config Sha256",
+      "type": "string"
+    },
+    "reframing_strategy": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Reframing Strategy",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sfx": {
+      "items": {
+        "$ref": "#/$defs/AudioMixEvent"
+      },
+      "title": "Sfx",
+      "type": "array"
+    },
+    "speech_name": {
+      "const": "asr.flac",
+      "default": "asr.flac",
+      "title": "Speech Name",
+      "type": "string"
+    },
+    "typography": {
+      "items": {
+        "$ref": "#/$defs/TypographyEvent"
+      },
+      "title": "Typography",
+      "type": "array"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    },
+    "windows": {
+      "items": {
+        "$ref": "#/$defs/ReframingWindow"
+      },
+      "title": "Windows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "advanced_set_id",
+    "duration_in_frames",
+    "reframing_strategy",
+    "reframing_config_sha256",
+    "profile_fingerprint",
+    "alignment_sha256",
+    "hero_plan_sha256",
+    "advanced_plan_sha256"
+  ],
+  "title": "AdvancedHeroRenderInput",
+  "type": "object"
+}

@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "description": "Structured diagram facts. Unknown keys are rejected by the base model.",
+  "properties": {
+    "kind": {
+      "enum": [
+        "number_comparison",
+        "two_step",
+        "callout"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "left_label": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Left Label",
+      "type": "string"
+    },
+    "left_value": {
+      "maximum": 1000000000,
+      "minimum": 0,
+      "title": "Left Value",
+      "type": "integer"
+    },
+    "right_label": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Right Label",
+      "type": "string"
+    },
+    "right_value": {
+      "maximum": 1000000000,
+      "minimum": 0,
+      "title": "Right Value",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "left_label",
+    "right_label",
+    "left_value",
+    "right_value"
+  ],
+  "title": "DiagramPayload",
+  "type": "object"
+}

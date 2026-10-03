@@ -39,6 +39,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
 - `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
 - `clipforge hero review open SOURCE_ID` serves a loopback page for the current Hero drafts. `doctor`, `list`, `show`, and `verify` only read. `decide` appends a decision bound to that Hero artifact, plan, and alignment. Approval does not publish or encode a new file.
+- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. B-roll and sound effects must already be local and rights-cleared. Music, Envato, and publishing are not included.
 
 ## What does not work yet
 
