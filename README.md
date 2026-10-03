@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-The local path is ingest, prepare, transcript, visual analysis, candidate mining, then a rough preview. Round 6 renders the current candidate set from the analysis proxy and the ASR FLAC. The preview is a review file. It does not publish and it is not a Hero edit.
+The local path is ingest, prepare, transcript, visual analysis, candidate mining, a rough preview, and a human review. Round 8 renders a separate Hero draft for candidates approved on the current rough preview. The draft is reviewable. It does not publish.
 
 ## What works
 
@@ -33,12 +33,18 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge review doctor` reports the review contract and that the server binds to loopback.
 - `clipforge review open SOURCE_ID` serves a local page for the current rough previews. The host must be `127.0.0.1`.
 - `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append human decisions. A decision does not change the preview files.
+- `clipforge hero doctor` reports WhisperX, the alignment model cache, and that a normal run does not download.
+- `clipforge hero align SOURCE_ID CANDIDATE_ID` force-aligns one approved clip from the ASR FLAC. It does not align the rest of the source. `--allow-model-download` is required before a missing model can be fetched.
+- `clipforge hero plan SOURCE_ID CANDIDATE_ID` writes a Hero edit plan from that forced alignment. Provisional timing is refused.
+- `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
+- `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
+- The review page can play a Hero draft and append a decision bound to that Hero artifact. Approval does not publish.
 
 ## What does not work yet
 
-- WhisperX alignment
-- Active-speaker detection and face recognition
-- Hero rendering, B-roll, music, and reframing
+- Full-source WhisperX transcription
+- Active-speaker detection, face recognition, and dynamic reframing
+- B-roll, music, and sound effects
 - A review UI on any address other than loopback
 - Envato search or download
 - Publishing

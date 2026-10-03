@@ -39,6 +39,16 @@ from clipforge.schemas.governance import (
     ComplianceRule,
     ReviewDecision,
 )
+from clipforge.schemas.hero import (
+    AlignedWord,
+    ForcedAlignmentDocument,
+    HeroCacheRecord,
+    HeroDraftOutput,
+    HeroDraftSetDocument,
+    HeroPlanDocument,
+    HeroProfile,
+    HeroRenderInput,
+)
 from clipforge.schemas.ingest import (
     AudioStreamInfo,
     ColorMetadata,
@@ -135,6 +145,14 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     RoughPreviewSetSummary,
     RoughPreviewSetDocument,
     RoughPreviewCacheRecord,
+    HeroProfile,
+    AlignedWord,
+    ForcedAlignmentDocument,
+    HeroRenderInput,
+    HeroDraftOutput,
+    HeroDraftSetDocument,
+    HeroCacheRecord,
+    HeroPlanDocument,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

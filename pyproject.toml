@@ -53,6 +53,7 @@ markers = [
     "candidate: deterministic candidate-mining tests with no model download and no video decode",
     "preview: rough preview tests; the real render smoke is the only test that launches a browser",
     "review: local review-surface tests; the browser smoke uses an already installed browser",
+    "hero: Hero draft tests; the real render smoke is the only test that launches a browser",
     "model_smoke: local model-weight tests, excluded from CI",
 ]
 

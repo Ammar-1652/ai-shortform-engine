@@ -48,11 +48,13 @@ The current candidate set is rendered from the analysis proxy and the ASR FLAC i
 
 Status: merged on main as `06783647073d8ef117ff0f0b04996e5a4a6e3bc9`. See `docs/operations/round-07-validation.md`.
 
-A loopback page plays the current rough previews and appends a human decision for each candidate. The decision is bound to that preview artifact. A stale page cannot save. Round 8 is not started.
+A loopback page plays the current rough previews and appends a human decision for each candidate. The decision is bound to that preview artifact. A stale page cannot save.
 
 ## Round 8 — Hero alignment and motion library
 
-WhisperX forced alignment on selected Hero clips only. Hero edit plans and the first purposeful motion components.
+Status: draft pull request, not merged. Started from `3b99d03080ee6c04cf6cf951937ff62b197e1b0e`. See `docs/operations/round-08-validation.md`.
+
+Approved candidates on the current rough preview are force-aligned as clips and rendered as a separate Hero draft. The motion library is `motion-library-v1`. The draft can be reviewed. It is not published. Dynamic reframing, B-roll, music, and sound effects stay deferred.
 
 ## Round 9 — Envato
 

@@ -1,0 +1,87 @@
+{
+  "additionalProperties": false,
+  "description": "One forced word. Text is copied from the transcript. Times are not provisional.",
+  "properties": {
+    "alignment_quality": {
+      "const": "forced",
+      "default": "forced",
+      "title": "Alignment Quality",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "output_end_frame_exclusive": {
+      "minimum": 1,
+      "title": "Output End Frame Exclusive",
+      "type": "integer"
+    },
+    "output_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_frame": {
+      "minimum": 0,
+      "title": "Output Start Frame",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "text": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "word_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Word Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "word_id",
+    "candidate_id",
+    "text",
+    "source_start_us",
+    "source_end_us",
+    "output_start_us",
+    "output_end_us",
+    "output_start_frame",
+    "output_end_frame_exclusive"
+  ],
+  "title": "AlignedWord",
+  "type": "object"
+}
