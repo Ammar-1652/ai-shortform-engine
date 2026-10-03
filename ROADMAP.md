@@ -46,7 +46,7 @@ The current candidate set is rendered from the analysis proxy and the ASR FLAC i
 
 ## Round 7 — Candidate review
 
-Status: complete on branch `round-07-candidate-review`. The draft PR is not merged. See `docs/operations/round-07-validation.md`.
+Status: merged on main as `06783647073d8ef117ff0f0b04996e5a4a6e3bc9`. See `docs/operations/round-07-validation.md`.
 
 A loopback page plays the current rough previews and appends a human decision for each candidate. The decision is bound to that preview artifact. A stale page cannot save. Round 8 is not started.
 
