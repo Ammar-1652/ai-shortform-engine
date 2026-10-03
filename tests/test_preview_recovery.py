@@ -128,7 +128,7 @@ def test_sidecar_failure_restores_previous_and_first_run_deletes_the_row(
     assert fixture.workspace.preview_sidecar().is_file()
 
 
-def test_cancellation_marks_the_job_cancelled(tmp_path: Path) -> None:
+def test_cancellation_marks_the_job_cancelled_and_removes_transient_media(tmp_path: Path) -> None:
     fixture, _backend = _fixture(tmp_path)
     with pytest.raises(KeyboardInterrupt):
         render(fixture, _CancelBackend())
@@ -136,6 +136,10 @@ def test_cancellation_marks_the_job_cancelled(tmp_path: Path) -> None:
     assert len(jobs) == 1
     assert jobs[0].status is JobStatus.CANCELLED
     assert _current_job(fixture) is None
+    runs = [path for path in (fixture.workspace.preview_root() / "runs").iterdir() if path.is_dir()]
+    assert len(runs) == 1
+    assert not (runs[0] / "staging").exists()
+    assert not (runs[0] / "render-batch.json").exists()
 
 
 def test_stale_preview_job_fails_only_after_the_lock(tmp_path: Path) -> None:
