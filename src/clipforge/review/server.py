@@ -16,6 +16,7 @@ from clipforge.review.service import (
     parse_decision_body,
     preview_media_path,
     record_decision,
+    record_hero_decision,
     review_board,
 )
 from clipforge.storage import Database
@@ -77,6 +78,12 @@ def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[
                     candidate_id = path.removeprefix("/media/candidate/")
                     _reject_id(candidate_id)
                     _send_media(self, preview_media_path(database, source_asset_id, candidate_id, work_root))
+                elif path.startswith("/media/hero/"):
+                    from clipforge.hero.show import hero_media_path
+
+                    candidate_id = path.removeprefix("/media/hero/")
+                    _reject_id(candidate_id)
+                    _send_media(self, hero_media_path(database, source_asset_id, candidate_id, work_root))
                 else:
                     _send_json(self, 404, {"error": "not found"})
             except MediaError as exc:
@@ -95,14 +102,24 @@ def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[
                     raise MediaError(
                         "the preview set changed while this review page was open; reload before saving"
                     )
-                review = record_decision(
-                    database=database,
-                    work_root=work_root,
-                    context=context,
-                    decision=decision,
-                    reviewer_id=reviewer,
-                    notes=notes,
-                )
+                if context.subject_kind == "hero":
+                    review = record_hero_decision(
+                        database=database,
+                        work_root=work_root,
+                        context=context,
+                        decision=decision,
+                        reviewer_id=reviewer,
+                        notes=notes,
+                    )
+                else:
+                    review = record_decision(
+                        database=database,
+                        work_root=work_root,
+                        context=context,
+                        decision=decision,
+                        reviewer_id=reviewer,
+                        notes=notes,
+                    )
             except json.JSONDecodeError:
                 _send_json(self, 400, {"error": "review body is not valid JSON"})
                 return

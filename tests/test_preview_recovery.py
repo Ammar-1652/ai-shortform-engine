@@ -86,6 +86,7 @@ def test_renderer_manifest_and_database_failures_keep_the_previous_set(
         render(fixture, backend, force=True)
     assert _current_job(fixture) == first.job_id
     monkeypatch.undo()
+    monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
 
     def fail_write(*_args: object, **_kwargs: object) -> None:
         raise StorageError("database write failed")
@@ -118,6 +119,7 @@ def test_sidecar_failure_restores_previous_and_first_run_deletes_the_row(
     assert failed and all(job.status is JobStatus.FAILED for job in failed)
     assert not fixture.workspace.preview_sidecar().exists()
     monkeypatch.undo()
+    monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
 
     kept = render(fixture, backend)
     monkeypatch.setattr("clipforge.preview.service.publish_json", fail_sidecar)

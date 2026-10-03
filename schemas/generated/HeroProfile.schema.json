@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "Output-changing Hero draft settings. This is not the rough-preview profile.",
+  "properties": {
+    "audio_codec": {
+      "const": "aac",
+      "default": "aac",
+      "title": "Audio Codec",
+      "type": "string"
+    },
+    "audio_enabled": {
+      "const": true,
+      "default": true,
+      "title": "Audio Enabled",
+      "type": "boolean"
+    },
+    "background": {
+      "const": "neutral-dark-v1",
+      "default": "neutral-dark-v1",
+      "title": "Background",
+      "type": "string"
+    },
+    "caption_algorithm_version": {
+      "const": "hero-caption-v1",
+      "default": "hero-caption-v1",
+      "title": "Caption Algorithm Version",
+      "type": "string"
+    },
+    "caption_style_version": {
+      "const": "hero-caption-style-v1",
+      "default": "hero-caption-style-v1",
+      "title": "Caption Style Version",
+      "type": "string"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "h264_crf": {
+      "default": 23,
+      "maximum": 51,
+      "minimum": 0,
+      "title": "H264 Crf",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "motion_library_version": {
+      "const": "motion-library-v1",
+      "default": "motion-library-v1",
+      "title": "Motion Library Version",
+      "type": "string"
+    },
+    "pixel_format": {
+      "const": "yuv420p",
+      "default": "yuv420p",
+      "title": "Pixel Format",
+      "type": "string"
+    },
+    "profile_id": {
+      "const": "hero-draft-v1",
+      "default": "hero-draft-v1",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "renderer_recipe_version": {
+      "const": "hero-draft-renderer-v1",
+      "default": "hero-draft-renderer-v1",
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "video_codec": {
+      "const": "h264",
+      "default": "h264",
+      "title": "Video Codec",
+      "type": "string"
+    },
+    "video_fit": {
+      "const": "contain",
+      "default": "contain",
+      "title": "Video Fit",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "title": "HeroProfile",
+  "type": "object"
+}

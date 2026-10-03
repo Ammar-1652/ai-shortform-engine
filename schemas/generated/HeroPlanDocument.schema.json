@@ -1,0 +1,538 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "AudioEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "gain_db": {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -60,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "role": {
+          "enum": [
+            "sfx",
+            "music",
+            "voice"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "asset_id",
+        "role"
+      ],
+      "title": "AudioEvent",
+      "type": "object"
+    },
+    "BrollEvent": {
+      "additionalProperties": false,
+      "description": "B-roll on the output clock, with an in-point on the B-roll asset's own clock.",
+      "properties": {
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "broll_source_in_us": {
+          "description": "In-point on the B-roll asset clock. Not a program-timeline time.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Broll Source In Us",
+          "type": "integer"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "asset_id",
+        "broll_source_in_us"
+      ],
+      "title": "BrollEvent",
+      "type": "object"
+    },
+    "CaptionCue": {
+      "additionalProperties": false,
+      "properties": {
+        "cue_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cue_id",
+        "interval",
+        "text"
+      ],
+      "title": "CaptionCue",
+      "type": "object"
+    },
+    "EditPlan": {
+      "additionalProperties": false,
+      "description": "Creative decisions bound to one time map.\n\n``time_map_sha256`` must match ``digest_time_map``. Changing the map without\nupdating the digest, or attaching events past the map, fails validation.",
+      "properties": {
+        "audio_events": {
+          "items": {
+            "$ref": "#/$defs/AudioEvent"
+          },
+          "title": "Audio Events",
+          "type": "array"
+        },
+        "broll_events": {
+          "items": {
+            "$ref": "#/$defs/BrollEvent"
+          },
+          "title": "Broll Events",
+          "type": "array"
+        },
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "captions": {
+          "items": {
+            "$ref": "#/$defs/CaptionCue"
+          },
+          "title": "Captions",
+          "type": "array"
+        },
+        "edit_plan_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Edit Plan Id",
+          "type": "string"
+        },
+        "motion_events": {
+          "items": {
+            "$ref": "#/$defs/MotionEvent"
+          },
+          "title": "Motion Events",
+          "type": "array"
+        },
+        "project_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ArtifactProvenance"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "rough",
+            "hero"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "time_map": {
+          "$ref": "#/$defs/TimeMapDocument"
+        },
+        "time_map_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Time Map Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "edit_plan_id",
+        "project_id",
+        "candidate_id",
+        "stage",
+        "time_map",
+        "time_map_sha256",
+        "provenance"
+      ],
+      "title": "EditPlan",
+      "type": "object"
+    },
+    "MotionEvent": {
+      "additionalProperties": false,
+      "description": "A motion-graphics event. ``purpose`` is required so a transition cannot be purposeless.",
+      "properties": {
+        "component_id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Component Id",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "payload": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Payload",
+          "type": "object"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "purpose",
+        "component_id"
+      ],
+      "title": "MotionEvent",
+      "type": "object"
+    },
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    },
+    "TimeMapDocument": {
+      "additionalProperties": false,
+      "description": "Ordered source ranges. This is the only persisted jump-cut map.\n\nThe JSON Schema title is ``TimeMap``. Output intervals are a pure function\nof this list via ``to_time_map`` and are not stored separately.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/TimelineSegment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "time_map_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Time Map Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time_map_id",
+        "segments"
+      ],
+      "title": "TimeMap",
+      "type": "object"
+    },
+    "TimelineSegment": {
+      "additionalProperties": false,
+      "description": "One kept source range. Output position is the index of this segment in its time map.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "segment_id",
+        "source_start_us",
+        "source_end_us"
+      ],
+      "title": "TimelineSegment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The EditPlan plus the identities that made it eligible.",
+  "properties": {
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "edit_plan": {
+      "$ref": "#/$defs/EditPlan"
+    },
+    "motion_library_version": {
+      "const": "motion-library-v1",
+      "default": "motion-library-v1",
+      "title": "Motion Library Version",
+      "type": "string"
+    },
+    "plan_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "qa_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Qa Requirements",
+      "type": "array"
+    },
+    "review_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Review Digest",
+      "type": "string"
+    },
+    "review_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "rough_preview_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rough Preview Artifact Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "edit_plan",
+    "alignment_sha256",
+    "review_id",
+    "review_digest",
+    "rough_preview_artifact_id",
+    "profile_fingerprint",
+    "qa_requirements"
+  ],
+  "title": "HeroPlanDocument",
+  "type": "object"
+}

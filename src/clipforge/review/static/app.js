@@ -1,5 +1,6 @@
 const summary = document.querySelector("#summary");
 const cards = document.querySelector("#cards");
+const hero = document.querySelector("#hero");
 const status = document.querySelector("#status");
 
 function text(parent, value) {
@@ -22,6 +23,7 @@ function decisionLabel(decision) {
 
 function renderBoard(board) {
   summary.replaceChildren();
+  line(summary, "stage rough");
   line(summary, "source " + board.source_asset_id);
   line(summary, "project " + board.project_id);
   line(summary, "preview set " + board.preview_set_id);
@@ -32,11 +34,109 @@ function renderBoard(board) {
   cards.replaceChildren();
   if (!board.candidates || board.candidates.length === 0) {
     line(cards, "No candidates were selected in the current candidate set.");
+  } else {
+    for (const card of board.candidates) {
+      cards.append(renderCard(board, card));
+    }
+  }
+  renderHero(board);
+}
+
+function renderHero(board) {
+  hero.replaceChildren();
+  if (!board.hero) {
+    line(hero, "No Hero draft is stored for this source.");
     return;
   }
-  for (const card of board.candidates) {
-    cards.append(renderCard(board, card));
+  if (board.hero.status !== "ready") {
+    line(hero, "Hero draft is not reviewable.");
+    return;
   }
+  line(hero, "stage hero");
+  line(hero, "hero set " + board.hero.hero_set_id);
+  line(hero, "alignment " + board.hero.alignment_model + " " + board.hero.whisperx_version);
+  line(hero, "profile " + String(board.hero.profile_fingerprint).slice(0, 12));
+  for (const draft of board.hero.drafts || []) {
+    hero.append(renderHeroDraft(board, draft));
+  }
+}
+
+function renderHeroDraft(board, draft) {
+  const article = document.createElement("article");
+  line(article, "stage hero");
+  line(article, "candidate " + draft.candidate_id);
+  line(article, "source " + draft.source_asset_id);
+  const video = document.createElement("video");
+  video.controls = true;
+  video.preload = "metadata";
+  video.src = draft.preview_url;
+  article.append(video);
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  line(meta, "enabled by approval " + draft.approval_review_id + " " + draft.approval_decision);
+  line(meta, "reviewer " + draft.approval_reviewer_id);
+  line(meta, "alignment " + draft.alignment_quality + " " + draft.alignment_model);
+  line(meta, "whisperx " + draft.whisperx_version);
+  line(meta, "profile " + draft.profile_fingerprint);
+  line(meta, "duration " + draft.duration_us + " us");
+  line(meta, draft.width + "×" + draft.height + " at " + draft.fps_numerator + "/" + draft.fps_denominator);
+  line(meta, draft.video_codec + " / " + draft.audio_codec + " / " + draft.pixel_format);
+  line(meta, "captions " + draft.caption_count);
+  line(meta, "hero decision " + decisionLabel(draft.current_decision));
+  article.append(meta);
+  const reviewer = document.createElement("input");
+  reviewer.placeholder = "reviewer id";
+  const notes = document.createElement("textarea");
+  notes.rows = 3;
+  notes.placeholder = "notes";
+  const choices = document.createElement("div");
+  for (const name of ["approved", "rejected", "changes_requested"]) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "hero-decision-" + draft.candidate_id;
+    input.value = name;
+    label.append(input, document.createTextNode(" " + name + " "));
+    choices.append(label);
+  }
+  const save = document.createElement("button");
+  save.type = "button";
+  text(save, "Save hero decision");
+  save.addEventListener("click", () => saveHeroDecision(board, draft, choices, reviewer, notes));
+  article.append(reviewer, notes, choices, save);
+  return article;
+}
+
+async function saveHeroDecision(board, draft, choices, reviewer, notes) {
+  const selected = choices.querySelector("input:checked");
+  if (!selected) {
+    text(status, "Choose approved, rejected, or changes requested.");
+    return;
+  }
+  const response = await fetch("/api/review/decisions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source_asset_id: board.source_asset_id,
+      project_id: board.project_id,
+      artifact_id: board.hero.artifact_id,
+      preview_set_id: board.hero.hero_set_id,
+      hero_set_id: board.hero.hero_set_id,
+      manifest_sha256: board.hero.manifest_sha256,
+      candidate_id: draft.candidate_id,
+      subject_kind: "hero",
+      decision: selected.value,
+      reviewer_id: reviewer.value,
+      notes: notes.value,
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    text(status, payload.error || "The decision was not saved.");
+    return;
+  }
+  text(status, "Saved hero " + payload.decision + " for " + payload.candidate_id);
+  await loadBoard();
 }
 
 function renderCard(board, card) {

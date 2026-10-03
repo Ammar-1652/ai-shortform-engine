@@ -121,6 +121,57 @@ class SourceWorkspace:
     def preview_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "preview.lock")
 
+    def hero_root(self) -> Path:
+        return _join(self.source_root, "hero")
+
+    def hero_run_dir(self, hero_set_id: str) -> Path:
+        return _join(self.hero_root(), "runs", _segment(hero_set_id))
+
+    def hero_sidecar(self) -> Path:
+        return self.metadata_file("hero-draft.recipe.json")
+
+    def hero_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "hero.lock")
+
+    def hero_candidate_dir(self, hero_set_id: str, candidate_id: str) -> Path:
+        return _join(self.hero_run_dir(hero_set_id), "candidates", _segment(candidate_id))
+
+    def hero_alignment_file(self, candidate_id: str) -> Path:
+        return _join(self.hero_root(), "alignments", _segment(candidate_id), "alignment.json")
+
+    def hero_plan_file(self, candidate_id: str) -> Path:
+        return _join(self.hero_root(), "plans", _segment(candidate_id), "plan.json")
+
+    def prepare_hero_file(self, path: Path) -> Path:
+        """Create the parent of one Hero file. Refuse a symlink on the way."""
+        root = self.root.resolve()
+        _mkdir_contained(root, self.hero_root())
+        _mkdir_contained(root, path.parent)
+        return path
+
+    def make_hero_candidate_dir(self, hero_set_id: str, candidate_id: str) -> Path:
+        directory = self.hero_candidate_dir(hero_set_id, candidate_id)
+        _mkdir_contained(self.root.resolve(), directory)
+        return directory
+
+    def make_hero_run(self, hero_set_id: str) -> Path:
+        """Create one immutable Hero run. Refuse a symlink at any component."""
+        self.ensure()
+        root = self.root.resolve()
+        _mkdir_contained(root, self.hero_root())
+        _mkdir_contained(root, _join(self.hero_root(), "runs"))
+        run = self.hero_run_dir(hero_set_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"Hero run {hero_set_id} already exists. "
+                "A new Hero run uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        _mkdir_contained(root, _join(run, "logs"))
+        _mkdir_contained(root, _join(run, "candidates"))
+        _mkdir_contained(root, _join(run, "staging"))
+        return run
+
     def preview_candidate_dir(self, preview_set_id: str, candidate_id: str) -> Path:
         """One candidate directory inside a preview run. The id is a path segment, not a path."""
         return _join(self.preview_run_dir(preview_set_id), "candidates", _segment(candidate_id))
@@ -257,6 +308,28 @@ def candidate_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) 
         "Clipforge refused to read the candidate set while it can be replaced."
     )
     with _flock(workspace, workspace.candidate_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def preview_read_lock(workspace: SourceWorkspace, *, busy: str | None = None) -> Iterator[Path]:
+    """Share ``preview.lock`` while a reader needs the current rough preview set."""
+    message = busy or (
+        f"another rough preview render is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the preview set while it can be replaced."
+    )
+    with _flock(workspace, workspace.preview_lock_path(), exclusive=False, busy=message) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def hero_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source Hero lock until this context exits."""
+    busy = (
+        f"another Hero draft is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second Hero draft so Hero artifacts cannot race."
+    )
+    with _flock(workspace, workspace.hero_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

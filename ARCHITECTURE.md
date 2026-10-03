@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 5 reads the current transcript and the current visual analysis and writes a candidate set. Round 6 renders that set as rough 720×1280 review files. A face is still not a speaker. Hero editing is not started.
+Clipforge turns authorized long-form video into short vertical edits. Round 7 records a human decision on the current rough preview. Round 8 renders a separate 1080×1920 Hero draft for the candidates that decision approved. A face is still not a speaker. Publishing is not implemented.
 
 ## Planes
 
@@ -22,11 +22,11 @@ Owns bytes, clocks, and pictures.
 - ffprobe / ffmpeg: local ingest, the analysis proxy, ASR audio, and output validation. Commands are argv lists. `shell=True` is not used. See [docs/architecture/media-ingest.md](docs/architecture/media-ingest.md).
 - Source ingest: a referenced local file plus an `AssetLicenseRecord` and a `source_manifests` row. The normalized probe is the clock authority. `MediaProbe` stays the older summary contract.
 - Proxies and ASR audio: `analysis-proxy` v1 and `asr-audio` v1, cached by recipe, source hash, and artifact hash. Paths belong under the work root.
-- Transcription: `Transcript` with `alignment` of `approximate` for the faster-whisper pass. The input is `audio/asr.flac`. Word times are provisional. WhisperX is reserved for `forced` alignment of selected Hero clips and is not installed. See [docs/architecture/transcription.md](docs/architecture/transcription.md).
+- Transcription: `Transcript` with `alignment` of `approximate` for the faster-whisper pass. The input is `audio/asr.flac`. Word times are provisional. WhisperX force-aligns an approved Hero clip only. See [docs/architecture/transcription.md](docs/architecture/transcription.md) and [docs/architecture/hero-alignment-and-motion.md](docs/architecture/hero-alignment-and-motion.md).
 - Visual analysis: `VisualAnalysisDocument` over the analysis proxy. `Scene.analysis_complete` stays false until transcript evidence exists. `FaceObservation.speaker_attribution` stays `unknown`. See [docs/architecture/visual-analysis.md](docs/architecture/visual-analysis.md).
 - Time mapping: implemented. See [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md).
 - Rough preview: `RoughPreviewSetDocument` for the current candidate set. The picture is the analysis proxy and the speech is the ASR FLAC. Captions are provisional. See [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md).
-- Rendering and output validation: Remotion composites the rough review at 720×1280. `RenderJob` and `RenderArtifact` remain the later Hero records. FFmpeg probes the preview. It does not draw the captions.
+- Rendering and output validation: Remotion composites the rough review at 720×1280 and the Hero draft at 1080×1920. FFmpeg probes both. It does not draw the captions. Hero drafts are `hero_draft_set_json` and do not replace `rough_preview_set_json`.
 
 ### AI decision plane
 
@@ -45,7 +45,7 @@ Owns files that are not the long-form source, and the rights on every file inclu
 - Source media: `SourceAsset.license_record_id` references `asset_license_records`, and that record's `asset_id` must be the source id. A version-1 file is migrated by inserting `unknown` placeholders. Those placeholders stay blocked.
 - Campaign assets, local assets, Envato assets, graphics, audio, fonts: `AssetKind` on `AssetReference`.
 - Rights: `AssetLicenseRecord`. `require_rights_cleared` blocks `unknown`, `prohibited`, and missing evidence.
-- Motion library: `MotionEvent.component_id` names a future Hero component. Round 6 has one review composition and no motion package.
+- Motion library: `motion-library-v1` writes `MotionEvent` values for a caption reveal, caption emphasis, and short opening and closing fades. Events do not change the TimeMap. See [ADR 0039](docs/adr/0039-deterministic-motion-library.md).
 
 ### Review plane
 
@@ -75,10 +75,10 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 | SQLite | Projects, sources, jobs, artifacts, reviews | Used |
 | FFmpeg and ffprobe | Ingest, proxy, ASR audio, validation | Used for local files |
 | faster-whisper | Full-source approximate transcript of the ASR FLAC | Used |
-| WhisperX | Forced alignment of selected Hero clips | Deferred |
+| WhisperX | Forced alignment of one approved Hero clip | Used when installed. CI uses a test double |
 | PySceneDetect | Scene boundaries on the analysis proxy | Used |
 | MediaPipe and OpenCV | Face boxes and frame measurements. No identity and no speaker label | Used |
-| Remotion, React, TypeScript | Rough 720×1280 review composition | Used for review previews |
+| Remotion, React, TypeScript | Rough 720×1280 review and Hero 1080×1920 draft | Used for local drafts |
 | pnpm | JavaScript installs | Used by the scaffold |
 | pytest, Ruff, mypy | Python checks | Used |
 | Vitest, ESLint, `tsc` | TypeScript checks | Used by the scaffold |
@@ -90,8 +90,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 
 The following are not stubbed as successful commands:
 
-- WhisperX integration
-- Hero edit plans and motion graphics
+- Full-source WhisperX, dynamic reframing, B-roll, music, and sound effects
 - Envato MCP
 - Remotion Player and publishing UI
 - Publishing APIs

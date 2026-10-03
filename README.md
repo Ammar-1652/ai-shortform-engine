@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-The local path is ingest, prepare, transcript, visual analysis, candidate mining, then a rough preview. Round 6 renders the current candidate set from the analysis proxy and the ASR FLAC. The preview is a review file. It does not publish and it is not a Hero edit.
+The local path is ingest, prepare, transcript, visual analysis, candidate mining, a rough preview, and a human review. Round 8 renders a separate Hero draft for candidates approved on the current rough preview. The draft is reviewable. It does not publish.
 
 ## What works
 
@@ -33,18 +33,39 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge review doctor` reports the review contract and that the server binds to loopback.
 - `clipforge review open SOURCE_ID` serves a local page for the current rough previews. The host must be `127.0.0.1`.
 - `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append human decisions. A decision does not change the preview files.
+- `clipforge hero doctor` reports WhisperX, the alignment model cache, and that a normal run does not download.
+- `clipforge hero align SOURCE_ID CANDIDATE_ID` force-aligns one approved clip from the ASR FLAC. It does not align the rest of the source. `--allow-model-download` is required before a missing model can be fetched.
+- `clipforge hero plan SOURCE_ID CANDIDATE_ID` writes a Hero edit plan from that forced alignment. Provisional timing is refused.
+- `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
+- `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
+- The review page can play a Hero draft and append a decision bound to that Hero artifact. Approval does not publish.
 
 ## What does not work yet
 
-- WhisperX alignment
-- Active-speaker detection and face recognition
-- Hero rendering, B-roll, music, and reframing
+- Full-source WhisperX transcription
+- Active-speaker detection, face recognition, and dynamic reframing
+- B-roll, music, and sound effects
 - A review UI on any address other than loopback
 - Envato search or download
 - Publishing
 - Analytics and learning
 
 `clipforge --help` only lists commands that run. There is no publish command.
+
+## Hero alignment runtime
+
+WhisperX is an optional local runtime. `uv sync` and CI do not install it, and it is not part of the locked default environment. That keeps the pinned `ctranslate2` used by faster-whisper unchanged.
+
+```text
+uv venv ~/.local/clipforge-hero-align --python 3.11
+UV_TORCH_BACKEND=cpu uv pip install --python ~/.local/clipforge-hero-align -e . 'whisperx==3.4.5'
+NLTK_DATA=~/.cache/nltk ~/.local/clipforge-hero-align/bin/python -c "import nltk; nltk.download('punkt_tab'); nltk.download('punkt')"
+~/.local/clipforge-hero-align/bin/python -c "import whisperx; whisperx.load_align_model(language_code='en', device='cpu')"
+```
+
+The last command is the explicit model download. After that, normal commands set `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, `HF_DATASETS_OFFLINE=1`, and `NLTK_DATA`. `--allow-model-download` remains the only switch that may fetch weights.
+
+The local CPU validation used WhisperX 3.4.5, torch 2.14.1+cpu, torchaudio 2.11.0+cpu, and NLTK 3.10.3. English alignment loads torchaudio `WAV2VEC2_ASR_BASE_960H` from `wav2vec2_fairseq_base_ls960_asr_ls960.pth`. WhisperX 3.4.5 does not implement `model_cache_only`; Clipforge blocks `torch.hub` downloads instead of pretending that flag exists. Alignment v1 is one TimeMap segment and English text.
 
 ## Architecture
 

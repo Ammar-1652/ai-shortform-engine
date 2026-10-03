@@ -1,0 +1,163 @@
+{
+  "additionalProperties": false,
+  "description": "Facts for one Hero composition. Python already checked approval and alignment.",
+  "properties": {
+    "alignment_quality": {
+      "const": "forced",
+      "default": "forced",
+      "title": "Alignment Quality",
+      "type": "string"
+    },
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "audio_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Audio Path",
+      "type": "string"
+    },
+    "background": {
+      "const": "neutral-dark-v1",
+      "default": "neutral-dark-v1",
+      "title": "Background",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "captions": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
+    "composition_id": {
+      "const": "HeroDraft",
+      "default": "HeroDraft",
+      "title": "Composition Id",
+      "type": "string"
+    },
+    "duration_in_frames": {
+      "minimum": 1,
+      "title": "Duration In Frames",
+      "type": "integer"
+    },
+    "edit_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Edit Plan Sha256",
+      "type": "string"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "hero_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Hero Set Id",
+      "type": "string"
+    },
+    "media_trim_frame": {
+      "minimum": 0,
+      "title": "Media Trim Frame",
+      "type": "integer"
+    },
+    "motion_events": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Motion Events",
+      "type": "array"
+    },
+    "motion_library_version": {
+      "const": "motion-library-v1",
+      "default": "motion-library-v1",
+      "title": "Motion Library Version",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "review_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Review Digest",
+      "type": "string"
+    },
+    "review_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "video_fit": {
+      "const": "contain",
+      "default": "contain",
+      "title": "Video Fit",
+      "type": "string"
+    },
+    "video_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Video Path",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "hero_set_id",
+    "video_path",
+    "audio_path",
+    "media_trim_frame",
+    "duration_in_frames",
+    "alignment_sha256",
+    "edit_plan_sha256",
+    "time_map_sha256",
+    "review_id",
+    "review_digest",
+    "profile_fingerprint"
+  ],
+  "title": "HeroRenderInput",
+  "type": "object"
+}
