@@ -23,6 +23,7 @@ from clipforge.hero.show import load_current_hero
 from clipforge.hero.verify import verify_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.preview.backend import FakeRoughRenderBackend
+from clipforge.review.hero_board import decision_context_for
 from clipforge.review.service import DecisionContext, record_decision, record_hero_decision, review_board
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.jobs import JobRecord, JobStatus
@@ -386,16 +387,7 @@ def test_hero_review_is_append_only_and_stale_writes_fail(tmp_path: Path) -> Non
     draft = hero["drafts"][0]
     assert draft["alignment_quality"] == "forced"
     assert "説明" not in str(draft["preview_url"])
-    context = DecisionContext(
-        source_asset_id=SOURCE_ID,
-        project_id=PROJECT_ID,
-        artifact_id=str(hero["artifact_id"]),
-        preview_set_id=str(hero["hero_set_id"]),
-        manifest_sha256=str(hero["manifest_sha256"]),
-        candidate_id=ids[0],
-        subject_kind="hero",
-        hero_set_id=str(hero["hero_set_id"]),
-    )
+    context = decision_context_for(hero, ids[0])
     saved = record_hero_decision(
         database=fixture.database,
         work_root=fixture.work,
@@ -407,14 +399,19 @@ def test_hero_review_is_append_only_and_stale_writes_fail(tmp_path: Path) -> Non
     assert saved.subject_kind == "hero"
     assert saved.automated is False
     stale = DecisionContext(
-        source_asset_id=SOURCE_ID,
-        project_id=PROJECT_ID,
+        source_asset_id=context.source_asset_id,
+        project_id=context.project_id,
         artifact_id="other-artifact",
-        preview_set_id=str(hero["hero_set_id"]),
-        manifest_sha256=str(hero["manifest_sha256"]),
-        candidate_id=ids[0],
+        preview_set_id=context.preview_set_id,
+        manifest_sha256=context.manifest_sha256,
+        candidate_id=context.candidate_id,
         subject_kind="hero",
-        hero_set_id=str(hero["hero_set_id"]),
+        hero_set_id=context.hero_set_id,
+        source_sha256=context.source_sha256,
+        alignment_id=context.alignment_id,
+        alignment_sha256=context.alignment_sha256,
+        plan_id=context.plan_id,
+        plan_sha256=context.plan_sha256,
     )
     with pytest.raises(MediaError, match="reload before saving"):
         record_hero_decision(

@@ -6,6 +6,7 @@ files, or any score. A decision for an older preview artifact is history only.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,10 +37,12 @@ from clipforge.storage import (
 )
 
 STALE_MESSAGE = "the preview set changed while this review page was open; reload before saving"
-HERO_STALE_MESSAGE = "the hero set changed while this review page was open; reload before saving"
+HERO_STALE_MESSAGE = "The Hero set changed while this review page was open; reload before saving."
 NOTES_MAX = 4000
 DECISIONS = frozenset({"approved", "rejected", "changes_requested"})
 LOOPBACK_HOST = "127.0.0.1"
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 _REQUEST_KEYS = frozenset(
     {
@@ -55,6 +58,11 @@ _REQUEST_KEYS = frozenset(
         "automated",
         "subject_kind",
         "hero_set_id",
+        "source_sha256",
+        "alignment_id",
+        "alignment_sha256",
+        "plan_id",
+        "plan_sha256",
     }
 )
 
@@ -79,6 +87,11 @@ class DecisionContext:
     candidate_id: str
     subject_kind: str = "candidate"
     hero_set_id: str = ""
+    source_sha256: str = ""
+    alignment_id: str = ""
+    alignment_sha256: str = ""
+    plan_id: str = ""
+    plan_sha256: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,7 +334,17 @@ def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str
         candidate_id=_required_text(payload, "candidate_id"),
         subject_kind=subject,
         hero_set_id=hero_set_id,
+        source_sha256=_optional_text(payload, "source_sha256"),
+        alignment_id=_optional_text(payload, "alignment_id"),
+        alignment_sha256=_optional_text(payload, "alignment_sha256"),
+        plan_id=_optional_text(payload, "plan_id"),
+        plan_sha256=_optional_text(payload, "plan_sha256"),
     )
+    if subject == "hero":
+        for key in ("source_sha256", "alignment_id", "alignment_sha256", "plan_id", "plan_sha256"):
+            if not str(getattr(context, key)).strip():
+                raise MediaError(f"{key} is required")
+        _require_hero_identifiers(context)
     return context, decision, reviewer, notes
 
 
@@ -337,6 +360,7 @@ def record_hero_decision(
     """Append one Hero-draft review. It does not publish and it does not replace the rough decision."""
     from clipforge.hero.constants import KIND_HERO
     from clipforge.hero.show import load_current_hero
+    from clipforge.review.hero_board import require_current_binding
 
     if context.subject_kind != "hero":
         raise MediaError("a hero review requires subject_kind hero")
@@ -350,21 +374,24 @@ def record_hero_decision(
     if len(notes) > NOTES_MAX:
         raise MediaError(f"notes are longer than {NOTES_MAX} characters")
     current = load_current_hero(database, context.source_asset_id, work_root)
-    _require_fresh_hero(current, context)
-    review = ReviewDecision.model_validate(
-        {
-            "review_id": str(uuid.uuid4()),
-            "project_id": current.project_id,
-            "artifact_id": current.artifact_id,
-            "candidate_id": context.candidate_id,
-            "subject_kind": "hero",
-            "decision": decision,
-            "reviewer_id": reviewer,
-            "created_at": datetime.now(UTC),
-            "notes": notes,
-            "automated": False,
-        }
-    )
+    require_current_binding(current, context)
+    try:
+        review = ReviewDecision.model_validate(
+            {
+                "review_id": str(uuid.uuid4()),
+                "project_id": current.project_id,
+                "artifact_id": current.artifact_id,
+                "candidate_id": context.candidate_id,
+                "subject_kind": "hero",
+                "decision": decision,
+                "reviewer_id": reviewer,
+                "created_at": datetime.now(UTC),
+                "notes": notes,
+                "automated": False,
+            }
+        )
+    except ValidationError as exc:
+        raise MediaError(f"review decision is not valid: {exc}") from exc
     with database.transaction() as connection:
         row = find_artifact(connection, current.project_id, current.source_asset_id, KIND_HERO)
         if row is None or row.artifact_id != current.artifact_id:
@@ -510,73 +537,18 @@ def _hero_section(
     work_root: Path,
     reviews: list[ReviewDecision],
 ) -> dict[str, object] | None:
-    from clipforge.hero.show import load_current_hero
+    del reviews
+    from clipforge.review.hero_board import hero_review_board
 
     try:
-        current = load_current_hero(database, source_asset_id, work_root)
+        board = hero_review_board(database, source_asset_id, work_root)
     except MediaError as exc:
-        if str(exc).startswith("no current hero draft"):
+        if "No current Hero drafts" in str(exc):
             return None
         return {"status": "unavailable", "detail": "the current hero draft is not reviewable"}
-    drafts: list[dict[str, object]] = []
-    for draft in current.document.drafts:
-        approval = next((item for item in reviews if item.review_id == draft.review_id), None)
-        hero_decision = effective_review(reviews, current.artifact_id, draft.candidate_id, subject_kind="hero")
-        drafts.append(
-            {
-                "stage": "hero",
-                "candidate_id": draft.candidate_id,
-                "source_asset_id": current.source_asset_id,
-                "preview_url": f"/media/hero/{draft.candidate_id}",
-                "approval_review_id": draft.review_id,
-                "approval_decision": None if approval is None else approval.decision,
-                "approval_reviewer_id": None if approval is None else approval.reviewer_id,
-                "alignment_quality": "forced",
-                "alignment_model": current.document.alignment_model,
-                "whisperx_version": current.document.whisperx_version,
-                "profile_fingerprint": current.document.profile_fingerprint,
-                "duration_us": draft.output_duration_us,
-                "duration_error_us": draft.duration_error_us,
-                "width": draft.width,
-                "height": draft.height,
-                "fps_numerator": draft.output_fps_numerator,
-                "fps_denominator": draft.output_fps_denominator,
-                "video_codec": draft.detected_video_codec,
-                "audio_codec": draft.detected_audio_codec,
-                "pixel_format": draft.detected_pixel_format,
-                "caption_count": draft.caption_count,
-                "current_decision": None if hero_decision is None else decision_json(hero_decision),
-            }
-        )
-    return {
-        "status": "ready",
-        "stage": "hero",
-        "hero_set_id": current.document.hero_set_id,
-        "artifact_id": current.artifact_id,
-        "manifest_sha256": current.manifest_sha256,
-        "profile_fingerprint": current.document.profile_fingerprint,
-        "alignment_model": current.document.alignment_model,
-        "whisperx_version": current.document.whisperx_version,
-        "drafts": drafts,
-    }
-
-
-def _require_fresh_hero(current: object, context: DecisionContext) -> None:
-    from clipforge.hero.show import CurrentHero
-
-    if not isinstance(current, CurrentHero):
-        raise MediaError(HERO_STALE_MESSAGE)
-    if context.project_id != current.project_id or context.source_asset_id != current.source_asset_id:
-        raise MediaError(HERO_STALE_MESSAGE)
-    if context.artifact_id != current.artifact_id or context.hero_set_id != current.document.hero_set_id:
-        raise MediaError(HERO_STALE_MESSAGE)
-    if context.preview_set_id != current.document.hero_set_id:
-        raise MediaError(HERO_STALE_MESSAGE)
-    if context.manifest_sha256 != current.manifest_sha256:
-        raise MediaError(HERO_STALE_MESSAGE)
-    known = {item.candidate_id for item in current.document.drafts}
-    if context.candidate_id not in known:
-        raise MediaError(f"unknown candidate {context.candidate_id}")
+    if board.get("status") == "empty":
+        return None
+    return board
 
 
 def _require_fresh(current: CurrentPreview, context: DecisionContext) -> None:
@@ -609,4 +581,38 @@ def _required_text(payload: dict[str, object], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value.strip():
         raise MediaError(f"{key} is required")
+    return value
+
+
+def _require_hero_identifiers(context: DecisionContext) -> None:
+    identifiers = (
+        context.source_asset_id,
+        context.project_id,
+        context.artifact_id,
+        context.preview_set_id,
+        context.candidate_id,
+        context.hero_set_id,
+        context.alignment_id,
+        context.plan_id,
+    )
+    for value in identifiers:
+        if not _IDENTIFIER.fullmatch(value):
+            raise MediaError(f"malformed identifier {value!r}")
+    digests = (
+        context.manifest_sha256,
+        context.source_sha256,
+        context.alignment_sha256,
+        context.plan_sha256,
+    )
+    for value in digests:
+        if not _SHA256.fullmatch(value):
+            raise MediaError("malformed sha256")
+
+
+def _optional_text(payload: dict[str, object], key: str) -> str:
+    value = payload.get(key, "")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise MediaError(f"{key} must be text")
     return value

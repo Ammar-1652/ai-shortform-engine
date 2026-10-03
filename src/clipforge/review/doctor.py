@@ -13,7 +13,7 @@ from clipforge.storage.migrations import CURRENT_SCHEMA_VERSION
 
 Status = Literal["PASS", "WARN", "FAIL"]
 _STATIC = Path(__file__).resolve().parent / "static"
-_FILES = ("index.html", "app.js", "styles.css")
+_FILES = ("index.html", "app.js", "hero.html", "hero.js", "styles.css")
 
 
 @dataclass(frozen=True, slots=True)

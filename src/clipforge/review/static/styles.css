@@ -29,6 +29,12 @@ video {
   margin: 12px auto;
 }
 
+.hero-stage video {
+  width: min(360px, 100%);
+  aspect-ratio: 9 / 16;
+  height: auto;
+}
+
 label,
 button,
 textarea,

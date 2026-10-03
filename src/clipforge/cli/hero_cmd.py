@@ -23,6 +23,15 @@ _HELP = (
 hero_app = typer.Typer(no_args_is_help=True, help=_HELP)
 
 
+def _register_review() -> None:
+    from clipforge.cli.hero_review_cmd import hero_review_app
+
+    hero_app.add_typer(hero_review_app, name="review")
+
+
+_register_review()
+
+
 def _fail(exc: BaseException) -> NoReturn:
     typer.echo(str(exc), err=True)
     raise typer.Exit(1)
