@@ -73,7 +73,7 @@ A change is done when:
 
 ## Testing policy
 
-- pytest for Python. Vitest for the renderer. `pytest -m preview` includes the rough-preview suite. Only the real render smoke launches a browser.
+- pytest for Python. Vitest for the renderer. `pytest -m preview` includes the rough-preview suite. Only the real render smoke launches a browser for rendering. `pytest -m review` covers the local review surface. Its browser smoke uses an already installed browser and does not download one.
 - Ruff formats and lints Python. mypy is strict on `clipforge`.
 - TypeScript `strict` stays on.
 - Tests that talk to SQLite use a temporary file, never a shared developer database.

@@ -448,6 +448,74 @@ def test_candidate_ids_cannot_escape(tmp_path: Path) -> None:
     assert not any(outside.iterdir())
 
 
+def test_sidecar_field_and_bad_picture_fail_closed(tmp_path: Path) -> None:
+    fixture, backend = _mined(tmp_path, 1)
+    result = render(fixture, backend)
+    sidecar_path = fixture.workspace.preview_sidecar()
+    from clipforge.schemas.preview import RoughPreviewCacheRecord
+    from clipforge.transcription.io import dump_json
+
+    record = RoughPreviewCacheRecord.model_validate_json(sidecar_path.read_text(encoding="utf-8"))
+    other = record.model_copy(update={"mining_id": "mining-other"})
+    sidecar_path.write_text(dump_json(other), encoding="utf-8")
+    report = verify_preview(database=fixture.database, source_asset_id=SOURCE_ID, work_root=fixture.work)
+    assert report.status == "FAIL"
+    assert any("mining id" in line.detail for line in report.lines)
+    sidecar_path.write_text(dump_json(record), encoding="utf-8")
+
+    document = load_preview_document(fixture.database, SOURCE_ID, fixture.work)
+    video = result.manifest_path.parent / document.previews[0].preview_relative_path
+    from clipforge.media.process import ProcessRunner
+    from clipforge.media.tools import resolve_ffmpeg
+
+    ProcessRunner().run(
+        [
+            resolve_ffmpeg(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=blue:s=16x16:r=30:d=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=48000:d=1",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(video),
+        ],
+        check=True,
+    )
+    updated = document.previews[0].model_copy(
+        update={"preview_sha256": sha256_file(video), "preview_size_bytes": video.stat().st_size}
+    )
+    rewritten = document.model_copy(
+        update={
+            "previews": [updated],
+            "summary": document.summary.model_copy(update={"total_preview_bytes": updated.preview_size_bytes}),
+        }
+    )
+    from clipforge.schemas.preview import RoughPreviewSetDocument
+
+    stored = RoughPreviewSetDocument.model_validate(rewritten.model_dump(mode="json"))
+    result.manifest_path.write_text(dump_json(stored), encoding="utf-8")
+    refreshed = record.model_copy(
+        update={
+            "manifest_sha256": sha256_file(result.manifest_path),
+            "manifest_size_bytes": result.manifest_path.stat().st_size,
+        }
+    )
+    sidecar_path.write_text(dump_json(refreshed), encoding="utf-8")
+    checked = verify_preview(database=fixture.database, source_asset_id=SOURCE_ID, work_root=fixture.work)
+    assert checked.status == "FAIL"
+    assert any("720" in line.detail or "16x16" in line.detail for line in checked.lines)
+
+
 def test_renderer_sources_do_not_use_a_shell() -> None:
     root = Path(__file__).resolve().parents[1]
     texts = []

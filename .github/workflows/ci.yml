@@ -20,7 +20,7 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not model_smoke"
+        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not review and not model_smoke"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
@@ -121,6 +121,21 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Rough preview tests
         run: uv run pytest -m preview
+
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install FFmpeg from Ubuntu packages
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Candidate review tests
+        run: uv run pytest -m review
 
   renderer:
     runs-on: ubuntu-latest

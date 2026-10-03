@@ -593,35 +593,17 @@ def _commit_and_publish(
         }
     )
     with database.transaction() as connection:
-        existing = find_artifact(
+        # A new preview set gets a new artifact id. Reviews stay on the set that was watched.
+        insert_artifact(
             connection,
-            inputs.pair.source.project_id,
-            inputs.pair.source.source_asset_id,
-            KIND_PREVIEW,
+            artifact_id=str(uuid.uuid4()),
+            project_id=inputs.pair.source.project_id,
+            job_id=job.job_id,
+            source_asset_id=inputs.pair.source.source_asset_id,
+            kind=KIND_PREVIEW,
+            uri=path_to_file_uri(manifest),
+            provenance=provenance,
         )
-        uri = path_to_file_uri(manifest)
-        if existing is None:
-            insert_artifact(
-                connection,
-                artifact_id=str(uuid.uuid4()),
-                project_id=inputs.pair.source.project_id,
-                job_id=job.job_id,
-                source_asset_id=inputs.pair.source.source_asset_id,
-                kind=KIND_PREVIEW,
-                uri=uri,
-                provenance=provenance,
-            )
-        else:
-            update_artifact(
-                connection,
-                artifact_id=existing.artifact_id,
-                project_id=inputs.pair.source.project_id,
-                job_id=job.job_id,
-                source_asset_id=inputs.pair.source.source_asset_id,
-                kind=KIND_PREVIEW,
-                uri=uri,
-                provenance=provenance,
-            )
         update_job(connection, succeeded)
     try:
         publish_json(
@@ -680,19 +662,18 @@ def _revert_artifact(
                 uri=uri,
                 provenance=provenance,
             )
-        else:
-            connection.execute(
-                """
-                DELETE FROM artifacts
-                WHERE project_id = ? AND source_asset_id = ? AND kind = ? AND job_id = ?
-                """,
-                (
-                    inputs.pair.source.project_id,
-                    inputs.pair.source.source_asset_id,
-                    KIND_PREVIEW,
-                    job.job_id,
-                ),
-            )
+        connection.execute(
+            """
+            DELETE FROM artifacts
+            WHERE project_id = ? AND source_asset_id = ? AND kind = ? AND job_id = ?
+            """,
+            (
+                inputs.pair.source.project_id,
+                inputs.pair.source.source_asset_id,
+                KIND_PREVIEW,
+                job.job_id,
+            ),
+        )
         update_job(connection, failed)
 
 

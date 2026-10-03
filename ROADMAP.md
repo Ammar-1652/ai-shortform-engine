@@ -46,7 +46,9 @@ The current candidate set is rendered from the analysis proxy and the ASR FLAC i
 
 ## Round 7 — Candidate review
 
-Not started. A local review surface, later the Remotion Player. Writes `ReviewDecision` rows. Does not publish.
+Status: complete on branch `round-07-candidate-review`. The draft PR is not merged. See `docs/operations/round-07-validation.md`.
+
+A loopback page plays the current rough previews and appends a human decision for each candidate. The decision is bound to that preview artifact. A stale page cannot save. Round 8 is not started.
 
 ## Round 8 — Hero alignment and motion library
 

@@ -15,6 +15,7 @@ from clipforge import __version__
 from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.media_cmd import media_app
 from clipforge.cli.preview_cmd import preview_app
+from clipforge.cli.review_cmd import review_app
 from clipforge.cli.source import source_app
 from clipforge.cli.storage_cmd import storage_app
 from clipforge.cli.transcript_cmd import transcript_app
@@ -44,6 +45,7 @@ app.add_typer(transcript_app, name="transcript")
 app.add_typer(vision_app, name="vision")
 app.add_typer(candidate_app, name="candidate")
 app.add_typer(preview_app, name="preview")
+app.add_typer(review_app, name="review")
 
 
 def _version_callback(value: bool) -> None:
