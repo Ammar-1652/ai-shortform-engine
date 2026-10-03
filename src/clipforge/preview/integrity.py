@@ -10,9 +10,16 @@ from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.workspace import SourceWorkspace, ensure_within
 from clipforge.preview.constants import JOB_PREVIEW
 from clipforge.preview.inputs import PreviewInputs
+from clipforge.preview.probe import probe_preview
 from clipforge.schemas.jobs import JobRecord, JobStatus
-from clipforge.schemas.preview import RoughPreviewCacheRecord, RoughPreviewSetDocument
+from clipforge.schemas.preview import (
+    CandidateRoughPreview,
+    RoughPreviewCacheRecord,
+    RoughPreviewSetDocument,
+)
 from clipforge.schemas.time import digest_time_map
+
+_ACCEPTED_PIXEL_FORMATS = frozenset({"yuv420p", "yuvj420p"})
 
 
 def preview_problems(
@@ -75,8 +82,7 @@ def _identity(
     for left, right, label in checks:
         if left != right:
             problems.append(f"preview manifest {label} does not match the current inputs")
-    if document.profile_fingerprint != record.profile_fingerprint:
-        problems.append("preview sidecar profile fingerprint does not match the manifest")
+    problems.extend(_sidecar(document, record, inputs))
     expected_ids = [item.candidate_id for item in inputs.candidate_document.candidates]
     got_ids = [item.candidate_id for item in document.previews]
     if got_ids != expected_ids:
@@ -202,6 +208,112 @@ def _files(
             problems.append(f"preview MP4 for {preview.candidate_id} does not match its recorded hash")
         if input_hash != preview.render_input_sha256:
             problems.append(f"render input for {preview.candidate_id} does not match its recorded hash")
+        problems.extend(_technical(video, preview))
+    return problems
+
+
+def _sidecar(
+    document: RoughPreviewSetDocument,
+    record: RoughPreviewCacheRecord,
+    inputs: PreviewInputs,
+) -> list[str]:
+    """Field-by-field sidecar check against the manifest, the inputs, and the job binding."""
+    problems: list[str] = []
+    triples = (
+        ("project id", record.project_id, document.project_id, inputs.pair.source.project_id),
+        ("source id", record.source_asset_id, document.source_asset_id, inputs.pair.source.source_asset_id),
+        ("preview set id", record.preview_set_id, document.preview_set_id, document.preview_set_id),
+        ("job id", record.job_id, document.provenance.job_id, document.provenance.job_id),
+        ("mining id", record.mining_id, document.mining_id, inputs.candidate_document.mining_id),
+        ("source SHA", record.source_sha256, document.source_sha256, inputs.pair.manifest.content_sha256),
+        (
+            "candidate artifact id",
+            record.candidate_set_artifact_id,
+            document.candidate_set_artifact_id,
+            inputs.candidate_artifact_id,
+        ),
+        (
+            "candidate set SHA",
+            record.candidate_set_sha256,
+            document.candidate_set_sha256,
+            inputs.candidate_sha256,
+        ),
+        ("transcript id", record.transcript_id, document.transcript_id, inputs.pair.transcript.transcript_id),
+        (
+            "transcript SHA",
+            record.transcript_sha256,
+            document.transcript_sha256,
+            inputs.pair.transcript_sha256,
+        ),
+        (
+            "visual analysis id",
+            record.visual_analysis_id,
+            document.visual_analysis_id,
+            inputs.pair.visual.analysis_id,
+        ),
+        (
+            "visual analysis SHA",
+            record.visual_analysis_sha256,
+            document.visual_analysis_sha256,
+            inputs.pair.visual_sha256,
+        ),
+        ("proxy SHA", record.analysis_proxy_sha256, document.analysis_proxy_sha256, inputs.proxy_sha256),
+        ("ASR SHA", record.asr_audio_sha256, document.asr_audio_sha256, inputs.asr_sha256),
+        (
+            "input digest",
+            record.preview_input_sha256,
+            document.preview_input_sha256,
+            inputs.preview_input_sha256,
+        ),
+        (
+            "profile fingerprint",
+            record.profile_fingerprint,
+            document.profile_fingerprint,
+            document.profile_fingerprint,
+        ),
+        (
+            "renderer recipe",
+            record.renderer_recipe_version,
+            document.renderer_recipe_version,
+            document.profile.renderer_recipe_version,
+        ),
+        (
+            "caption algorithm",
+            record.caption_algorithm_version,
+            document.caption_algorithm_version,
+            document.profile.caption_algorithm_version,
+        ),
+    )
+    for label, sidecar_value, manifest_value, current_value in triples:
+        if sidecar_value != manifest_value or sidecar_value != current_value:
+            problems.append(f"preview sidecar {label} does not match the manifest and current inputs")
+    if record.rendered_count != document.summary.rendered_count:
+        problems.append("preview sidecar rendered count does not match the manifest")
+    return problems
+
+
+def _technical(path: Path, preview: CandidateRoughPreview) -> list[str]:
+    """ffprobe the MP4. A matching hash does not excuse an invalid picture."""
+    try:
+        probed = probe_preview(path, expected_duration_us=preview.output_duration_us, log_path=None)
+    except MediaError as exc:
+        return [str(exc)]
+    problems: list[str] = []
+    if probed.video_codec != "h264" or preview.detected_video_codec != "h264":
+        problems.append(f"preview {preview.candidate_id} video codec is not h264")
+    if probed.audio_codec != "aac" or preview.detected_audio_codec != "aac":
+        problems.append(f"preview {preview.candidate_id} audio codec is not aac")
+    if (
+        probed.pixel_format not in _ACCEPTED_PIXEL_FORMATS
+        or preview.detected_pixel_format not in _ACCEPTED_PIXEL_FORMATS
+    ):
+        problems.append(f"preview {preview.candidate_id} pixel format is not yuv420p")
+    if probed.pixel_format != preview.detected_pixel_format:
+        problems.append(f"preview {preview.candidate_id} pixel format does not match the manifest")
+    if (probed.fps_numerator, probed.fps_denominator) != (30, 1):
+        problems.append(f"preview {preview.candidate_id} frame rate is not 30/1")
+    if probed.duration_error_us != preview.duration_error_us:
+        problems.append(f"preview {preview.candidate_id} duration error does not match the manifest")
     return problems
 
 

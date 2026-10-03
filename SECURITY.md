@@ -37,6 +37,10 @@ Mining reads the local transcript and visual-analysis JSON. It does not upload e
 
 `preview render` reads the local analysis proxy, the local ASR FLAC, and the stored transcript. It does not upload frames, audio, transcript text, or candidate text. Remotion runs on this machine. The browser is a local executable and is not exposed as a remote debugging service by Clipforge. Caption text is drawn as ordinary text, not as HTML. Render inputs reject `http://` and `https://` media URLs. The Node process is started from an argument list. `shell=True` is not used. Preview MP4s stay under the work root and are not committed.
 
+## Candidate review
+
+`review open` listens on `127.0.0.1` only. It refuses `0.0.0.0` and other hosts. The page assets ship with the package. They do not reference a CDN or a remote script. Preview MP4s are served by candidate id from the current manifest. The handler rejects symlink targets and paths outside the work root. Review notes are stored and shown as text. Decision writes are rejected when the preview set changed. The server does not upload media or call an external API.
+
 ## Downloaded assets
 
 Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.

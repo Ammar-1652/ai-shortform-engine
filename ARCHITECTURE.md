@@ -8,7 +8,7 @@ Clipforge turns authorized long-form video into short vertical edits. Round 5 re
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify, preview doctor/render/list/show/verify.
+- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify, preview doctor/render/list/show/verify, review doctor/open/list/decide/verify.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
 - State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
@@ -49,9 +49,9 @@ Owns files that are not the long-form source, and the rights on every file inclu
 
 ### Review plane
 
-Owns human decisions. Nothing in Round 1 plays video.
+Owns human decisions. Round 7 serves them on `127.0.0.1` for the current rough-preview set. See [docs/architecture/candidate-review-surface.md](docs/architecture/candidate-review-surface.md).
 
-- Candidate review: `subject_kind = candidate`.
+- Candidate review: `subject_kind = candidate`, bound to the current rough-preview artifact. Decisions are append-only. Approval does not publish.
 - Hero promotion: a later review over a candidate. Promotion count is not fixed in the schema.
 - Caption and framing correction: `subject_kind` values `caption` and `framing`.
 - Final playback approval: `subject_kind = final` and `decision = approved` require an `artifact_id`.

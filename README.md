@@ -29,13 +29,17 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge candidate list`, `clipforge candidate show`, and `clipforge candidate verify` read that set. `show` keeps word timing marked provisional. Verify does not repair or rescore.
 - `clipforge preview doctor` reports the rough-preview recipe, Node, pnpm, ffmpeg, ffprobe, and a local browser. It does not launch the browser or download one.
 - `clipforge preview render SOURCE_ID` builds one review MP4 per selected candidate. `--force` renders again and keeps the previous run.
-- `clipforge preview list`, `clipforge preview show`, and `clipforge preview verify` read the current set. Verify does not render or repair. Captions stay provisional.
+- `clipforge preview list`, `clipforge preview show`, and `clipforge preview verify` read the current set. Verify does not render or repair. Captions stay provisional. Verify also checks each MP4 with ffprobe.
+- `clipforge review doctor` reports the review contract and that the server binds to loopback.
+- `clipforge review open SOURCE_ID` serves a local page for the current rough previews. The host must be `127.0.0.1`.
+- `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append human decisions. A decision does not change the preview files.
 
 ## What does not work yet
 
 - WhisperX alignment
 - Active-speaker detection and face recognition
 - Hero rendering, B-roll, music, and reframing
+- A review UI on any address other than loopback
 - Envato search or download
 - A review UI
 - Publishing

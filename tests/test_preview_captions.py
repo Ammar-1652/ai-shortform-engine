@@ -168,6 +168,20 @@ def test_punctuation_unicode_and_numbers_are_preserved() -> None:
     assert kept[0].timing_quality == "provisional"
 
 
+def test_unreferenced_words_stay_out_of_the_cue() -> None:
+    spoken = segment(0, 0, 4_000_000, "one two three four five six seven eight nine ten.")
+    assert len(spoken.words) >= 9
+    cues, _, _ = _plan(
+        _transcript([spoken]),
+        _bundle(0, 4_000_000, segments=["seg-0"], words=[]),
+    )
+    assert len(cues) == 1
+    assert cues[0].transcript_word_ids == []
+    assert cues[0].text == "one two three four five six seven eight nine ten."
+    assert cues[0].source_start_us == 0
+    assert cues[0].source_end_us == 4_000_000
+
+
 def test_segment_fallback_does_not_invent_word_times() -> None:
     bare = segment(0, 1_000_000, 3_000_000, "Only the segment text.", words=False)
     cues, _, _ = _plan(_transcript([bare]), _bundle(0, 4_000_000, segments=["seg-0"]))

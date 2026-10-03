@@ -95,17 +95,15 @@ def _pieces(
             if piece is not None:
                 chosen.append(piece)
     else:
+        # No referenced word ids. Segment text and segment timing only.
+        # Words that happen to sit on the segment are not harvested.
         for segment_id in bundle.transcript_segment_ids:
             segment = segments.get(segment_id)
             if segment is None:
                 raise MediaError(f"candidate caption planning references unknown segment {segment_id}")
-            if segment.words:
-                ordered_words = [(word, segment.segment_id) for word in segment.words]
-                chosen.extend(_chunk_words(ordered_words, profile))
-            else:
-                piece = _segment_piece(segment, bundle)
-                if piece is not None:
-                    chosen.append(piece)
+            piece = _segment_piece(segment, bundle)
+            if piece is not None:
+                chosen.append(piece)
     chosen.sort(key=lambda item: (item.source_start_us, item.source_end_us, item.text))
     return chosen
 

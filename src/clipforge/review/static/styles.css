@@ -1,0 +1,57 @@
+:root {
+  color: #f4f4f4;
+  background: #161616;
+  font-family: sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+header,
+article {
+  max-width: 880px;
+  margin: 0 auto 24px;
+}
+
+article {
+  background: #222;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+video {
+  width: min(720px, 100%);
+  aspect-ratio: 9 / 16;
+  background: #111;
+  display: block;
+  margin: 12px auto;
+}
+
+label,
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+textarea,
+input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+}
+
+button {
+  margin-top: 12px;
+}
+
+.meta,
+.history {
+  color: #d0d0d0;
+}
+
+.history li {
+  margin: 4px 0;
+}
