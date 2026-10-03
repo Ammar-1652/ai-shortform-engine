@@ -8,8 +8,9 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["node"],
+    "jsx": "react-jsx",
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

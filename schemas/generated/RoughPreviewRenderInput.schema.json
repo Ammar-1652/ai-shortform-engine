@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "RoughCaptionCue": {
+      "additionalProperties": false,
+      "description": "One provisional caption. Microseconds are canonical. Frames are a render derivative.",
+      "properties": {
+        "cue_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Cue Id",
+          "type": "string"
+        },
+        "output_end_frame_exclusive": {
+          "minimum": 1,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "timing_quality": {
+          "const": "provisional",
+          "default": "provisional",
+          "title": "Timing Quality",
+          "type": "string"
+        },
+        "transcript_segment_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Transcript Segment Ids",
+          "type": "array"
+        },
+        "transcript_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Transcript Word Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cue_id",
+        "text",
+        "transcript_segment_ids",
+        "source_start_us",
+        "source_end_us",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive"
+      ],
+      "title": "RoughCaptionCue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Facts the renderer needs. Python already decided that this candidate is valid.",
+  "properties": {
+    "audio_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Audio Path",
+      "type": "string"
+    },
+    "background": {
+      "const": "neutral-dark-v1",
+      "default": "neutral-dark-v1",
+      "title": "Background",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/RoughCaptionCue"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
+    "composition_id": {
+      "const": "RoughPreview",
+      "default": "RoughPreview",
+      "title": "Composition Id",
+      "type": "string"
+    },
+    "duration_in_frames": {
+      "minimum": 1,
+      "title": "Duration In Frames",
+      "type": "integer"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1280,
+      "default": 1280,
+      "title": "Height",
+      "type": "integer"
+    },
+    "media_trim_frame": {
+      "minimum": 0,
+      "title": "Media Trim Frame",
+      "type": "integer"
+    },
+    "preview_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Preview Set Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "timing_quality": {
+      "const": "provisional",
+      "default": "provisional",
+      "title": "Timing Quality",
+      "type": "string"
+    },
+    "video_fit": {
+      "const": "contain",
+      "default": "contain",
+      "title": "Video Fit",
+      "type": "string"
+    },
+    "video_path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Video Path",
+      "type": "string"
+    },
+    "width": {
+      "const": 720,
+      "default": 720,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "preview_set_id",
+    "video_path",
+    "audio_path",
+    "media_trim_frame",
+    "duration_in_frames"
+  ],
+  "title": "RoughPreviewRenderInput",
+  "type": "object"
+}

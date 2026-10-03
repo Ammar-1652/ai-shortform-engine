@@ -33,6 +33,10 @@ Scene detection and face detection run on this machine against the local analysi
 
 Mining reads the local transcript and visual-analysis JSON. It does not upload either artifact, call a remote model, decode the proxy, or decode the ASR audio. It does not run face recognition or speaker inference. Candidate excerpts are slices of the stored transcript and stay under the work root. Do not commit `candidates.json` or other runtime JSON that contains transcript text.
 
+## Rough previews
+
+`preview render` reads the local analysis proxy, the local ASR FLAC, and the stored transcript. It does not upload frames, audio, transcript text, or candidate text. Remotion runs on this machine. The browser is a local executable and is not exposed as a remote debugging service by Clipforge. Caption text is drawn as ordinary text, not as HTML. Render inputs reject `http://` and `https://` media URLs. The Node process is started from an argument list. `shell=True` is not used. Preview MP4s stay under the work root and are not committed.
+
 ## Downloaded assets
 
 Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.

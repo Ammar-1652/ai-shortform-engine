@@ -1,0 +1,593 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "CandidateRoughPreview": {
+      "additionalProperties": false,
+      "description": "One rendered review file. Quality numbers here are copies for display, not render inputs.",
+      "properties": {
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "caption_count": {
+          "minimum": 0,
+          "title": "Caption Count",
+          "type": "integer"
+        },
+        "detected_audio_codec": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Audio Codec",
+          "type": "string"
+        },
+        "detected_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Detected Duration Us",
+          "type": "integer"
+        },
+        "detected_pixel_format": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Pixel Format",
+          "type": "string"
+        },
+        "detected_video_codec": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Detected Video Codec",
+          "type": "string"
+        },
+        "duration_error_us": {
+          "title": "Duration Error Us",
+          "type": "integer"
+        },
+        "edit_opportunity_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edit Opportunity Score"
+        },
+        "height": {
+          "const": 1280,
+          "default": 1280,
+          "title": "Height",
+          "type": "integer"
+        },
+        "output_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Duration Us",
+          "type": "integer"
+        },
+        "output_fps_denominator": {
+          "const": 1,
+          "default": 1,
+          "title": "Output Fps Denominator",
+          "type": "integer"
+        },
+        "output_fps_numerator": {
+          "const": 30,
+          "default": 30,
+          "title": "Output Fps Numerator",
+          "type": "integer"
+        },
+        "output_frame_count": {
+          "minimum": 1,
+          "title": "Output Frame Count",
+          "type": "integer"
+        },
+        "preview_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Preview Relative Path",
+          "type": "string"
+        },
+        "preview_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preview Sha256",
+          "type": "string"
+        },
+        "preview_size_bytes": {
+          "minimum": 1,
+          "title": "Preview Size Bytes",
+          "type": "integer"
+        },
+        "quality_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Score"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "render_input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Render Input Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "time_map_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Time Map Sha256",
+          "type": "string"
+        },
+        "timing_quality": {
+          "const": "provisional",
+          "default": "provisional",
+          "title": "Timing Quality",
+          "type": "string"
+        },
+        "width": {
+          "const": 720,
+          "default": 720,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "rank",
+        "time_map_sha256",
+        "source_start_us",
+        "source_end_us",
+        "output_duration_us",
+        "output_frame_count",
+        "caption_count",
+        "render_input_sha256",
+        "preview_relative_path",
+        "preview_sha256",
+        "preview_size_bytes",
+        "detected_video_codec",
+        "detected_pixel_format",
+        "detected_audio_codec",
+        "detected_duration_us",
+        "duration_error_us"
+      ],
+      "title": "CandidateRoughPreview",
+      "type": "object"
+    },
+    "RoughPreviewProfile": {
+      "additionalProperties": false,
+      "description": "Every setting that changes preview bytes. ``created_at`` is not a field.",
+      "properties": {
+        "audio_enabled": {
+          "const": true,
+          "default": true,
+          "title": "Audio Enabled",
+          "type": "boolean"
+        },
+        "background": {
+          "const": "neutral-dark-v1",
+          "default": "neutral-dark-v1",
+          "title": "Background",
+          "type": "string"
+        },
+        "caption_algorithm_version": {
+          "const": "provisional-caption-v1",
+          "default": "provisional-caption-v1",
+          "title": "Caption Algorithm Version",
+          "type": "string"
+        },
+        "caption_style_version": {
+          "const": "rough-caption-style-v1",
+          "default": "rough-caption-style-v1",
+          "title": "Caption Style Version",
+          "type": "string"
+        },
+        "fps_denominator": {
+          "const": 1,
+          "default": 1,
+          "title": "Fps Denominator",
+          "type": "integer"
+        },
+        "fps_numerator": {
+          "const": 30,
+          "default": 30,
+          "title": "Fps Numerator",
+          "type": "integer"
+        },
+        "h264_crf": {
+          "default": 28,
+          "maximum": 51,
+          "minimum": 0,
+          "title": "H264 Crf",
+          "type": "integer"
+        },
+        "height": {
+          "const": 1280,
+          "default": 1280,
+          "title": "Height",
+          "type": "integer"
+        },
+        "max_caption_code_points": {
+          "const": 42,
+          "default": 42,
+          "title": "Max Caption Code Points",
+          "type": "integer"
+        },
+        "max_caption_duration_us": {
+          "const": 3000000,
+          "default": 3000000,
+          "title": "Max Caption Duration Us",
+          "type": "integer"
+        },
+        "max_caption_gap_us": {
+          "const": 1250000,
+          "default": 1250000,
+          "title": "Max Caption Gap Us",
+          "type": "integer"
+        },
+        "max_caption_words": {
+          "const": 8,
+          "default": 8,
+          "title": "Max Caption Words",
+          "type": "integer"
+        },
+        "pixel_format": {
+          "const": "yuv420p",
+          "default": "yuv420p",
+          "title": "Pixel Format",
+          "type": "string"
+        },
+        "profile_id": {
+          "const": "rough-preview-v1",
+          "default": "rough-preview-v1",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "renderer_recipe_version": {
+          "const": "rough-preview-renderer-v1",
+          "default": "rough-preview-renderer-v1",
+          "title": "Renderer Recipe Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "video_codec": {
+          "const": "h264",
+          "default": "h264",
+          "title": "Video Codec",
+          "type": "string"
+        },
+        "video_fit": {
+          "const": "contain",
+          "default": "contain",
+          "title": "Video Fit",
+          "type": "string"
+        },
+        "width": {
+          "const": 720,
+          "default": 720,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "title": "RoughPreviewProfile",
+      "type": "object"
+    },
+    "RoughPreviewSetSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "rendered_count": {
+          "minimum": 0,
+          "title": "Rendered Count",
+          "type": "integer"
+        },
+        "selected_candidate_count": {
+          "minimum": 0,
+          "title": "Selected Candidate Count",
+          "type": "integer"
+        },
+        "total_output_duration_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Total Output Duration Us",
+          "type": "integer"
+        },
+        "total_preview_bytes": {
+          "minimum": 0,
+          "title": "Total Preview Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "selected_candidate_count",
+        "rendered_count",
+        "total_output_duration_us",
+        "total_preview_bytes"
+      ],
+      "title": "RoughPreviewSetSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One immutable rough-preview run for the current candidate set.",
+  "properties": {
+    "analysis_proxy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Analysis Proxy Sha256",
+      "type": "string"
+    },
+    "asr_audio_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Asr Audio Sha256",
+      "type": "string"
+    },
+    "candidate_set_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Set Artifact Id",
+      "type": "string"
+    },
+    "candidate_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Set Sha256",
+      "type": "string"
+    },
+    "caption_algorithm_version": {
+      "const": "provisional-caption-v1",
+      "default": "provisional-caption-v1",
+      "title": "Caption Algorithm Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "mining_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Mining Id",
+      "type": "string"
+    },
+    "preview_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Preview Input Sha256",
+      "type": "string"
+    },
+    "preview_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Preview Set Id",
+      "type": "string"
+    },
+    "previews": {
+      "items": {
+        "$ref": "#/$defs/CandidateRoughPreview"
+      },
+      "title": "Previews",
+      "type": "array"
+    },
+    "profile": {
+      "$ref": "#/$defs/RoughPreviewProfile"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "renderer_recipe_version": {
+      "const": "rough-preview-renderer-v1",
+      "default": "rough-preview-renderer-v1",
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/RoughPreviewSetSummary"
+    },
+    "tool_version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Tool Version",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "preview_set_id",
+    "project_id",
+    "source_asset_id",
+    "mining_id",
+    "created_at",
+    "source_sha256",
+    "candidate_set_artifact_id",
+    "candidate_set_sha256",
+    "transcript_id",
+    "transcript_sha256",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "analysis_proxy_sha256",
+    "asr_audio_sha256",
+    "preview_input_sha256",
+    "profile",
+    "profile_fingerprint",
+    "tool_version",
+    "summary",
+    "provenance"
+  ],
+  "title": "RoughPreviewSetDocument",
+  "type": "object"
+}

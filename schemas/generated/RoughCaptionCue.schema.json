@@ -1,0 +1,100 @@
+{
+  "additionalProperties": false,
+  "description": "One provisional caption. Microseconds are canonical. Frames are a render derivative.",
+  "properties": {
+    "cue_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Cue Id",
+      "type": "string"
+    },
+    "output_end_frame_exclusive": {
+      "minimum": 1,
+      "title": "Output End Frame Exclusive",
+      "type": "integer"
+    },
+    "output_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_frame": {
+      "minimum": 0,
+      "title": "Output Start Frame",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "text": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "timing_quality": {
+      "const": "provisional",
+      "default": "provisional",
+      "title": "Timing Quality",
+      "type": "string"
+    },
+    "transcript_segment_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Transcript Segment Ids",
+      "type": "array"
+    },
+    "transcript_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Transcript Word Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "cue_id",
+    "text",
+    "transcript_segment_ids",
+    "source_start_us",
+    "source_end_us",
+    "output_start_us",
+    "output_end_us",
+    "output_start_frame",
+    "output_end_frame_exclusive"
+  ],
+  "title": "RoughCaptionCue",
+  "type": "object"
+}

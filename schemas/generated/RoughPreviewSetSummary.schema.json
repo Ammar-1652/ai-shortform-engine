@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "rendered_count": {
+      "minimum": 0,
+      "title": "Rendered Count",
+      "type": "integer"
+    },
+    "selected_candidate_count": {
+      "minimum": 0,
+      "title": "Selected Candidate Count",
+      "type": "integer"
+    },
+    "total_output_duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Total Output Duration Us",
+      "type": "integer"
+    },
+    "total_preview_bytes": {
+      "minimum": 0,
+      "title": "Total Preview Bytes",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "selected_candidate_count",
+    "rendered_count",
+    "total_output_duration_us",
+    "total_preview_bytes"
+  ],
+  "title": "RoughPreviewSetSummary",
+  "type": "object"
+}

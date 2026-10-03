@@ -1,0 +1,162 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar for the current rough preview set. ``created_at`` is not identity.",
+  "properties": {
+    "analysis_proxy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Analysis Proxy Sha256",
+      "type": "string"
+    },
+    "asr_audio_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Asr Audio Sha256",
+      "type": "string"
+    },
+    "candidate_set_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Set Artifact Id",
+      "type": "string"
+    },
+    "candidate_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Set Sha256",
+      "type": "string"
+    },
+    "caption_algorithm_version": {
+      "const": "provisional-caption-v1",
+      "default": "provisional-caption-v1",
+      "title": "Caption Algorithm Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "manifest_size_bytes": {
+      "minimum": 0,
+      "title": "Manifest Size Bytes",
+      "type": "integer"
+    },
+    "mining_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Mining Id",
+      "type": "string"
+    },
+    "preview_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Preview Input Sha256",
+      "type": "string"
+    },
+    "preview_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Preview Set Id",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "rendered_count": {
+      "minimum": 0,
+      "title": "Rendered Count",
+      "type": "integer"
+    },
+    "renderer_recipe_version": {
+      "const": "rough-preview-renderer-v1",
+      "default": "rough-preview-renderer-v1",
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "validation_status": {
+      "const": "passed",
+      "title": "Validation Status",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "preview_set_id",
+    "job_id",
+    "mining_id",
+    "source_sha256",
+    "candidate_set_artifact_id",
+    "candidate_set_sha256",
+    "transcript_id",
+    "transcript_sha256",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "analysis_proxy_sha256",
+    "asr_audio_sha256",
+    "preview_input_sha256",
+    "profile_fingerprint",
+    "manifest_sha256",
+    "manifest_size_bytes",
+    "rendered_count",
+    "validation_status",
+    "created_at"
+  ],
+  "title": "RoughPreviewCacheRecord",
+  "type": "object"
+}

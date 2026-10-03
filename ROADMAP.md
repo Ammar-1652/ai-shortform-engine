@@ -34,19 +34,19 @@ PySceneDetect shot intervals, representative frames, luma and sharpness measurem
 
 ## Round 5 — Candidate mining
 
-Status: complete on this branch. See `docs/operations/round-05-validation.md`. The draft PR is not merged.
+Status: merged on main as `f9d3e6153b976a5509dac940b7780f7856322794`. See `docs/operations/round-05-validation.md`.
 
 The current transcript and the current visual analysis are mined into one candidate-set artifact. Quality and edit opportunity stay separate. About 15–25 candidates is a target band, not a quota, and there is no fixed top 5. Compliance remains a gate.
 
 ## Round 6 — Rough Remotion renderer
 
-Status: not started.
+Status: complete on branch `round-06-rough-renderer`. The draft PR is not merged. See `docs/operations/round-06-validation.md`.
 
-Cheap vertical previews and captions driven by the canonical time map. No second timing implementation inside React. Not started.
+The current candidate set is rendered from the analysis proxy and the ASR FLAC into 720×1280 review MP4s. Captions are provisional. The TimeMap stays the clock. Round 7 is not started.
 
 ## Round 7 — Candidate review
 
-A local review surface, later the Remotion Player. Writes `ReviewDecision` rows. Does not publish.
+Not started. A local review surface, later the Remotion Player. Writes `ReviewDecision` rows. Does not publish.
 
 ## Round 8 — Hero alignment and motion library
 

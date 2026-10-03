@@ -2,7 +2,7 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-The local path is ingest, prepare, transcript, visual analysis, then candidate mining. Round 5 reads the stored transcript and the stored visual analysis and writes a candidate set. It does not render a reel. Round 6 will make rough previews from that set.
+The local path is ingest, prepare, transcript, visual analysis, candidate mining, then a rough preview. Round 6 renders the current candidate set from the analysis proxy and the ASR FLAC. The preview is a review file. It does not publish and it is not a Hero edit.
 
 ## What works
 
@@ -27,12 +27,15 @@ The local path is ingest, prepare, transcript, visual analysis, then candidate m
 - `clipforge candidate doctor` reports the candidate recipe, duration limits, and disk. It does not load a model.
 - `clipforge candidate mine SOURCE_ID` builds a candidate set from the current transcript and visual analysis. Scores are editorial heuristics. Edit opportunity is separate. There is no virality probability and the command does not publish.
 - `clipforge candidate list`, `clipforge candidate show`, and `clipforge candidate verify` read that set. `show` keeps word timing marked provisional. Verify does not repair or rescore.
+- `clipforge preview doctor` reports the rough-preview recipe, Node, pnpm, ffmpeg, ffprobe, and a local browser. It does not launch the browser or download one.
+- `clipforge preview render SOURCE_ID` builds one review MP4 per selected candidate. `--force` renders again and keeps the previous run.
+- `clipforge preview list`, `clipforge preview show`, and `clipforge preview verify` read the current set. Verify does not render or repair. Captions stay provisional.
 
 ## What does not work yet
 
 - WhisperX alignment
 - Active-speaker detection and face recognition
-- Rough or Hero rendering
+- Hero rendering, B-roll, music, and reframing
 - Envato search or download
 - A review UI
 - Publishing
@@ -52,14 +55,15 @@ Five planes share one core:
 | Assets | License and provenance records. No downloads. |
 | Review | Human decisions are data. Nothing is published. |
 
-The normative timing rules are in [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md). Candidate mining is in [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md). Decisions are in [docs/adr](docs/adr). The map of later rounds is [ROADMAP.md](ROADMAP.md).
+The normative timing rules are in [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md). Candidate mining is in [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md). Rough previews are in [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md). Decisions are in [docs/adr](docs/adr). The map of later rounds is [ROADMAP.md](ROADMAP.md).
 
 ## Requirements
 
 - Python 3.11, installed for this repo by `uv` (`.python-version`). System Python may be newer.
 - [uv](https://docs.astral.sh/uv/) 0.11 or newer
 - Git
-- Node.js 22 LTS or newer and pnpm, for the renderer scaffold
+- Node.js 22 LTS or newer and pnpm, for the Remotion preview renderer
+- A local Chrome or Chromium binary for `preview render`. Clipforge does not download a browser. Set `CLIPFORGE_BROWSER_EXECUTABLE` when it is not on `PATH`.
 - FFmpeg and ffprobe from your OS packages. `clipforge doctor` warns when they are missing. `source` and `media` commands fail until they are installed.
 
 No Docker, Redis, Postgres, n8n, or paid inference API is required.
