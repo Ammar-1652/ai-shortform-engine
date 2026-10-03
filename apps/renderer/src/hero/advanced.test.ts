@@ -13,7 +13,8 @@ describe("advanced hero composition", () => {
     expect(source).not.toContain("eval(");
     expect(source).not.toContain("http://");
     expect(source).not.toContain("https://");
-    expect(source).toContain("{caption.text}");
-    expect(source).toContain("{diagram.left_label}");
+    expect(source).toContain("{typeText}");
+    expect(source).toContain("diagram.payload?.left_label");
+    expect(source).toContain("staticFile(brollName)");
   });
 });

@@ -28,7 +28,7 @@ GET /media/advanced-hero/<candidate_id>
 
 `uv run ruff check` and `uv run ruff format --check` passed. `uv run mypy` reported no issues in 149 source files. `uv run pytest` passed 300 tests. `uv run clipforge schema check` matched `schemas/generated`. `pnpm --dir apps/renderer lint`, `typecheck`, and `test` passed (22 Vitest tests).
 
-The advanced smoke used `FakeAdvancedRenderBackend` and a local B-roll and SFX fixture. It kept the Hero v1 sidecar unchanged and served a cache hit on the second render. A renderer failure left no advanced sidecar. An advanced decision for another set id was rejected.
+`tests/test_advanced_hero_chrome.py` renders `AdvancedHeroDraft` through Remotion in local Chrome. The render log contains `bundleSeconds`. Decoded frames show red B-roll during its interval, the green source outside that interval, magenta and cyan diagram bars, and a yellow typography plate. `Café` and `$12.50` are in the render input and on the plate. The advanced review page in Chrome shows B-roll, SFX, typography, diagram, and emphasis facts, saves a decision, reloads it, and rejects a stale set id.
 
 CI run URLs are added when the draft pull request finishes.
 

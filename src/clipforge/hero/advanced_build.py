@@ -76,7 +76,7 @@ def build_advanced_plan(
         raise MediaError("advanced plan has more SFX events than the profile allows")
     windows = _windows(profile, visual, duration_us, candidate_id)
     emphasis = _emphasis(alignment, candidate_id)
-    typography = _typography(emphasis, candidate_id)
+    typography = _typography(alignment, emphasis, candidate_id)
     diagrams = _diagrams(emphasis, duration_us, candidate_id)
     assets: list[AssetBinding] = []
     broll = _broll(
@@ -189,22 +189,37 @@ def _rule(word: AlignedWord) -> str | None:
     return None
 
 
-def _typography(emphasis: list[EmphasisEvent], candidate_id: str) -> list[TypographyEvent]:
-    chosen = [item for item in emphasis if item.rule_id == "number_or_currency"]
-    if not chosen:
-        chosen = emphasis[:1]
+def _typography(
+    alignment: ForcedAlignmentDocument,
+    emphasis: list[EmphasisEvent],
+    candidate_id: str,
+) -> list[TypographyEvent]:
+    chosen: list[tuple[str, int, int, MotionPurpose]] = []
+    seen: set[str] = set()
+    for word in alignment.words:
+        stripped = word.text.strip()
+        non_ascii = any(ord(char) > 127 for char in stripped)
+        numeric = any(char.isdigit() or char == "$" for char in stripped)
+        interesting = non_ascii or numeric
+        if not interesting or not stripped or stripped in seen:
+            continue
+        seen.add(stripped)
+        chosen.append((stripped, word.output_start_us, word.output_end_us, MotionPurpose.KEY_PHRASE))
+    if not chosen and emphasis:
+        item = emphasis[0]
+        chosen.append((item.text.strip(), item.output_start_us, item.output_end_us, item.purpose))
     events: list[TypographyEvent] = []
-    for index, item in enumerate(chosen[:2]):
+    for index, (text, start, end, purpose) in enumerate(chosen[:3]):
         events.append(
             TypographyEvent(
-                event_id=stable_id("type", candidate_id, item.word_id),
-                interval=OutputInterval(output_start_us=item.output_start_us, output_end_us=item.output_end_us),
-                purpose=item.purpose,
+                event_id=stable_id("type", candidate_id, text, str(index)),
+                interval=OutputInterval(output_start_us=start, output_end_us=end),
+                purpose=purpose,
                 component_id=f"typography-{index}",
-                text=item.text.strip(),
+                text=text,
                 x=72,
-                y=1500 + (index * 80),
-                font_size=54,
+                y=1480,
+                font_size=64,
             )
         )
     return events

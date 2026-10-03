@@ -48,26 +48,26 @@ for (const item of batch.items) {
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
   }
-  if (input.alignment_quality !== "forced") {
-    throw new Error("hero render refuses alignment that is not forced");
+  if (input.composition_id !== "AdvancedHeroDraft") {
+    throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
-  for (const key of ["video_path", "audio_path"]) {
-    const value = input[key];
-    if (typeof value !== "string") {
-      throw new Error(`hero render batch ${key} is missing`);
+  const raw = JSON.stringify(input);
+  if (raw.includes("http://") || raw.includes("https://")) {
+    throw new Error("refusing remote media URL in the advanced render input");
+  }
+  for (const name of [input.base_video_name, input.speech_name]) {
+    if (typeof name !== "string" || name.includes("..") || name.includes("/")) {
+      throw new Error("advanced staged media name is not a file name");
     }
-    const lower = value.toLowerCase();
-    if (lower.startsWith("http://") || lower.startsWith("https://")) {
-      throw new Error(`refusing remote media URL in ${key}`);
+    contained(path.join(stagingDir, name), stagingDir);
+  }
+  const names = input.asset_names ?? {};
+  for (const name of Object.values(names)) {
+    if (typeof name !== "string" || name.includes("..") || name.includes("/")) {
+      throw new Error("advanced asset name is not a staging file name");
     }
+    contained(path.join(stagingDir, name), stagingDir);
   }
-  const videoName = path.basename(input.video_path);
-  const audioName = path.basename(input.audio_path);
-  if (videoName !== "analysis.mp4" || audioName !== "asr.flac") {
-    throw new Error("hero media must be the staged analysis.mp4 and asr.flac");
-  }
-  contained(path.join(stagingDir, videoName), stagingDir);
-  contained(path.join(stagingDir, audioName), stagingDir);
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
     throw new Error("hero render batch h264Crf must be an integer from 0 to 51");
   }

@@ -99,6 +99,10 @@ def _handler(
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("app.js"))
                 elif path == "/hero.js":
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("hero.js"))
+                elif path == "/advanced-review":
+                    _send_bytes(self, 200, "text/html; charset=utf-8", _static("advanced-review.html"))
+                elif path == "/advanced-review.js":
+                    _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("advanced-review.js"))
                 elif path == "/styles.css":
                     _send_bytes(self, 200, "text/css; charset=utf-8", _static("styles.css"))
                 elif path == "/api/review":
@@ -121,6 +125,12 @@ def _handler(
                     from clipforge.hero.advanced_service import advanced_review_board
 
                     _send_json(self, 200, advanced_review_board(database, source_asset_id, work_root))
+                elif path.startswith("/api/advanced-hero-review/hero/"):
+                    from clipforge.hero.advanced_service import advanced_review_card
+
+                    hero_id = path.removeprefix("/api/advanced-hero-review/hero/")
+                    _reject_id(hero_id)
+                    _send_json(self, 200, advanced_review_card(database, source_asset_id, hero_id, work_root))
                 elif path.startswith("/media/advanced-hero/"):
                     from clipforge.hero.advanced_service import advanced_media_path
 

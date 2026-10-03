@@ -284,6 +284,117 @@ def test_advanced_decision_is_bound_to_the_current_set(tmp_path: Path) -> None:
         require_advanced_binding(fixture.database, SOURCE_ID, fixture.work, "other-set", row.artifact_id)
 
 
+def test_unknown_and_prohibited_rights_fail_before_a_job(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-unknown", "graphic", b"bytes", status=RightsStatus.UNKNOWN)
+    with pytest.raises(MediaError, match="rights status"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-unknown"],
+        )
+    _register_asset(fixture, "broll-banned", "graphic", b"bytes", status=RightsStatus.PROHIBITED)
+    with pytest.raises(MediaError, match="rights status"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-banned"],
+        )
+    from clipforge.storage import list_jobs
+
+    with fixture.database.connect() as connection:
+        jobs = [item for item in list_jobs(connection, PROJECT_ID) if item.kind == "advanced_hero_render"]
+    assert jobs == []
+
+
+def test_symlinked_assets_and_remote_urls_are_rejected(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-link", "graphic", b"broll")
+    target = tmp_path / "outside.bin"
+    target.write_bytes(b"other")
+    path = fixture.workspace.advanced_asset_file("broll-link")
+    path.unlink()
+    path.symlink_to(target)
+    with pytest.raises(MediaError, match="symlink"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-link"],
+        )
+    _register_asset(fixture, "sfx-link", "audio", b"sfx")
+    sfx = fixture.workspace.advanced_asset_file("sfx-link")
+    sfx.unlink()
+    sfx.symlink_to(target)
+    with pytest.raises(MediaError, match="symlink"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            sfx_asset_ids=["sfx-link"],
+        )
+    catalog = json.loads(fixture.workspace.advanced_asset_catalog().read_text(encoding="utf-8"))
+    catalog["assets"][0]["uri"] = "https://example.invalid/broll.mp4"
+    fixture.workspace.advanced_asset_catalog().write_text(json.dumps(catalog), encoding="utf-8")
+    with pytest.raises(MediaError, match="remote"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-link"],
+        )
+
+
+def test_changed_sfx_hash_and_review_payload_are_safe(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    _register_asset(fixture, "sfx-1", "audio", b"sfx-bytes")
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+        sfx_asset_ids=["sfx-1"],
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    from clipforge.hero.advanced_service import advanced_review_board
+
+    board = advanced_review_board(fixture.database, SOURCE_ID, fixture.work)
+    encoded = json.dumps(board)
+    assert "file:" not in encoded
+    assert "/home/" not in encoded
+    assert "/tmp/" not in encoded
+    draft = board["drafts"][0]
+    assert draft["broll"][0]["display_name"] == "broll-1"
+    assert draft["broll"][0]["rights_status"] == "owned"
+    assert draft["sfx"][0]["role"] == "sfx"
+    assert "gain_db" in draft["sfx"][0]
+    assert draft["typography"]
+    assert draft["diagrams"][0]["kind"] == "number_comparison"
+    assert draft["emphasis"]
+    fixture.workspace.advanced_asset_file("sfx-1").write_bytes(b"changed-sfx")
+    with pytest.raises(MediaError, match="hash"):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=FakeAdvancedRenderBackend(),
+        )
+
+
 def test_profile_disallows_music() -> None:
     profile = AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="contain"))
     assert profile.music_allowed is False
@@ -360,7 +471,13 @@ def _minimum_plan(typography: list[TypographyEvent]) -> dict[str, object]:
     }
 
 
-def _register_asset(fixture, asset_id: str, kind: str, payload: bytes) -> None:
+def _register_asset(
+    fixture,
+    asset_id: str,
+    kind: str,
+    payload: bytes,
+    status: RightsStatus = RightsStatus.OWNED,
+) -> None:
     path = fixture.workspace.advanced_asset_file(asset_id)
     fixture.workspace.prepare_advanced_file(path)
     path.write_bytes(payload)
@@ -378,7 +495,7 @@ def _register_asset(fixture, asset_id: str, kind: str, payload: bytes) -> None:
     record = AssetLicenseRecord(
         license_record_id=license_id,
         asset_id=asset_id,
-        status=RightsStatus.OWNED,
+        status=status,
         evidence_uri=path_to_file_uri(path),
         recorded_at=now,
         recorded_by="ada",

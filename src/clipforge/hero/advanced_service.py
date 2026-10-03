@@ -45,6 +45,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
+    AssetBinding,
     ReframingStrategy,
     advanced_fingerprint,
 )
@@ -192,8 +193,9 @@ def render_advanced_drafts(
                 True,
                 perf_counter() - started,
             )
-        for candidate_id, _plan in chosen:
+        for candidate_id, plan in chosen:
             _context(database, source_asset_id, candidate_id, root)
+            _require_plan_assets(database, inputs.pair.workspace, plan, root)
         now = datetime.now(UTC)
         job = _running_job(inputs.pair.source.project_id, source, len(chosen), now, _actor(created_by))
         with database.transaction() as connection:
@@ -353,9 +355,10 @@ def _render_run(
     items: list[dict[str, object]] = []
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
+        staged = {item.asset_id: _staged_name(item) for item in plan.assets}
         for binding in plan.assets:
             catalog_file = _asset_path(workspace, binding.asset_id, root)
-            _link(catalog_file, staging / f"{binding.asset_id}.bin", root)
+            _link(catalog_file, staging / staged[binding.asset_id], root)
         render_input = AdvancedHeroRenderInput(
             candidate_id=candidate_id,
             advanced_set_id=advanced_set_id,
@@ -372,11 +375,17 @@ def _render_run(
             broll=plan.broll,
             sfx=plan.sfx,
             windows=plan.windows,
-            asset_names={item.asset_id: f"{item.asset_id}.bin" for item in plan.assets},
+            asset_names=staged,
         )
         output = run_dir / "candidates" / candidate_id / "advanced.mp4"
         output.parent.mkdir(parents=True, exist_ok=True)
-        items.append({"outputPath": str(output), "input": render_input.model_dump(mode="json")})
+        items.append(
+            {
+                "outputPath": str(output),
+                "h264Crf": 18,
+                "input": render_input.model_dump(mode="json"),
+            }
+        )
         prepared.append((rank, candidate_id, plan, render_input, output))
     batch = run_dir / "batch.json"
     batch.write_text(json_dumps({"items": items}), encoding="utf-8")
@@ -641,6 +650,30 @@ def _sample_rate(path: Path) -> int:
     raise MediaError(f"{path.name} has no audio stream")
 
 
+def _require_plan_assets(
+    database: Database,
+    workspace: SourceWorkspace,
+    plan: AdvancedHeroPlanDocument,
+    root: Path,
+) -> None:
+    from clipforge.hero.advanced_assets import require_asset
+
+    for binding in plan.assets:
+        require_asset(
+            database,
+            workspace,
+            project_id=plan.project_id,
+            asset_id=binding.asset_id,
+            expected_kind=binding.kind,
+            work_root=root,
+        )
+
+
+def _staged_name(binding: AssetBinding) -> str:
+    suffix = ".wav" if binding.kind == "audio" else ".mp4"
+    return f"{binding.asset_id}{suffix}"
+
+
 def _asset_path(workspace: SourceWorkspace, asset_id: str, root: Path) -> Path:
     from clipforge.hero.advanced_assets import load_catalog
 
@@ -896,35 +929,172 @@ def advanced_review_board(database: Database, source_asset_id: str, work_root: P
     document = _load_current_document(database, source_asset_id, work_root)
     if document is None:
         return {"status": "empty", "drafts": [], "detail": "No current advanced Hero drafts are stored."}
+    root = work_root.resolve()
+    inputs = load_preview_inputs(
+        database,
+        source_asset_id,
+        root,
+        profile_fingerprint=default_profile().fingerprint(),
+        create_workspace=False,
+    )
+    with database.connect() as connection:
+        row = find_artifact(connection, document.project_id, source_asset_id, KIND_ADVANCED)
+    reviews = _reviews(database, document.project_id)
     drafts: list[dict[str, object]] = []
+    artifact_id = None if row is None else row.artifact_id
+    manifest_sha = _sidecar_digest(inputs.pair.workspace)
     for draft in document.drafts:
-        drafts.append(
-            {
-                "candidate_id": draft.candidate_id,
-                "rank": draft.rank,
-                "advanced_set_id": document.advanced_set_id,
-                "artifact_kind": KIND_ADVANCED,
-                "reframing_strategy": document.reframing_strategy,
-                "hero_artifact_id": document.hero_artifact_id,
-                "manifest_sha256": _sidecar_digest(
-                    load_preview_inputs(
-                        database,
-                        source_asset_id,
-                        work_root.resolve(),
-                        profile_fingerprint=default_profile().fingerprint(),
-                        create_workspace=False,
-                    ).pair.workspace
-                ),
-                "preview_url": f"/media/advanced-hero/{draft.candidate_id}",
-            }
+        plan = _read_model(
+            inputs.pair.workspace.advanced_plan_file(draft.candidate_id),
+            AdvancedHeroPlanDocument,
+            "advanced plan",
         )
+        drafts.append(_review_draft(document, draft, plan, artifact_id, manifest_sha, reviews))
     return {
         "status": "ready",
+        "source_asset_id": source_asset_id,
+        "project_id": document.project_id,
         "advanced_set_id": document.advanced_set_id,
+        "artifact_id": None if row is None else row.artifact_id,
         "hero_artifact_id": document.hero_artifact_id,
+        "manifest_sha256": _sidecar_digest(inputs.pair.workspace),
+        "source_sha256": document.source_sha256,
         "reframing_strategy": document.reframing_strategy,
         "music_allowed": False,
         "drafts": drafts,
+    }
+
+
+def advanced_review_card(
+    database: Database, source_asset_id: str, candidate_id: str, work_root: Path
+) -> dict[str, object]:
+    board = advanced_review_board(database, source_asset_id, work_root)
+    drafts = board.get("drafts")
+    if isinstance(drafts, list):
+        for draft in drafts:
+            if isinstance(draft, dict) and draft.get("candidate_id") == candidate_id:
+                return draft
+    raise MediaError(f"unknown candidate {candidate_id}")
+
+
+def _review_draft(
+    document: AdvancedHeroDraftSetDocument,
+    draft: AdvancedHeroDraftOutput,
+    plan: AdvancedHeroPlanDocument,
+    artifact_id: str | None,
+    manifest_sha256: str,
+    reviews: list[ReviewDecision],
+) -> dict[str, object]:
+    names = {item.asset_id: item for item in plan.assets}
+    broll: list[dict[str, object]] = []
+    for clip in plan.broll:
+        binding = names.get(clip.asset_id)
+        broll.append(
+            {
+                "asset_id": clip.asset_id,
+                "display_name": None if binding is None else binding.display_name,
+                "kind": None if binding is None else binding.kind,
+                "rights_status": None if binding is None else binding.license_status,
+                "output_start_us": clip.interval.output_start_us,
+                "output_end_us": clip.interval.output_end_us,
+                "source_in_us": clip.broll_source_in_us,
+                "layer_name": "b-roll",
+            }
+        )
+    sfx: list[dict[str, object]] = []
+    for sound in plan.sfx:
+        binding = names.get(sound.asset_id)
+        sfx.append(
+            {
+                "asset_id": sound.asset_id,
+                "display_name": None if binding is None else binding.display_name,
+                "rights_status": None if binding is None else binding.license_status,
+                "role": sound.role,
+                "gain_db": sound.gain_db,
+                "output_start_us": sound.interval.output_start_us,
+                "output_end_us": sound.interval.output_end_us,
+            }
+        )
+    typography = [
+        {
+            "component_id": item.component_id,
+            "text": item.text,
+            "purpose": item.purpose.value,
+            "output_start_us": item.interval.output_start_us,
+            "output_end_us": item.interval.output_end_us,
+            "x": item.x,
+            "y": item.y,
+            "font_size": item.font_size,
+            "style_id": "advanced-typography-v1",
+        }
+        for item in plan.typography
+    ]
+    diagrams = [
+        {
+            "component_id": item.component_id,
+            "kind": item.payload.kind,
+            "left_label": item.payload.left_label,
+            "right_label": item.payload.right_label,
+            "left_value": item.payload.left_value,
+            "right_value": item.payload.right_value,
+            "output_start_us": item.interval.output_start_us,
+            "output_end_us": item.interval.output_end_us,
+            "x": item.x,
+            "y": item.y,
+            "width": item.width,
+            "height": item.height,
+        }
+        for item in plan.diagrams
+    ]
+    emphasis = [
+        {
+            "text": item.text,
+            "word_id": item.word_id,
+            "output_start_frame": item.output_start_frame,
+            "output_end_frame_exclusive": item.output_end_frame_exclusive,
+            "purpose": item.purpose.value,
+            "rule_id": item.rule_id,
+            "component_id": item.event_id,
+        }
+        for item in plan.emphasis
+    ]
+    return {
+        "candidate_id": draft.candidate_id,
+        "rank": draft.rank,
+        "source_asset_id": document.source_asset_id,
+        "project_id": document.project_id,
+        "advanced_set_id": document.advanced_set_id,
+        "artifact_id": artifact_id,
+        "artifact_kind": KIND_ADVANCED,
+        "manifest_sha256": manifest_sha256,
+        "source_sha256": document.source_sha256,
+        "hero_set_id": document.hero_set_id,
+        "hero_artifact_id": document.hero_artifact_id,
+        "alignment_id": plan.alignment_id,
+        "alignment_sha256": plan.alignment_sha256,
+        "plan_id": plan.hero_plan_id,
+        "plan_sha256": plan.hero_plan_sha256,
+        "advanced_plan_sha256": draft.advanced_plan_sha256,
+        "reframing_strategy": document.reframing_strategy,
+        "preview_url": f"/media/advanced-hero/{draft.candidate_id}",
+        "broll": broll,
+        "sfx": sfx,
+        "typography": typography,
+        "diagrams": diagrams,
+        "emphasis": emphasis,
+        "history": [
+            {
+                "review_id": item.review_id,
+                "decision": item.decision,
+                "reviewer_id": item.reviewer_id,
+                "notes": item.notes,
+                "artifact_id": item.artifact_id,
+                "current_artifact": item.artifact_id == artifact_id,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in reviews
+            if item.subject_kind == "hero" and item.candidate_id == draft.candidate_id
+        ],
     }
 
 

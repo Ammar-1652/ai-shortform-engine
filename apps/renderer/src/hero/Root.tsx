@@ -46,9 +46,14 @@ const placeholder: HeroDraftInput = {
 
 const advancedPlaceholder = {
   duration_in_frames: 30,
-  typography: [{ text: "Café $12.50", start_frame: 0, end_frame: 30 }],
-  diagram: { left_label: "Café", right_label: "$12.50" },
-  broll_name: null,
+  base_video_name: "analysis.mp4",
+  speech_name: "asr.flac",
+  typography: [{ text: "Café $12.50", interval: { output_start_us: 0, output_end_us: 1_000_000 } }],
+  diagrams: [],
+  broll: [],
+  sfx: [],
+  emphasis: [],
+  asset_names: {},
 };
 
 export function HeroRoot() {
