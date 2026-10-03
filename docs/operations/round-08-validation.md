@@ -111,7 +111,10 @@ The follow-up offline-alignment hardening in commit `1b88f406e2eb19d4e4c88aaaccf
 - Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37145159495
 - Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37145161890
 
-Those runs predate the live WhisperX alignment. That follow-up keeps WhisperX out of the default lock, reports the torchaudio checkpoint, and passes `model_cache_only` only when the installed loader declares it.
+Those runs predate the live WhisperX alignment. Commit `5b6208123605985d7f4c49b0da05a16b3a1a6ff1` keeps WhisperX out of the default lock, reports the torchaudio checkpoint, and passes `model_cache_only` only when the installed loader declares it. Every listed job passed:
+
+- Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37148853598
+- Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37148855512
 
 ## Limitations
 
