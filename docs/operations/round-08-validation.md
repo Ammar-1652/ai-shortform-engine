@@ -44,7 +44,14 @@ ffprobe accepted a 1080×1920 H.264/AAC frame. A frame at 0.5 seconds showed the
 
 ## CI
 
-Recorded after the draft pull request runs.
+Draft pull request: https://github.com/Ammar-1652/ai-shortform-engine/pull/8
+
+The first push, commit `15c865fac353880cc192a9825aebe8ab8352c6bc`, failed the hero job. GitHub's runner already had Chrome, the smoke test started Remotion, and `@remotion/bundler` was not installed in that job. Push run: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37139869791. Pull request run: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37139873074.
+
+Commit `a2f105a` skips that smoke unless the renderer packages are installed. These runs were green. Every listed job passed: python, media, transcription, vision, candidate, preview, review, hero, and renderer.
+
+- Push: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37140026025
+- Pull request: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37140028751
 
 ## Limitations
 
