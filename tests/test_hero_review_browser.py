@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import socket
@@ -63,9 +64,8 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
         stderr=subprocess.DEVNULL,
     )
     try:
-        page = _page_socket(debug_port, url)
-        first = _eval(
-            page,
+        page = DebugPage(debug_port, url)
+        first = page.evaluate(
             """
             (async () => {
               const deadline = Date.now() + 8000;
@@ -104,8 +104,7 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
             backend=FakeHeroRenderBackend(),
             alignment_backend=FakeForcedAlignment(),
         )
-        stale = _eval(
-            page,
+        stale = page.evaluate(
             """
             (async () => {
               const article = document.querySelector("article");
@@ -123,10 +122,9 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
             """,
         )
         assert "reload before saving" in stale
-        _reload(page)
-        _wait_for_text(page, "Café")
-        saved = _eval(
-            page,
+        page.reload()
+        page.wait_for("Café")
+        saved = page.evaluate(
             """
             (async () => {
               const article = document.querySelector("article");
@@ -148,30 +146,15 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
             """,
         )
         assert "Saved hero approved" in str(saved), saved
-        _reload(page)
-        reloaded = _eval(
-            page,
-            """
-            (async () => {
-              const deadline = Date.now() + 8000;
-              while (Date.now() < deadline && !document.body.innerText.includes("approved")) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-              }
-              return {
-                text: document.body.innerText,
-                images: document.querySelectorAll("img").length,
-                scripts: document.querySelectorAll("script").length
-              };
-            })()
-            """,
-        )
-        assert "approved by ada" in reloaded["text"]
-        assert "current artifact" in reloaded["text"]
-        assert "Café" in reloaded["text"]
-        assert "説明" in reloaded["text"]
-        assert "$12.50" in reloaded["text"]
-        assert "<unsafe>" in reloaded["text"]
-        assert reloaded["images"] == 0
+        page.reload()
+        reloaded = page.wait_for("approved by ada")
+        assert "current artifact" in reloaded
+        assert "Café" in reloaded
+        assert "説明" in reloaded
+        assert "$12.50" in reloaded
+        assert "<unsafe>" in reloaded
+        images = page.evaluate("document.querySelectorAll('img').length")
+        assert images == 0
     finally:
         chrome.terminate()
         chrome.wait(timeout=10)
@@ -179,27 +162,97 @@ def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.
         server.server_close()
 
 
-def _reload(page: socket.socket) -> None:
-    _call(page, "Page.reload", {"ignoreCache": True})
+class NavigationError(AssertionError):
+    """The Chrome page debugger socket did not survive navigation."""
 
 
-def _wait_for_text(page: socket.socket, needle: str) -> None:
-    literal = json.dumps(needle)
-    found = _eval(
-        page,
-        f"""
-        (async () => {{
-          const deadline = Date.now() + 8000;
-          while (Date.now() < deadline) {{
-            const text = document.body ? document.body.innerText : "";
-            if (text.includes({literal})) return text;
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }}
-          return document.body ? document.body.innerText : "";
-        }})()
-        """,
-    )
-    assert needle in str(found), found
+class DebugPage:
+    """One local Chrome tab. Reload closes that debugger socket, so reconnect."""
+
+    def __init__(self, debug_port: int, url: str) -> None:
+        self.debug_port = debug_port
+        self.url = url
+        self.socket = _page_socket(debug_port, url)
+
+    def evaluate(self, expression: str) -> object:
+        last: object = "Chrome did not evaluate the page"
+        for _ in range(12):
+            try:
+                value = _eval(self.socket, expression)
+            except (NavigationError, ConnectionError, OSError, json.JSONDecodeError) as exc:
+                last = str(exc)
+                self.reattach()
+                time.sleep(0.25)
+                continue
+            if value is None or value == {}:
+                last = value
+                time.sleep(0.25)
+                continue
+            return value
+        raise AssertionError(repr(last))
+
+    def reload(self) -> None:
+        self.evaluate("window.__clipforgeReload = 'old'")
+        with contextlib.suppress(NavigationError, ConnectionError, OSError, json.JSONDecodeError):
+            _call(self.socket, "Page.reload", {"ignoreCache": True})
+        deadline = _seconds() + 15
+        while _seconds() < deadline:
+            try:
+                marker = _eval(self.socket, "window.__clipforgeReload || ''")
+            except (NavigationError, ConnectionError, OSError, json.JSONDecodeError):
+                time.sleep(0.2)
+                self.reattach()
+                continue
+            if marker != "old":
+                return
+            time.sleep(0.2)
+        raise AssertionError("Chrome did not finish reloading the review page")
+
+    def wait_for(self, needle: str, timeout: float = 20) -> str:
+        deadline = _seconds() + timeout
+        last: object = ""
+        while _seconds() < deadline:
+            try:
+                value = _eval(self.socket, "document.body ? document.body.innerText : ''")
+            except (NavigationError, ConnectionError, OSError, json.JSONDecodeError):
+                time.sleep(0.2)
+                self.reattach()
+                continue
+            last = value
+            if isinstance(value, str) and needle in value:
+                return value
+            time.sleep(0.2)
+        raise AssertionError(f"{needle!r} not visible after reload: {last!r}")
+
+    def reattach(self) -> None:
+        _PENDING.pop(id(self.socket), None)
+        with contextlib.suppress(OSError):
+            self.socket.close()
+        deadline = _seconds() + 10
+        last = "Chrome page target disappeared after navigation"
+        while _seconds() < deadline:
+            try:
+                targets = _list_targets(self.debug_port)
+            except (OSError, json.JSONDecodeError) as exc:
+                last = str(exc)
+                time.sleep(0.2)
+                continue
+            for target in targets:
+                if target.get("type") != "page":
+                    continue
+                if not _same_page(str(target.get("url", "")), self.url):
+                    continue
+                debugger = target.get("webSocketDebuggerUrl")
+                if not isinstance(debugger, str):
+                    continue
+                try:
+                    self.socket = _connect(debugger)
+                except (OSError, ConnectionError, AssertionError) as exc:
+                    last = str(exc)
+                    continue
+                return
+            time.sleep(0.2)
+        raise NavigationError(last)
 
 
 def _free_port() -> int:
@@ -245,31 +298,33 @@ def _new_target(debug_port: int, url: str) -> dict[str, object]:
 
 
 def _eval(page: socket.socket, expression: str) -> object:
-    last = "Chrome did not evaluate the page"
-    for _ in range(20):
-        try:
-            result = _call(
-                page,
-                "Runtime.evaluate",
-                {"expression": expression, "awaitPromise": True, "returnByValue": True},
-            )
-        except AssertionError as exc:
-            last = str(exc)
-            if "destroyed" not in last and "Cannot find context" not in last:
-                raise
-            time.sleep(0.25)
-            continue
-        value = result["result"]
-        assert isinstance(value, dict)
-        if value.get("subtype") == "error":
-            description = str(value.get("description"))
-            if "destroyed" in description:
-                time.sleep(0.25)
-                last = description
-                continue
-            raise AssertionError(description)
-        return value.get("value")
-    raise AssertionError(last)
+    result = _call(
+        page,
+        "Runtime.evaluate",
+        {"expression": expression, "awaitPromise": True, "returnByValue": True},
+    )
+    details = result.get("exceptionDetails")
+    if isinstance(details, dict):
+        text = str(details.get("text") or details)
+        if _navigation_error(text):
+            raise NavigationError(text)
+        raise AssertionError(text)
+    value = result["result"]
+    assert isinstance(value, dict)
+    if value.get("subtype") == "error":
+        description = str(value.get("description"))
+        if _navigation_error(description):
+            raise NavigationError(description)
+        raise AssertionError(description)
+    if "value" not in value:
+        raise NavigationError("Chrome returned no evaluation value")
+    return value.get("value")
+
+
+def _navigation_error(message: str) -> bool:
+    folded = message.lower()
+    needles = ("destroyed", "navigated", "cannot find context", "execution context", "inspected target")
+    return any(needle in folded for needle in needles)
 
 
 def _call(page: socket.socket, method: str, params: dict[str, object]) -> dict[str, object]:
@@ -280,7 +335,11 @@ def _call(page: socket.socket, method: str, params: dict[str, object]) -> dict[s
         message = _recv(page)
         if message.get("id") == call_id:
             if "error" in message:
-                raise AssertionError(message["error"])
+                err = message["error"]
+                text = str(err)
+                if _navigation_error(text):
+                    raise NavigationError(text)
+                raise AssertionError(err)
             found = message.get("result")
             assert isinstance(found, dict)
             return found
@@ -310,45 +369,89 @@ def _connect(url: str) -> socket.socket:
         if not chunk:
             break
         header += chunk
-    if b" 101 " not in header.split(b"\r\n", 1)[0]:
+    marker = header.find(b"\r\n\r\n")
+    if marker < 0 or b" 101 " not in header[:marker].split(b"\r\n", 1)[0]:
         raise AssertionError(header.decode("utf-8", errors="replace"))
+    _PENDING[id(sock)] = header[marker + 4 :]
     return sock
 
 
+_PENDING: dict[int, bytes] = {}
+
+
 def _send(sock: socket.socket, payload: dict[str, object]) -> None:
-    raw = json.dumps(payload).encode("utf-8")
+    _send_frame(sock, 0x1, json.dumps(payload).encode("utf-8"))
+
+
+def _send_frame(sock: socket.socket, opcode: int, raw: bytes) -> None:
     mask = os.urandom(4)
-    header = bytes([0x81])
+    header = bytes([0x80 | opcode])
     length = len(raw)
     if length < 126:
         header += bytes([0x80 | length])
-    else:
+    elif length < 65536:
         header += bytes([0x80 | 126]) + struct.pack("!H", length)
+    else:
+        header += bytes([0x80 | 127]) + struct.pack("!Q", length)
     masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(raw))
     sock.sendall(header + mask + masked)
 
 
 def _recv(sock: socket.socket) -> dict[str, object]:
-    frame = _read_exact(sock, 2)
-    length = frame[1] & 0x7F
-    if length == 126:
-        length = struct.unpack("!H", _read_exact(sock, 2))[0]
-    elif length == 127:
-        length = struct.unpack("!Q", _read_exact(sock, 8))[0]
-    payload = _read_exact(sock, length)
-    message = json.loads(payload.decode("utf-8"))
-    assert isinstance(message, dict)
-    return message
+    while True:
+        frame = _read_exact(sock, 2)
+        opcode = frame[0] & 0x0F
+        length = frame[1] & 0x7F
+        if length == 126:
+            length = struct.unpack("!H", _read_exact(sock, 2))[0]
+        elif length == 127:
+            length = struct.unpack("!Q", _read_exact(sock, 8))[0]
+        payload = _read_exact(sock, length)
+        if opcode == 0x9:
+            _send_frame(sock, 0xA, payload)
+            continue
+        if opcode == 0x8:
+            raise ConnectionError("Chrome closed the debugger websocket")
+        if opcode != 0x1:
+            continue
+        message = json.loads(payload.decode("utf-8"))
+        assert isinstance(message, dict)
+        return message
 
 
 def _read_exact(sock: socket.socket, size: int) -> bytes:
-    chunks = bytearray()
+    pending = _PENDING.get(id(sock), b"")
+    if pending:
+        _PENDING[id(sock)] = pending[size:]
+        chunks = bytearray(pending[:size])
+    else:
+        chunks = bytearray()
     while len(chunks) < size:
         part = sock.recv(size - len(chunks))
         if not part:
-            break
+            raise ConnectionError("Chrome closed the debugger socket")
         chunks.extend(part)
     return bytes(chunks)
+
+
+def _list_targets(debug_port: int) -> list[dict[str, object]]:
+    with urllib.request.urlopen(
+        f"http://{LOOPBACK_HOST}:{debug_port}/json/list",
+        timeout=2,
+    ) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    assert isinstance(payload, list)
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _same_page(found: str, wanted: str) -> bool:
+    left = urllib.parse.urlsplit(found)
+    right = urllib.parse.urlsplit(wanted)
+    return (
+        left.hostname == right.hostname
+        and left.port == right.port
+        and left.path.rstrip("/") == right.path.rstrip("/")
+    )
 
 
 def _seconds() -> float:

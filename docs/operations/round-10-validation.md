@@ -26,9 +26,11 @@ GET /media/advanced-hero/<candidate_id>
 
 ## Checks
 
-`uv run ruff check` and `uv run ruff format --check` passed. `uv run mypy` reported no issues in 149 source files. `uv run pytest` passed 300 tests. `uv run clipforge schema check` matched `schemas/generated`. `pnpm --dir apps/renderer lint`, `typecheck`, and `test` passed (22 Vitest tests).
+`uv run ruff check` and `uv run ruff format --check` passed. `uv run mypy` reported no issues in 149 source files. `uv run pytest` passed 306 tests. `uv run clipforge schema check` matched `schemas/generated`. `pnpm --dir apps/renderer lint`, `typecheck`, and `test` passed (22 Vitest tests).
 
-`tests/test_advanced_hero_chrome.py` renders `AdvancedHeroDraft` through Remotion in local Chrome. The render log contains `bundleSeconds`. Decoded frames show red B-roll during its interval, the green source outside that interval, magenta and cyan diagram bars, and a yellow typography plate. `Café` and `$12.50` are in the render input and on the plate. The advanced review page in Chrome shows B-roll, SFX, typography, diagram, and emphasis facts, saves a decision, reloads it, and rejects a stale set id.
+`tests/test_advanced_hero_chrome.py` renders `AdvancedHeroDraft` through Remotion in local Chrome. The render log contains `bundleSeconds`. ffmpeg decodes frames from that MP4. The center pixel is red during the B-roll interval and green after it. The diagram region is magenta on the left and cyan on the right. The typography plate is yellow. `Café` and `$12.50` are in the render input and on the plate. The output is H.264, AAC, 1080×1920, and 30/1. The advanced review page in Chrome shows B-roll, SFX, typography, diagram, and emphasis facts, saves a decision, reloads it, and rejects a stale set id.
+
+Push CI on `bd66bdd` failed because a page reload closed the Chrome debugger socket. The Hero review smoke then read an empty result, and the advanced review smoke received "Inspected target navigated or closed". The preview job's Remotion render smoke had already passed. The smokes now reconnect to the same page and wait until the new document shows the saved decision.
 
 CI run URLs are added when the draft pull request finishes.
 

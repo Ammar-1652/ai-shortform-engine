@@ -27,7 +27,7 @@ from clipforge.review.service import (
 from tests.candidate_support import SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 from tests.test_advanced_hero import _register_asset
-from tests.test_hero_review_browser import _eval, _page_socket
+from tests.test_hero_review_browser import DebugPage
 from tests.test_hero_service import CountingAligner, _hero
 
 pytestmark = pytest.mark.preview
@@ -189,9 +189,8 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         stderr=subprocess.DEVNULL,
     )
     try:
-        page = _page_socket(debug, f"http://{LOOPBACK_HOST}:{port}/advanced-review")
-        first = _eval(
-            page,
+        page = DebugPage(debug, f"http://{LOOPBACK_HOST}:{port}/advanced-review")
+        first = page.evaluate(
             """
             (async () => {
               const deadline = Date.now() + 8000;
@@ -217,8 +216,7 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert "number_comparison" in first["text"]
         assert "emphasis" in first["text"]
         assert first["images"] == 0
-        saved = _eval(
-            page,
+        saved = page.evaluate(
             """
             (async () => {
               const article = document.querySelector("article");
@@ -235,38 +233,18 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
             """,
         )
         assert "Saved advanced approved" in str(saved)
-        _eval(page, "location.reload(); 'reloading'")
-        reloaded = ""
-        for _ in range(6):
-            value = _eval(
-                page,
-                """
-                (async () => {
-                  const deadline = Date.now() + 4000;
-                  let body = "";
-                  while (Date.now() < deadline) {
-                    body = document.body ? document.body.innerText : "";
-                    if (body.includes("current artifact") && body.includes("Café")) break;
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                  }
-                  return document.body ? document.body.innerText : "";
-                })()
-                """,
-            )
-            if isinstance(value, str) and "current artifact" in value and "Café" in value:
-                reloaded = value
-                break
+        page.reload()
+        reloaded = page.wait_for("current artifact")
         assert "approved" in reloaded
-        assert "Café" in str(reloaded)
-        assert "説明" in str(reloaded)
-        assert "$12.50" in str(reloaded)
-        assert "<unsafe>" in str(reloaded)
+        assert "Café" in reloaded
+        assert "説明" in reloaded
+        assert "$12.50" in reloaded
+        assert "<unsafe>" in reloaded
         sidecar = fixture.workspace.advanced_sidecar()
         payload = json.loads(sidecar.read_text(encoding="utf-8"))
         payload["advanced_set_id"] = "other-advanced-set"
         sidecar.write_text(json.dumps(payload), encoding="utf-8")
-        stale = _eval(
-            page,
+        stale = page.evaluate(
             """
             (async () => {
               const article = document.querySelector("article");
