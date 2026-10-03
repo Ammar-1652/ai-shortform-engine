@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from clipforge.errors import ClipforgeError, MediaError, StorageError
 from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.mutation import inspect_mutation
-from clipforge.media.workspace import SourceWorkspace
+from clipforge.media.workspace import SourceWorkspace, ensure_within
 from clipforge.preview.constants import KIND_PREVIEW
 from clipforge.preview.inputs import load_preview_inputs
 from clipforge.preview.integrity import preview_problems
@@ -109,6 +109,13 @@ def verify_preview(
         return PreviewVerifyReport(source_asset_id, tuple(lines))
     try:
         path = path_from_file_uri(row.uri)
+        workspace = inputs.pair.workspace
+        expected = workspace.preview_run_dir(record.preview_set_id) / "manifest.json"
+        ensure_within(root, path)
+        if path != expected or path.is_symlink() or not path.is_file():
+            raise MediaError(
+                "preview artifact is not manifest.json inside this source's preview run"
+            )
         document = RoughPreviewSetDocument.model_validate_json(read_text(path))
     except (OSError, ValidationError, ValueError, MediaError) as exc:
         lines.append(VerifyLine("FAIL", "preview_document", str(exc)))
