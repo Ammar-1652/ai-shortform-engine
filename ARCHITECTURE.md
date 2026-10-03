@@ -92,9 +92,8 @@ The following are not stubbed as successful commands:
 
 - WhisperX integration
 - Hero edit plans and motion graphics
-- Candidate review UI
 - Envato MCP
-- Review web UI and Remotion Player
+- Remotion Player and publishing UI
 - Publishing APIs
 - Cloud workers
 - Performance learning
