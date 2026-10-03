@@ -52,9 +52,11 @@ A loopback page plays the current rough previews and appends a human decision fo
 
 ## Round 8 — Hero alignment and motion library
 
-Status: draft pull request, not merged. Started from `3b99d03080ee6c04cf6cf951937ff62b197e1b0e`. See `docs/operations/round-08-validation.md`.
+Status: merged on main as `7c1b22cf9266319119350b3db9e80fe18d9d155b`. See `docs/operations/round-08-validation.md`.
 
 Approved candidates on the current rough preview are force-aligned as clips and rendered as a separate Hero draft. The motion library is `motion-library-v1`. The draft can be reviewed. It is not published. Dynamic reframing, B-roll, music, and sound effects stay deferred.
+
+The Hero review workflow that follows this merge is recorded in `docs/operations/round-09-validation.md`. The product round below is still Envato.
 
 ## Round 9 — Envato
 

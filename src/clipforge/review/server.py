@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from pydantic import ValidationError
+
 from clipforge.errors import MediaError
 from clipforge.review.service import (
     LOOPBACK_HOST,
@@ -34,6 +36,28 @@ def require_loopback(host: str) -> None:
         )
 
 
+def open_hero_review_server(
+    *,
+    database: Database,
+    source_asset_id: str,
+    work_root: Path,
+    host: str = LOOPBACK_HOST,
+    port: int = 8765,
+) -> ThreadingHTTPServer:
+    """Validate the current Hero set, then bind a loopback server."""
+    from clipforge.review.hero_board import hero_review_board
+
+    require_loopback(host)
+    if port < 0 or port > 65535:
+        raise MediaError(f"port {port} is outside 0..65535")
+    hero_review_board(database, source_asset_id, work_root)
+    handler = _handler(database, source_asset_id, work_root.resolve(), surface="hero")
+    try:
+        return ThreadingHTTPServer((host, port), handler)
+    except OSError as exc:
+        raise MediaError(f"could not bind the review server on {host}:{port}: {exc}") from exc
+
+
 def open_review_server(
     *,
     database: Database,
@@ -47,14 +71,20 @@ def open_review_server(
     if port < 0 or port > 65535:
         raise MediaError(f"port {port} is outside 0..65535")
     review_board(database, source_asset_id, work_root)
-    handler = _handler(database, source_asset_id, work_root.resolve())
+    handler = _handler(database, source_asset_id, work_root.resolve(), surface="rough")
     try:
         return ThreadingHTTPServer((host, port), handler)
     except OSError as exc:
         raise MediaError(f"could not bind the review server on {host}:{port}: {exc}") from exc
 
 
-def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[BaseHTTPRequestHandler]:
+def _handler(
+    database: Database,
+    source_asset_id: str,
+    work_root: Path,
+    *,
+    surface: str,
+) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -63,13 +93,22 @@ def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[
             path = unquote(parsed.path)
             try:
                 if path == "/":
-                    _send_bytes(self, 200, "text/html; charset=utf-8", _static("index.html"))
+                    page = "hero.html" if surface == "hero" else "index.html"
+                    _send_bytes(self, 200, "text/html; charset=utf-8", _static(page))
                 elif path == "/app.js":
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("app.js"))
+                elif path == "/hero.js":
+                    _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("hero.js"))
                 elif path == "/styles.css":
                     _send_bytes(self, 200, "text/css; charset=utf-8", _static("styles.css"))
                 elif path == "/api/review":
                     _send_json(self, 200, review_board(database, source_asset_id, work_root))
+                elif path == "/api/hero-review":
+                    _send_hero_board(self, database, source_asset_id, work_root)
+                elif path.startswith("/api/hero-review/hero/"):
+                    hero_id = path.removeprefix("/api/hero-review/hero/")
+                    _reject_id(hero_id)
+                    _send_hero_card(self, database, source_asset_id, hero_id, work_root)
                 elif path.startswith("/api/review/candidates/"):
                     candidate_id = path.removeprefix("/api/review/candidates/")
                     _reject_id(candidate_id)
@@ -123,6 +162,9 @@ def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[
             except json.JSONDecodeError:
                 _send_json(self, 400, {"error": "review body is not valid JSON"})
                 return
+            except ValidationError as exc:
+                _send_json(self, 400, {"error": f"review decision is not valid: {exc}"})
+                return
             except MediaError as exc:
                 status = 400
                 text = str(exc)
@@ -138,6 +180,29 @@ def _handler(database: Database, source_asset_id: str, work_root: Path) -> type[
             del fmt, args
 
     return Handler
+
+
+def _send_hero_board(
+    handler: BaseHTTPRequestHandler,
+    database: Database,
+    source_asset_id: str,
+    work_root: Path,
+) -> None:
+    from clipforge.review.hero_board import hero_review_board
+
+    _send_json(handler, 200, hero_review_board(database, source_asset_id, work_root))
+
+
+def _send_hero_card(
+    handler: BaseHTTPRequestHandler,
+    database: Database,
+    source_asset_id: str,
+    hero_id: str,
+    work_root: Path,
+) -> None:
+    from clipforge.review.hero_board import hero_review_card
+
+    _send_json(handler, 200, hero_review_card(database, source_asset_id, hero_id, work_root))
 
 
 def _reject_id(candidate_id: str) -> None:

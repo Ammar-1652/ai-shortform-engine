@@ -35,7 +35,7 @@ The artifact kind is `hero_draft_set_json`. A failed render, manifest write, dat
 
 ## Review
 
-The loopback page labels rough cards and, when a Hero set exists, Hero cards. A Hero card shows the candidate, the source, the approval that allowed the render, alignment quality and model, profile, duration, dimensions, frame rate, codecs, and caption count. The player is a native `video` element with controls and no autoplay. Saving a Hero decision appends a `ReviewDecision` with `subject_kind = hero` bound to the current Hero artifact. If that set changes while the page is open, the write fails and asks for a reload. Approving a Hero draft does not publish it.
+The rough-preview page can still show a short Hero card. The Hero review surface is separate. See [hero-review-and-approval.md](hero-review-and-approval.md). `clipforge hero review open` binds to loopback, checks the current Hero set, and plays that set in manifest order. A decision is an append-only `ReviewDecision` with `subject_kind = hero`. It repeats the artifact, manifest, plan, and alignment the page loaded. A mismatch asks for a reload. Approval does not publish or render another file.
 
 ## Still deferred
 

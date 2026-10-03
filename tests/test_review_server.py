@@ -150,7 +150,7 @@ def test_api_media_and_post(tmp_path: Path) -> None:
 
 def test_static_bundle_has_no_remote_execution() -> None:
     static = _ROOT / "src" / "clipforge" / "review" / "static"
-    names = ("index.html", "app.js", "styles.css")
+    names = sorted(path.name for path in static.iterdir() if path.is_file())
     combined = "\n".join((static / name).read_text(encoding="utf-8") for name in names)
     assert "http://" not in combined
     assert "https://" not in combined
