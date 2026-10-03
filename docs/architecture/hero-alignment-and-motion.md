@@ -17,7 +17,7 @@ If none are approved, the command returns a no-op. It does not write an empty He
 
 The production adapter is WhisperX on the approved clip only. It trims `audio/asr.flac` with the candidate TimeMap and aligns the transcript words cited by that candidate. Text is copied. Unicode, numbers, and punctuation stay as stored. Word intervals must be positive, monotonic, non-overlapping, and inside the TimeMap. Output frames are the first Hero frame at or after each boundary.
 
-`hero doctor` reports WhisperX, the Python runtime, model-cache presence, CPU or GPU, and that a normal run does not download. `--allow-model-download` is the only download switch.
+`hero doctor` reports WhisperX, the Python runtime, model-cache presence, CPU or GPU, and that a normal run does not download. The adapter also blocks torchaudio and NLTK download paths when offline. `--allow-model-download` is the only download switch.
 
 `FakeForcedAlignment` is for tests. It splits the candidate span into equal integer parts and does not read provisional timestamps.
 

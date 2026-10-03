@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -271,6 +273,9 @@ def align_span_with_whisperx(
 
     if not allow_model_download:
         os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        os.environ["HF_DATASETS_OFFLINE"] = "1"
+        _require_cached_punkt()
     try:
         import whisperx  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -289,7 +294,25 @@ def align_span_with_whisperx(
     text = "".join(word.text for word in words).strip()
     duration_s = (source_end_us - source_start_us) / 1_000_000
     segments = [{"text": text, "start": 0.0, "end": duration_s}]
-    model, metadata = whisperx.load_align_model(language_code="en", device="cpu")
+    try:
+        with _block_model_downloads(allow_model_download):
+            model, metadata = whisperx.load_align_model(
+                language_code="en",
+                device="cpu",
+                model_cache_only=not allow_model_download,
+            )
+    except TypeError as exc:
+        raise MediaError(
+            "the installed WhisperX does not support its cache-only alignment option. "
+            "Upgrade WhisperX before running Hero alignment."
+        ) from exc
+    except MediaError:
+        raise
+    except Exception as exc:
+        raise MediaError(
+            "WhisperX could not load the English alignment model. "
+            "Run hero doctor and install the model locally, or use --allow-model-download explicitly."
+        ) from exc
     aligned = whisperx.align(segments, model, metadata, clip, "cpu", return_char_alignments=False)
     returned = []
     for segment in aligned.get("segments", []):
@@ -320,6 +343,54 @@ def align_span_with_whisperx(
             )
         bounds.append((source_start_us + start, source_start_us + end))
     return bounds
+
+
+def _require_cached_punkt() -> None:
+    """Fail before WhisperX can invoke nltk.download in offline mode."""
+    try:
+        import nltk
+    except ImportError as exc:
+        raise MediaError(
+            "WhisperX requires NLTK punkt data for offline alignment. "
+            "Install the WhisperX runtime and its local punkt data first."
+        ) from exc
+    for resource in ("tokenizers/punkt_tab/english/", "tokenizers/punkt/english.pickle"):
+        try:
+            nltk.data.find(resource)
+            return
+        except LookupError:
+            continue
+    raise MediaError(
+        "WhisperX English punkt data is not cached. The normal Hero run will not download it; "
+        "install the data locally or run with --allow-model-download."
+    )
+
+
+@contextmanager
+def _block_model_downloads(allow_model_download: bool) -> Iterator[None]:
+    """Block torchaudio/torch.hub downloads that HF offline flags cannot stop."""
+    if allow_model_download:
+        yield
+        return
+    try:
+        import torch.hub  # type: ignore[import-not-found]
+    except ImportError:
+        yield
+        return
+
+    original = torch.hub.download_url_to_file
+
+    def blocked(*_args: object, **_kwargs: object) -> None:
+        raise MediaError(
+            "the WhisperX alignment model is not cached. The normal Hero run will not download it; "
+            "install the model locally or run with --allow-model-download."
+        )
+
+    torch.hub.download_url_to_file = blocked
+    try:
+        yield
+    finally:
+        torch.hub.download_url_to_file = original
 
 
 def _whisperx_version() -> str:

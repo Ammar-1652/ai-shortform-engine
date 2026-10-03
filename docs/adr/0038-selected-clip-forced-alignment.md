@@ -11,7 +11,7 @@ Round 3 transcribes the whole ASR FLAC with faster-whisper and stores provisiona
 
 Hero alignment runs only on a candidate whose effective review for the current rough-preview artifact is `approved`. The text authority is the transcript words named by that candidate. The adapter trims the existing ASR FLAC to the candidate TimeMap and calls WhisperX on that span. It does not transcribe the rest of the source and it does not rewrite, normalize, or invent words.
 
-Every stored word is `alignment_quality = forced`, with source and output microseconds, half-open Hero frames, the WhisperX version, and the alignment configuration hash. A count or text mismatch fails the job. Provisional times are not substituted. A normal run sets `HF_HUB_OFFLINE=1`. Model download requires `--allow-model-download`.
+Every stored word is `alignment_quality = forced`, with source and output microseconds, half-open Hero frames, the WhisperX version, and the alignment configuration hash. A count or text mismatch fails the job. Provisional times are not substituted. A normal run sets the Hugging Face offline flags, checks local NLTK data, and blocks torch/torchaudio downloads. Model download requires `--allow-model-download`.
 
 Tests inject `FakeForcedAlignment`. Production commands use the WhisperX adapter.
 
