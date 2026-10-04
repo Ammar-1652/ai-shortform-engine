@@ -51,6 +51,23 @@ for (const item of batch.items) {
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
+  if (input.reframing_strategy !== "contain") {
+    throw new Error(
+      `advanced render does not support reframing strategy ${input.reframing_strategy}`,
+    );
+  }
+  for (const event of input.sfx ?? []) {
+    if (event && event.role && event.role !== "sfx") {
+      throw new Error("advanced render rejects music");
+    }
+    if (
+      event &&
+      typeof event.gain_db === "number" &&
+      (event.gain_db < -24 || event.gain_db > 6)
+    ) {
+      throw new Error("SFX gain_db must be between -24 and 6");
+    }
+  }
   const raw = JSON.stringify(input);
   if (raw.includes("http://") || raw.includes("https://")) {
     throw new Error("refusing remote media URL in the advanced render input");

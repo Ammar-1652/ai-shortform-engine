@@ -79,24 +79,35 @@ function renderDraft(board, draft) {
     history.append(entry);
   }
   article.append(history);
+  line(article, "effective decision " + (draft.current_decision || "none"));
   const reviewer = document.createElement("input");
   reviewer.placeholder = "reviewer id";
   const notes = document.createElement("textarea");
   notes.placeholder = "notes";
-  const choice = document.createElement("input");
-  choice.type = "radio";
-  choice.value = "approved";
-  choice.name = "advanced-decision-" + draft.candidate_id;
+  const choices = document.createElement("div");
+  for (const name of ["approved", "rejected", "changes_requested"]) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "advanced-decision-" + draft.candidate_id;
+    input.value = name;
+    label.append(input, document.createTextNode(" " + name + " "));
+    choices.append(label);
+  }
   const save = document.createElement("button");
   save.type = "button";
   text(save, "Save advanced decision");
-  save.addEventListener("click", () => saveDecision(board, draft, reviewer, notes, choice));
-  article.append(reviewer, notes, choice, save);
+  save.addEventListener("click", () => saveDecision(board, draft, reviewer, notes, choices));
+  article.append(reviewer, notes, choices, save);
   return article;
 }
 
-async function saveDecision(board, draft, reviewer, notes, choice) {
-  choice.checked = true;
+async function saveDecision(board, draft, reviewer, notes, choices) {
+  const selected = choices.querySelector("input:checked");
+  if (!selected) {
+    text(status, "Choose approved, rejected, or changes requested.");
+    return;
+  }
   const response = await fetch("/api/review/decisions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -115,7 +126,7 @@ async function saveDecision(board, draft, reviewer, notes, choice) {
       alignment_sha256: draft.alignment_sha256,
       advanced_set_id: board.advanced_set_id,
       subject_kind: "hero",
-      decision: "approved",
+      decision: selected.value,
       reviewer_id: reviewer.value,
       notes: notes.value,
     }),

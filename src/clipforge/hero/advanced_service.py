@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from clipforge import __version__
 from clipforge.errors import MediaError, StorageError
-from clipforge.hero.advanced_backend import AdvancedRenderBackend, FakeAdvancedRenderBackend
+from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.probe import probe_hero
@@ -90,6 +90,13 @@ def default_advanced_profile() -> AdvancedHeroProfile:
     return _PROFILE
 
 
+def select_advanced_backend(backend: AdvancedRenderBackend | None) -> AdvancedRenderBackend:
+    """Production rendering uses Remotion. Tests pass a fake encoder explicitly."""
+    if backend is None:
+        return RemotionAdvancedRenderBackend()
+    return backend
+
+
 def plan_advanced_candidate(
     *,
     database: Database,
@@ -156,7 +163,7 @@ def render_advanced_drafts(
     """Render stored advanced plans. A missing approval writes nothing."""
     root = work_root.resolve()
     active = profile or default_advanced_profile()
-    renderer = backend if backend is not None else FakeAdvancedRenderBackend()
+    renderer = select_advanced_backend(backend)
     rough = default_profile()
     inputs = load_preview_inputs(
         database, source_asset_id, root, profile_fingerprint=rough.fingerprint(), create_workspace=True
@@ -194,7 +201,8 @@ def render_advanced_drafts(
                 perf_counter() - started,
             )
         for candidate_id, plan in chosen:
-            _context(database, source_asset_id, candidate_id, root)
+            context = _context(database, source_asset_id, candidate_id, root)
+            _require_plan_binding(plan, context)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
         now = datetime.now(UTC)
         job = _running_job(inputs.pair.source.project_id, source, len(chosen), now, _actor(created_by))
@@ -583,8 +591,14 @@ def _cache_ready(
         return False
     if record.visual_analysis_sha256 != hero.document.visual_analysis_sha256:
         return False
+    from clipforge.hero.advanced_assets import confine_work_path
+
     manifest = workspace.advanced_run_dir(record.advanced_set_id) / "manifest.json"
-    if not manifest.is_file() or manifest.is_symlink():
+    try:
+        manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
+    except (MediaError, ValueError):
+        return False
+    if not manifest.is_file():
         return False
     if sha256_file(manifest) != record.manifest_sha256:
         return False
@@ -594,17 +608,25 @@ def _cache_ready(
         return False
     if len(document.drafts) != len(chosen):
         return False
+    from clipforge.hero.advanced_assets import confine_work_path
+
     for draft in document.drafts:
         video = manifest.parent / draft.preview_relative_path
-        if not video.is_file() or video.is_symlink():
+        try:
+            video = confine_work_path(root, video.relative_to(root).as_posix(), label="advanced media")
+        except (MediaError, ValueError):
             return False
-        ensure_within(root, video)
+        if not video.is_file():
+            return False
         if sha256_file(video) != draft.preview_sha256 or video.stat().st_size != draft.preview_size_bytes:
             return False
     for _candidate_id, plan in chosen:
         for binding in plan.assets:
-            path = _asset_path(workspace, binding.asset_id, root)
-            if not path.is_file() or path.is_symlink() or sha256_file(path) != binding.sha256:
+            try:
+                path = _asset_path(workspace, binding.asset_id, root)
+            except MediaError:
+                return False
+            if not path.is_file() or sha256_file(path) != binding.sha256:
                 return False
     with database.connect() as connection:
         row = find_artifact(connection, record.project_id, record.source_asset_id, KIND_ADVANCED)
@@ -650,6 +672,39 @@ def _sample_rate(path: Path) -> int:
     raise MediaError(f"{path.name} has no audio stream")
 
 
+def _require_plan_binding(plan: AdvancedHeroPlanDocument, context: _Context) -> None:
+    """Fail closed when the stored plan no longer matches the current producers."""
+    if plan.reframing_strategy != "contain":
+        strategy = plan.reframing_strategy
+        raise MediaError(f"advanced render does not support reframing strategy {strategy}")
+    checks = (
+        (plan.source_sha256 != context.source_sha256, "source"),
+        (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),
+        (plan.candidate_set_sha256 != context.candidate_set_sha256, "candidate set SHA"),
+        (plan.rough_preview_artifact_id != context.rough_artifact_id, "rough preview"),
+        (plan.rough_manifest_sha256 != context.rough_manifest_sha256, "rough preview manifest"),
+        (plan.hero_artifact_id != context.hero_artifact_id, "Hero artifact"),
+        (plan.hero_set_id != context.hero_set_id, "Hero set"),
+        (plan.hero_manifest_sha256 != context.hero_manifest_sha256, "Hero manifest"),
+        (plan.hero_review_id != context.review_id, "Hero approval"),
+        (plan.hero_review_digest != context.review_digest, "Hero approval"),
+        (plan.alignment_id != context.alignment.alignment_id, "alignment"),
+        (plan.alignment_sha256 != context.alignment_sha256, "alignment"),
+        (plan.hero_plan_id != context.hero_plan.plan_id, "Hero plan"),
+        (plan.hero_plan_sha256 != context.hero_plan_sha256, "Hero plan"),
+        (plan.visual_analysis_id != context.visual.analysis_id, "visual analysis"),
+        (plan.visual_analysis_sha256 != context.visual_sha256, "visual analysis"),
+        (plan.time_map_sha256 != context.hero_plan.edit_plan.time_map_sha256, "TimeMap"),
+    )
+    for failed, name in checks:
+        if failed:
+            raise MediaError(f"advanced plan is stale: {name} changed after planning")
+    if plan.windows:
+        end = max(window.output_end_us for window in plan.windows)
+        if end != context.duration_us:
+            raise MediaError("advanced plan is stale: TimeMap duration changed after planning")
+
+
 def _require_plan_assets(
     database: Database,
     workspace: SourceWorkspace,
@@ -659,7 +714,7 @@ def _require_plan_assets(
     from clipforge.hero.advanced_assets import require_asset
 
     for binding in plan.assets:
-        require_asset(
+        entry, license_record, path = require_asset(
             database,
             workspace,
             project_id=plan.project_id,
@@ -667,6 +722,12 @@ def _require_plan_assets(
             expected_kind=binding.kind,
             work_root=root,
         )
+        if entry.file_sha256 != binding.sha256 or sha256_file(path) != binding.sha256:
+            raise MediaError(f"advanced plan is stale: asset {binding.asset_id} hash changed after planning")
+        if license_record.status.value != binding.license_status:
+            raise MediaError(f"advanced plan is stale: asset {binding.asset_id} rights changed after planning")
+        if license_record.license_record_id != binding.license_record_id:
+            raise MediaError(f"advanced plan is stale: asset {binding.asset_id} rights changed after planning")
 
 
 def _staged_name(binding: AssetBinding) -> str:
@@ -675,18 +736,27 @@ def _staged_name(binding: AssetBinding) -> str:
 
 
 def _asset_path(workspace: SourceWorkspace, asset_id: str, root: Path) -> Path:
-    from clipforge.hero.advanced_assets import load_catalog
+    from clipforge.hero.advanced_assets import confine_work_path, load_catalog
 
     entry = next((item for item in load_catalog(workspace) if item.reference.asset_id == asset_id), None)
     if entry is None:
         raise MediaError(f"advanced asset {asset_id} is not in the local catalog")
-    path = (root / entry.relative_path).resolve()
-    ensure_within(root, path)
-    return path
+    return confine_work_path(root, entry.relative_path, label=f"advanced asset {asset_id}")
 
 
 def _link(source: Path, destination: Path, root: Path) -> None:
-    ensure_within(root, destination)
+    from clipforge.hero.advanced_assets import confine_work_path
+
+    try:
+        source_relative = source.relative_to(root)
+    except ValueError as exc:
+        raise MediaError("refusing to stage a file outside the work root") from exc
+    confine_work_path(root, source_relative.as_posix(), label="staged media")
+    try:
+        destination_relative = destination.relative_to(root)
+    except ValueError as exc:
+        raise MediaError("refusing to stage a file outside the work root") from exc
+    confine_work_path(root, destination_relative.parent.as_posix(), label="staged media")
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() or destination.is_symlink():
         destination.unlink()
@@ -863,15 +933,20 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
         profile_fingerprint=fingerprint,
         create_workspace=False,
     )
+    from clipforge.hero.advanced_assets import confine_work_path
+
     workspace = loaded.pair.workspace
     manifest = workspace.advanced_run_dir(document.advanced_set_id) / "manifest.json"
+    manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
     if sha256_file(manifest) != _sidecar_digest(workspace):
         raise MediaError("advanced manifest hash does not match the sidecar")
+    from clipforge.hero.advanced_assets import confine_work_path
+
     for draft in document.drafts:
         video = manifest.parent / draft.preview_relative_path
-        if video.is_symlink() or not video.is_file():
+        video = confine_work_path(root, video.relative_to(root).as_posix(), label="advanced output")
+        if not video.is_file():
             raise MediaError("advanced output is missing or a symlink")
-        ensure_within(root, video)
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
 
@@ -915,10 +990,10 @@ def advanced_media_path(database: Database, source_asset_id: str, candidate_id: 
         profile_fingerprint=default_profile().fingerprint(),
         create_workspace=False,
     )
-    path = inputs.pair.workspace.advanced_run_dir(document.advanced_set_id) / draft.preview_relative_path
-    if path.is_symlink():
-        raise MediaError("advanced media is a symlink")
-    ensure_within(root, path)
+    from clipforge.hero.advanced_assets import confine_work_path
+
+    lexical = inputs.pair.workspace.advanced_run_dir(document.advanced_set_id) / draft.preview_relative_path
+    path = confine_work_path(root, lexical.relative_to(root).as_posix(), label="advanced media")
     if not path.is_file():
         raise MediaError(f"unknown candidate {candidate_id}")
     return path
@@ -1058,6 +1133,11 @@ def _review_draft(
         }
         for item in plan.emphasis
     ]
+    effective = (
+        None
+        if artifact_id is None
+        else effective_review(reviews, artifact_id, draft.candidate_id, subject_kind="hero")
+    )
     return {
         "candidate_id": draft.candidate_id,
         "rank": draft.rank,
@@ -1082,6 +1162,7 @@ def _review_draft(
         "typography": typography,
         "diagrams": diagrams,
         "emphasis": emphasis,
+        "current_decision": None if effective is None else effective.decision,
         "history": [
             {
                 "review_id": item.review_id,

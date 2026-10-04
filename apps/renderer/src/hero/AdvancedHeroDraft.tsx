@@ -1,4 +1,6 @@
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
+
+import { linearVolume } from "./gain.js";
 
 type Interval = { output_start_us?: number; output_end_us?: number };
 
@@ -20,12 +22,24 @@ type DiagramEvent = {
   };
 };
 
-type BrollEvent = { asset_id?: string; interval?: Interval };
-type SfxEvent = { asset_id?: string; interval?: Interval; gain_db?: number };
+type BrollEvent = {
+  asset_id?: string;
+  interval?: Interval;
+  broll_source_in_us?: number;
+};
+
+type SfxEvent = {
+  asset_id?: string;
+  interval?: Interval;
+  gain_db?: number;
+  role?: string;
+};
+
 type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: number };
 
 export type AdvancedHeroInput = {
   duration_in_frames: number;
+  reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
   typography?: TypeEvent[];
@@ -37,6 +51,7 @@ export type AdvancedHeroInput = {
 };
 
 const FPS = 30;
+const NEUTRAL_DARK = "#111111";
 
 function frameAt(microseconds: number | undefined): number {
   if (typeof microseconds !== "number") {
@@ -51,15 +66,24 @@ function active(frame: number, interval: Interval | undefined): boolean {
   return frame >= start && frame < end;
 }
 
+function span(interval: Interval | undefined): { from: number; duration: number } {
+  const from = frameAt(interval?.output_start_us);
+  const end = frameAt(interval?.output_end_us);
+  return { from, duration: Math.max(1, end - from) };
+}
+
 /**
- * Advanced portrait draft. Text nodes are React children.
- * A face box is not a speaker. Music is not a layer.
+ * Advanced portrait draft. Contain keeps the whole source picture.
+ * Text nodes are React children. A face box is not a speaker. Music is not a layer.
  */
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
+  if (input.reframing_strategy !== "contain") {
+    throw new Error(
+      `advanced render does not support reframing strategy ${String(input.reframing_strategy)}`,
+    );
+  }
   const names = input.asset_names ?? {};
-  const broll = (input.broll ?? []).find((item) => active(frame, item.interval));
-  const brollName = broll?.asset_id ? names[broll.asset_id] : undefined;
   const typography = input.typography ?? [];
   const typeVisible = typography.some((item) => active(frame, item.interval));
   const typeText = typography.map((item) => item.text ?? "").join(" ");
@@ -69,31 +93,48 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   );
   const speech = input.speech_name ?? "asr.flac";
   const picture = input.base_video_name ?? "analysis.mp4";
+  const contained = { width: "100%", height: "100%", objectFit: "contain" as const };
   return (
-    <AbsoluteFill style={{ backgroundColor: "#003300" }}>
+    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       <OffthreadVideo
         src={staticFile(picture)}
         durationInFrames={input.duration_in_frames}
         muted
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={contained}
       />
       <Audio src={staticFile(speech)} durationInFrames={input.duration_in_frames} />
-      {(input.sfx ?? []).map((item) => {
+      {(input.broll ?? []).map((item) => {
         const name = item.asset_id ? names[item.asset_id] : undefined;
-        if (!name || !active(frame, item.interval)) {
+        if (!name) {
           return null;
         }
-        return <Audio key={name} src={staticFile(name)} volume={0.5} />;
+        const window = span(item.interval);
+        return (
+          <Sequence key={`broll-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
+            <AbsoluteFill>
+              <OffthreadVideo
+                src={staticFile(name)}
+                trimBefore={frameAt(item.broll_source_in_us)}
+                durationInFrames={window.duration}
+                muted
+                style={contained}
+              />
+            </AbsoluteFill>
+          </Sequence>
+        );
       })}
-      {brollName === undefined ? null : (
-        <AbsoluteFill>
-          <OffthreadVideo
-            src={staticFile(brollName)}
-            muted
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        </AbsoluteFill>
-      )}
+      {(input.sfx ?? []).map((item) => {
+        const name = item.asset_id ? names[item.asset_id] : undefined;
+        if (!name || item.role === "music") {
+          return null;
+        }
+        const window = span(item.interval);
+        return (
+          <Sequence key={`sfx-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
+            <Audio src={staticFile(name)} volume={linearVolume(item.gain_db ?? 0)} />
+          </Sequence>
+        );
+      })}
       {diagram === undefined ? null : (
         <AbsoluteFill>
           <div style={{ position: "absolute", left: 140, top: 320, width: 280, height: 280, backgroundColor: "#ff00ff" }} />

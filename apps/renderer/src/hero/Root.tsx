@@ -46,6 +46,7 @@ const placeholder: HeroDraftInput = {
 
 const advancedPlaceholder = {
   duration_in_frames: 30,
+  reframing_strategy: "contain",
   base_video_name: "analysis.mp4",
   speech_name: "asr.flac",
   typography: [{ text: "Café $12.50", interval: { output_start_us: 0, output_end_us: 1_000_000 } }],

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { linearVolume } from "./gain.js";
+
 const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "AdvancedHeroDraft.tsx"), "utf8");
 
 describe("advanced hero composition", () => {
@@ -13,8 +15,21 @@ describe("advanced hero composition", () => {
     expect(source).not.toContain("eval(");
     expect(source).not.toContain("http://");
     expect(source).not.toContain("https://");
+    expect(source).not.toContain('objectFit: "cover"');
+    expect(source).toContain('objectFit: "contain"');
+    expect(source).toContain("broll_source_in_us");
+    expect(source).toContain("linearVolume");
     expect(source).toContain("{typeText}");
     expect(source).toContain("diagram.payload?.left_label");
-    expect(source).toContain("staticFile(brollName)");
+    expect(source).toContain("staticFile(name)");
+  });
+
+  it("converts SFX gain from dB and rejects music-range values", () => {
+    expect(linearVolume(0)).toBeCloseTo(1);
+    expect(linearVolume(-6)).toBeCloseTo(10 ** (-6 / 20));
+    expect(linearVolume(6)).toBeCloseTo(10 ** (6 / 20));
+    expect(linearVolume(-24)).toBeCloseTo(10 ** (-24 / 20));
+    expect(() => linearVolume(7)).toThrow(/-24 and 6/);
+    expect(() => linearVolume(-25)).toThrow(/-24 and 6/);
   });
 });

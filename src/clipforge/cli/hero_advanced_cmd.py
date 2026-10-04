@@ -34,6 +34,7 @@ def advanced_doctor(
     typer.echo(f"PASS profile: {profile.profile_id}")
     typer.echo("PASS music: disallowed")
     typer.echo(f"PASS reframing: {profile.reframing.strategy_id}")
+    typer.echo("PASS renderer: remotion")
     typer.echo(f"PASS work_dir: {resolve_work_dir(work_dir)}")
 
 
@@ -71,17 +72,18 @@ def advanced_render(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
-    """Render stored advanced plans into a separate artifact."""
-    from clipforge.hero.advanced_backend import FakeAdvancedRenderBackend
+    """Render stored advanced plans with the production Remotion backend."""
     from clipforge.hero.advanced_service import render_advanced_drafts
 
-    result = render_advanced_drafts(
-        database=Database(resolve_db_path(db)),
-        source_asset_id=source_asset_id,
-        work_root=resolve_work_dir(work_dir),
-        force=force,
-        backend=FakeAdvancedRenderBackend(),
-    )
+    try:
+        result = render_advanced_drafts(
+            database=Database(resolve_db_path(db)),
+            source_asset_id=source_asset_id,
+            work_root=resolve_work_dir(work_dir),
+            force=force,
+        )
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
     typer.echo(f"status: {result.status}")
     typer.echo(f"advanced_set_id: {result.advanced_set_id}")
     if result.status == "noop":

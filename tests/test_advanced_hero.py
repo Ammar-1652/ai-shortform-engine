@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,13 +11,23 @@ import pytest
 from pydantic import ValidationError
 
 from clipforge.errors import MediaError
-from clipforge.hero.advanced_backend import FakeAdvancedRenderBackend
-from clipforge.hero.advanced_service import plan_advanced_candidate, render_advanced_drafts
+from clipforge.hero.advanced_backend import (
+    FakeAdvancedRenderBackend,
+    RemotionAdvancedRenderBackend,
+)
+from clipforge.hero.advanced_service import (
+    plan_advanced_candidate,
+    render_advanced_drafts,
+    select_advanced_backend,
+)
 from clipforge.hero.backend import FakeHeroRenderBackend
+from clipforge.hero.show import load_current_hero
 from clipforge.media.hashing import sha256_file
-from clipforge.media.local_file import path_to_file_uri
+from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
+from clipforge.preview.inputs import load_preview_inputs
+from clipforge.preview.service import default_profile
 from clipforge.review.hero_board import decision_context_for
-from clipforge.review.service import record_hero_decision, review_board
+from clipforge.review.service import parse_decision_body, record_hero_decision, review_board
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
@@ -466,12 +477,345 @@ def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> N
     assert "left_label" in page
 
 
+def test_production_backend_is_remotion() -> None:
+    import inspect
+
+    from clipforge.cli.hero_advanced_cmd import advanced_render
+
+    assert isinstance(select_advanced_backend(None), RemotionAdvancedRenderBackend)
+    fake = FakeAdvancedRenderBackend()
+    assert select_advanced_backend(fake) is fake
+    assert "FakeAdvancedRenderBackend" not in inspect.getsource(advanced_render)
+
+
+def test_review_saves_every_decision(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    from clipforge.hero.advanced_service import advanced_review_board, record_advanced_decision
+
+    notes = 'Café 説明 $12.50 <unsafe>&"quoted"'
+    board = advanced_review_board(fixture.database, SOURCE_ID, fixture.work)
+    for decision in ("rejected", "changes_requested", "approved"):
+        record_advanced_decision(
+            database=fixture.database,
+            work_root=fixture.work,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            advanced_set_id=str(board["advanced_set_id"]),
+            artifact_id=str(board["artifact_id"]),
+            decision=decision,
+            reviewer_id="ada",
+            notes=notes,
+        )
+        time.sleep(0.01)
+    shown = advanced_review_board(fixture.database, SOURCE_ID, fixture.work)
+    draft = shown["drafts"][0]
+    assert draft["current_decision"] == "approved"
+    history = [item["decision"] for item in draft["history"]]
+    assert history.count("approved") >= 1
+    assert "rejected" in history
+    assert "changes_requested" in history
+    assert any("<unsafe>" in str(item["notes"]) for item in draft["history"])
+    with pytest.raises(MediaError, match="decision"):
+        record_advanced_decision(
+            database=fixture.database,
+            work_root=fixture.work,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            advanced_set_id=str(board["advanced_set_id"]),
+            artifact_id=str(board["artifact_id"]),
+            decision="publish",
+            reviewer_id="ada",
+            notes="",
+        )
+    with pytest.raises(MediaError, match="blank"):
+        record_advanced_decision(
+            database=fixture.database,
+            work_root=fixture.work,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            advanced_set_id=str(board["advanced_set_id"]),
+            artifact_id=str(board["artifact_id"]),
+            decision="rejected",
+            reviewer_id=" ",
+            notes="",
+        )
+    with pytest.raises(MediaError, match="4000"):
+        record_advanced_decision(
+            database=fixture.database,
+            work_root=fixture.work,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            advanced_set_id=str(board["advanced_set_id"]),
+            artifact_id=str(board["artifact_id"]),
+            decision="rejected",
+            reviewer_id="ada",
+            notes="x" * 4001,
+        )
+    with pytest.raises(MediaError, match="automated"):
+        parse_decision_body({"decision": "approved", "reviewer_id": "ada", "automated": True})
+
+
+def test_same_content_symlinks_and_escapes_do_not_render(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"same-broll")
+    _register_asset(fixture, "sfx-1", "audio", b"same-sfx")
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+        sfx_asset_ids=["sfx-1"],
+    )
+    broll = fixture.workspace.advanced_asset_file("broll-1")
+    twin = tmp_path / "same-broll.bin"
+    twin.write_bytes(broll.read_bytes())
+    broll.unlink()
+    broll.symlink_to(twin)
+    _assert_render_blocked(fixture, "symlink")
+    broll.unlink()
+    broll.write_bytes(twin.read_bytes())
+    parent = broll.parent
+    moved = tmp_path / "real-broll-dir"
+    parent.rename(moved)
+    parent.symlink_to(moved, target_is_directory=True)
+    _assert_render_blocked(fixture, "symlink")
+
+
+def test_traversal_and_foreign_file_uri_are_rejected(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    catalog_path = fixture.workspace.advanced_asset_catalog()
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog["assets"][0]["relative_path"] = "../outside.bin"
+    catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+    with pytest.raises(MediaError, match="escapes"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-1"],
+        )
+    assert _advanced_jobs(fixture) == []
+    catalog["assets"][0]["relative_path"] = str(
+        fixture.workspace.advanced_asset_file("broll-1").resolve().relative_to(fixture.work.resolve())
+    )
+    outside = tmp_path / "elsewhere.bin"
+    outside.write_bytes(b"broll-bytes")
+    catalog["assets"][0]["uri"] = path_to_file_uri(outside)
+    catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+    with pytest.raises(MediaError, match="escapes"):
+        plan_advanced_candidate(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            candidate_id=candidate_id,
+            work_root=fixture.work,
+            broll_asset_ids=["broll-1"],
+        )
+    assert _advanced_jobs(fixture) == []
+
+
+def test_changed_asset_hash_blocks_render(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+    )
+    fixture.workspace.advanced_asset_file("broll-1").write_bytes(b"changed-bytes")
+    _assert_render_blocked(fixture, "hash")
+
+
+def test_symlinked_advanced_mp4_is_not_served(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    from clipforge.hero.advanced_service import advanced_media_path
+
+    video = next(fixture.work.rglob("advanced.mp4"))
+    copy = tmp_path / "copy.mp4"
+    copy.write_bytes(video.read_bytes())
+    video.unlink()
+    video.symlink_to(copy)
+    with pytest.raises(MediaError, match="symlink"):
+        advanced_media_path(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+
+
+def test_stale_hero_producers_do_not_insert_a_job(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    hero = review_board(fixture.database, SOURCE_ID, fixture.work)["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, candidate_id),
+        decision="rejected",
+        reviewer_id="ada",
+        notes="",
+    )
+    _assert_render_blocked(fixture, "approval")
+
+
+def test_new_hero_artifact_invalidates_the_advanced_plan(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner(), force=True)
+    hero = review_board(fixture.database, SOURCE_ID, fixture.work)["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, candidate_id),
+        decision="approved",
+        reviewer_id="ada",
+        notes="",
+    )
+    _assert_render_blocked(fixture, "Hero artifact")
+
+
+def test_mutated_producers_block_advanced_render(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+    )
+    hero = load_current_hero(fixture.database, SOURCE_ID, fixture.work)
+    alignment = hero.manifest_path.parent / "candidates" / candidate_id / "alignment.json"
+    alignment.write_text(alignment.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    _assert_render_blocked(fixture, "alignment")
+
+
+def test_mutated_hero_plan_source_and_visual_block_render(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    hero = load_current_hero(fixture.database, SOURCE_ID, fixture.work)
+    plan = hero.manifest_path.parent / "candidates" / candidate_id / "plan.json"
+    original_plan = plan.read_bytes()
+    plan.write_bytes(original_plan + b"\n")
+    _assert_render_blocked(fixture, "plan")
+    plan.write_bytes(original_plan)
+    inputs = load_preview_inputs(
+        fixture.database,
+        SOURCE_ID,
+        fixture.work,
+        profile_fingerprint=default_profile().fingerprint(),
+        create_workspace=False,
+    )
+    source = path_from_file_uri(inputs.pair.source.uri)
+    original = source.read_bytes()
+    source.write_bytes(original + b"\x00")
+    _assert_render_blocked(fixture, "source")
+    source.write_bytes(original)
+    visual = inputs.pair.visual_path
+    visual_bytes = visual.read_bytes()
+    visual.write_bytes(visual_bytes + b"\n")
+    _assert_render_blocked(fixture, "visual")
+
+
+def test_rights_change_and_old_hero_set_block_render(tmp_path: Path) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+    )
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE asset_license_records SET status = ? WHERE asset_id = ?",
+            ("prohibited", "broll-1"),
+        )
+    _assert_render_blocked(fixture, "rights")
+    with fixture.database.transaction() as connection:
+        connection.execute(
+            "UPDATE asset_license_records SET status = ? WHERE asset_id = ?",
+            ("owned", "broll-1"),
+        )
+    stored_path = fixture.workspace.advanced_plan_file(candidate_id)
+    stored = json.loads(stored_path.read_text(encoding="utf-8"))
+    stored["hero_set_id"] = "older-hero-set"
+    stored_path.write_text(json.dumps(stored), encoding="utf-8")
+    _assert_render_blocked(fixture, "Hero set")
+    stored["hero_set_id"] = review_board(fixture.database, SOURCE_ID, fixture.work)["hero"]["hero_set_id"]
+    stored["reframing_strategy"] = "center_crop"
+    stored_path.write_text(json.dumps(stored), encoding="utf-8")
+    _assert_render_blocked(fixture, "does not support reframing")
+
+
 def test_profile_disallows_music() -> None:
     profile = AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="contain"))
     assert profile.music_allowed is False
     assert profile.profile_id == "advanced-hero-v1"
     again = AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="contain"))
     assert profile.fingerprint() == again.fingerprint()
+
+
+def _advanced_jobs(fixture) -> list[object]:
+    from clipforge.storage import list_jobs
+
+    with fixture.database.connect() as connection:
+        return [item for item in list_jobs(connection, PROJECT_ID) if item.kind == "advanced_hero_render"]
+
+
+def _assert_render_blocked(fixture, match: str) -> None:
+    assert not fixture.workspace.advanced_sidecar().exists()
+    with pytest.raises(MediaError, match=match):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=FakeAdvancedRenderBackend(),
+        )
+    assert _advanced_jobs(fixture) == []
+    assert not fixture.workspace.advanced_sidecar().exists()
 
 
 def _approved(tmp_path: Path):

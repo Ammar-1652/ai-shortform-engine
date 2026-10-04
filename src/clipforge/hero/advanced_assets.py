@@ -61,6 +61,37 @@ def load_catalog(workspace: SourceWorkspace) -> list[AssetCatalogEntry]:
     return entries
 
 
+def confine_work_path(work_root: Path, relative: str, *, label: str) -> Path:
+    """Reject escapes and symlinks before resolving the path."""
+    if not relative or relative.startswith(("/", "\\")) or "\\" in relative or "\x00" in relative:
+        raise MediaError(f"{label} path escapes the work root")
+    parts = relative.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise MediaError(f"{label} path escapes the work root")
+    current = work_root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise MediaError(f"{label} is a symlink")
+    resolved = current.resolve()
+    ensure_within(work_root, resolved)
+    return resolved
+
+
+def confine_file_uri(work_root: Path, uri: str, *, label: str) -> Path:
+    """Apply the same lexical checks to a file URI."""
+    if "\\" in uri or ".." in uri.split("/"):
+        raise MediaError(f"{label} path escapes the work root")
+    if not uri.startswith("file:"):
+        raise MediaError(f"{label} must be a file URI under the work root")
+    raw = path_from_file_uri(uri)
+    try:
+        relative = raw.relative_to(work_root)
+    except ValueError as exc:
+        raise MediaError(f"{label} path escapes the work root") from exc
+    return confine_work_path(work_root, relative.as_posix(), label=label)
+
+
 def require_asset(
     database: Database,
     workspace: SourceWorkspace,
@@ -134,14 +165,12 @@ def _license(database: Database, license_record_id: str) -> AssetLicenseRecord:
 
 
 def _local_file(workspace: SourceWorkspace, entry: AssetCatalogEntry, work_root: Path) -> Path:
-    relative = entry.relative_path
-    if relative.startswith("/") or ".." in relative.split("/") or "\\" in relative:
-        raise MediaError(f"advanced asset {entry.reference.asset_id} path escapes the work root")
-    path = (work_root / relative).resolve()
-    ensure_within(work_root, path)
-    declared = path_from_file_uri(entry.reference.uri) if entry.reference.uri.startswith("file:") else path
-    if declared.resolve() != path:
-        raise MediaError(f"advanced asset {entry.reference.asset_id} uri does not match the catalog path")
+    label = f"advanced asset {entry.reference.asset_id}"
+    path = confine_work_path(work_root, entry.relative_path, label=label)
+    if entry.reference.uri.startswith("file:"):
+        declared = confine_file_uri(work_root, entry.reference.uri, label=label)
+        if declared != path:
+            raise MediaError(f"{label} uri does not match the catalog path")
     del workspace
     return path
 

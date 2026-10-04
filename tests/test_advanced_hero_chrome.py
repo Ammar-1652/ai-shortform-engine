@@ -10,8 +10,11 @@ from pathlib import Path
 import pytest
 
 from clipforge.errors import MediaError
-from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
-from clipforge.hero.advanced_service import plan_advanced_candidate, render_advanced_drafts
+from clipforge.hero.advanced_service import (
+    plan_advanced_candidate,
+    render_advanced_drafts,
+    select_advanced_backend,
+)
 from clipforge.hero.backend import FakeHeroRenderBackend
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.browser import resolve_browser
@@ -107,11 +110,13 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     joined = " ".join(item.text for item in plan.typography)
     assert "Café" in joined
     assert "$12.50" in joined
+    from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
+
+    assert isinstance(select_advanced_backend(None), RemotionAdvancedRenderBackend)
     result = render_advanced_drafts(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
         work_root=fixture.work,
-        backend=RemotionAdvancedRenderBackend(),
     )
     assert result.status == "rendered"
     assert result.manifest_path is not None
@@ -123,11 +128,18 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     assert probe["width"] == 1080 and probe["height"] == 1920
     assert probe["fps"] == "30/1"
     assert probe["audio"] == "aac"
+    assert probe["pix_fmt"] in {"yuv420p", "yuvj420p"}
+    rendered = json.loads((video.parent / "render-input.json").read_text(encoding="utf-8"))
+    assert rendered["reframing_strategy"] == "contain"
+    assert rendered["broll"][0]["broll_source_in_us"] == 0
+    assert rendered["sfx"][0]["gain_db"] == -6
+    assert rendered["sfx"][0]["role"] == "sfx"
     broll_end = plan.broll[0].interval.output_end_us / 1_000_000
     during = broll_end / 2
     after = min(probe["duration"] - 0.05, broll_end + 0.2)
     assert _pixel(video, during, 540, 960) == "red"
     assert _pixel(video, after, 540, 960) == "green"
+    assert _pixel(video, after, 540, 40) == "dark"
     assert _pixel(video, after, 200, 400) == "magenta"
     assert _pixel(video, after, 600, 400) == "cyan"
     assert _pixel(video, after, 200, 1550) == "yellow"
@@ -216,26 +228,14 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert "number_comparison" in first["text"]
         assert "emphasis" in first["text"]
         assert first["images"] == 0
-        saved = page.evaluate(
-            """
-            (async () => {
-              const article = document.querySelector("article");
-              article.querySelector("input").value = "ada";
-              article.querySelector("textarea").value = "Café 説明 $12.50 <unsafe>&\\"quoted\\"";
-              article.querySelector("button").click();
-              const deadline = Date.now() + 8000;
-              const node = document.querySelector("#status");
-              while (Date.now() < deadline && !(node && node.textContent.includes("Saved"))) {
-                await new Promise((resolve) => setTimeout(resolve, 100));
-              }
-              return node ? node.textContent : "";
-            })()
-            """,
-        )
-        assert "Saved advanced approved" in str(saved)
+        notes = 'Café 説明 $12.50 <unsafe>&"quoted"'
+        for decision in ("rejected", "changes_requested", "approved"):
+            saved = _save_advanced(page, decision, notes)
+            assert f"Saved advanced {decision}" in str(saved), saved
         page.reload()
-        reloaded = page.wait_for("current artifact")
-        assert "approved" in reloaded
+        reloaded = page.wait_for("effective decision approved")
+        assert "rejected by ada" in reloaded
+        assert "changes_requested by ada" in reloaded
         assert "Café" in reloaded
         assert "説明" in reloaded
         assert "$12.50" in reloaded
@@ -250,6 +250,8 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
               const article = document.querySelector("article");
               article.querySelector("input").value = "ada";
               article.querySelector("textarea").value = "stale";
+              const choice = article.querySelector("input[value=approved]");
+              if (choice) choice.checked = true;
               article.querySelector("button").click();
               const deadline = Date.now() + 8000;
               const node = document.querySelector("#status");
@@ -266,6 +268,32 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         chrome.wait(timeout=10)
         server.shutdown()
         server.server_close()
+
+
+def _save_advanced(page: DebugPage, decision: str, notes: str) -> object:
+    selector = json.dumps(f"input[value={decision}]")
+    notes_literal = json.dumps(notes)
+    return page.evaluate(
+        f"""
+        (async () => {{
+          const article = document.querySelector("article");
+          article.querySelector("input").value = "ada";
+          article.querySelector("textarea").value = {notes_literal};
+          const choice = article.querySelector({selector});
+          if (!choice) return "no choice";
+          choice.checked = true;
+          const node = document.querySelector("#status");
+          if (node) node.textContent = "";
+          article.querySelector("button").click();
+          const deadline = Date.now() + 8000;
+          const expected = "Saved advanced " + {json.dumps(decision)};
+          while (Date.now() < deadline && !(node && node.textContent.includes(expected))) {{
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }}
+          return node ? node.textContent : "";
+        }})()
+        """
+    )
 
 
 def _lavfi(path: Path, video: str, audio: str, seconds: str) -> None:
@@ -321,7 +349,7 @@ def _probe(path: Path) -> dict[str, object]:
             "-v",
             "error",
             "-show_entries",
-            "stream=codec_name,width,height,avg_frame_rate",
+            "stream=codec_name,width,height,avg_frame_rate,pix_fmt",
             "-of",
             "json",
             str(path),
@@ -343,6 +371,7 @@ def _probe(path: Path) -> dict[str, object]:
         "height": video["height"],
         "fps": video["avg_frame_rate"],
         "audio": audio["codec_name"],
+        "pix_fmt": video.get("pix_fmt"),
         "duration": duration,
     }
 
@@ -376,6 +405,8 @@ def _pixel(path: Path, seconds: float, x: int, y: int) -> str:
         return "red"
     if red < 40 and green > 40 and blue < 40:
         return "green"
+    if red < 40 and green < 40 and blue < 40:
+        return "dark"
     if red > 180 and green < 80 and blue > 180:
         return "magenta"
     if red < 80 and green > 180 and blue > 180:

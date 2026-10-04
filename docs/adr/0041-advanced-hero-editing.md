@@ -11,7 +11,9 @@ Hero draft v1 force-aligns an approved candidate and renders a contained 1080×1
 
 Advanced drafts use artifact kind `advanced_hero_draft_set_json` and profile `advanced-hero-v1`. `hero-draft-v1` stays unchanged.
 
-B-roll and SFX come from a local asset catalog plus an existing license row. The file must sit under the work root, must not be a symlink, and must match its hash. Rights must be `owned`, `licensed`, or `campaign_provided`, with evidence. `unknown`, `prohibited`, remote URLs, and Envato search or download are rejected before a render job is inserted. Overlapping B-roll is rejected. Music is not a role.
+B-roll and SFX come from a local asset catalog plus an existing license row. The catalog path and file URI are checked before `Path.resolve()`: absolute paths, `..`, backslashes, the candidate symlink, and any symlinked parent are rejected, even when the target bytes match the catalog hash. Rights must be `owned`, `licensed`, or `campaign_provided`, with evidence. `unknown`, `prohibited`, remote URLs, and Envato search or download are rejected before a render job is inserted. Overlapping B-roll is rejected. Music is not a role.
+
+Production `clipforge hero advanced render` uses Remotion. `FakeAdvancedRenderBackend` is an explicit test injection, not the service default. The composition contains the source on `#111111` and schedules B-roll and SFX on their output intervals. SFX gain is `10 ** (gain_db / 20)`. A strategy other than `contain` fails before the job. Render also rechecks the current Hero approval and the plan's producer bindings. A stale or revoked binding inserts no job and publishes no sidecar.
 
 Typography and diagrams copy bounded text and numbers. HTML is not interpreted. Semantic emphasis uses forced aligned words only. Reframing strategies are explicit. A strategy without the evidence it requires fails. It does not fall back to another strategy and it does not assign a speaker.
 
