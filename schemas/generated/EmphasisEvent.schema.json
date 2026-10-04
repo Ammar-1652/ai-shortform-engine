@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One forced word selected by a named rule. Text is copied.",
+  "properties": {
+    "event_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "output_end_frame_exclusive": {
+      "minimum": 1,
+      "title": "Output End Frame Exclusive",
+      "type": "integer"
+    },
+    "output_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_frame": {
+      "minimum": 0,
+      "title": "Output Start Frame",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    },
+    "purpose": {
+      "$ref": "#/$defs/MotionPurpose"
+    },
+    "rule_id": {
+      "enum": [
+        "number_or_currency",
+        "terminal_punctuation",
+        "diagram_label"
+      ],
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "word_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Word Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "word_id",
+    "text",
+    "output_start_us",
+    "output_end_us",
+    "output_start_frame",
+    "output_end_frame_exclusive",
+    "purpose",
+    "rule_id"
+  ],
+  "title": "EmphasisEvent",
+  "type": "object"
+}

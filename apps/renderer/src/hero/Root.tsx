@@ -1,5 +1,6 @@
 import { Composition } from "remotion";
 
+import { AdvancedHeroDraft } from "./AdvancedHeroDraft.js";
 import { HeroDraft } from "./HeroDraft.js";
 import type { HeroDraftInput } from "./types.js";
 import { compositionFacts, parseHeroInput } from "./validation.js";
@@ -43,8 +44,38 @@ const placeholder: HeroDraftInput = {
   motion_events: [],
 };
 
+const advancedPlaceholder = {
+  duration_in_frames: 30,
+  reframing_strategy: "contain",
+  base_video_name: "analysis.mp4",
+  speech_name: "asr.flac",
+  typography: [{ text: "Café $12.50", interval: { output_start_us: 0, output_end_us: 1_000_000 } }],
+  diagrams: [],
+  broll: [],
+  sfx: [],
+  emphasis: [],
+  asset_names: {},
+};
+
 export function HeroRoot() {
   return (
+    <>
+    <Composition
+      id="AdvancedHeroDraft"
+      component={AdvancedHeroDraft}
+      durationInFrames={30}
+      fps={30}
+      width={1080}
+      height={1920}
+      defaultProps={advancedPlaceholder}
+      calculateMetadata={({ props }) => ({
+        durationInFrames: props.duration_in_frames,
+        fps: 30,
+        width: 1080,
+        height: 1920,
+        props,
+      })}
+    />
     <Composition
       id="HeroDraft"
       component={HeroDraft}
@@ -64,5 +95,6 @@ export function HeroRoot() {
         };
       }}
     />
+    </>
   );
 }

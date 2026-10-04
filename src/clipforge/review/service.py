@@ -63,6 +63,7 @@ _REQUEST_KEYS = frozenset(
         "alignment_sha256",
         "plan_id",
         "plan_sha256",
+        "advanced_set_id",
     }
 )
 
@@ -92,6 +93,7 @@ class DecisionContext:
     alignment_sha256: str = ""
     plan_id: str = ""
     plan_sha256: str = ""
+    advanced_set_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +341,7 @@ def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str
         alignment_sha256=_optional_text(payload, "alignment_sha256"),
         plan_id=_optional_text(payload, "plan_id"),
         plan_sha256=_optional_text(payload, "plan_sha256"),
+        advanced_set_id=_optional_text(payload, "advanced_set_id"),
     )
     if subject == "hero":
         for key in ("source_sha256", "alignment_id", "alignment_sha256", "plan_id", "plan_sha256"):

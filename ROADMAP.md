@@ -64,7 +64,9 @@ Official Envato MCP for search, plus an asset request that cannot land in an edi
 
 ## Round 10 — Advanced Hero editing
 
-B-roll, typography, diagrams, SFX, semantic emphasis, reframing strategies that are not "the face is the speaker".
+Status: in progress on `round-10-advanced-hero`, started from `57980d6848728a7a7e218d58d311e6db49db7219`. See `docs/operations/round-10-validation.md`.
+
+B-roll, typography, diagrams, SFX, semantic emphasis, and reframing that does not treat a face as the speaker. Envato search and download stay on the round above. Publishing and music stay deferred.
 
 ## Round 11 — Profiles, policy engine, QA
 

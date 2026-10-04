@@ -24,9 +24,11 @@ hero_app = typer.Typer(no_args_is_help=True, help=_HELP)
 
 
 def _register_review() -> None:
+    from clipforge.cli.hero_advanced_cmd import advanced_app
     from clipforge.cli.hero_review_cmd import hero_review_app
 
     hero_app.add_typer(hero_review_app, name="review")
+    hero_app.add_typer(advanced_app, name="advanced")
 
 
 _register_review()

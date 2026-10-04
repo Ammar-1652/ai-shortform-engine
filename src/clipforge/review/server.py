@@ -99,6 +99,10 @@ def _handler(
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("app.js"))
                 elif path == "/hero.js":
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("hero.js"))
+                elif path == "/advanced-review":
+                    _send_bytes(self, 200, "text/html; charset=utf-8", _static("advanced-review.html"))
+                elif path == "/advanced-review.js":
+                    _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("advanced-review.js"))
                 elif path == "/styles.css":
                     _send_bytes(self, 200, "text/css; charset=utf-8", _static("styles.css"))
                 elif path == "/api/review":
@@ -117,6 +121,22 @@ def _handler(
                     candidate_id = path.removeprefix("/media/candidate/")
                     _reject_id(candidate_id)
                     _send_media(self, preview_media_path(database, source_asset_id, candidate_id, work_root))
+                elif path == "/api/advanced-hero-review":
+                    from clipforge.hero.advanced_service import advanced_review_board
+
+                    _send_json(self, 200, advanced_review_board(database, source_asset_id, work_root))
+                elif path.startswith("/api/advanced-hero-review/hero/"):
+                    from clipforge.hero.advanced_service import advanced_review_card
+
+                    hero_id = path.removeprefix("/api/advanced-hero-review/hero/")
+                    _reject_id(hero_id)
+                    _send_json(self, 200, advanced_review_card(database, source_asset_id, hero_id, work_root))
+                elif path.startswith("/media/advanced-hero/"):
+                    from clipforge.hero.advanced_service import advanced_media_path
+
+                    candidate_id = path.removeprefix("/media/advanced-hero/")
+                    _reject_id(candidate_id)
+                    _send_media(self, advanced_media_path(database, source_asset_id, candidate_id, work_root))
                 elif path.startswith("/media/hero/"):
                     from clipforge.hero.show import hero_media_path
 
@@ -141,6 +161,33 @@ def _handler(
                     raise MediaError(
                         "the preview set changed while this review page was open; reload before saving"
                     )
+                if context.advanced_set_id:
+                    from clipforge.hero.advanced_service import record_advanced_decision
+
+                    review_id = record_advanced_decision(
+                        database=database,
+                        work_root=work_root,
+                        source_asset_id=context.source_asset_id,
+                        candidate_id=context.candidate_id,
+                        advanced_set_id=context.advanced_set_id,
+                        artifact_id=context.artifact_id,
+                        decision=decision,
+                        reviewer_id=reviewer,
+                        notes=notes,
+                    )
+                    _send_json(
+                        self,
+                        201,
+                        {
+                            "review_id": review_id,
+                            "decision": decision,
+                            "candidate_id": context.candidate_id,
+                            "artifact_id": context.artifact_id,
+                            "notes": notes,
+                            "automated": False,
+                        },
+                    )
+                    return
                 if context.subject_kind == "hero":
                     review = record_hero_decision(
                         database=database,

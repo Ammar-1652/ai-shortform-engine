@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "ReframingStrategy": {
+      "additionalProperties": false,
+      "description": "Named crop strategy. It does not identify a speaker.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "strategy_id": {
+          "enum": [
+            "contain",
+            "center_crop",
+            "manual_window",
+            "visual_safe_window",
+            "multi_face_safe_window",
+            "saliency_window"
+          ],
+          "title": "Strategy Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "strategy_id"
+      ],
+      "title": "ReframingStrategy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One crop on the visual frame. Coordinates are pixels inside that frame.",
+  "properties": {
+    "frame_height": {
+      "minimum": 1,
+      "title": "Frame Height",
+      "type": "integer"
+    },
+    "frame_width": {
+      "minimum": 1,
+      "title": "Frame Width",
+      "type": "integer"
+    },
+    "output_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_height": {
+      "minimum": 1,
+      "title": "Source Height",
+      "type": "integer"
+    },
+    "source_width": {
+      "minimum": 1,
+      "title": "Source Width",
+      "type": "integer"
+    },
+    "source_x": {
+      "minimum": 0,
+      "title": "Source X",
+      "type": "integer"
+    },
+    "source_y": {
+      "minimum": 0,
+      "title": "Source Y",
+      "type": "integer"
+    },
+    "strategy_id": {
+      "$ref": "#/$defs/ReframingStrategy"
+    },
+    "window_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Window Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "window_id",
+    "strategy_id",
+    "output_start_us",
+    "output_end_us",
+    "source_x",
+    "source_y",
+    "source_width",
+    "source_height",
+    "frame_width",
+    "frame_height"
+  ],
+  "title": "ReframingWindow",
+  "type": "object"
+}

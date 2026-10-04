@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "description": "Named crop strategy. It does not identify a speaker.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "strategy_id": {
+      "enum": [
+        "contain",
+        "center_crop",
+        "manual_window",
+        "visual_safe_window",
+        "multi_face_safe_window",
+        "saliency_window"
+      ],
+      "title": "Strategy Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "strategy_id"
+  ],
+  "title": "ReframingStrategy",
+  "type": "object"
+}
