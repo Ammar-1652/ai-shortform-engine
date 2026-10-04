@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "Alignment for one language. It does not claim the speaker's identity.",
+  "properties": {
+    "alignment_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Alignment Id",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "provider_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_status": {
+      "enum": [
+        "supported",
+        "optional",
+        "not_claimed",
+        "unsupported"
+      ],
+      "title": "Provider Status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "alignment_id",
+    "source_asset_id",
+    "language",
+    "provider_id",
+    "provider_status",
+    "source_sha256"
+  ],
+  "title": "LanguageAlignmentDocument",
+  "type": "object"
+}

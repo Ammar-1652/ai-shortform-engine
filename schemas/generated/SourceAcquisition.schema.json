@@ -1,0 +1,119 @@
+{
+  "additionalProperties": false,
+  "description": "One explicit acquisition. A plan is not a download.",
+  "properties": {
+    "acquired_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Acquired At"
+    },
+    "acquisition_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Acquisition Id",
+      "type": "string"
+    },
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "download_status": {
+      "enum": [
+        "not_selected_for_round_18",
+        "planned",
+        "provider_unavailable",
+        "acquired",
+        "manual_download_required",
+        "rejected"
+      ],
+      "title": "Download Status",
+      "type": "string"
+    },
+    "error_code": {
+      "default": "none",
+      "maxLength": 80,
+      "title": "Error Code",
+      "type": "string"
+    },
+    "local_relative_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Local Relative Path"
+    },
+    "operator_confirmation": {
+      "default": false,
+      "title": "Operator Confirmation",
+      "type": "boolean"
+    },
+    "provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sha256"
+    },
+    "size_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Bytes"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "acquisition_id",
+    "campaign_id",
+    "source_id",
+    "provider",
+    "download_status"
+  ],
+  "title": "SourceAcquisition",
+  "type": "object"
+}

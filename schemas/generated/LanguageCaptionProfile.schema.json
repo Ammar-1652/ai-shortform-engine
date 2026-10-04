@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "How captions are drawn. Glow and emoji are not styles this campaign allows.",
+  "properties": {
+    "effects": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Effects",
+      "type": "array"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "max_characters": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Characters",
+      "type": "integer"
+    },
+    "profile_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "review_required": {
+      "default": true,
+      "title": "Review Required",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text_direction": {
+      "enum": [
+        "ltr",
+        "rtl"
+      ],
+      "title": "Text Direction",
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "language",
+    "text_direction",
+    "max_characters"
+  ],
+  "title": "LanguageCaptionProfile",
+  "type": "object"
+}

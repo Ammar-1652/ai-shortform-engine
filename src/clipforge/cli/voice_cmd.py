@@ -13,6 +13,7 @@ from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.schemas.voice import NarrationRequest
 from clipforge.storage import Database
+from clipforge.voice.plan import build_plan, load_plan, render_plan, verify_plan, write_plan
 from clipforge.voice.provider import FakeVoiceProvider, provider_from_env
 from clipforge.voice.service import (
     capability_text,
@@ -83,16 +84,84 @@ def voice_generate(
     typer.echo(f"audio_sha256: {document.audio_sha256}")
 
 
-@voice_app.command("verify")
-def voice_verify(
-    artifact_id: Annotated[str, typer.Argument()],
+@voice_app.command("plan")
+def voice_plan(
+    source_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    script: Annotated[str, typer.Option("--script")],
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    reason: Annotated[str, typer.Option("--reason")] = "operator has not requested narration",
+    enabled: Annotated[bool, typer.Option("--enabled")] = False,
+    project_id: Annotated[str, typer.Option("--project")] = "project-1",
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Write a narration plan. This does not generate audio."""
+    try:
+        plan = build_plan(
+            project_id=project_id,
+            source_asset_id=source_id,
+            candidate_id=candidate_id,
+            script_text=script,
+            language=language,
+            enabled=enabled,
+            operator_reason=reason,
+        )
+        path = write_plan(resolve_work_dir(work_dir), plan)
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"plan: {path.name}")
+    typer.echo(f"enabled: {str(plan.enabled).lower()}")
+    typer.echo(f"campaign_policy_decision: {plan.campaign_policy_decision}")
+
+
+@voice_app.command("render")
+def voice_render_cmd(
+    source_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    script: Annotated[str, typer.Option("--script")],
+    provider: Annotated[str, typer.Option("--provider")] = "fake",
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
-    """Check one narration asset. Does not generate audio."""
+    """Generate audio only when the saved plan is enabled."""
+    root = resolve_work_dir(work_dir)
+    path = root / "voice" / source_id / f"{candidate_id}.json"
     try:
-        typer.echo(verify_narration(Database(resolve_db_path(db)), resolve_work_dir(work_dir), artifact_id))
-    except (ClipforgeError, ValidationError) as exc:
+        plan = load_plan(path)
+        updated = render_plan(
+            Database(resolve_db_path(db)),
+            root,
+            plan,
+            _provider(provider),  # type: ignore[arg-type]
+            script_text=script,
+        )
+        write_plan(root, updated)
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"enabled: {str(updated.enabled).lower()}")
+    if updated.generated_audio_sha256:
+        typer.echo(f"audio_sha256: {updated.generated_audio_sha256}")
+    else:
+        typer.echo("audio: not_run")
+
+
+@voice_app.command("verify")
+def voice_verify(
+    source_or_artifact: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str | None, typer.Argument()] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Check one narration asset or a saved plan. Does not generate audio."""
+    database = Database(resolve_db_path(db))
+    root = resolve_work_dir(work_dir)
+    try:
+        if candidate_id is None:
+            typer.echo(verify_narration(database, root, source_or_artifact))
+            return
+        plan = load_plan(root / "voice" / source_or_artifact / f"{candidate_id}.json")
+        typer.echo(verify_plan(database, root, plan))
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
         _fail(exc)
 
 

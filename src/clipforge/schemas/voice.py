@@ -168,3 +168,38 @@ class NarrationAudioArtifact(Versioned):
         if self.provenance.job_id != self.job_id:
             raise ValueError("narration provenance must name its producing job")
         return self
+
+
+class NarrationPlan(Versioned):
+    """An operator decision to narrate, or an explicit choice not to."""
+
+    plan_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    enabled: bool
+    operator_reason: str = Field(min_length=1, max_length=400)
+    campaign_policy_decision: str = Field(min_length=1, max_length=80)
+    language: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    voice_id: EntityId
+    provider: str = Field(min_length=1, max_length=40)
+    provider_version: str = Field(min_length=1, max_length=40)
+    model_id: str = Field(min_length=1, max_length=80)
+    model_license: LicenseState
+    consent_status: Literal["recorded", "missing"]
+    source_script_sha256: str = Field(pattern=_SHA)
+    artifact_id: EntityId | None = None
+    generated_audio_sha256: str | None = Field(default=None, pattern=_SHA)
+    target_duration_us: int = Field(gt=0)
+    actual_duration_us: int | None = Field(default=None, gt=0)
+    sample_rate: int = Field(ge=8000, le=96000)
+    channels: int = Field(ge=1, le=2)
+    loudness_lufs: float | None = None
+    gain_db: float = 0
+    ducking_policy: Literal["none", "duck_source"] = "none"
+    timing_policy: TimingPolicy
+
+    @field_validator("operator_reason", "campaign_policy_decision", "provider", "provider_version", "model_id")
+    @classmethod
+    def plan_text_is_public(cls, value: str) -> str:
+        return _reject_text(value, "narration plan")

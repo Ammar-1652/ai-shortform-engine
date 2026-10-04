@@ -1,0 +1,106 @@
+{
+  "additionalProperties": false,
+  "description": "One catalogued file. Folder membership is not rights evidence.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "display_name": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "download_status": {
+      "enum": [
+        "not_selected_for_round_18",
+        "planned",
+        "provider_unavailable",
+        "acquired",
+        "manual_download_required",
+        "rejected"
+      ],
+      "title": "Download Status",
+      "type": "string"
+    },
+    "mime_type": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "priority": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Priority",
+      "type": "string"
+    },
+    "provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_file_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Provider File Id",
+      "type": "string"
+    },
+    "rights_state": {
+      "enum": [
+        "allowed",
+        "blocked",
+        "needs_operator_confirmation",
+        "needs_policy_clarification",
+        "needs_operator_clarification",
+        "rights_unverified",
+        "unsupported_language",
+        "unsupported_feature"
+      ],
+      "title": "Rights State",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_url": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Source Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "campaign_id",
+    "provider",
+    "provider_file_id",
+    "display_name",
+    "source_url",
+    "mime_type",
+    "size_bytes",
+    "priority",
+    "download_status",
+    "rights_state"
+  ],
+  "title": "CampaignSource",
+  "type": "object"
+}

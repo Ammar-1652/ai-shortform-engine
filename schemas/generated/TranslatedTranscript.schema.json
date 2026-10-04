@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "description": "A translation kept apart from the canonical source words.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Source Language",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "source_text": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Source Text",
+      "type": "string"
+    },
+    "target_language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Target Language",
+      "type": "string"
+    },
+    "text_direction": {
+      "enum": [
+        "ltr",
+        "rtl"
+      ],
+      "title": "Text Direction",
+      "type": "string"
+    },
+    "translated_text": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Translated Text",
+      "type": "string"
+    },
+    "translation_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Translation Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "translation_id",
+    "source_asset_id",
+    "source_language",
+    "target_language",
+    "source_text",
+    "translated_text",
+    "source_sha256",
+    "text_direction"
+  ],
+  "title": "TranslatedTranscript",
+  "type": "object"
+}

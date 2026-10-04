@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "description": "A recorded operator step. Secrets are not fields.",
+  "properties": {
+    "action": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Action",
+      "type": "string"
+    },
+    "action_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Action Id",
+      "type": "string"
+    },
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "error_code": {
+      "default": "none",
+      "maxLength": 80,
+      "title": "Error Code",
+      "type": "string"
+    },
+    "result": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Result",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selected_source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Selected Source Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "action_id",
+    "campaign_id",
+    "action",
+    "result",
+    "created_at"
+  ],
+  "title": "OperatorAction",
+  "type": "object"
+}

@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "description": "One hard rule. Ambiguous rules ask the operator instead of guessing.",
+  "properties": {
+    "description": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "implementation_mode": {
+      "enum": [
+        "external_black_box_ai_tool",
+        "clipforge_native_editor",
+        "human_supplied_asset",
+        "voice_narration_provider"
+      ],
+      "title": "Implementation Mode",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "outcome": {
+      "enum": [
+        "allowed",
+        "blocked",
+        "needs_operator_confirmation",
+        "needs_policy_clarification",
+        "needs_operator_clarification",
+        "rights_unverified",
+        "unsupported_language",
+        "unsupported_feature"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "rule_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rule_id",
+    "name",
+    "description",
+    "implementation_mode",
+    "outcome"
+  ],
+  "title": "CampaignPolicyRule",
+  "type": "object"
+}

@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "One operator campaign. A URL is a public page, not a credential.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "campaign_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Campaign Url"
+    },
+    "default_language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Default Language",
+      "type": "string"
+    },
+    "policy_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "title",
+    "policy_id",
+    "policy_sha256",
+    "default_language"
+  ],
+  "title": "Campaign",
+  "type": "object"
+}
