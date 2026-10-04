@@ -44,6 +44,7 @@ from clipforge.schemas.analytics import (
     PerformanceOutcome,
 )
 from clipforge.schemas.batch import BatchChild, BatchManifest
+from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
 from clipforge.schemas.candidates import (
     CandidateDeduplicationDecision,
     CandidateEvidenceBundle,
@@ -137,6 +138,7 @@ from clipforge.schemas.vision import (
     VisualAnalysisDocument,
     VisualAnalysisSummary,
 )
+from clipforge.schemas.voice import NarrationAudioArtifact, NarrationRequest, VoiceProviderProfile
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     Project,
@@ -239,6 +241,12 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AnalyticsLabelCacheRecord,
     AnalyticsImportProfile,
     ImportValidationSummary,
+    BenchmarkRun,
+    BenchmarkStage,
+    V1ReadinessReport,
+    NarrationAudioArtifact,
+    NarrationRequest,
+    VoiceProviderProfile,
     BatchChild,
     BatchManifest,
     ReviewDecision,

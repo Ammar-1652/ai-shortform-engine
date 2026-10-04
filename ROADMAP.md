@@ -88,10 +88,12 @@ Record observed outcomes for known artifacts and compare editorial patterns. The
 
 ## Round 14 — Analytics operations
 
-Status: in progress on `round-14-analytics-operations`, started from `31946408c5e205311b027e71d2fd292336df84b9`.
+Status: merged on main as `39d09e83b74239632d59c67fc456131419ed31ce`. See `docs/operations/round-14-validation.md`.
 
 Append manual labels, normalize local CSV, JSON, and JSONL exports, and review the evidence on a loopback page. Effective labels feed comparison. The page does not publish or approve. See `docs/architecture/analytics-operations.md`.
 
-## Later — End-to-end benchmark and V1
+## Round 15 — End-to-end benchmark and optional narration
 
-A fixed authorized fixture, a full run from ingest through human approval, and a written list of what is still manual. V1 still does not publish by itself.
+Status: in progress on `round-15-e2e-benchmark-voice-sidecar`, started from `39d09e83b74239632d59c67fc456131419ed31ce`.
+
+Record a local readiness pass across the existing production chain and keep human decisions explicit. VoiceStudio narration is an optional local sidecar and stays off unless the operator enables it. Publishing is still not implemented. See `docs/architecture/end-to-end-v1-benchmark.md`.

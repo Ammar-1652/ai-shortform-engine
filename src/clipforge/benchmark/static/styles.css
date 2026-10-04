@@ -1,0 +1,16 @@
+body {
+  margin: 0;
+  font: 16px/1.45 sans-serif;
+  color: #1c1917;
+  background: #f6f3ee;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+section {
+  margin-top: 16px;
+}

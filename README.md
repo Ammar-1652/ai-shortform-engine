@@ -45,6 +45,8 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
 - `clipforge analytics record` and `clipforge analytics import` append local outcome observations for an artifact that is already in the database. CSV, JSON, and JSONL exports can be normalized with `--profile`. `labels set` appends a manual label. `list`, `show`, `verify`, `compare`, `labels history`, and `dashboard verify` only read. `dashboard` serves a loopback page on `127.0.0.1`. Missing metrics stay missing. Comparisons are descriptive. They do not approve, optimize, or publish.
+- `clipforge benchmark run` records the current local chain. Missing candidate approval, Hero approval, or a passing QA result blocks the record. It does not invent those decisions. `list`, `show`, `verify`, and `readiness` only read.
+- `clipforge voice doctor` passes when VoiceStudio is disabled. `voice generate` needs an explicit script, consent, and a commercial-use license. The default model is not treated as commercially permitted. Generated audio does not approve a Hero.
 
 ## What does not work yet
 
@@ -55,6 +57,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - A review UI on any address other than loopback
 - Envato search or download
 - Platform API clients, viewer tracking, and automatic optimization
+- A required VoiceStudio install. The live narration engine is optional and may be unavailable.
 
 `clipforge --help` only lists commands that run. There is no publish command.
 

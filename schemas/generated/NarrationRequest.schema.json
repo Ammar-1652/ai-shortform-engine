@@ -1,0 +1,367 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "VoiceProviderProfile": {
+      "additionalProperties": false,
+      "description": "Who spoke, and whether that voice may be used. Reference audio is not stored.",
+      "properties": {
+        "clone_permission": {
+          "title": "Clone Permission",
+          "type": "boolean"
+        },
+        "commercial_use": {
+          "enum": [
+            "allowed",
+            "prohibited",
+            "unknown",
+            "cc_by_nc"
+          ],
+          "title": "Commercial Use",
+          "type": "string"
+        },
+        "consent_record_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Consent Record Id",
+          "type": "string"
+        },
+        "engine_id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Engine Id",
+          "type": "string"
+        },
+        "language": {
+          "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+          "title": "Language",
+          "type": "string"
+        },
+        "license_evidence_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "License Evidence Id",
+          "type": "string"
+        },
+        "model_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_license": {
+          "enum": [
+            "allowed",
+            "prohibited",
+            "unknown",
+            "cc_by_nc"
+          ],
+          "title": "Model License",
+          "type": "string"
+        },
+        "model_revision": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Model Revision",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ArtifactProvenance"
+        },
+        "provider_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_version": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "voice_profile_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Voice Profile Id",
+          "type": "string"
+        },
+        "voice_type": {
+          "enum": [
+            "designed",
+            "cloned",
+            "preset"
+          ],
+          "title": "Voice Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_id",
+        "provider_version",
+        "engine_id",
+        "model_id",
+        "model_revision",
+        "language",
+        "voice_profile_id",
+        "voice_type",
+        "consent_record_id",
+        "commercial_use",
+        "model_license",
+        "license_evidence_id",
+        "clone_permission",
+        "provenance"
+      ],
+      "title": "VoiceProviderProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "An explicit script. A raw transcript is not accepted as this script.",
+  "properties": {
+    "candidate_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidate Id"
+    },
+    "channels": {
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "created_by": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Created By",
+      "type": "string"
+    },
+    "duration_tolerance_us": {
+      "default": 100000,
+      "maximum": 2000000,
+      "minimum": 0,
+      "title": "Duration Tolerance Us",
+      "type": "integer"
+    },
+    "hero_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hero Id"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "output_format": {
+      "const": "wav",
+      "default": "wav",
+      "title": "Output Format",
+      "type": "string"
+    },
+    "output_use": {
+      "enum": [
+        "commercial",
+        "internal"
+      ],
+      "title": "Output Use",
+      "type": "string"
+    },
+    "profile": {
+      "$ref": "#/$defs/VoiceProviderProfile"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "provider_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "script_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Script Sha256",
+      "type": "string"
+    },
+    "script_text": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Script Text",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "target_duration_us": {
+      "exclusiveMinimum": 0,
+      "title": "Target Duration Us",
+      "type": "integer"
+    },
+    "timing_policy": {
+      "enum": [
+        "preserve_duration",
+        "bounded_time_stretch",
+        "reject_if_out_of_range"
+      ],
+      "title": "Timing Policy",
+      "type": "string"
+    },
+    "voice_profile_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Voice Profile Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "script_text",
+    "script_sha256",
+    "language",
+    "provider_id",
+    "voice_profile_id",
+    "sample_rate",
+    "channels",
+    "timing_policy",
+    "target_duration_us",
+    "output_use",
+    "profile",
+    "created_by",
+    "provenance"
+  ],
+  "title": "NarrationRequest",
+  "type": "object"
+}

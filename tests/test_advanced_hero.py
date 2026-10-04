@@ -99,6 +99,77 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     assert again.cache_hit is True
     assert backend.calls == 1
     assert fixture.workspace.hero_sidecar().read_bytes() == hero_manifest
+    before = sorted(fixture.work.rglob("render-input.json"))
+    assert before
+    assert all("narration" not in path.read_text(encoding="utf-8") for path in before)
+
+
+def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
+    from clipforge.voice.provider import FakeVoiceProvider
+    from clipforge.voice.service import VoiceError, generate_narration
+    from tests.test_round15 import _narration
+
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    board = review_board(fixture.database, SOURCE_ID, fixture.work)
+    hero = board["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, ids[0]),
+        decision="approved",
+        reviewer_id="ada",
+        notes="kept",
+    )
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+    )
+    plain = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    assert plain.status == "rendered"
+    plain_inputs = list(fixture.work.rglob("render-input.json"))
+    assert plain_inputs
+    assert all("narration" not in path.read_text(encoding="utf-8") for path in plain_inputs)
+    target = max(item.output_end_us for item in plan.windows)
+    request = _narration("Café narration stays optional").model_copy(update={"target_duration_us": target})
+    narration = generate_narration(fixture.database, fixture.work, request, FakeVoiceProvider())
+    with pytest.raises(VoiceError):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=FakeAdvancedRenderBackend(),
+            narration_artifact_id="missing-narration",
+            force=True,
+        )
+    bound = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        narration_artifact_id=narration.artifact_id,
+        force=True,
+    )
+    assert bound.status == "rendered"
+    latest = max(fixture.work.rglob("render-input.json"), key=lambda path: path.stat().st_mtime)
+    rendered = latest.read_text(encoding="utf-8")
+    assert "narration.wav" in rendered
+    assert "/tmp/" not in rendered
+    assert "://" not in rendered
+    with fixture.database.connect() as connection:
+        payload = connection.execute(
+            "SELECT payload_json FROM jobs WHERE kind = 'advanced_hero_render' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    assert payload is not None
+    assert narration.audio_sha256 in str(payload["payload_json"])
 
 
 def test_rights_and_paths_fail_before_a_job(tmp_path: Path) -> None:
