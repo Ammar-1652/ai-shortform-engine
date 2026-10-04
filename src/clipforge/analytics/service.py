@@ -269,8 +269,6 @@ def _verify_review_and_qa(
         raise AnalyticsError("stored QA status no longer matches the QA evidence")
 
 
-
-
 def compare_project(
     database: Database,
     project_id: str,
