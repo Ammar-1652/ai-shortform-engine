@@ -24,6 +24,7 @@ _COUNTED_TABLES = (
     "editorial_feature_snapshots",
     "performance_outcomes",
     "analytics_imports",
+    "editorial_label_sets",
 )
 
 

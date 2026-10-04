@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Analytics review</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>Analytics review</h1>
+    <p id="status">Loading local evidence.</p>
+    <section>
+      <h2>Outcomes</h2>
+      <div id="outcomes"></div>
+    </section>
+    <section>
+      <h2>Selected outcome</h2>
+      <div id="detail"></div>
+    </section>
+    <section>
+      <h2>Labels</h2>
+      <form id="label-form">
+        <label>Reviewer <input id="reviewer" name="reviewer" value="ada"></label>
+        <label>Hook <input id="hook" name="hook" value="unknown"></label>
+        <label>Topics <input id="topics" name="topics" value=""></label>
+        <label>CTA <input id="cta" name="cta" value="unknown"></label>
+        <label>Format <input id="format-tag" name="format-tag" value="unknown"></label>
+        <label>Audience <input id="audience" name="audience" value="unknown"></label>
+        <label>Notes <input id="notes" name="notes" value=""></label>
+        <button type="submit">Save labels</button>
+      </form>
+      <p id="label-message"></p>
+      <div id="label-history"></div>
+    </section>
+    <section>
+      <h2>Comparison</h2>
+      <label>Dimension
+        <select id="dimension">
+          <option>platform</option>
+          <option>hook_type</option>
+          <option>topic_tag</option>
+          <option>cta</option>
+          <option>format_tag</option>
+          <option>audience_tag</option>
+          <option>campaign</option>
+          <option>geography</option>
+        </select>
+      </label>
+      <button id="compare" type="button">Describe cohorts</button>
+      <div id="comparison"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

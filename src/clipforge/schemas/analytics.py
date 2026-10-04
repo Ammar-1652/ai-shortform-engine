@@ -309,10 +309,19 @@ class AnalyticsImportRecord(Versioned):
     import_id: EntityId
     project_id: EntityId
     content_sha256: str = Field(pattern=_SHA)
+    profile_id: EntityId = "clipforge-observation-v1"
+    validation_summary: str = Field(default="", max_length=500)
     outcome_ids: list[EntityId] = Field(min_length=1)
     created_at: AwareDatetime
     created_by: str = Field(min_length=1, max_length=80)
     provenance: ArtifactProvenance
+
+    @field_validator("validation_summary", "created_by")
+    @classmethod
+    def import_text_is_public(cls, value: str) -> str:
+        if value == "":
+            return value
+        return _reject_unsafe_text(value, "import text")
 
 
 class CohortAggregate(Versioned):
@@ -386,6 +395,108 @@ class AnalyticsComparison(Versioned):
         if keys != sorted(keys):
             raise ValueError("cohorts must be ordered by key")
         return self
+
+
+class EditorialLabelSet(Versioned):
+    """One append-only manual label save. Older rows stay in history."""
+
+    label_set_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    artifact_id: EntityId
+    outcome_id: EntityId | None = None
+    snapshot_id: EntityId | None = None
+    previous_label_set_id: EntityId | None = None
+    labels: ManualLabels
+    platform: str | None = Field(default=None, pattern=r"^(unknown|[a-z][a-z0-9_]{0,31})$")
+    campaign_id: EntityId | None = None
+    geography: str | None = Field(default=None, pattern=_GEOGRAPHY)
+    reviewer_id: str = Field(min_length=1, max_length=80)
+    notes: str = Field(default="", max_length=500)
+    confidence: str | None = Field(default=None, pattern=_RATE)
+    created_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @field_validator("reviewer_id", "notes")
+    @classmethod
+    def public_note(cls, value: str) -> str:
+        if value == "":
+            return value
+        return _reject_unsafe_text(value, "label text")
+
+    @model_validator(mode="after")
+    def lineage_is_present(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("label provenance must include the source asset")
+        return self
+
+
+class EditorialLabelAssignment(Versioned):
+    """A request to append one label set. Unknown keys are rejected."""
+
+    project_id: EntityId
+    source_asset_id: EntityId
+    artifact_id: EntityId
+    outcome_id: EntityId | None = None
+    snapshot_id: EntityId | None = None
+    expected_label_set_id: EntityId | None = None
+    expected_artifact_sha256: str | None = Field(default=None, pattern=_SHA)
+    labels: ManualLabels = Field(default_factory=ManualLabels)
+    platform: str | None = Field(default=None, pattern=r"^(unknown|[a-z][a-z0-9_]{0,31})$")
+    campaign_id: EntityId | None = None
+    geography: str | None = Field(default=None, pattern=_GEOGRAPHY)
+    reviewer_id: str = Field(min_length=1, max_length=80)
+    notes: str = Field(default="", max_length=500)
+    confidence: str | None = Field(default=None, pattern=_RATE)
+
+    @field_validator("reviewer_id", "notes")
+    @classmethod
+    def public_note(cls, value: str) -> str:
+        if value == "":
+            return value
+        return _reject_unsafe_text(value, "label text")
+
+
+class EditorialLabelHistory(Versioned):
+    """Oldest to newest label sets for one artifact. The last row is effective."""
+
+    project_id: EntityId
+    artifact_id: EntityId
+    effective_label_set_id: EntityId | None = None
+    entries: list[EditorialLabelSet]
+
+
+class AnalyticsLabelCacheRecord(Versioned):
+    """Sidecar identity for the current label history. Paths are not stored."""
+
+    project_id: EntityId
+    source_asset_id: EntityId
+    artifact_id: EntityId
+    artifact_sha256: str = Field(pattern=_SHA)
+    outcome_id: EntityId | None = None
+    snapshot_id: EntityId | None = None
+    label_set_id: EntityId
+    label_history_sha256: str = Field(pattern=_SHA)
+    import_profile_id: str = Field(default="none", max_length=80)
+    created_at: AwareDatetime
+
+
+class AnalyticsImportProfile(Versioned):
+    """A local parser profile. It does not contact a platform."""
+
+    profile_id: EntityId
+    kind: Literal["native", "tabular"]
+    formats: list[Literal["json", "jsonl", "csv"]] = Field(min_length=1)
+    unknown_columns: Literal["reject", "ignore"] = "reject"
+    columns: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class ImportValidationSummary(Versioned):
+    """What an accepted file contained. The file path is not stored."""
+
+    profile_id: EntityId
+    row_count: int = Field(ge=0)
+    status: Literal["accepted", "replayed"]
 
 
 def decimal_text(value: Decimal) -> str:

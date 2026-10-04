@@ -1,0 +1,96 @@
+{
+  "additionalProperties": false,
+  "description": "Sidecar identity for the current label history. Paths are not stored.",
+  "properties": {
+    "artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Artifact Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "import_profile_id": {
+      "default": "none",
+      "maxLength": 80,
+      "title": "Import Profile Id",
+      "type": "string"
+    },
+    "label_history_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Label History Sha256",
+      "type": "string"
+    },
+    "label_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Label Set Id",
+      "type": "string"
+    },
+    "outcome_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome Id"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Snapshot Id"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "artifact_id",
+    "artifact_sha256",
+    "label_set_id",
+    "label_history_sha256",
+    "created_at"
+  ],
+  "title": "AnalyticsLabelCacheRecord",
+  "type": "object"
+}

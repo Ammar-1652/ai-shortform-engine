@@ -1,6 +1,6 @@
 # Round 13 validation
 
-Date: 2026-10-04. Branch `round-13-performance-analytics`. Started from Round 12 merge `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`. The pull request is a draft and is not merged.
+Date: 2026-10-04. Branch `round-13-performance-analytics`. Started from Round 12 merge `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`. Merged on main as `31946408c5e205311b027e71d2fd292336df84b9`. Round 14 starts from that commit.
 
 ## Scope
 

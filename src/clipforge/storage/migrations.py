@@ -609,11 +609,40 @@ CREATE TABLE analytics_imports (
 """
 
 
+ANALYTICS_LABELS_SQL = """
+ALTER TABLE analytics_imports ADD COLUMN profile_id TEXT NOT NULL DEFAULT 'clipforge-observation-v1';
+
+ALTER TABLE analytics_imports ADD COLUMN validation_summary TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE analytics_imports ADD COLUMN outcome_ids_json TEXT NOT NULL DEFAULT '[]';
+
+CREATE TABLE editorial_label_sets (
+    label_set_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    source_asset_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL,
+    outcome_id TEXT,
+    snapshot_id TEXT,
+    document_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects (project_id),
+    FOREIGN KEY (artifact_id, project_id) REFERENCES artifacts (artifact_id, project_id),
+    FOREIGN KEY (source_asset_id, project_id) REFERENCES source_assets (source_asset_id, project_id),
+    FOREIGN KEY (outcome_id) REFERENCES performance_outcomes (outcome_id),
+    FOREIGN KEY (snapshot_id) REFERENCES editorial_feature_snapshots (snapshot_id)
+);
+
+CREATE INDEX idx_editorial_label_sets_artifact
+    ON editorial_label_sets (project_id, artifact_id, created_at, label_set_id);
+"""
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial", INITIAL_SQL),
     Migration(2, "rights_and_lineage", RIGHTS_AND_LINEAGE_SQL, precheck_rights_and_lineage),
     Migration(3, "project_lineage_integrity", PROJECT_LINEAGE_SQL, precheck_project_lineage),
     Migration(4, "source_manifests", SOURCE_MANIFESTS_SQL),
     Migration(5, "analytics_outcomes", ANALYTICS_SQL),
+    Migration(6, "analytics_labels", ANALYTICS_LABELS_SQL),
 )
 CURRENT_SCHEMA_VERSION = MIGRATIONS[-1].version

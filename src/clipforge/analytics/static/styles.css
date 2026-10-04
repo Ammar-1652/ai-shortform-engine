@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+  font: 16px/1.45 sans-serif;
+  color: #1c1917;
+  background: #f6f3ee;
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+section {
+  margin-top: 28px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e7e0d6;
+}
+
+button {
+  margin-top: 8px;
+}
+
+label {
+  display: block;
+  margin: 8px 0;
+}
+
+.card {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #e7e0d6;
+}
+
+.warning {
+  color: #9a3412;
+}

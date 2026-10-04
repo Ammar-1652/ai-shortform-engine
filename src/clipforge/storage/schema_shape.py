@@ -144,6 +144,21 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "outcome_count",
             "created_at",
             "created_by",
+            "profile_id",
+            "validation_summary",
+            "outcome_ids_json",
+        }
+    ),
+    "editorial_label_sets": frozenset(
+        {
+            "label_set_id",
+            "project_id",
+            "source_asset_id",
+            "artifact_id",
+            "outcome_id",
+            "snapshot_id",
+            "document_json",
+            "created_at",
         }
     ),
 }
@@ -244,6 +259,27 @@ REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
         }
     ),
     "analytics_imports": frozenset({("projects", (("project_id", "project_id"),))}),
+    "editorial_label_sets": frozenset(
+        {
+            ("projects", (("project_id", "project_id"),)),
+            (
+                "artifacts",
+                (
+                    ("artifact_id", "artifact_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+            (
+                "source_assets",
+                (
+                    ("source_asset_id", "source_asset_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+            ("performance_outcomes", (("outcome_id", "outcome_id"),)),
+            ("editorial_feature_snapshots", (("snapshot_id", "snapshot_id"),)),
+        }
+    ),
 }
 
 REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
@@ -284,6 +320,7 @@ REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
     "editorial_feature_snapshots": frozenset({("snapshot_id",)}),
     "performance_outcomes": frozenset({("outcome_id",), ("idempotency_key",)}),
     "analytics_imports": frozenset({("import_id",)}),
+    "editorial_label_sets": frozenset({("label_set_id",)}),
 }
 
 REQUIRED_TABLES = frozenset(REQUIRED_COLUMNS)

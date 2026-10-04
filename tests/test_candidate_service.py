@@ -204,7 +204,7 @@ def test_mine_caches_and_verify_lists(tmp_path: Path, monkeypatch: pytest.Monkey
     doctor = runner.invoke(app, ["candidate", "doctor", "--work-dir", str(work)])
     assert doctor.exit_code == 0
     assert "candidate-mining" in doctor.stdout
-    assert "schema_version: 5" in doctor.stdout
+    assert "schema_version: 6" in doctor.stdout
 
 
 def test_force_keeps_the_previous_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
