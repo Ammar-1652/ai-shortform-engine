@@ -112,6 +112,40 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "probe_json",
         }
     ),
+    "editorial_feature_snapshots": frozenset(
+        {
+            "snapshot_id",
+            "project_id",
+            "source_asset_id",
+            "artifact_id",
+            "artifact_sha256",
+            "document_json",
+            "created_at",
+        }
+    ),
+    "performance_outcomes": frozenset(
+        {
+            "outcome_id",
+            "project_id",
+            "source_asset_id",
+            "artifact_id",
+            "snapshot_id",
+            "idempotency_key",
+            "observed_at",
+            "document_json",
+            "created_at",
+        }
+    ),
+    "analytics_imports": frozenset(
+        {
+            "import_id",
+            "project_id",
+            "content_sha256",
+            "outcome_count",
+            "created_at",
+            "created_by",
+        }
+    ),
 }
 
 REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
@@ -170,6 +204,46 @@ REQUIRED_FOREIGN_KEYS: dict[str, frozenset[ExpectedForeignKey]] = {
             ),
         }
     ),
+    "editorial_feature_snapshots": frozenset(
+        {
+            ("projects", (("project_id", "project_id"),)),
+            (
+                "artifacts",
+                (
+                    ("artifact_id", "artifact_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+            (
+                "source_assets",
+                (
+                    ("source_asset_id", "source_asset_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+        }
+    ),
+    "performance_outcomes": frozenset(
+        {
+            ("projects", (("project_id", "project_id"),)),
+            (
+                "artifacts",
+                (
+                    ("artifact_id", "artifact_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+            (
+                "source_assets",
+                (
+                    ("source_asset_id", "source_asset_id"),
+                    ("project_id", "project_id"),
+                ),
+            ),
+            ("editorial_feature_snapshots", (("snapshot_id", "snapshot_id"),)),
+        }
+    ),
+    "analytics_imports": frozenset({("projects", (("project_id", "project_id"),))}),
 }
 
 REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
@@ -207,6 +281,9 @@ REQUIRED_UNIQUE_KEYS: dict[str, frozenset[ExpectedUniqueKey]] = {
             ("project_id", "content_sha256"),
         }
     ),
+    "editorial_feature_snapshots": frozenset({("snapshot_id",)}),
+    "performance_outcomes": frozenset({("outcome_id",), ("idempotency_key",)}),
+    "analytics_imports": frozenset({("import_id",)}),
 }
 
 REQUIRED_TABLES = frozenset(REQUIRED_COLUMNS)

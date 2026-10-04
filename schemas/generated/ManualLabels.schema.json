@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "Labels a person typed. ``unknown`` means the person did not supply one.",
+  "properties": {
+    "audience_tag": {
+      "default": "unknown",
+      "title": "Audience Tag",
+      "type": "string"
+    },
+    "cta": {
+      "default": "unknown",
+      "title": "Cta",
+      "type": "string"
+    },
+    "format_tag": {
+      "default": "unknown",
+      "title": "Format Tag",
+      "type": "string"
+    },
+    "hook_type": {
+      "default": "unknown",
+      "title": "Hook Type",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "topic_tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Topic Tags",
+      "type": "array"
+    }
+  },
+  "title": "ManualLabels",
+  "type": "object"
+}

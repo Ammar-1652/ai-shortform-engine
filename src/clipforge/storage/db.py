@@ -21,6 +21,9 @@ _COUNTED_TABLES = (
     "artifacts",
     "reviews",
     "source_manifests",
+    "editorial_feature_snapshots",
+    "performance_outcomes",
+    "analytics_imports",
 )
 
 

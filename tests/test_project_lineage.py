@@ -244,8 +244,8 @@ def test_valid_version_2_database_migrates_to_current_schema(tmp_path: Path) -> 
 
     _insert_job_artifact_review(path)
     database = Database(path)
-    assert database.initialize() == 4
-    assert database.initialize() == 4
+    assert database.initialize() == 5
+    assert database.initialize() == 5
     database.health_check()
     with database.connect() as connection:
         record = get_asset_license_record(connection, "lic-a")

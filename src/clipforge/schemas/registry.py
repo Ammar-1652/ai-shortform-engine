@@ -25,6 +25,18 @@ from clipforge.schemas.advanced import (
     ReframingWindow,
     TypographyEvent,
 )
+from clipforge.schemas.analytics import (
+    AnalyticsCohort,
+    AnalyticsComparison,
+    AnalyticsImportRecord,
+    AnalyticsObservationInput,
+    CohortAggregate,
+    EditorialFeatureSnapshot,
+    HumanEvidence,
+    ManualLabels,
+    PerformanceMetrics,
+    PerformanceOutcome,
+)
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.candidates import (
     CandidateDeduplicationDecision,
@@ -205,6 +217,16 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     PolicyDigest,
     QASetDocument,
     QACacheRecord,
+    AnalyticsCohort,
+    AnalyticsComparison,
+    AnalyticsImportRecord,
+    AnalyticsObservationInput,
+    CohortAggregate,
+    EditorialFeatureSnapshot,
+    HumanEvidence,
+    ManualLabels,
+    PerformanceMetrics,
+    PerformanceOutcome,
     BatchChild,
     BatchManifest,
     ReviewDecision,

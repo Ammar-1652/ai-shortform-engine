@@ -44,6 +44,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge qa run SOURCE_ID` writes a `qa_set_json` artifact for the current advanced Hero draft. `list`, `show`, and `verify` only read. `qa gate` succeeds only when technical and campaign QA both pass and still match the current artifact.
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
+- `clipforge analytics record` and `clipforge analytics import` append local outcome observations for an artifact that is already in the database. `list`, `show`, `verify`, and `compare` only read. Missing metrics stay missing. Comparisons are descriptive. They do not approve, optimize, or publish.
 
 ## What does not work yet
 

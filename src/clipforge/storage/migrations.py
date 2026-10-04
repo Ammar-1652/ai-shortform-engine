@@ -561,10 +561,59 @@ CREATE INDEX idx_source_manifests_project ON source_manifests(project_id);
 """
 
 
+ANALYTICS_SQL = """
+CREATE TABLE editorial_feature_snapshots (
+    snapshot_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    source_asset_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL,
+    artifact_sha256 TEXT NOT NULL,
+    document_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects (project_id),
+    FOREIGN KEY (artifact_id, project_id) REFERENCES artifacts (artifact_id, project_id),
+    FOREIGN KEY (source_asset_id, project_id) REFERENCES source_assets (source_asset_id, project_id)
+);
+
+CREATE INDEX idx_editorial_snapshots_artifact
+    ON editorial_feature_snapshots (artifact_id, project_id);
+
+CREATE TABLE performance_outcomes (
+    outcome_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    source_asset_id TEXT NOT NULL,
+    artifact_id TEXT NOT NULL,
+    snapshot_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    observed_at TEXT NOT NULL,
+    document_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects (project_id),
+    FOREIGN KEY (artifact_id, project_id) REFERENCES artifacts (artifact_id, project_id),
+    FOREIGN KEY (source_asset_id, project_id) REFERENCES source_assets (source_asset_id, project_id),
+    FOREIGN KEY (snapshot_id) REFERENCES editorial_feature_snapshots (snapshot_id)
+);
+
+CREATE INDEX idx_performance_outcomes_project
+    ON performance_outcomes (project_id, observed_at, outcome_id);
+
+CREATE TABLE analytics_imports (
+    import_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    content_sha256 TEXT NOT NULL,
+    outcome_count INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects (project_id)
+);
+"""
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial", INITIAL_SQL),
     Migration(2, "rights_and_lineage", RIGHTS_AND_LINEAGE_SQL, precheck_rights_and_lineage),
     Migration(3, "project_lineage_integrity", PROJECT_LINEAGE_SQL, precheck_project_lineage),
     Migration(4, "source_manifests", SOURCE_MANIFESTS_SQL),
+    Migration(5, "analytics_outcomes", ANALYTICS_SQL),
 )
 CURRENT_SCHEMA_VERSION = MIGRATIONS[-1].version
