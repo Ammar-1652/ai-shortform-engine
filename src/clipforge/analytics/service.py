@@ -160,6 +160,7 @@ def show_outcome(database: Database, outcome_id: str) -> str:
     return json.dumps(payload, sort_keys=True)
 
 
+
 def verify_outcome(database: Database, work_root: Path, outcome_id: str) -> str:
     """Re-read one outcome. This does not write."""
     outcome, snapshot = _load_one(database, outcome_id)
@@ -191,9 +192,83 @@ def verify_outcome(database: Database, work_root: Path, outcome_id: str) -> str:
         raise AnalyticsError("idempotency key does not match the stored outcome")
     if str(column_observed["observed_at"]) != outcome.observed_at.isoformat():
         raise AnalyticsError("observed time column does not match the stored outcome")
+    _verify_review_and_qa(database, work_root.resolve(), outcome, artifact)
     file_state = _inspect_media(work_root.resolve(), artifact.uri, outcome.artifact_sha256)
     lines = ["PASS outcome", f"media_evidence: {file_state}"]
     return "\n".join(lines)
+
+
+def _verify_review_and_qa(
+    database: Database,
+    root: Path,
+    outcome: PerformanceOutcome,
+    artifact: ArtifactRow,
+) -> None:
+    """Revalidate immutable review and QA references stored on an outcome."""
+    with database.connect() as connection:
+        if outcome.human.review_id is not None:
+            try:
+                review = get_review(connection, outcome.human.review_id)
+            except StorageError as exc:
+                raise AnalyticsError("stored review reference is missing") from exc
+            if review.project_id != outcome.project_id:
+                raise AnalyticsError("stored review belongs to a different project")
+            if review.artifact_id is not None and review.artifact_id != artifact.artifact_id:
+                raise AnalyticsError("stored review is bound to a different artifact")
+            if (
+                outcome.candidate_id is not None
+                and review.candidate_id is not None
+                and review.candidate_id != outcome.candidate_id
+            ):
+                raise AnalyticsError("stored review is bound to a different candidate")
+            if outcome.human.review_decision != review.decision:
+                raise AnalyticsError("stored review decision no longer matches the review row")
+            if outcome.human.reviewer_id != review.reviewer_id:
+                raise AnalyticsError("stored reviewer no longer matches the review row")
+
+        if outcome.artifact_kind == _ADVANCED and outcome.qa_policy == "not_required":
+            raise AnalyticsError("advanced Hero outcomes require historical or current QA evidence")
+        if outcome.qa_policy == "not_required":
+            return
+        if outcome.qa_artifact_id is None:
+            raise AnalyticsError("stored QA reference is missing")
+        try:
+            qa_row = get_artifact(connection, outcome.qa_artifact_id)
+            qa_job = get_job(connection, qa_row.job_id or "")
+        except StorageError as exc:
+            raise AnalyticsError("stored QA reference is missing") from exc
+        if qa_row.kind != _QA_KIND:
+            raise AnalyticsError("stored QA artifact kind does not match")
+        if qa_row.project_id != outcome.project_id or qa_row.source_asset_id != outcome.source_asset_id:
+            raise AnalyticsError("stored QA artifact lineage does not match the outcome")
+        if qa_job.project_id != outcome.project_id or qa_job.status is not JobStatus.SUCCEEDED:
+            raise AnalyticsError("stored QA producer is not a succeeded job")
+        if outcome.qa_policy == "current":
+            current = find_artifact(connection, outcome.project_id, outcome.source_asset_id, _QA_KIND)
+            if current is None or current.artifact_id != qa_row.artifact_id:
+                raise AnalyticsError("stored QA artifact is no longer current")
+        document = _read_json(root, qa_row.uri)
+    if document is None:
+        if outcome.qa_policy == "current":
+            raise AnalyticsError("current QA evidence file is unavailable")
+        if outcome.qa_status != "unavailable":
+            raise AnalyticsError("historical QA evidence is unavailable but the stored status disagrees")
+        return
+    try:
+        parsed = QASetDocument.model_validate(document)
+    except ValidationError as exc:
+        raise AnalyticsError("QA evidence file does not match the QA set contract") from exc
+    if (
+        parsed.project_id != outcome.project_id
+        or parsed.source_asset_id != outcome.source_asset_id
+        or parsed.target_artifact_id != artifact.artifact_id
+        or parsed.target_artifact_kind != artifact.kind
+    ):
+        raise AnalyticsError("QA evidence is bound to a different artifact")
+    if outcome.qa_status != parsed.status.value:
+        raise AnalyticsError("stored QA status no longer matches the QA evidence")
+
+
 
 
 def compare_project(
