@@ -88,7 +88,7 @@ def compare_outcomes(
             observation_count=0,
             cohorts=[],
             note="insufficient_evidence: no observations matched. Missing metrics were not treated as zero.",
-            provenance=_provenance(created_at, created_by),
+            provenance=_provenance(created_at, created_by, source_asset_ids=[]),
         )
     grouped: dict[str, list[tuple[PerformanceOutcome, EditorialFeatureSnapshot]]] = defaultdict(list)
     for outcome, snapshot in chosen:
@@ -107,7 +107,11 @@ def compare_outcomes(
             "Missing metrics were not treated as zero. "
             "A row with several topic tags is counted in each of those tags."
         ),
-        provenance=_provenance(created_at, created_by),
+        provenance=_provenance(
+            created_at,
+            created_by,
+            source_asset_ids=sorted({outcome.source_asset_id for outcome, _snapshot in chosen}),
+        ),
     )
 
 
@@ -366,11 +370,16 @@ def _json_default(value: object) -> str:
     return value.isoformat() if isinstance(value, datetime) else str(value)
 
 
-def _provenance(created_at: datetime, created_by: str) -> ArtifactProvenance:
+def _provenance(
+    created_at: datetime,
+    created_by: str,
+    *,
+    source_asset_ids: list[str] | tuple[str, ...],
+) -> ArtifactProvenance:
     return ArtifactProvenance(
         created_at=created_at,
         created_by=created_by,
         tool="clipforge-analytics",
         tool_version="0",
-        source_asset_ids=[],
+        source_asset_ids=list(source_asset_ids),
     )
