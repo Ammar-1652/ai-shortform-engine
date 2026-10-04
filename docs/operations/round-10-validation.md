@@ -1,6 +1,6 @@
 # Round 10 validation
 
-Date: 2026-10-04. Branch `round-10-advanced-hero`. Started from Round 9 merge `57980d6848728a7a7e218d58d311e6db49db7219`. The pull request is a draft and is not merged.
+Date: 2026-10-04. Branch `round-10-advanced-hero`. Started from Round 9 merge `57980d6848728a7a7e218d58d311e6db49db7219`. Merged on main as `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`.
 
 ## Scope
 

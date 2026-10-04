@@ -1037,7 +1037,14 @@ def advanced_review_board(database: Database, source_asset_id: str, work_root: P
         "reframing_strategy": document.reframing_strategy,
         "music_allowed": False,
         "drafts": drafts,
+        **_qa_facts(database, source_asset_id, work_root),
     }
+
+
+def _qa_facts(database: Database, source_asset_id: str, work_root: Path) -> dict[str, object]:
+    from clipforge.qa.service import qa_public_facts
+
+    return qa_public_facts(database, source_asset_id, work_root)
 
 
 def advanced_review_card(

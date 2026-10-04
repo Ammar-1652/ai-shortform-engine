@@ -8,11 +8,11 @@ Clipforge turns authorized long-form video into short vertical edits. Round 7 re
 
 Owns how work is requested, recorded, and stopped.
 
-- CLI: `clipforge` (Typer): doctor, projects, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify, preview doctor/render/list/show/verify, review doctor/open/list/decide/verify, hero doctor/align/plan/render/list/show/verify, and hero review doctor/open/list/show/decide/verify.
+- CLI: `clipforge` (Typer): doctor, projects, profiles, schema export, database init, source inspect/ingest/list/show, media prepare/verify, storage status, transcript doctor/run/show/verify, vision doctor/model/analyze/show/verify, candidate doctor/mine/list/show/verify, preview doctor/render/list/show/verify, review doctor/open/list/decide/verify, hero doctor/align/plan/render/list/show/verify, hero review, hero advanced, and qa doctor/run/list/show/verify/gate.
 - Jobs: `JobRecord` and `RenderJob`. Status is an enum. A failed job must carry `error_message`. Media preparation commits `running`, closes the connection, then runs ffmpeg. It does not hold a write transaction across the encode.
 - State: SQLite file, migrations, repositories in `clipforge.storage`. Schema version 4 adds `source_manifests` on top of the version 3 project-bound lineage. No global connection. A file that claims the current version but is missing a table, a required column, a critical foreign key, or a migration row is rejected and not rebuilt.
-- Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Example file: `configs/profiles/organic.json`. The file is not executed.
-- Policies: `ComplianceRule` with severity fixed to `block`. Example: `configs/policies/source-rights.json`.
+- Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Files live in `configs/profiles/`. `profile-organic` and `profile-paid-campaign` use the same core. The files are not executed. See [docs/architecture/profiles-policy-qa.md](docs/architecture/profiles-policy-qa.md).
+- Policies: `ComplianceRule` with severity fixed to `block`. `configs/policies/source-rights.json` and `configs/policies/asset-rights.json` are deterministic evaluators, not plugins.
 - Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.
 
 ### Media plane
@@ -32,11 +32,11 @@ Owns bytes, clocks, and pictures.
 
 Owns judgment that is not a deterministic media tool. Agents orchestrate. They do not replace ffmpeg, the time map, or the compliance gate.
 
-- Campaign interpretation: `CampaignProfile` and policy ids. No interpreter yet.
+- Campaign interpretation: `CampaignProfile` selects policy ids. The policy engine evaluates those ids with a fixed Python registry.
 - Candidate discovery: `clipforge candidate mine` writes one `CandidateMiningDocument` per source. Each selected `CandidateClip` has one source range, transcript evidence, and visual evidence. See [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md).
 - Scoring: `creative_score` is the quality heuristic in `[0, 1]`. `edit_opportunity_score` is stored beside it and is not added in. Neither score is compliance or a virality probability.
 - Edit planning: `EditPlan` for stage `rough` or `hero`, bound to a time-map digest. The map must have a positive output duration. `Scene` and `FaceObservation` provenance must include their own `source_asset_id`. A face is still not a speaker.
-- QA assistance: `QAResult` aggregates checks. The status cannot be stronger than the worst check.
+- QA assistance: `QASetDocument` binds a technical `QAResult` and a campaign `QAResult` to the current advanced Hero artifact. The aggregate status cannot be stronger than the worst check. `clipforge qa gate` is the deterministic prerequisite for any later publishing work.
 
 ### Asset plane
 

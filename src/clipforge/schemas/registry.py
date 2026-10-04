@@ -102,6 +102,7 @@ from clipforge.schemas.preview import (
 )
 from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 from clipforge.schemas.vision import (
@@ -200,6 +201,9 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     RenderArtifact,
     QACheck,
     QAResult,
+    PolicyDigest,
+    QASetDocument,
+    QACacheRecord,
     ReviewDecision,
     JobRecord,
     ArtifactProvenance,

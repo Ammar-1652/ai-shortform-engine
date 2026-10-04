@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "description": "One resolved policy and its canonical hash. The path is not stored.",
+  "properties": {
+    "policy_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "policy_id",
+    "sha256"
+  ],
+  "title": "PolicyDigest",
+  "type": "object"
+}

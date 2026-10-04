@@ -163,6 +163,25 @@ class SourceWorkspace:
     def advanced_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "plan.json")
 
+    def qa_root(self) -> Path:
+        return _join(self.source_root, "qa")
+
+    def qa_run_dir(self, qa_set_id: str) -> Path:
+        return _join(self.qa_root(), "runs", _segment(qa_set_id))
+
+    def qa_sidecar(self) -> Path:
+        return self.metadata_file("qa-set.recipe.json")
+
+    def qa_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "qa.lock")
+
+    def prepare_qa_file(self, path: Path) -> Path:
+        root = self.root.resolve()
+        _mkdir_contained(root, self.qa_root())
+        _mkdir_contained(root, _join(self.qa_root(), "runs"))
+        _mkdir_contained(root, path.parent)
+        return path
+
     def prepare_advanced_file(self, path: Path) -> Path:
         root = self.root.resolve()
         _mkdir_contained(root, self.advanced_root())
@@ -374,6 +393,39 @@ def advanced_hero_lock(workspace: SourceWorkspace) -> Iterator[Path]:
         "Clipforge refused to start a second advanced Hero edit."
     )
     with _flock(workspace, workspace.advanced_lock_path(), exclusive=True, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def advanced_read_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Share the advanced Hero lock while QA reads the current advanced set."""
+    busy = (
+        f"another advanced Hero edit is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the advanced set while it can be replaced."
+    )
+    with _flock(workspace, workspace.advanced_lock_path(), exclusive=False, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def hero_read_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Share the Hero lock while QA reads the current Hero draft."""
+    busy = (
+        f"another Hero draft is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the Hero set while it can be replaced."
+    )
+    with _flock(workspace, workspace.hero_lock_path(), exclusive=False, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def qa_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source QA lock until this context exits."""
+    busy = (
+        f"another QA run is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second QA run."
+    )
+    with _flock(workspace, workspace.qa_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

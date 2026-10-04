@@ -27,6 +27,7 @@ from clipforge.storage.repository import (
     list_source_assets,
     update_artifact,
     update_job,
+    update_project_profile,
     update_source_manifest_stats,
 )
 
@@ -58,5 +59,6 @@ __all__ = [
     "list_source_assets",
     "update_artifact",
     "update_job",
+    "update_project_profile",
     "update_source_manifest_stats",
 ]

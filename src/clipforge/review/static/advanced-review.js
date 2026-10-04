@@ -19,6 +19,11 @@ function renderBoard(board) {
   line(summary, "source " + board.source_asset_id);
   line(summary, "project " + board.project_id);
   line(summary, "reframing " + board.reframing_strategy);
+  line(summary, "profile " + (board.profile_id || "none"));
+  line(summary, "policies " + ((board.policy_ids || []).join(" ") || "none"));
+  line(summary, "qa " + (board.qa_status || "none"));
+  line(summary, "technical " + (board.technical_status || "none"));
+  line(summary, "campaign " + (board.campaign_status || "none"));
   if (!board.drafts || board.drafts.length === 0) {
     line(drafts, "No current advanced Hero drafts are stored.");
     return;

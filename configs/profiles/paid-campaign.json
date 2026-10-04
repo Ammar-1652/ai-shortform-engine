@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "profile-paid-campaign",
+  "name": "Paid campaign",
+  "mode": "paid_campaign",
+  "objective": "Use the same production core with a stricter rights gate before a human decision.",
+  "policy_ids": ["policy-asset-rights", "policy-source-rights"]
+}

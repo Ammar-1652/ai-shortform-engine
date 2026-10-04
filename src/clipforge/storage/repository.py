@@ -45,6 +45,16 @@ def list_projects(connection: sqlite3.Connection) -> list[Project]:
     return [_project_from_row(row) for row in rows]
 
 
+def update_project_profile(connection: sqlite3.Connection, project_id: str, profile_id: str | None) -> Project:
+    """Assign a profile id. This does not change the schema or any other column."""
+    current = get_project(connection, project_id)
+    connection.execute(
+        "UPDATE projects SET profile_id = ? WHERE project_id = ?",
+        (profile_id, project_id),
+    )
+    return current.model_copy(update={"profile_id": profile_id})
+
+
 def get_project(connection: sqlite3.Connection, project_id: str) -> Project:
     row = connection.execute(
         "SELECT * FROM projects WHERE project_id = ?",

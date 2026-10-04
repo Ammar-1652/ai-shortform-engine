@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "rule_id": "policy-asset-rights",
+  "name": "Referenced asset rights required",
+  "description": "Every non-source asset in the current advanced plan needs a cleared local license and a matching file hash.",
+  "severity": "block"
+}
