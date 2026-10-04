@@ -20,7 +20,7 @@ jobs:
       - name: mypy
         run: uv run mypy
       - name: pytest
-        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not review and not hero and not model_smoke and not analytics"
+        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not review and not hero and not model_smoke and not analytics and not benchmark"
       - name: Schema check
         run: uv run clipforge schema check
       - name: Doctor
@@ -155,6 +155,26 @@ jobs:
         run: uv sync --frozen --all-groups
       - name: Analytics page tests
         run: uv run pytest -m analytics
+
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install FFmpeg and a system browser
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          if ! command -v google-chrome && ! command -v google-chrome-stable && ! command -v chromium && ! command -v chromium-browser; then
+            sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          fi
+      - name: Install Python dependencies
+        run: uv sync --frozen --all-groups
+      - name: Benchmark and narration tests
+        run: uv run pytest -m benchmark
 
   hero:
     runs-on: ubuntu-latest

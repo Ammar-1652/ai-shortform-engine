@@ -1,6 +1,6 @@
 # Round 14 validation
 
-Date: 2026-10-04. Branch `round-14-analytics-operations`. Started from Round 13 merge `31946408c5e205311b027e71d2fd292336df84b9`. The pull request is a draft and is not merged.
+Date: 2026-10-04. Branch `round-14-analytics-operations`. Started from Round 13 merge `31946408c5e205311b027e71d2fd292336df84b9`. Merged on main as `39d09e83b74239632d59c67fc456131419ed31ce`. Round 15 starts from that commit.
 
 ## Scope
 

@@ -159,6 +159,7 @@ def render_advanced_drafts(
     profile: AdvancedHeroProfile | None = None,
     backend: AdvancedRenderBackend | None = None,
     created_by: str | None = None,
+    narration_artifact_id: str | None = None,
 ) -> AdvancedRenderResult:
     """Render stored advanced plans. A missing approval writes nothing."""
     root = work_root.resolve()
@@ -187,7 +188,11 @@ def render_advanced_drafts(
             return AdvancedRenderResult(
                 "noop", source_asset_id, None, None, 0, None, None, False, perf_counter() - started
             )
-        if not force and _cache_ready(database, inputs.pair.workspace, hero, chosen, root):
+        if (
+            narration_artifact_id is None
+            and not force
+            and _cache_ready(database, inputs.pair.workspace, hero, chosen, root)
+        ):
             current = _current_manifest(inputs.pair.workspace)
             return AdvancedRenderResult(
                 "cached",
@@ -204,8 +209,23 @@ def render_advanced_drafts(
             context = _context(database, source_asset_id, candidate_id, root)
             _require_plan_binding(plan, context)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
+        narration: tuple[str, Path] | None = None
+        if narration_artifact_id is not None:
+            from clipforge.voice.service import require_bound_narration
+
+            target = chosen[0][1].windows[-1].output_end_us if chosen[0][1].windows else 1
+            narration = require_bound_narration(
+                database,
+                root,
+                narration_artifact_id,
+                project_id=inputs.pair.source.project_id,
+                source_asset_id=source,
+                target_duration_us=target,
+            )
         now = datetime.now(UTC)
         job = _running_job(inputs.pair.source.project_id, source, len(chosen), now, _actor(created_by))
+        if narration is not None:
+            job = job.model_copy(update={"payload": {**job.payload, "narration_sha256": narration[0]}})
         with database.transaction() as connection:
             insert_job(connection, job)
         advanced_set_id = str(uuid.uuid4())
@@ -226,6 +246,7 @@ def render_advanced_drafts(
                 root,
                 run_dir,
                 source_asset_id,
+                narration,
             )
             digest = sha256_file(manifest)
             record = _cache_record(document, job.job_id, digest, manifest.stat().st_size)
@@ -350,6 +371,7 @@ def _render_run(
     root: Path,
     run_dir: Path,
     source_asset_id: str,
+    narration: tuple[str, Path] | None = None,
 ) -> tuple[AdvancedHeroDraftSetDocument, Path]:
     if not isinstance(hero, CurrentHero):
         raise MediaError("current Hero draft is missing")
@@ -364,6 +386,9 @@ def _render_run(
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
         staged = {item.asset_id: _staged_name(item) for item in plan.assets}
+        if narration is not None:
+            _link(narration[1], staging / "narration.wav", root)
+            staged["narration"] = "narration.wav"
         for binding in plan.assets:
             catalog_file = _asset_path(workspace, binding.asset_id, root)
             _link(catalog_file, staging / staged[binding.asset_id], root)

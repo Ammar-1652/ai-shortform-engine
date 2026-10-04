@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from clipforge import __version__
 from clipforge.cli.analytics_cmd import analytics_app
 from clipforge.cli.batch_cmd import batch_app
+from clipforge.cli.benchmark_cmd import benchmark_app
 from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.hero_cmd import hero_app
 from clipforge.cli.job_cmd import job_app
@@ -26,6 +27,7 @@ from clipforge.cli.source import source_app
 from clipforge.cli.storage_cmd import storage_app
 from clipforge.cli.transcript_cmd import transcript_app
 from clipforge.cli.vision_cmd import vision_app
+from clipforge.cli.voice_cmd import voice_app
 from clipforge.doctor import exit_code, format_report, run_checks
 from clipforge.errors import ClipforgeError
 from clipforge.paths import find_repo_root, resolve_db_path
@@ -58,6 +60,8 @@ app.add_typer(qa_app, name="qa")
 app.add_typer(job_app, name="job")
 app.add_typer(batch_app, name="batch")
 app.add_typer(analytics_app, name="analytics")
+app.add_typer(benchmark_app, name="benchmark")
+app.add_typer(voice_app, name="voice")
 
 
 def _version_callback(value: bool) -> None:

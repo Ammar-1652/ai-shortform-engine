@@ -1,0 +1,178 @@
+"""Local narration providers. The live provider is off unless the operator enables it."""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Protocol
+from urllib.parse import urlsplit
+
+from clipforge.schemas.voice import NarrationRequest
+from clipforge.voice.audio import VoiceError, wav_bytes
+
+_LOOPBACK = "127.0.0.1"
+
+
+class VoiceProvider(Protocol):
+    """A narration engine. Implementations must not approve a Hero."""
+
+    def doctor(self) -> str:
+        """Report whether this provider is required and reachable."""
+
+    def capabilities(self) -> dict[str, str]:
+        """Return a small public description. No waveforms."""
+
+    def generate(self, request: NarrationRequest) -> bytes:
+        """Return WAV bytes. This does not write a Clipforge artifact."""
+
+    def verify_audio(self, payload: bytes) -> None:
+        """Reject audio that is empty or not PCM WAV."""
+
+
+class FakeVoiceProvider:
+    """Deterministic silence. Tests use this. It does not open a network connection."""
+
+    provider_id = "fake"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def doctor(self) -> str:
+        return "PASS voice: fake provider"
+
+    def capabilities(self) -> dict[str, str]:
+        return {"provider": "fake", "format": "wav", "network": "none"}
+
+    def generate(self, request: NarrationRequest) -> bytes:
+        self.calls += 1
+        return wav_bytes(request.target_duration_us, request.sample_rate, request.channels)
+
+    def verify_audio(self, payload: bytes) -> None:
+        from clipforge.voice.audio import parse_wav
+
+        parse_wav(payload)
+
+
+class VoiceStudioProvider:
+    """HTTP client for a local VoiceStudio process. Models are not downloaded."""
+
+    provider_id = "voicestudio"
+
+    def __init__(
+        self,
+        *,
+        url: str = "http://127.0.0.1:3900",
+        enabled: bool = False,
+        timeout_s: float = 300,
+        allow_remote: bool = False,
+    ) -> None:
+        self.url = url.rstrip("/")
+        self.enabled = enabled
+        self.timeout_s = timeout_s
+        self.allow_remote = allow_remote
+        self.calls = 0
+
+    def doctor(self) -> str:
+        if not self.enabled:
+            return "PASS voice: provider disabled"
+        self._require_endpoint()
+        document = self._get("/.well-known/voicestudio-speech")
+        protocol = document.get("protocol") if isinstance(document, dict) else None
+        if protocol != "voicestudio.speech.v1":
+            raise VoiceError("VoiceStudio discovery protocol was not recognized")
+        return "PASS voice: local endpoint answered"
+
+    def capabilities(self) -> dict[str, str]:
+        if not self.enabled:
+            return {"provider": "voicestudio", "enabled": "0", "network": "none"}
+        self.doctor()
+        return {"provider": "voicestudio", "enabled": "1", "protocol": "voicestudio.speech.v1"}
+
+    def generate(self, request: NarrationRequest) -> bytes:
+        if not self.enabled:
+            raise VoiceError("VoiceStudio is disabled")
+        self._require_endpoint()
+        self.calls += 1
+        body = json.dumps(
+            {
+                "model": request.profile.engine_id,
+                "voice": request.voice_profile_id,
+                "input": request.script_text,
+                "response_format": "wav",
+            }
+        ).encode("utf-8")
+        payload, content_type = self._post("/v1/audio/speech", body)
+        if payload.startswith(b"{") or "json" in content_type:
+            raise VoiceError("VoiceStudio returned an error document instead of audio")
+        self.verify_audio(payload)
+        return payload
+
+    def verify_audio(self, payload: bytes) -> None:
+        from clipforge.voice.audio import parse_wav
+
+        if not payload:
+            raise VoiceError("narration audio is empty")
+        parse_wav(payload)
+
+    def _require_endpoint(self) -> None:
+        if self.timeout_s <= 0 or self.timeout_s > 3600:
+            raise VoiceError("VoiceStudio timeout is not usable")
+        parts = urlsplit(self.url)
+        host = parts.hostname or ""
+        if parts.username or parts.password or parts.query or "@" in self.url:
+            raise VoiceError("VoiceStudio endpoint must not carry a secret")
+        if host == _LOOPBACK and parts.scheme == "http":
+            return
+        if self.allow_remote and parts.scheme == "https" and host and host != _LOOPBACK:
+            return
+        raise VoiceError("VoiceStudio endpoint must be loopback HTTP or an explicitly allowed HTTPS host")
+
+    def _get(self, path: str) -> object:
+        raw, _content_type = self._request("GET", path, None)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise VoiceError("VoiceStudio discovery document was not JSON") from exc
+
+    def _post(self, path: str, body: bytes) -> tuple[bytes, str]:
+        return self._request("POST", path, body)
+
+    def _request(self, method: str, path: str, body: bytes | None) -> tuple[bytes, str]:
+        import http.client
+
+        parts = urlsplit(self.url)
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        connection: http.client.HTTPConnection
+        if parts.scheme == "https":
+            connection = http.client.HTTPSConnection(parts.hostname or "", port, timeout=self.timeout_s)
+        else:
+            connection = http.client.HTTPConnection(parts.hostname or "", port, timeout=self.timeout_s)
+        try:
+            headers = {"Accept": "application/json, audio/wav"}
+            if body is not None:
+                headers["Content-Type"] = "application/json"
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            payload = response.read()
+            content_type = response.headers.get("Content-Type", "")
+        except TimeoutError as exc:
+            raise VoiceError("VoiceStudio timed out") from exc
+        except OSError as exc:
+            raise VoiceError("VoiceStudio did not answer") from exc
+        finally:
+            connection.close()
+        if response.status >= 400:
+            raise VoiceError("VoiceStudio rejected the request")
+        return payload, content_type
+
+
+def provider_from_env() -> VoiceStudioProvider:
+    """Read the operator's local endpoint. The default is disabled."""
+    enabled = os.environ.get("CLIPFORGE_VOICESTUDIO_ENABLED", "0") == "1"
+    url = os.environ.get("CLIPFORGE_VOICESTUDIO_URL", "http://127.0.0.1:3900")
+    try:
+        timeout = float(os.environ.get("CLIPFORGE_VOICESTUDIO_TIMEOUT_S", "300"))
+    except ValueError as exc:
+        raise VoiceError("VoiceStudio timeout is not a number") from exc
+    allow_remote = os.environ.get("CLIPFORGE_VOICESTUDIO_ALLOW_REMOTE", "0") == "1"
+    return VoiceStudioProvider(url=url, enabled=enabled, timeout_s=timeout, allow_remote=allow_remote)
