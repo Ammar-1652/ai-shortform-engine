@@ -82,6 +82,8 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
         "hero_review",
         "analytics",
         "publish_export",
+        "platform_dry_run",
+        "platform_submit",
     ]
     assert first.fixture_kind == "deterministic_synthetic"
     assert first.readiness == "blocked"

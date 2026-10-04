@@ -47,6 +47,8 @@ class ProcessRunner:
         log_path: Path | None = None,
         cancel_event: threading.Event | None = None,
         check: bool = True,
+        env: dict[str, str] | None = None,
+        reap_group: bool = False,
     ) -> ProcessResult:
         if not argv or any(not isinstance(part, str) or part == "" for part in argv):
             raise MediaError("refusing to run a command with an empty argument. The shell was not used.")
@@ -65,6 +67,7 @@ class ProcessRunner:
                 stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
                 start_new_session=True,
+                env=env,
             )
             self._active = process
             capture = _Capture()
@@ -98,6 +101,10 @@ class ProcessRunner:
             except KeyboardInterrupt:
                 terminate_process(process)
                 raise
+            if reap_group and process.poll() is not None:
+                # The leader is still a zombie, so its pid cannot have been reused.
+                # Signal the group before wait() so a leftover browser cannot stay up.
+                _signal_group(process.pid)
             stdout_thread.join(timeout=2)
             stderr_thread.join(timeout=2)
             returncode = process.wait(timeout=5)
@@ -206,15 +213,31 @@ def _read_stderr(stream: BinaryIO, capture: _Capture, log_handle: TextIO | None)
 def _open_log(log_path: Path | None) -> TextIO | None:
     if log_path is None:
         return None
+    if log_path.is_symlink() or log_path.parent.is_symlink():
+        raise MediaError(f"renderer log path is a symlink: {log_path.name}")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     return log_path.open("a", encoding="utf-8")
 
 
+def _signal_group(pid: int) -> None:
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+
+
 def _failure_message(result: ProcessResult) -> str:
     detail = " ".join(result.stderr_tail.strip().split())
-    if len(detail) > 300:
-        detail = detail[:300] + "..."
+    limit = 1500 if result.argv and Path(result.argv[0]).name == "node" else 300
+    if len(detail) > limit:
+        detail = detail[:limit] + "..."
     if not detail:
         detail = "no stderr was captured"
     location = str(result.log_path) if result.log_path is not None else "not requested"
-    return f"{Path(result.argv[0]).name} exited {result.returncode}. {detail} The log is {location}."
+    name = Path(result.argv[0]).name if result.argv else "process"
+    label = "renderer log" if name == "node" else "stderr"
+    return f"{name} exited {result.returncode}. {label}: {detail} The log is {location}."

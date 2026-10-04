@@ -48,13 +48,14 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge benchmark run` records the current local chain, including a labeled synthetic analytics fixture and a `publish_export` stage. Missing candidate approval, Hero approval, a passing QA result, or a verified local package blocks the record. It does not invent those decisions. `list`, `show`, `verify`, and `readiness` only read. Readiness separates local delivery from platform publishing.
 - `clipforge voice doctor` passes when VoiceStudio is disabled. `voice generate` needs an explicit script, consent, and a commercial-use license. The default model is not treated as commercially permitted. Generated audio does not approve a Hero. Nothing downloads a model unless `--allow-model-download` is passed on a command that already had that flag.
 - `clipforge publish doctor` reports the local exporter, the work-root path rule, and ffprobe. `publish plan` is a read-only preflight. `publish export SOURCE_ID CANDIDATE_ID` copies the verified Advanced Hero MP4 into `deliveries/<delivery_id>/` after preflight. It does not re-render. `list`, `show`, and `verify` only read. `recover` fails a stale running export. `resume` starts a new attempt only when the previous package is not a verified success. `--force` keeps the previous directory. `--destination` other than `local` fails because external platform publishing is not implemented.
+- `clipforge platform doctor` and `clipforge platform capabilities` describe the optional adapter. `publish dry-run` checks a target against the verified local package and does not open a socket. `publish submit` does not upload unless `CLIPFORGE_PLATFORM_LIVE_SMOKE=1` and a real adapter are both configured. No production adapter is registered. `status` does not submit again. `cancel` is not success. Output keeps `local delivery` separate from `external platform`.
 
 ## What does not work yet
 
 - Full-source WhisperX transcription
 - Active-speaker detection, face recognition, and dynamic reframing
 - Music. Local B-roll and SFX are supported. Music is prohibited.
-- External platform publishing. Local delivery export is implemented. Upload still needs a future adapter. There is no TikTok, Instagram, or YouTube client.
+- External platform publishing. The adapter interface and dry-run path exist. Upload is `not_configured` until an operator sets `CLIPFORGE_PLATFORM_LIVE_SMOKE=1` and a real adapter. There is no TikTok, Instagram, or YouTube client. Credentials are not stored in SQLite or artifacts.
 - A review UI on any address other than loopback
 - Envato search or download
 - Platform API clients, viewer tracking, and automatic optimization

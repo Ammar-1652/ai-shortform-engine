@@ -41,6 +41,7 @@ def benchmark_run(
     candidate_id: Annotated[str | None, typer.Option("--candidate-id")] = None,
     voice_provider: Annotated[str, typer.Option("--voice-provider")] = "none",
     force: Annotated[bool, typer.Option("--force")] = False,
+    execute: Annotated[bool, typer.Option("--execute")] = False,
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
@@ -54,6 +55,7 @@ def benchmark_run(
             candidate_id=candidate_id,
             voice_provider=voice_provider,
             force=force,
+            execute=execute,
         )
     except (ClipforgeError, ValidationError, OSError) as exc:
         _fail(exc)

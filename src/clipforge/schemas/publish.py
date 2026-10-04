@@ -190,6 +190,182 @@ class PublishCacheRecord(Versioned):
         return self
 
 
+_SECRET = ("bearer ", "password=", "token=", "api_key", "authorization:", "cookie=", "secret=")
+_MARKUP = ("<", ">", "javascript:", "onerror=", "onload=")
+PublishState = Literal[
+    "planned",
+    "dry_run_passed",
+    "queued",
+    "uploading",
+    "published",
+    "failed",
+    "cancelled",
+    "unknown",
+]
+
+
+def _plain(value: str, *, label: str) -> str:
+    stripped = value.strip()
+    if stripped != value or not stripped:
+        raise ValueError(f"{label} must not be blank or padded")
+    lowered = stripped.lower()
+    if any(token in lowered for token in _SECRET) or any(token in lowered for token in _MARKUP):
+        raise ValueError(f"{label} contains markup or a secret-like token")
+    if "\\" in stripped or ".." in stripped.split("/") or stripped.startswith("/") or "://" in lowered:
+        raise ValueError(f"{label} contains a path or URL")
+    return stripped
+
+
+class PublishTarget(Versioned):
+    """Where a verified local package would be offered. This stores no credentials."""
+
+    platform: str = Field(min_length=1, max_length=40)
+    account_label: str = Field(min_length=1, max_length=80)
+    destination_id: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=2000)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    campaign_id: EntityId
+    privacy: Literal["public", "unlisted", "private"] = "public"
+    scheduled_at: AwareDatetime | None = None
+    delivery_id: EntityId
+    manifest_sha256: str = Field(pattern=_SHA)
+
+    @field_validator("platform", "account_label", "destination_id", "title", "description")
+    @classmethod
+    def text_is_plain(cls, value: str) -> str:
+        return _plain(value, label="publish target")
+
+    @field_validator("tags")
+    @classmethod
+    def tags_are_plain(cls, values: list[str]) -> list[str]:
+        return [_plain(item, label="tag") for item in values]
+
+    @model_validator(mode="after")
+    def destination_is_local(self) -> Self:
+        if not self.destination_id.replace(".", "").replace("_", "").replace("-", "").isalnum():
+            raise ValueError("destination id is malformed")
+        return self
+
+
+class PublishRequest(Versioned):
+    """One request bound to a verified local delivery. Secrets are not fields."""
+
+    request_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    candidate_id: EntityId
+    delivery_id: EntityId
+    manifest_sha256: str = Field(pattern=_SHA)
+    advanced_artifact_sha256: str = Field(pattern=_SHA)
+    qa_set_id: EntityId
+    qa_set_sha256: str = Field(pattern=_SHA)
+    approval_review_id: EntityId
+    campaign_profile_id: EntityId
+    idempotency_key: EntityId
+    created_at: AwareDatetime
+    target: PublishTarget
+
+    @model_validator(mode="after")
+    def target_matches_delivery(self) -> Self:
+        if self.target.delivery_id != self.delivery_id or self.target.manifest_sha256 != self.manifest_sha256:
+            raise ValueError("publish target does not match the local delivery")
+        if self.target.campaign_id != self.campaign_profile_id:
+            raise ValueError("publish target campaign does not match the request")
+        return self
+
+
+class PublishReceipt(Versioned):
+    """Safe provenance returned by a provider. Credentials are rejected."""
+
+    platform: str = Field(min_length=1, max_length=40)
+    remote_item_id: str | None = Field(default=None, max_length=80)
+    public_url: str | None = Field(default=None, max_length=300)
+    manifest_sha256: str = Field(pattern=_SHA)
+    submitted_at: AwareDatetime
+    provider_version: str = Field(min_length=1, max_length=40)
+    status: Literal["published"]
+
+    @field_validator("platform", "remote_item_id", "provider_version")
+    @classmethod
+    def receipt_text_is_plain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _plain(value, label="publish receipt")
+
+    @field_validator("public_url")
+    @classmethod
+    def url_is_public(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        lowered = value.lower()
+        if any(token in lowered for token in _SECRET) or any(token in lowered for token in _MARKUP):
+            raise ValueError("publish receipt contains a secret-like token")
+        if not lowered.startswith("https://"):
+            raise ValueError("publish receipt URL must be https")
+        if "\\" in value or "/tmp/" in lowered or "/home/" in lowered:
+            raise ValueError("publish receipt URL is not public")
+        return value
+
+
+class PublishAttempt(Versioned):
+    """One local record of a dry run or upload attempt."""
+
+    attempt_id: EntityId
+    request: PublishRequest
+    state: PublishState
+    provider_version: str = Field(min_length=1, max_length=40)
+    error_category: str = Field(default="none", max_length=40)
+    receipt: PublishReceipt | None = None
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def published_has_a_receipt(self) -> Self:
+        if self.updated_at < self.created_at:
+            raise ValueError("publish attempt was updated before it was created")
+        if self.state == "published":
+            if self.receipt is None or self.receipt.manifest_sha256 != self.request.manifest_sha256:
+                raise ValueError("a published attempt requires a verified receipt")
+        elif self.receipt is not None:
+            raise ValueError("only a published attempt stores a receipt")
+        _plain(self.provider_version, label="provider")
+        _plain(self.error_category, label="error")
+        return self
+
+
+class PublishReadiness(Versioned):
+    """Local delivery and external upload are separate."""
+
+    project_id: EntityId
+    source_asset_id: EntityId
+    technical: Readiness
+    editorial: Readiness
+    rights: Readiness
+    qa: Readiness
+    local_delivery: Readiness
+    platform_adapter: Literal["passed", "unavailable"]
+    platform_dry_run: Readiness
+    external_upload: Literal["not_configured", "not_run", "passed", "failed", "blocked", "unavailable"]
+    real_source_verified: Readiness
+    voicestudio: Readiness
+    overall: Literal[
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable",
+        "blocked_for_external_publish",
+    ]
+    reason: str = Field(min_length=1, max_length=160)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_is_plain(cls, value: str) -> str:
+        return _plain(value, label="readiness")
+
+
 class PublishReadinessReport(Versioned):
     """Local delivery readiness. Platform publishing stays not implemented."""
 

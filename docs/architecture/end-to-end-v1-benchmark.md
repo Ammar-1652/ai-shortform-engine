@@ -22,6 +22,10 @@ The recorded order is:
 14. human Hero review
 15. analytics, using a labeled synthetic fixture when the run is synthetic
 16. local delivery export (`publish_export`)
+17. optional platform dry-run
+18. optional platform submit, which stays `not_run` unless live smoke is enabled
+
+`--execute` may run a missing prepare stage and may export the local package when preflight passes. Existing artifacts are `recorded_evidence`. The benchmark does not insert a human approval and does not download a model. Platform dry-run uses the local dry-run publisher only after a verified package exists, and platform submit does not contact a remote platform. A synthetic run is marked `synthetic_only`. Without an executed real-source delivery, readiness stays `real_source_verified: unavailable` and `no authorized source supplied`.
 
 Each stage stores status, timestamps, elapsed milliseconds from a monotonic clock, cache hit, artifact id, artifact hash, error category, delivery id, delivery manifest hash, readiness classification, and whether a person must act. A required stage that is `failed`, `blocked`, or `unavailable` stops the later required stages. A synthetic run writes `benchmarks/fixtures/synthetic-analytics.json` and marks analytics `synthetic_fixture`. That file is not a viewer metric. A real run with no local outcomes leaves analytics `not_run`.
 

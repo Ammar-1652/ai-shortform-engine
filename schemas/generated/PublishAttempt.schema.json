@@ -1,0 +1,369 @@
+{
+  "$defs": {
+    "PublishReceipt": {
+      "additionalProperties": false,
+      "description": "Safe provenance returned by a provider. Credentials are rejected.",
+      "properties": {
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "platform": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Platform",
+          "type": "string"
+        },
+        "provider_version": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "public_url": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public Url"
+        },
+        "remote_item_id": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remote Item Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "const": "published",
+          "title": "Status",
+          "type": "string"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "manifest_sha256",
+        "submitted_at",
+        "provider_version",
+        "status"
+      ],
+      "title": "PublishReceipt",
+      "type": "object"
+    },
+    "PublishRequest": {
+      "additionalProperties": false,
+      "description": "One request bound to a verified local delivery. Secrets are not fields.",
+      "properties": {
+        "advanced_artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Advanced Artifact Sha256",
+          "type": "string"
+        },
+        "approval_review_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Approval Review Id",
+          "type": "string"
+        },
+        "campaign_profile_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Profile Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "delivery_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "idempotency_key": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "project_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "qa_set_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Qa Set Id",
+          "type": "string"
+        },
+        "qa_set_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Qa Set Sha256",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Asset Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PublishTarget"
+        }
+      },
+      "required": [
+        "request_id",
+        "project_id",
+        "source_asset_id",
+        "source_sha256",
+        "candidate_id",
+        "delivery_id",
+        "manifest_sha256",
+        "advanced_artifact_sha256",
+        "qa_set_id",
+        "qa_set_sha256",
+        "approval_review_id",
+        "campaign_profile_id",
+        "idempotency_key",
+        "created_at",
+        "target"
+      ],
+      "title": "PublishRequest",
+      "type": "object"
+    },
+    "PublishTarget": {
+      "additionalProperties": false,
+      "description": "Where a verified local package would be offered. This stores no credentials.",
+      "properties": {
+        "account_label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Account Label",
+          "type": "string"
+        },
+        "campaign_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "delivery_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Delivery Id",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "destination_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Destination Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "platform": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Platform",
+          "type": "string"
+        },
+        "privacy": {
+          "default": "public",
+          "enum": [
+            "public",
+            "unlisted",
+            "private"
+          ],
+          "title": "Privacy",
+          "type": "string"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduled At"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "account_label",
+        "destination_id",
+        "title",
+        "description",
+        "campaign_id",
+        "delivery_id",
+        "manifest_sha256"
+      ],
+      "title": "PublishTarget",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One local record of a dry run or upload attempt.",
+  "properties": {
+    "attempt_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "error_category": {
+      "default": "none",
+      "maxLength": 40,
+      "title": "Error Category",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PublishReceipt"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "request": {
+      "$ref": "#/$defs/PublishRequest"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "dry_run_passed",
+        "queued",
+        "uploading",
+        "published",
+        "failed",
+        "cancelled",
+        "unknown"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "request",
+    "state",
+    "provider_version",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "PublishAttempt",
+  "type": "object"
+}

@@ -123,12 +123,17 @@ from clipforge.schemas.preview import (
 from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.publish import (
+    PublishAttempt,
     PublishCacheRecord,
     PublishExportInput,
     PublishFile,
     PublishPackageDocument,
     PublishProfile,
+    PublishReadiness,
     PublishReadinessReport,
+    PublishReceipt,
+    PublishRequest,
+    PublishTarget,
 )
 from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
@@ -239,6 +244,11 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     PublishReadinessReport,
     PublishExportInput,
     PublishCacheRecord,
+    PublishTarget,
+    PublishRequest,
+    PublishReceipt,
+    PublishAttempt,
+    PublishReadiness,
     AnalyticsCohort,
     AnalyticsComparison,
     AnalyticsImportRecord,

@@ -11,9 +11,9 @@ from typing import Protocol
 from clipforge.errors import MediaError
 from clipforge.media.clock import us_to_seconds_str
 from clipforge.media.process import ProcessRunner
-from clipforge.media.tools import resolve_executable, resolve_ffmpeg
+from clipforge.media.tools import resolve_ffmpeg
 from clipforge.paths import find_repo_root
-from clipforge.preview.browser import resolve_browser
+from clipforge.preview.isolation import run_remotion_script
 
 
 class RoughRenderBackend(Protocol):
@@ -31,16 +31,8 @@ class RemotionRoughRenderBackend:
     requires_browser: bool = True
 
     def render_batch(self, batch_path: Path, *, log_path: Path) -> None:
-        browser = resolve_browser()
-        node = resolve_executable("CLIPFORGE_NODE", "node")
         script = find_repo_root() / "apps" / "renderer" / "scripts" / "render-rough.mjs"
-        if not script.is_file():
-            raise MediaError(f"rough preview renderer script is missing at {script}")
-        ProcessRunner().run(
-            [node, str(script), str(batch_path), str(browser)],
-            log_path=log_path,
-            check=True,
-        )
+        run_remotion_script(script, batch_path, log_path=log_path)
 
 
 @dataclass

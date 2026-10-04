@@ -111,9 +111,23 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Editorial",
+      "type": "string"
+    },
+    "external_upload": {
+      "default": "not_configured",
+      "enum": [
+        "not_configured",
+        "not_run",
+        "passed",
+        "failed",
+        "blocked",
+        "unavailable"
+      ],
+      "title": "External Upload",
       "type": "string"
     },
     "local_delivery": {
@@ -122,7 +136,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Local Delivery",
       "type": "string"
@@ -140,9 +155,32 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Overall",
+      "type": "string"
+    },
+    "platform_adapter": {
+      "default": "passed",
+      "enum": [
+        "passed",
+        "unavailable"
+      ],
+      "title": "Platform Adapter",
+      "type": "string"
+    },
+    "platform_dry_run": {
+      "default": "not_run",
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable",
+        "blocked_for_external_publish"
+      ],
+      "title": "Platform Dry Run",
       "type": "string"
     },
     "platform_publishing": {
@@ -160,7 +198,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Qa",
       "type": "string"
@@ -177,7 +216,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Real Source Verified",
       "type": "string"
@@ -188,7 +228,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Rights",
       "type": "string"
@@ -205,7 +246,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Technical",
       "type": "string"
@@ -216,7 +258,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Voicestudio",
       "type": "string"
