@@ -1,6 +1,6 @@
 # Round 11 validation
 
-Date: 2026-10-04. Branch `round-11-profiles-policy-qa`. Started from Round 10 merge `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`. The pull request is a draft and is not merged.
+Date: 2026-10-04. Branch `round-11-profiles-policy-qa`. Started from Round 10 merge `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`. Merged on main as `338ac295691a44816c3497a946a2f7c453bcdc1b`. Round 12 starts from that commit.
 
 ## Scope
 

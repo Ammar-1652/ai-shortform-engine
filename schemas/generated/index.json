@@ -84,6 +84,8 @@
     "PolicyDigest",
     "QASetDocument",
     "QACacheRecord",
+    "BatchChild",
+    "BatchManifest",
     "ReviewDecision",
     "JobRecord",
     "ArtifactProvenance",

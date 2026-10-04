@@ -100,10 +100,6 @@ def render_previews(
     root = work_root.resolve()
     active = profile or default_profile()
     renderer = backend if backend is not None else RemotionRoughRenderBackend()
-    if renderer.requires_browser:
-        from clipforge.preview.browser import resolve_browser
-
-        resolve_browser()
     inputs = load_preview_inputs(
         database,
         source_asset_id,
@@ -131,6 +127,10 @@ def render_previews(
         _fail_stale(database, inputs)
         if not force and _cache_ready(database, inputs, active):
             return _cache_result(database, inputs, started)
+        if renderer.requires_browser:
+            from clipforge.preview.browser import resolve_browser
+
+            resolve_browser()
         _require_budget(root)
         now = datetime.now(UTC)
         job = _running_job(inputs, active, now)

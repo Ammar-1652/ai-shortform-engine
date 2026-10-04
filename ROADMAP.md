@@ -70,13 +70,15 @@ Advanced Hero B-roll, typography, diagrams, SFX, semantic emphasis, and contain 
 
 ## Round 11 — Profiles, policy engine, QA
 
-Status: in progress on `round-11-profiles-policy-qa`, started from `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`.
+Status: merged on main as `338ac295691a44816c3497a946a2f7c453bcdc1b`. See `docs/operations/round-11-validation.md`.
 
 Campaign profiles select rules. Technical QA and campaign QA are hard gates. A pass requires check evidence. The gate does not publish.
 
 ## Round 12 — Jobs, cache, restart, batch
 
-Resume a failed job from recorded state. Cache probes and transcripts. Batch several sources without a second database.
+Status: in progress on `round-12-jobs-cache-restart-batch`, started from `338ac295691a44816c3497a946a2f7c453bcdc1b`.
+
+Inspect and recover recorded jobs. Resume creates a new attempt and keeps the previous row. Cache hits for probes and transcripts must match the source, the sidecar, and a succeeded producer. Batch runs use one SQLite database. See `docs/architecture/jobs-cache-restart-batch.md`.
 
 ## Round 13 — Performance analytics
 

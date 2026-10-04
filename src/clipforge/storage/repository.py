@@ -313,6 +313,11 @@ def list_jobs(connection: sqlite3.Connection, project_id: str) -> list[JobRecord
     return [_job_from_row(row) for row in rows]
 
 
+def list_all_jobs(connection: sqlite3.Connection) -> list[JobRecord]:
+    rows = connection.execute("SELECT * FROM jobs ORDER BY created_at, job_id").fetchall()
+    return [_job_from_row(row) for row in rows]
+
+
 @dataclass(frozen=True, slots=True)
 class ArtifactRow:
     artifact_id: str

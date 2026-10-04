@@ -1,5 +1,6 @@
 """Versioned contracts shared by later pipelines and the Remotion app."""
 
+from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.common import (
     SCHEMA_VERSION,
     ContractModel,
@@ -74,6 +75,8 @@ __all__ = [
     "AssetLicenseRecord",
     "AssetReference",
     "AudioEvent",
+    "BatchChild",
+    "BatchManifest",
     "BrollEvent",
     "CampaignMode",
     "CampaignProfile",
