@@ -159,8 +159,6 @@ def show_outcome(database: Database, outcome_id: str) -> str:
     }
     return json.dumps(payload, sort_keys=True)
 
-
-
 def verify_outcome(database: Database, work_root: Path, outcome_id: str) -> str:
     """Re-read one outcome. This does not write."""
     outcome, snapshot = _load_one(database, outcome_id)
