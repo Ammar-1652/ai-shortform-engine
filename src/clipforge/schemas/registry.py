@@ -25,6 +25,7 @@ from clipforge.schemas.advanced import (
     ReframingWindow,
     TypographyEvent,
 )
+from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.candidates import (
     CandidateDeduplicationDecision,
     CandidateEvidenceBundle,
@@ -204,6 +205,8 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     PolicyDigest,
     QASetDocument,
     QACacheRecord,
+    BatchChild,
+    BatchManifest,
     ReviewDecision,
     JobRecord,
     ArtifactProvenance,

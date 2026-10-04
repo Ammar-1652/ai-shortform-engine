@@ -15,7 +15,7 @@ from clipforge.schemas.ingest import DerivativeCacheRecord
 
 
 def read_cache_record(path: Path) -> DerivativeCacheRecord | None:
-    if not path.is_file():
+    if path.is_symlink() or not path.is_file():
         return None
     try:
         return DerivativeCacheRecord.model_validate_json(path.read_text(encoding="utf-8"))
@@ -45,7 +45,7 @@ def cache_identity_matches(
         return False
     if record.audio_stream_index != audio_stream_index:
         return False
-    if not artifact_path.is_file():
+    if artifact_path.is_symlink() or not artifact_path.is_file():
         return False
     try:
         size = artifact_path.stat().st_size

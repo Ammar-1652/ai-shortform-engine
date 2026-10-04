@@ -44,6 +44,7 @@ from clipforge.storage import (
     Database,
     find_artifact,
     get_asset_license_record,
+    get_job,
     get_source_asset,
     get_source_manifest,
     insert_artifact,
@@ -161,10 +162,23 @@ def _prepare_while_locked(
     prepare in another process cannot be marked failed or have its partials removed.
     """
     workspace.clear_partials()
+    now = datetime.now(UTC)
+    recorded_tool = _sidecar_tool_version(workspace)
+    if recorded_tool is not None:
+        cached = _cached_prepare(
+            database=database,
+            manifest=manifest,
+            workspace=workspace,
+            ffmpeg_version=recorded_tool,
+            estimate=estimate,
+        )
+        if cached is not None:
+            with database.transaction() as connection:
+                _fail_stale_jobs(connection, source.project_id, source_asset_id, now)
+            return cached
     ffmpeg = _resolve_ffmpeg()
     _resolve_ffprobe()
     ffmpeg_version = _version(active, ffmpeg)
-    now = datetime.now(UTC)
     job = JobRecord(
         job_id=str(uuid.uuid4()),
         project_id=source.project_id,
@@ -193,6 +207,7 @@ def _prepare_while_locked(
         if manifest.transcription_eligible:
             produced.append(
                 _ensure_audio(
+                    database=database,
                     source_path=path,
                     manifest=manifest,
                     workspace=workspace,
@@ -205,6 +220,7 @@ def _prepare_while_locked(
             )
         produced.append(
             _ensure_proxy(
+                database=database,
                 source_path=path,
                 manifest=manifest,
                 video=video,
@@ -249,7 +265,7 @@ def _prepare_while_locked(
     payload["analysis_proxy_sha256"] = proxy.sha256
     payload["analysis_proxy_recipe"] = recipes.recipe_id(proxy.recipe_name, proxy.recipe_version)
     payload["analysis_proxy_cache"] = "hit" if proxy.from_cache else "miss"
-    payload["analysis_proxy_arguments"] = json.dumps(list(proxy.arguments))
+    payload["analysis_proxy_arguments"] = json.dumps(_public_arguments(list(proxy.arguments)))
     payload["validation_status"] = "passed"
     if audio is None:
         payload["asr_audio_cache"] = "skipped"
@@ -259,7 +275,7 @@ def _prepare_while_locked(
         payload["asr_audio_sha256"] = audio.sha256
         payload["asr_audio_recipe"] = recipes.recipe_id(audio.recipe_name, audio.recipe_version)
         payload["asr_audio_cache"] = "hit" if audio.from_cache else "miss"
-        payload["asr_audio_arguments"] = json.dumps(list(audio.arguments))
+        payload["asr_audio_arguments"] = json.dumps(_public_arguments(list(audio.arguments)))
     succeeded = job.model_copy(
         update={
             "status": JobStatus.SUCCEEDED,
@@ -293,6 +309,7 @@ def _prepare_while_locked(
 
 def _ensure_audio(
     *,
+    database: Database,
     source_path: Path,
     manifest: SourceIngestManifest,
     workspace: SourceWorkspace,
@@ -310,11 +327,14 @@ def _ensure_audio(
         raise MediaError("the source is marked transcription-eligible but has no audio offset")
     rate = video.avg_frame_rate or video.r_frame_rate
     cached = _reuse(
+        database=database,
+        kind=recipes.KIND_ASR,
         final=final,
         sidecar=sidecar,
         manifest=manifest,
         recipe_name=recipes.ASR_AUDIO_NAME,
         recipe_version=recipes.ASR_AUDIO_VERSION,
+        ffmpeg_version=ffmpeg_version,
         validate=lambda: validate_asr_audio(
             final,
             runner,
@@ -389,7 +409,7 @@ def _ensure_audio(
         size_bytes=size,
         recipe_name=recipes.ASR_AUDIO_NAME,
         recipe_version=recipes.ASR_AUDIO_VERSION,
-        arguments=tuple(argv),
+        arguments=tuple(_public_arguments(argv)),
         from_cache=False,
         ffmpeg_version=ffmpeg_version,
     )
@@ -397,6 +417,7 @@ def _ensure_audio(
 
 def _ensure_proxy(
     *,
+    database: Database,
     source_path: Path,
     manifest: SourceIngestManifest,
     video: VideoStreamInfo,
@@ -416,6 +437,8 @@ def _ensure_proxy(
     expect_audio = manifest.audio_stream_index is not None
     offset = 0 if manifest.probe.timeline.audio_offset_us is None else manifest.probe.timeline.audio_offset_us
     cached = _reuse(
+        database=database,
+        kind=recipes.KIND_PROXY,
         final=final,
         sidecar=sidecar,
         manifest=manifest,
@@ -433,6 +456,7 @@ def _ensure_proxy(
             expect_audio=expect_audio,
             log_path=log_path,
         ),
+        ffmpeg_version=ffmpeg_version,
     )
     if cached is not None:
         return _from_cache(cached, recipes.KIND_PROXY, final, ffmpeg_version)
@@ -521,23 +545,93 @@ def _ensure_proxy(
         size_bytes=size,
         recipe_name=recipes.ANALYSIS_PROXY_NAME,
         recipe_version=recipes.ANALYSIS_PROXY_VERSION,
-        arguments=tuple(argv),
+        arguments=tuple(_public_arguments(argv)),
         from_cache=False,
+        ffmpeg_version=ffmpeg_version,
+    )
+
+
+def _cached_prepare(
+    *,
+    database: Database,
+    manifest: SourceIngestManifest,
+    workspace: SourceWorkspace,
+    ffmpeg_version: str,
+    estimate: int,
+) -> PrepareResult | None:
+    """Return the existing prepare when every derivative is already a verified hit.
+
+    A hit does not insert a job and does not call ffprobe. A partial hit returns
+    None so the caller can encode the missing derivative.
+    """
+    proxy = _reuse(
+        database=database,
+        kind=recipes.KIND_PROXY,
+        final=workspace.proxy_file("analysis.mp4"),
+        sidecar=workspace.metadata_file("analysis-proxy.recipe.json"),
+        manifest=manifest,
+        recipe_name=recipes.ANALYSIS_PROXY_NAME,
+        recipe_version=recipes.ANALYSIS_PROXY_VERSION,
+        ffmpeg_version=ffmpeg_version,
+        validate=lambda: None,
+    )
+    if proxy is None:
+        return None
+    audio_path: Path | None = None
+    audio_sha: str | None = None
+    audio_hit: bool | None = None
+    if manifest.transcription_eligible:
+        audio_path = workspace.audio_file("asr.flac")
+        audio = _reuse(
+            database=database,
+            kind=recipes.KIND_ASR,
+            final=audio_path,
+            sidecar=workspace.metadata_file("asr-audio.recipe.json"),
+            manifest=manifest,
+            recipe_name=recipes.ASR_AUDIO_NAME,
+            recipe_version=recipes.ASR_AUDIO_VERSION,
+            ffmpeg_version=ffmpeg_version,
+            validate=lambda: None,
+        )
+        if audio is None:
+            return None
+        audio_sha = audio.artifact_sha256
+        audio_hit = True
+    job_id = _current_job_id(database, manifest, recipes.KIND_PROXY)
+    if job_id is None:
+        return None
+    return PrepareResult(
+        job_id=job_id,
+        source_asset_id=manifest.source_asset_id,
+        project_id=manifest.project_id,
+        proxy_path=workspace.proxy_file("analysis.mp4"),
+        proxy_sha256=proxy.artifact_sha256,
+        proxy_from_cache=True,
+        audio_path=audio_path,
+        audio_sha256=audio_sha,
+        audio_from_cache=audio_hit,
+        storage_estimate_bytes=estimate,
         ffmpeg_version=ffmpeg_version,
     )
 
 
 def _reuse(
     *,
+    database: Database,
+    kind: str,
     final: Path,
     sidecar: Path,
     manifest: SourceIngestManifest,
     recipe_name: str,
     recipe_version: str,
+    ffmpeg_version: str,
     validate: Callable[[], object],
 ) -> DerivativeCacheRecord | None:
+    del validate
     record = read_cache_record(sidecar)
-    if record is None:
+    if record is None or record.ffmpeg_version != ffmpeg_version:
+        return None
+    if not _producer_succeeded(database, manifest, kind):
         return None
     if not cache_identity_matches(
         record,
@@ -551,11 +645,56 @@ def _reuse(
         artifact_path=final,
     ):
         return None
-    try:
-        validate()
-    except (MediaError, OSError):
-        return None
     return record
+
+
+def _producer_succeeded(database: Database, manifest: SourceIngestManifest, kind: str) -> bool:
+    """A failed or missing producer job is not a cache hit."""
+    return _current_job_id(database, manifest, kind) is not None
+
+
+def _current_job_id(database: Database, manifest: SourceIngestManifest, kind: str) -> str | None:
+    with database.connect() as connection:
+        row = find_artifact(connection, manifest.project_id, manifest.source_asset_id, kind)
+        if row is None or row.job_id is None or row.project_id != manifest.project_id:
+            return None
+        if row.source_asset_id != manifest.source_asset_id:
+            return None
+        try:
+            job = get_job(connection, row.job_id)
+        except StorageError:
+            return None
+    if job.status is not JobStatus.SUCCEEDED or job.project_id != manifest.project_id:
+        return None
+    return job.job_id
+
+
+def _sidecar_tool_version(workspace: SourceWorkspace) -> str | None:
+    """Read the stored tool identity. This does not execute ffmpeg or ffprobe."""
+    record = read_cache_record(workspace.metadata_file("analysis-proxy.recipe.json"))
+    if record is None or not record.ffmpeg_version.strip():
+        return None
+    return record.ffmpeg_version
+
+
+def _public_arguments(argv: list[str]) -> list[str]:
+    """Drop absolute paths from stored argv. The recipe version is the option identity."""
+    cleaned: list[str] = []
+    for item in argv:
+        text = item.strip()
+        if (
+            text.startswith("/")
+            or text.startswith("~")
+            or text.startswith("\\")
+            or "\\" in text
+            or "://" in text
+            or ".." in text.split("/")
+        ):
+            name = Path(text.replace("\\", "/")).name
+            cleaned.append(name or "path")
+            continue
+        cleaned.append(item)
+    return cleaned or ["ffmpeg"]
 
 
 def _from_cache(record: DerivativeCacheRecord, kind: str, path: Path, ffmpeg_version: str) -> _Produced:
@@ -592,7 +731,7 @@ def _record(
         artifact_sha256=digest,
         size_bytes=size,
         ffmpeg_version=ffmpeg_version,
-        arguments=argv,
+        arguments=_public_arguments(argv),
         validation_status="passed",
         created_at=datetime.now(UTC),
     )

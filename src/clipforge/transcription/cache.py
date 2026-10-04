@@ -18,7 +18,7 @@ from clipforge.transcription.runtime import ResolvedRuntime
 
 
 def read_transcript_cache(path: Path) -> TranscriptionCacheRecord | None:
-    if not path.is_file():
+    if path.is_symlink() or not path.is_file():
         return None
     try:
         return TranscriptionCacheRecord.model_validate_json(read_text(path))
