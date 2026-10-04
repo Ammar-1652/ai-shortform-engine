@@ -12,6 +12,7 @@ import typer
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.cli.analytics_cmd import analytics_app
 from clipforge.cli.batch_cmd import batch_app
 from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.hero_cmd import hero_app
@@ -56,6 +57,7 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(qa_app, name="qa")
 app.add_typer(job_app, name="job")
 app.add_typer(batch_app, name="batch")
+app.add_typer(analytics_app, name="analytics")
 
 
 def _version_callback(value: bool) -> None:

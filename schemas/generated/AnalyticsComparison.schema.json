@@ -1,0 +1,532 @@
+{
+  "$defs": {
+    "AnalyticsCohort": {
+      "additionalProperties": false,
+      "description": "One descriptive slice. The key is a label, not a rank.",
+      "properties": {
+        "aggregate": {
+          "$ref": "#/$defs/CohortAggregate"
+        },
+        "artifact_count": {
+          "minimum": 0,
+          "title": "Artifact Count",
+          "type": "integer"
+        },
+        "dimension": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Dimension",
+          "type": "string"
+        },
+        "key": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "policy_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Policy Ids",
+          "type": "array"
+        },
+        "profile_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Profile Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension",
+        "key",
+        "aggregate",
+        "artifact_count"
+      ],
+      "title": "AnalyticsCohort",
+      "type": "object"
+    },
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "CohortAggregate": {
+      "additionalProperties": false,
+      "description": "Numbers computed only from observations that actually reported each metric.",
+      "properties": {
+        "comments_count": {
+          "minimum": 0,
+          "title": "Comments Count",
+          "type": "integer"
+        },
+        "comments_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comments Total"
+        },
+        "completion_rate_count": {
+          "minimum": 0,
+          "title": "Completion Rate Count",
+          "type": "integer"
+        },
+        "completion_rate_mean": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Rate Mean"
+        },
+        "completion_rate_median": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completion Rate Median"
+        },
+        "engagement_rate_count": {
+          "minimum": 0,
+          "title": "Engagement Rate Count",
+          "type": "integer"
+        },
+        "engagement_rate_mean": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Engagement Rate Mean"
+        },
+        "human_time_count": {
+          "minimum": 0,
+          "title": "Human Time Count",
+          "type": "integer"
+        },
+        "human_time_mean_seconds": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Human Time Mean Seconds"
+        },
+        "likes_count": {
+          "minimum": 0,
+          "title": "Likes Count",
+          "type": "integer"
+        },
+        "likes_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Likes Total"
+        },
+        "missing_completion_rate": {
+          "minimum": 0,
+          "title": "Missing Completion Rate",
+          "type": "integer"
+        },
+        "missing_revenue": {
+          "minimum": 0,
+          "title": "Missing Revenue",
+          "type": "integer"
+        },
+        "missing_views": {
+          "minimum": 0,
+          "title": "Missing Views",
+          "type": "integer"
+        },
+        "observed_from": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed From"
+        },
+        "observed_to": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed To"
+        },
+        "paid_views_count": {
+          "minimum": 0,
+          "title": "Paid Views Count",
+          "type": "integer"
+        },
+        "paid_views_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paid Views Total"
+        },
+        "revenue_count": {
+          "minimum": 0,
+          "title": "Revenue Count",
+          "type": "integer"
+        },
+        "revenue_currency": {
+          "anyOf": [
+            {
+              "const": "USD",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revenue Currency"
+        },
+        "revenue_total": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revenue Total"
+        },
+        "sample_count": {
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "saves_count": {
+          "minimum": 0,
+          "title": "Saves Count",
+          "type": "integer"
+        },
+        "saves_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Saves Total"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "shares_count": {
+          "minimum": 0,
+          "title": "Shares Count",
+          "type": "integer"
+        },
+        "shares_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shares Total"
+        },
+        "small_cohort": {
+          "title": "Small Cohort",
+          "type": "boolean"
+        },
+        "views_count": {
+          "minimum": 0,
+          "title": "Views Count",
+          "type": "integer"
+        },
+        "views_mean": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Views Mean"
+        },
+        "views_median": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Views Median"
+        },
+        "views_total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Views Total"
+        },
+        "watch_time_count": {
+          "minimum": 0,
+          "title": "Watch Time Count",
+          "type": "integer"
+        },
+        "watch_time_mean_us": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watch Time Mean Us"
+        }
+      },
+      "required": [
+        "sample_count",
+        "small_cohort",
+        "views_count",
+        "watch_time_count",
+        "completion_rate_count",
+        "likes_count",
+        "comments_count",
+        "shares_count",
+        "saves_count",
+        "engagement_rate_count",
+        "paid_views_count",
+        "revenue_count",
+        "human_time_count",
+        "missing_views",
+        "missing_completion_rate",
+        "missing_revenue"
+      ],
+      "title": "CohortAggregate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A read-only description. It does not recommend a change.",
+  "properties": {
+    "cohorts": {
+      "items": {
+        "$ref": "#/$defs/AnalyticsCohort"
+      },
+      "title": "Cohorts",
+      "type": "array"
+    },
+    "comparison_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Comparison Id",
+      "type": "string"
+    },
+    "dimension": {
+      "title": "Dimension",
+      "type": "string"
+    },
+    "note": {
+      "maxLength": 400,
+      "minLength": 1,
+      "title": "Note",
+      "type": "string"
+    },
+    "observation_count": {
+      "minimum": 0,
+      "title": "Observation Count",
+      "type": "integer"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "described",
+        "insufficient_evidence"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "comparison_id",
+    "project_id",
+    "status",
+    "dimension",
+    "observation_count",
+    "cohorts",
+    "note",
+    "provenance"
+  ],
+  "title": "AnalyticsComparison",
+  "type": "object"
+}

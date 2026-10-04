@@ -76,13 +76,15 @@ Campaign profiles select rules. Technical QA and campaign QA are hard gates. A p
 
 ## Round 12 — Jobs, cache, restart, batch
 
-Status: in progress on `round-12-jobs-cache-restart-batch`, started from `338ac295691a44816c3497a946a2f7c453bcdc1b`.
+Status: merged on main as `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`. See `docs/operations/round-12-validation.md`.
 
 Inspect and recover recorded jobs. Resume creates a new attempt and keeps the previous row. Cache hits for probes and transcripts must match the source, the sidecar, and a succeeded producer. Batch runs use one SQLite database. See `docs/architecture/jobs-cache-restart-batch.md`.
 
 ## Round 13 — Performance analytics
 
-Store outcomes so a later round can see which editorial patterns performed. No automatic republish.
+Status: in progress on `round-13-performance-analytics`, started from `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`.
+
+Record observed outcomes for known artifacts and compare editorial patterns. The records are append-only and descriptive. They do not publish, approve, or change an edit. See `docs/architecture/performance-analytics.md`.
 
 ## Round 14 — End-to-end benchmark and V1
 

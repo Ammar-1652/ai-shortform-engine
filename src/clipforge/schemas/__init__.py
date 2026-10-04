@@ -1,5 +1,11 @@
 """Versioned contracts shared by later pipelines and the Remotion app."""
 
+from clipforge.schemas.analytics import (
+    AnalyticsComparison,
+    AnalyticsObservationInput,
+    EditorialFeatureSnapshot,
+    PerformanceOutcome,
+)
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.common import (
     SCHEMA_VERSION,
@@ -70,6 +76,8 @@ from clipforge.schemas.transcription import TranscriptionCacheRecord, Transcript
 
 __all__ = [
     "SCHEMA_VERSION",
+    "AnalyticsComparison",
+    "AnalyticsObservationInput",
     "ArtifactProvenance",
     "AssetKind",
     "AssetLicenseRecord",
@@ -89,6 +97,7 @@ __all__ = [
     "ComplianceStatus",
     "ContractModel",
     "EditPlan",
+    "EditorialFeatureSnapshot",
     "EntityId",
     "EvidenceKind",
     "FaceObservation",
@@ -99,6 +108,7 @@ __all__ = [
     "MotionEvent",
     "MotionPurpose",
     "OutputInterval",
+    "PerformanceOutcome",
     "Project",
     "QACheck",
     "QAKind",

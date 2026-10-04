@@ -1,6 +1,6 @@
 # Round 12 validation
 
-Date: 2026-10-04. Branch `round-12-jobs-cache-restart-batch`. Started from Round 11 merge `338ac295691a44816c3497a946a2f7c453bcdc1b`. The pull request is a draft and is not merged.
+Date: 2026-10-04. Branch `round-12-jobs-cache-restart-batch`. Started from Round 11 merge `338ac295691a44816c3497a946a2f7c453bcdc1b`. Merged on main as `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`. Round 13 starts from that commit.
 
 ## Scope
 

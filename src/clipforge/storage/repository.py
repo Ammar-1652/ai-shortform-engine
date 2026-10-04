@@ -502,6 +502,29 @@ def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> Non
     )
 
 
+def get_artifact(connection: sqlite3.Connection, artifact_id: str) -> ArtifactRow:
+    row = connection.execute(
+        "SELECT * FROM artifacts WHERE artifact_id = ?",
+        (artifact_id,),
+    ).fetchone()
+    if row is None:
+        raise StorageError(
+            f"no artifact with id {artifact_id}. "
+            "Analytics can only record an artifact that is already in this database."
+        )
+    return _artifact_from_row(row)
+
+
+def get_review(connection: sqlite3.Connection, review_id: str) -> ReviewDecision:
+    row = connection.execute(
+        "SELECT * FROM reviews WHERE review_id = ?",
+        (review_id,),
+    ).fetchone()
+    if row is None:
+        raise StorageError(f"no review with id {review_id}. The review row was not created.")
+    return _review_from_row(row)
+
+
 def list_reviews(connection: sqlite3.Connection, project_id: str) -> list[ReviewDecision]:
     rows = connection.execute(
         "SELECT * FROM reviews WHERE project_id = ? ORDER BY created_at, review_id",
