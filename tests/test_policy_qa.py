@@ -172,6 +172,7 @@ def test_qa_aggregate_cannot_be_upgraded() -> None:
         )
 
 
+@pytest.mark.hero
 def test_unprofiled_project_is_blocked(tmp_path: Path) -> None:
     fixture, candidate_id = _approved(tmp_path)
     plan_advanced_candidate(
@@ -197,6 +198,7 @@ def test_unprofiled_project_is_blocked(tmp_path: Path) -> None:
     assert not fixture.workspace.qa_sidecar().exists()
 
 
+@pytest.mark.hero
 def test_qa_smoke_and_stale_gate(tmp_path: Path) -> None:
     fixture, _candidate_id = _ready_advanced(tmp_path)
     result = run_qa(
@@ -219,6 +221,43 @@ def test_qa_smoke_and_stale_gate(tmp_path: Path) -> None:
     assert list_qa(fixture.database, SOURCE_ID, fixture.work)
     assert fixture.database.path.read_bytes() == before_db
     assert fixture.workspace.qa_sidecar().read_bytes() == before_side
+    video = next(path for path in fixture.work.rglob("advanced.mp4") if not path.is_symlink())
+    original = video.read_bytes()
+    video.write_bytes(b"")
+    failed = run_qa(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        created_by="ada",
+    )
+    assert failed.status == "fail"
+    shown_fail = show_qa(fixture.database, SOURCE_ID, fixture.work)
+    assert "zero bytes" in shown_fail
+    with pytest.raises(QAError):
+        gate_qa(fixture.database, SOURCE_ID, fixture.work)
+    video.write_bytes(original)
+    jobs_before = len(_qa_jobs(fixture))
+    copy = tmp_path / "same-advanced.mp4"
+    copy.write_bytes(original)
+    video.unlink()
+    video.symlink_to(copy)
+    with pytest.raises(QAError, match="symlink"):
+        run_qa(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            created_by="ada",
+        )
+    assert len(_qa_jobs(fixture)) == jobs_before
+    video.unlink()
+    video.write_bytes(original)
+    restored = run_qa(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        created_by="ada",
+    )
+    assert restored.status == "pass"
     with fixture.database.transaction() as connection:
         connection.execute(
             "UPDATE asset_license_records SET status = ? WHERE asset_id = ?",
@@ -230,6 +269,7 @@ def test_qa_smoke_and_stale_gate(tmp_path: Path) -> None:
         gate_qa(fixture.database, SOURCE_ID, fixture.work)
 
 
+@pytest.mark.hero
 def test_qa_failure_keeps_the_previous_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture, _candidate_id = _ready_advanced(tmp_path)
     first = run_qa(
@@ -263,6 +303,7 @@ def test_qa_failure_keeps_the_previous_set(tmp_path: Path, monkeypatch: pytest.M
     assert gate_qa(fixture.database, SOURCE_ID, fixture.work).qa_set_id == first.qa_set_id
 
 
+@pytest.mark.hero
 def test_cancelled_qa_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture, _candidate_id = _ready_advanced(tmp_path)
 
