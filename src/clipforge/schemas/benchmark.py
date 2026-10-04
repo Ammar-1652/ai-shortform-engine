@@ -36,12 +36,16 @@ class BenchmarkStage(Versioned):
     artifact_sha256: str | None = Field(default=None, pattern=_SHA)
     error_category: str = Field(default="none", max_length=40)
     human_action_required: bool = False
+    delivery_id: EntityId | None = None
+    delivery_manifest_sha256: str | None = Field(default=None, pattern=_SHA)
+    readiness_classification: str = Field(default="not_recorded", max_length=40)
 
     @model_validator(mode="after")
     def times_move_forward(self) -> Self:
         if self.finished_at < self.started_at:
             raise ValueError("stage finished before it started")
-        if not _public(self.stage) or not _public(self.error_category):
+        texts = (self.stage, self.error_category, self.readiness_classification)
+        if any(not _public(item) for item in texts):
             raise ValueError("stage text contains a forbidden token")
         return self
 
@@ -115,8 +119,11 @@ class V1ReadinessReport(Versioned):
     editorial: Readiness
     rights: Readiness
     qa: Readiness
-    delivery: Readiness
+    local_delivery: Readiness
+    platform_publishing: Literal["not_implemented"] = "not_implemented"
     voicestudio: Readiness
+    real_source_verified: Readiness
+    real_source_reason: str = Field(min_length=1, max_length=160)
     overall: Readiness
     blocking_limitations: list[str] = Field(default_factory=list)
     manual_steps: list[str] = Field(default_factory=list)
@@ -124,6 +131,9 @@ class V1ReadinessReport(Versioned):
 
     @model_validator(mode="after")
     def limitations_are_public(self) -> Self:
-        if any(not _public(item) for item in [*self.blocking_limitations, *self.manual_steps]):
+        texts = [self.real_source_reason, *self.blocking_limitations, *self.manual_steps]
+        if any(not _public(item) for item in texts):
             raise ValueError("readiness text contains a forbidden token")
+        if self.platform_publishing != "not_implemented":
+            raise ValueError("platform publishing is not implemented")
         return self

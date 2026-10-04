@@ -1,6 +1,6 @@
 # Architecture
 
-Clipforge turns authorized long-form video into short vertical edits. Round 7 records a human decision on the current rough preview. Round 8 renders a separate 1080×1920 Hero draft for the candidates that decision approved. A face is still not a speaker. Publishing is not implemented.
+Clipforge turns authorized long-form video into short vertical edits. Round 7 records a human decision on the current rough preview. Round 8 renders a separate 1080×1920 Hero draft for the candidates that decision approved. A face is still not a speaker. Local delivery export copies an approved Advanced Hero into a directory. External platform publishing is not implemented.
 
 ## Planes
 
@@ -93,7 +93,7 @@ The following are not stubbed as successful commands:
 - Full-source WhisperX, dynamic reframing, B-roll, music, and sound effects
 - Envato MCP
 - Remotion Player and publishing UI
-- Publishing APIs
+- Publishing APIs. Local delivery export does not upload.
 - Cloud workers
 - Performance learning
 - External analytics integrations

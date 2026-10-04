@@ -16,7 +16,8 @@ def test_help_lists_foundation_commands_and_not_pipelines() -> None:
     assert result.exit_code == 0
     for name in ("doctor", "project", "schema", "db", "source", "media", "storage", "transcript", "vision"):
         assert name in result.stdout
-    for absent in ("publish", "transcribe", "render"):
+    assert "publish" in result.stdout
+    for absent in ("transcribe", "render", "upload"):
         assert absent not in result.stdout
     source_help = runner.invoke(app, ["source", "--help"])
     assert source_help.exit_code == 0

@@ -50,7 +50,8 @@ def test_root_help_hides_preview_subcommands() -> None:
     top = runner.invoke(app, ["--help"])
     assert top.exit_code == 0
     assert "preview" in top.stdout
-    for absent in ("publish", "transcribe", "render"):
+    assert "publish" in top.stdout
+    for absent in ("transcribe", "render", "upload"):
         assert absent not in top.stdout
     group = runner.invoke(app, ["preview", "--help"])
     assert group.exit_code == 0

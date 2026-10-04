@@ -175,6 +175,9 @@ class SourceWorkspace:
     def qa_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "qa.lock")
 
+    def publish_lock_path(self) -> Path:
+        return _join(self.source_root, "tmp", "publish.lock")
+
     def prepare_qa_file(self, path: Path) -> Path:
         root = self.root.resolve()
         _mkdir_contained(root, self.qa_root())
@@ -426,6 +429,31 @@ def qa_lock(workspace: SourceWorkspace) -> Iterator[Path]:
         "Clipforge refused to start a second QA run."
     )
     with _flock(workspace, workspace.qa_lock_path(), exclusive=True, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def qa_read_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Share the QA lock while delivery reads the current QA set."""
+    busy = (
+        f"another QA run is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to read the QA set while it can be replaced."
+    )
+    with _flock(workspace, workspace.qa_lock_path(), exclusive=False, busy=busy) as lock_path:
+        yield lock_path
+
+
+@contextmanager
+def publish_lock(workspace: SourceWorkspace) -> Iterator[Path]:
+    """Hold the exclusive per-source delivery lock until this context exits.
+
+    Acquire this only after the shared advanced and QA locks.
+    """
+    busy = (
+        f"another local delivery export is already active for source {workspace.source_asset_id}. "
+        "Clipforge refused to start a second export."
+    )
+    with _flock(workspace, workspace.publish_lock_path(), exclusive=True, busy=busy) as lock_path:
         yield lock_path
 
 

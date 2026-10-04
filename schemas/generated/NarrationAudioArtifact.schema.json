@@ -134,6 +134,24 @@
       "title": "Codec",
       "type": "string"
     },
+    "commercial_use": {
+      "anyOf": [
+        {
+          "enum": [
+            "allowed",
+            "prohibited",
+            "unknown",
+            "cc_by_nc"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Commercial Use"
+    },
     "consent_record_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -182,6 +200,24 @@
       "minLength": 1,
       "title": "Model Id",
       "type": "string"
+    },
+    "model_license": {
+      "anyOf": [
+        {
+          "enum": [
+            "allowed",
+            "prohibited",
+            "unknown",
+            "cc_by_nc"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model License"
     },
     "model_revision": {
       "maxLength": 80,

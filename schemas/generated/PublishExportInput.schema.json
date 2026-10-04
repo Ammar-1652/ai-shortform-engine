@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "description": "What an export would bind. Planning with this record does not copy media.",
+  "properties": {
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "destination": {
+      "const": "local",
+      "default": "local",
+      "title": "Destination",
+      "type": "string"
+    },
+    "force": {
+      "default": false,
+      "title": "Force",
+      "type": "boolean"
+    },
+    "include_narration": {
+      "default": false,
+      "title": "Include Narration",
+      "type": "boolean"
+    },
+    "narration_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Narration Artifact Id"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "profile_fingerprint"
+  ],
+  "title": "PublishExportInput",
+  "type": "object"
+}

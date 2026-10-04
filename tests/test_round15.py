@@ -81,12 +81,18 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
         "qa",
         "hero_review",
         "analytics",
+        "publish_export",
     ]
     assert first.fixture_kind == "deterministic_synthetic"
-    assert first.readiness == "passed"
+    assert first.readiness == "blocked"
     assert first.selected_count == 1
     assert first.qa_result == "passed"
     assert "candidate_review" in first.cache_hits
+    analytics = next(stage for stage in first.stages if stage.stage == "analytics")
+    assert analytics.status == "passed"
+    assert analytics.error_category == "synthetic_fixture"
+    publish = next(stage for stage in first.stages if stage.stage == "publish_export")
+    assert publish.status == "blocked"
     assert "/tmp/" not in first.model_dump_json()
     assert "://" not in first.model_dump_json()
     again = run_benchmark(database, work, "source-1", fixture_kind="deterministic_synthetic", created_by="ada")
@@ -100,10 +106,13 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
     assert report.technical == "passed"
     assert report.editorial == "passed"
     assert report.qa == "passed"
-    assert report.delivery == "blocked"
+    assert report.local_delivery == "blocked"
+    assert report.platform_publishing == "not_implemented"
+    assert report.real_source_verified == "unavailable"
+    assert report.real_source_reason == "no authorized source supplied"
     assert report.voicestudio == "unavailable"
     assert report.overall == "blocked"
-    assert "publishing is not implemented" in report.blocking_limitations
+    assert "External platform publishing is not implemented" in " ".join(report.blocking_limitations)
     assert "PASS benchmark" in verify_run(database, work, first.benchmark_run_id)
 
 

@@ -63,6 +63,6 @@ There is no public vulnerability mailbox yet. Report issues to the repository ow
 
 ## What this repository refuses to automate
 
-- Publishing
+- External platform publishing. Local delivery export copies an approved file and does not upload it.
 - Treating model output as legal clearance
 - Using an asset with no rights evidence

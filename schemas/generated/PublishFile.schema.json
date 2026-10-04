@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "One file inside a delivery package. The path is relative to the work root.",
+  "properties": {
+    "relative_path": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "role": {
+      "enum": [
+        "video",
+        "metadata",
+        "captions_srt",
+        "captions_vtt",
+        "narration",
+        "checksums",
+        "manifest"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 1,
+      "title": "Size Bytes",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "relative_path",
+    "sha256",
+    "size_bytes",
+    "role"
+  ],
+  "title": "PublishFile",
+  "type": "object"
+}
