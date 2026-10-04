@@ -36,6 +36,12 @@ clipforge batch resume BATCH_ID
 
 `pnpm --dir apps/renderer lint`, `typecheck`, and `test` passed (23 Vitest tests). `uv run clipforge doctor` passed with 10 checks and schema version 4.
 
+Push CI: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37182225440
+
+Pull-request CI: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37182227762
+
+Both runs succeeded. Each had nine jobs: python, media, transcription, vision, candidate, preview, review, hero, and renderer.
+
 ## Limitations
 
 - Production resume covers `media_prepare`, `transcribe`, and `rough_preview_render`. Vision, candidate, Hero, advanced Hero, and QA jobs fail closed instead of being guessed.
