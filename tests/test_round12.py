@@ -65,7 +65,8 @@ def test_help_does_not_grow_pipeline_words() -> None:
     assert result.exit_code == 0
     assert "job" in result.stdout
     assert "batch" in result.stdout
-    for absent in ("publish", "transcribe", "render"):
+    assert "publish" in result.stdout
+    for absent in ("transcribe", "render", "upload"):
         assert absent not in result.stdout
 
 

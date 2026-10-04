@@ -319,7 +319,8 @@ def test_read_only_commands_do_not_change_state(tmp_path: Path) -> None:
     assert _rows(fixture.database) == before_reviews
     top = runner.invoke(app, ["--help"])
     assert "review" in top.stdout
-    for absent in ("publish", "transcribe", "render"):
+    assert "publish" in top.stdout
+    for absent in ("transcribe", "render", "upload"):
         assert absent not in top.stdout
 
 

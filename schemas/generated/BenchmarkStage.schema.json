@@ -33,6 +33,33 @@
       "title": "Cache Hit",
       "type": "boolean"
     },
+    "delivery_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Delivery Id"
+    },
+    "delivery_manifest_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Delivery Manifest Sha256"
+    },
     "elapsed_ms": {
       "minimum": 0,
       "title": "Elapsed Ms",
@@ -67,6 +94,12 @@
       ],
       "default": null,
       "title": "Job Id"
+    },
+    "readiness_classification": {
+      "default": "not_recorded",
+      "maxLength": 40,
+      "title": "Readiness Classification",
+      "type": "string"
     },
     "schema_version": {
       "const": "1.0.0",

@@ -150,6 +150,8 @@ class NarrationAudioArtifact(Versioned):
     codec: str = Field(min_length=1, max_length=40)
     consent_record_id: EntityId
     license_evidence_id: EntityId
+    model_license: LicenseState | None = None
+    commercial_use: LicenseState | None = None
     cache_id: str = Field(pattern=_SHA)
     job_id: EntityId
     provenance: ArtifactProvenance

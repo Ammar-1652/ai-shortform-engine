@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,7 @@ _ORDER = (
     "qa",
     "hero_review",
     "analytics",
+    "publish_export",
 )
 _KINDS = {
     "transcript": "transcript_json",
@@ -85,7 +87,8 @@ def doctor_text() -> str:
             "PASS decisions: human decisions stay explicit",
             "PASS gates: missing approval blocks the run",
             "PASS network: none",
-            "PASS delivery: local evidence only",
+            "PASS delivery: local package only",
+            "PASS platform_publishing: not_implemented",
         ]
     )
 
@@ -108,6 +111,9 @@ def run_benchmark(
     if voice_provider not in {"none", "voicestudio", "fake"}:
         raise BenchmarkError("voice provider must be none, fake, or voicestudio")
     root = work_root.resolve()
+    benchmark_root = root / "benchmarks"
+    if benchmark_root.is_symlink():
+        raise BenchmarkError("benchmark directory is a symlink")
     started = monotonic()
     stamp = datetime.now(UTC)
     with database.connect() as connection:
@@ -146,6 +152,7 @@ def run_benchmark(
             hero_reviews=hero_reviews,
             candidate_id=candidate_id,
             stamp=stamp,
+            fixture_kind=fixture_kind,
         )
         stage = stage.model_copy(update={"elapsed_ms": int((monotonic() - tick) * 1000)})
         stages.append(stage)
@@ -156,6 +163,8 @@ def run_benchmark(
             stopped = True
     if voice_provider == "voicestudio":
         warnings.append("VoiceStudio was requested and is reported by the voice doctor")
+    if any(stage.error_category == "synthetic_fixture" for stage in stages):
+        warnings.append("synthetic analytics fixture is not real viewer evidence")
     elapsed_ms = int((monotonic() - started) * 1000)
     evidence = [stage.artifact_sha256 for stage in stages if stage.artifact_sha256]
     run_id = _run_id(manifest.content_sha256, fixture_kind, approved, evidence)
@@ -192,7 +201,7 @@ def run_benchmark(
         work_bytes=_work_bytes(root),
         tool_versions=_tools(),
         model_revisions={"clipforge": __version__},
-        manual_actions=manual or ["publishing remains a separate human action"],
+        manual_actions=manual or ["external platform publishing remains a separate adapter"],
         warnings=warnings,
         readiness=_readiness(_overall(stages, rights_ok)),
         provenance=ArtifactProvenance(
@@ -259,28 +268,44 @@ def verify_run(database: Database, work_root: Path, benchmark_id: str) -> str:
 
 def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> V1ReadinessReport:
     document = _read(work_root.resolve(), benchmark_id)
-    skipped = {"candidate_review", "hero_review", "analytics", "qa"}
+    skipped = {"candidate_review", "hero_review", "analytics", "qa", "publish_export"}
     technical_names = [name for name in _ORDER if name not in skipped]
     technical = _rollup(document, technical_names)
     editorial = _status(document, "hero_review")
     rights = _status(document, "ingest")
     qa = document.qa_result
-    limitations = ["publishing is not implemented", "VoiceStudio is optional and is not a required gate"]
+    local_delivery = _status(document, "publish_export")
+    limitations = [
+        "External platform publishing is not implemented; local delivery export is available.",
+        "VoiceStudio is optional and is not a required gate",
+        "analytics evidence does not approve, optimize, or publish content",
+    ]
+    if document.fixture_kind != "real_authorized":
+        limitations.append("synthetic evidence is not real-source verification")
     steps = list(document.manual_actions)
     if "candidate review" not in " ".join(steps):
         steps.append("a person approves the candidate and the Hero")
     overall = document.readiness
-    if overall == "passed":
+    if local_delivery != "passed":
         overall = "blocked"
-        limitations.insert(0, "delivery stays blocked because publishing is not implemented")
+        limitations.insert(0, "local delivery stays blocked until a verified package exists")
+    voice = "unavailable"
+    if (
+        os.environ.get("CLIPFORGE_VOICESTUDIO_URL", "").strip()
+        and os.environ.get("CLIPFORGE_VOICESTUDIO_LIVE_SMOKE", "").strip() == "1"
+    ):
+        voice = "not_run"
     return V1ReadinessReport(
         benchmark_run_id=document.benchmark_run_id,
         technical=_readiness(technical),
         editorial=_readiness(editorial),
         rights=_readiness(rights),
         qa=_readiness(qa),
-        delivery="blocked",
-        voicestudio="unavailable",
+        local_delivery=_readiness(local_delivery),
+        platform_publishing="not_implemented",
+        voicestudio=_readiness(voice),
+        real_source_verified="unavailable",
+        real_source_reason="no authorized source supplied",
         overall=_readiness(overall),
         blocking_limitations=limitations,
         manual_steps=steps,
@@ -301,6 +326,7 @@ def _one(
     hero_reviews: list[ReviewDecision],
     candidate_id: str | None,
     stamp: datetime,
+    fixture_kind: str,
 ) -> tuple[BenchmarkStage, dict[str, str]]:
     if name == "ingest":
         if not rights_ok:
@@ -328,7 +354,43 @@ def _one(
             ).fetchone()
         if count is not None and int(count[0]) > 0:
             return _stage(name, "passed", stamp, cache_hit=True), {}
+        if fixture_kind == "deterministic_synthetic":
+            _write_synthetic_analytics(root)
+            return (
+                _stage(name, "passed", stamp, cache_hit=True, error_category="synthetic_fixture"),
+                {},
+            )
         return _stage(name, "not_run", stamp, cache_hit=False, error_category="not_run"), {}
+    if name == "publish_export":
+        from clipforge.publish.service import observe_stage
+
+        chosen = candidate_id
+        if chosen is None and approved:
+            chosen = sorted(approved)[0]
+        observed = observe_stage(database, root, source_asset_id, chosen)
+        status = observed["status"]
+        category = observed["error_category"]
+        delivery_id = observed["delivery_id"]
+        manifest_sha = observed["manifest_sha256"]
+        artifact_id = observed["artifact_id"]
+        job_id = observed["job_id"]
+        classification = observed["readiness_classification"]
+        return (
+            _stage(
+                name,
+                str(status),
+                stamp,
+                cache_hit=bool(observed["cache_hit"]),
+                artifact_id=str(artifact_id) if artifact_id else None,
+                error_category=str(category),
+                human=status != "passed",
+                job_id=str(job_id) if job_id else None,
+                delivery_id=str(delivery_id) if delivery_id else None,
+                delivery_manifest_sha256=str(manifest_sha) if manifest_sha else None,
+                readiness_classification=str(classification),
+            ),
+            {},
+        )
     kind = _KINDS[name]
     with database.connect() as connection:
         row = find_artifact(connection, project_id, source_asset_id, kind)
@@ -391,7 +453,18 @@ def _stage(
     artifact_sha256: str | None = None,
     error_category: str = "none",
     human: bool = False,
+    job_id: str | None = None,
+    delivery_id: str | None = None,
+    delivery_manifest_sha256: str | None = None,
+    readiness_classification: str | None = None,
 ) -> BenchmarkStage:
+    if readiness_classification is None:
+        if error_category == "synthetic_fixture":
+            readiness_classification = "synthetic_fixture"
+        elif status == "passed":
+            readiness_classification = "technical_ready"
+        else:
+            readiness_classification = "blocked"
     return BenchmarkStage(
         stage=name,
         status=status,  # type: ignore[arg-type]
@@ -399,10 +472,14 @@ def _stage(
         finished_at=stamp,
         elapsed_ms=0,
         cache_hit=cache_hit,
+        job_id=job_id,
         artifact_id=artifact_id,
         artifact_sha256=artifact_sha256,
         error_category=error_category,
         human_action_required=human,
+        delivery_id=delivery_id,
+        delivery_manifest_sha256=delivery_manifest_sha256,
+        readiness_classification=readiness_classification,
     )
 
 
@@ -640,6 +717,25 @@ def _current_path(root: Path, source_asset_id: str) -> Path:
     if "/" in source_asset_id or "\\" in source_asset_id or ".." in source_asset_id:
         raise BenchmarkError("source id is not a safe identifier")
     return root / "benchmarks" / source_asset_id / "current.json"
+
+
+def _write_synthetic_analytics(root: Path) -> None:
+    """Write a labelled fixture. It is not a viewer metric and does not approve anything."""
+    directory = root / "benchmarks" / "fixtures"
+    path = directory / "synthetic-analytics.json"
+    if directory.is_symlink() or path.is_symlink():
+        raise BenchmarkError("synthetic analytics path is a symlink")
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "evidence_class": "synthetic_fixture",
+        "fixture_kind": "deterministic_synthetic",
+        "note": "synthetic analytics fixture is not real viewer evidence",
+        "viewer_metrics": "absent",
+    }
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    if path.is_file() and path.read_text(encoding="utf-8") == text:
+        return
+    path.write_text(text, encoding="utf-8")
 
 
 def _action(name: str) -> str:

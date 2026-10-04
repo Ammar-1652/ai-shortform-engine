@@ -91,6 +91,8 @@ def generate_narration(
         codec=codec,
         consent_record_id=request.profile.consent_record_id,
         license_evidence_id=request.profile.license_evidence_id,
+        model_license=request.profile.model_license,
+        commercial_use=request.profile.commercial_use,
         cache_id=cache_id,
         job_id=job_id,
         provenance=ArtifactProvenance(

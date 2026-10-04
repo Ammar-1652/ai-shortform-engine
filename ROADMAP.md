@@ -94,6 +94,12 @@ Append manual labels, normalize local CSV, JSON, and JSONL exports, and review t
 
 ## Round 15 — End-to-end benchmark and optional narration
 
-Status: in progress on `round-15-e2e-benchmark-voice-sidecar`, started from `39d09e83b74239632d59c67fc456131419ed31ce`.
+Status: merged on main as `67ae3c3126aa8046da9cb0f6b8becb4603801395`. See `docs/operations/round-15-validation.md`.
 
-Record a local readiness pass across the existing production chain and keep human decisions explicit. VoiceStudio narration is an optional local sidecar and stays off unless the operator enables it. Publishing is still not implemented. See `docs/architecture/end-to-end-v1-benchmark.md`.
+Record a local readiness pass across the existing production chain and keep human decisions explicit. VoiceStudio narration is an optional local sidecar and stays off unless the operator enables it. See `docs/architecture/end-to-end-v1-benchmark.md`.
+
+## Round 16 — Local delivery export
+
+Status: in progress on `round-16-local-delivery-export`, started from `67ae3c3126aa8046da9cb0f6b8becb4603801395`.
+
+Copy an approved Advanced Hero into a verified local package. External platform publishing is not implemented. Real-source verification still requires an authorized source. See `docs/architecture/local-delivery-export.md`.

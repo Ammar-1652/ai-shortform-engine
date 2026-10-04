@@ -20,9 +20,10 @@ The recorded order is:
 12. Advanced Hero render
 13. technical and campaign QA evidence
 14. human Hero review
-15. optional analytics
+15. analytics, using a labeled synthetic fixture when the run is synthetic
+16. local delivery export (`publish_export`)
 
-Each stage stores status, timestamps, elapsed milliseconds from a monotonic clock, cache hit, artifact id, artifact hash, error category, and whether a person must act. A required stage that is `failed`, `blocked`, or `unavailable` stops the later required stages. Analytics may stay `not_run`.
+Each stage stores status, timestamps, elapsed milliseconds from a monotonic clock, cache hit, artifact id, artifact hash, error category, delivery id, delivery manifest hash, readiness classification, and whether a person must act. A required stage that is `failed`, `blocked`, or `unavailable` stops the later required stages. A synthetic run writes `benchmarks/fixtures/synthetic-analytics.json` and marks analytics `synthetic_fixture`. That file is not a viewer metric. A real run with no local outcomes leaves analytics `not_run`.
 
 Rights must be owned, licensed, or campaign-provided. Unknown and prohibited rights block ingest. Candidate review blocks until an approved human decision exists for the selected candidate. Hero review blocks until an approved Hero decision exists. QA fails when the QA document status is not `pass`. The benchmark does not create those decisions.
 
@@ -46,7 +47,7 @@ Promotion writes a partial manifest, validates it, inserts the job and artifact,
 
 ## Readiness
 
-`clipforge benchmark readiness` separates technical, editorial, rights, QA, delivery, and VoiceStudio. Delivery stays `blocked` because publishing is not implemented. VoiceStudio stays `unavailable` unless a later record says the endpoint answered. Overall stays `blocked` while delivery is blocked, even when the technical chain passed. The report lists the remaining manual steps.
+`clipforge benchmark readiness` separates technical, editorial, rights, QA, local delivery, platform publishing, VoiceStudio, and real-source verification. `local_delivery` is `passed` only after a package verifies. `platform_publishing` stays `not_implemented`. `real_source_verified` stays `unavailable` with reason `no authorized source supplied` when no authorized source was supplied. A synthetic fixture is never reported as real-source verification. VoiceStudio stays `unavailable` unless `CLIPFORGE_VOICESTUDIO_URL` and `CLIPFORGE_VOICESTUDIO_LIVE_SMOKE=1` are set, and even then the benchmark records `not_run` until a provider actually responds. Overall stays `blocked` while local delivery is not `passed`. The report lists the remaining manual steps. External publishing is not passed because a local package exists.
 
 ## Commands
 

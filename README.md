@@ -40,26 +40,29 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
 - `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
 - `clipforge hero review open SOURCE_ID` serves a loopback page for the current Hero drafts. `doctor`, `list`, `show`, and `verify` only read. `decide` appends a decision bound to that Hero artifact, plan, and alignment. Approval does not publish or encode a new file.
-- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Local B-roll, typography, diagrams, SFX, and semantic emphasis are supported. Music, Envato, and publishing are not included. The picture uses contain framing.
+- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Local B-roll, typography, diagrams, SFX, and semantic emphasis are supported. Music and Envato are not included. The picture uses contain framing. Rendering does not upload.
 - `clipforge qa run SOURCE_ID` writes a `qa_set_json` artifact for the current advanced Hero draft. `list`, `show`, and `verify` only read. `qa gate` succeeds only when technical and campaign QA both pass and still match the current artifact.
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
 - `clipforge analytics record` and `clipforge analytics import` append local outcome observations for an artifact that is already in the database. CSV, JSON, and JSONL exports can be normalized with `--profile`. `labels set` appends a manual label. `list`, `show`, `verify`, `compare`, `labels history`, and `dashboard verify` only read. `dashboard` serves a loopback page on `127.0.0.1`. Missing metrics stay missing. Comparisons are descriptive. They do not approve, optimize, or publish.
-- `clipforge benchmark run` records the current local chain. Missing candidate approval, Hero approval, or a passing QA result blocks the record. It does not invent those decisions. `list`, `show`, `verify`, and `readiness` only read.
-- `clipforge voice doctor` passes when VoiceStudio is disabled. `voice generate` needs an explicit script, consent, and a commercial-use license. The default model is not treated as commercially permitted. Generated audio does not approve a Hero.
+- `clipforge benchmark run` records the current local chain, including a labeled synthetic analytics fixture and a `publish_export` stage. Missing candidate approval, Hero approval, a passing QA result, or a verified local package blocks the record. It does not invent those decisions. `list`, `show`, `verify`, and `readiness` only read. Readiness separates local delivery from platform publishing.
+- `clipforge voice doctor` passes when VoiceStudio is disabled. `voice generate` needs an explicit script, consent, and a commercial-use license. The default model is not treated as commercially permitted. Generated audio does not approve a Hero. Nothing downloads a model unless `--allow-model-download` is passed on a command that already had that flag.
+- `clipforge publish doctor` reports the local exporter, the work-root path rule, and ffprobe. `publish plan` is a read-only preflight. `publish export SOURCE_ID CANDIDATE_ID` copies the verified Advanced Hero MP4 into `deliveries/<delivery_id>/` after preflight. It does not re-render. `list`, `show`, and `verify` only read. `recover` fails a stale running export. `resume` starts a new attempt only when the previous package is not a verified success. `--force` keeps the previous directory. `--destination` other than `local` fails because external platform publishing is not implemented.
 
 ## What does not work yet
 
 - Full-source WhisperX transcription
 - Active-speaker detection, face recognition, and dynamic reframing
 - Music. Local B-roll and SFX are supported. Music is prohibited.
-- Publishing
+- External platform publishing. Local delivery export is implemented. Upload still needs a future adapter. There is no TikTok, Instagram, or YouTube client.
 - A review UI on any address other than loopback
 - Envato search or download
 - Platform API clients, viewer tracking, and automatic optimization
-- A required VoiceStudio install. The live narration engine is optional and may be unavailable.
+- A required VoiceStudio install. The live narration engine is optional, local-only by default, and may be unavailable. Clipforge does not download its models automatically.
+- Real-source verification without an authorized source. A synthetic benchmark is not that verification.
+- Treating analytics evidence as approval, optimization, or a publish decision.
 
-`clipforge --help` only lists commands that run. There is no publish command.
+`clipforge --help` only lists commands that run. `publish` exports a local package. It does not upload.
 
 ## Hero alignment runtime
 

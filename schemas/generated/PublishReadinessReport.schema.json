@@ -1,0 +1,180 @@
+{
+  "additionalProperties": false,
+  "description": "Local delivery readiness. Platform publishing stays not implemented.",
+  "properties": {
+    "candidate_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Candidate Id"
+    },
+    "delivery_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Delivery Id"
+    },
+    "editorial": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Editorial",
+      "type": "string"
+    },
+    "failure_category": {
+      "default": "none",
+      "maxLength": 40,
+      "title": "Failure Category",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "local_delivery": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Local Delivery",
+      "type": "string"
+    },
+    "overall": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Overall",
+      "type": "string"
+    },
+    "platform_publishing": {
+      "const": "not_implemented",
+      "default": "not_implemented",
+      "title": "Platform Publishing",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "qa": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Qa",
+      "type": "string"
+    },
+    "real_source_reason": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Real Source Reason",
+      "type": "string"
+    },
+    "real_source_verified": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Real Source Verified",
+      "type": "string"
+    },
+    "rights": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Rights",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "technical": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Technical",
+      "type": "string"
+    },
+    "voicestudio": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Voicestudio",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "technical",
+    "editorial",
+    "rights",
+    "qa",
+    "local_delivery",
+    "voicestudio",
+    "real_source_verified",
+    "real_source_reason",
+    "overall"
+  ],
+  "title": "PublishReadinessReport",
+  "type": "object"
+}

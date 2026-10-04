@@ -21,6 +21,7 @@ from clipforge.cli.job_cmd import job_app
 from clipforge.cli.media_cmd import media_app
 from clipforge.cli.preview_cmd import preview_app
 from clipforge.cli.profile_cmd import profile_app
+from clipforge.cli.publish_cmd import publish_app
 from clipforge.cli.qa_cmd import qa_app
 from clipforge.cli.review_cmd import review_app
 from clipforge.cli.source import source_app
@@ -62,6 +63,7 @@ app.add_typer(batch_app, name="batch")
 app.add_typer(analytics_app, name="analytics")
 app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(voice_app, name="voice")
+app.add_typer(publish_app, name="publish")
 
 
 def _version_callback(value: bool) -> None:

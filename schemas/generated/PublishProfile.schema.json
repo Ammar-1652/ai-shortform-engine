@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "Local package settings. This profile does not name a platform.",
+  "properties": {
+    "audio_codec": {
+      "const": "aac",
+      "default": "aac",
+      "title": "Audio Codec",
+      "type": "string"
+    },
+    "destination": {
+      "const": "local",
+      "default": "local",
+      "title": "Destination",
+      "type": "string"
+    },
+    "fps_denominator": {
+      "const": 1,
+      "default": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "const": 30,
+      "default": 30,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "height": {
+      "const": 1920,
+      "default": 1920,
+      "title": "Height",
+      "type": "integer"
+    },
+    "output_use": {
+      "const": "commercial",
+      "default": "commercial",
+      "title": "Output Use",
+      "type": "string"
+    },
+    "profile_id": {
+      "const": "local-delivery-v1",
+      "default": "local-delivery-v1",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "video_codec": {
+      "const": "h264",
+      "default": "h264",
+      "title": "Video Codec",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "default": 1080,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "title": "PublishProfile",
+  "type": "object"
+}
