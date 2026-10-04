@@ -98,17 +98,18 @@ def test_migration_from_version_4_preserves_rows_and_rejects_the_future(tmp_path
     connection.commit()
     connection.close()
     database = Database(path)
-    assert database.initialize() == 5
+    assert database.initialize() == 6
     database.health_check()
     with database.connect() as checked:
         assert checked.execute("SELECT name FROM projects").fetchone()["name"] == "Keep"
         assert checked.execute("SELECT COUNT(*) FROM performance_outcomes").fetchone()[0] == 0
+        assert checked.execute("SELECT COUNT(*) FROM editorial_label_sets").fetchone()[0] == 0
     with database.connect() as checked:
         checked.execute(
-            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (6, 'future', ?)",
+            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (7, 'future', ?)",
             (now,),
         )
-        checked.execute("PRAGMA user_version = 6")
+        checked.execute("PRAGMA user_version = 7")
         checked.commit()
     with pytest.raises(Exception, match="newer than this build"):
         Database(path).status()

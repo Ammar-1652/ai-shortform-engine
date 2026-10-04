@@ -1,0 +1,7 @@
+{
+  "profile_id": "clipforge-observation-v1",
+  "kind": "native",
+  "formats": ["json", "jsonl"],
+  "unknown_columns": "reject",
+  "columns": {}
+}

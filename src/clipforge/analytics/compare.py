@@ -30,6 +30,8 @@ DIMENSIONS = (
     "hook_type",
     "topic_tag",
     "cta",
+    "format_tag",
+    "audience_tag",
     "caption_presence",
     "broll_presence",
     "sfx_presence",
@@ -52,10 +54,13 @@ class ComparisonFilter:
     source_asset_id: str | None = None
     observed_from: datetime | None = None
     observed_to: datetime | None = None
+    measurement_window: str | None = None
     duration_bucket: str | None = None
     hook_type: str | None = None
     topic_tag: str | None = None
     cta: str | None = None
+    format_tag: str | None = None
+    audience_tag: str | None = None
     caption_presence: str | None = None
     broll_presence: str | None = None
     sfx_presence: str | None = None
@@ -304,10 +309,14 @@ def _matches(
         return False
     if chosen.observed_to is not None and outcome.observed_at > chosen.observed_to:
         return False
+    if chosen.measurement_window is not None and outcome.measurement_window != chosen.measurement_window:
+        return False
     checks = {
         "duration_bucket": snapshot.duration_bucket,
         "hook_type": snapshot.labels.hook_type,
         "cta": snapshot.labels.cta,
+        "format_tag": snapshot.labels.format_tag,
+        "audience_tag": snapshot.labels.audience_tag,
         "caption_presence": _presence(snapshot.caption_count),
         "broll_presence": _presence(snapshot.broll_count),
         "sfx_presence": _presence(snapshot.sfx_count),
@@ -341,6 +350,8 @@ def _keys(
         "duration_bucket": snapshot.duration_bucket,
         "hook_type": snapshot.labels.hook_type,
         "cta": snapshot.labels.cta,
+        "format_tag": snapshot.labels.format_tag,
+        "audience_tag": snapshot.labels.audience_tag,
         "caption_presence": _presence(snapshot.caption_count),
         "broll_presence": _presence(snapshot.broll_count),
         "sfx_presence": _presence(snapshot.sfx_count),

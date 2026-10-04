@@ -82,10 +82,16 @@ Inspect and recover recorded jobs. Resume creates a new attempt and keeps the pr
 
 ## Round 13 — Performance analytics
 
-Status: in progress on `round-13-performance-analytics`, started from `d28b183977c1ae4a976cebdd2d1cbaf912639c3d`.
+Status: merged on main as `31946408c5e205311b027e71d2fd292336df84b9`. See `docs/operations/round-13-validation.md`.
 
 Record observed outcomes for known artifacts and compare editorial patterns. The records are append-only and descriptive. They do not publish, approve, or change an edit. See `docs/architecture/performance-analytics.md`.
 
-## Round 14 — End-to-end benchmark and V1
+## Round 14 — Analytics operations
+
+Status: in progress on `round-14-analytics-operations`, started from `31946408c5e205311b027e71d2fd292336df84b9`.
+
+Append manual labels, normalize local CSV, JSON, and JSONL exports, and review the evidence on a loopback page. Effective labels feed comparison. The page does not publish or approve. See `docs/architecture/analytics-operations.md`.
+
+## Later — End-to-end benchmark and V1
 
 A fixed authorized fixture, a full run from ingest through human approval, and a written list of what is still manual. V1 still does not publish by itself.

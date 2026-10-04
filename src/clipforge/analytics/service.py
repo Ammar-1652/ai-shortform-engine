@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -55,6 +56,9 @@ def doctor_text() -> str:
             "PASS writes: append only",
             "PASS network: none",
             "PASS metrics: missing stays missing",
+            "PASS labels: append only",
+            "PASS imports: local files only",
+            "PASS page: loopback only",
             "PASS use: descriptive evidence only",
         ]
     )
@@ -90,13 +94,19 @@ def import_observations(
     path: Path,
     *,
     before_commit: Callable[[], None] | None = None,
+    profile_id: str = "clipforge-observation-v1",
+    validate_only: bool = False,
 ) -> list[PerformanceOutcome]:
     """Validate a whole local file, then insert it in one transaction."""
     root = work_root.resolve()
     _require_local_file(root, path)
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    documents = _parse_file(raw)
+    from clipforge.analytics.importers import documents_for_profile, load_import_profile
+
+    profile = load_import_profile(profile_id)
+    suffix = path.suffix.lower().lstrip(".")
+    documents = documents_for_profile(profile, raw, suffix)
     if not documents:
         raise AnalyticsError("import file has no observations")
     prepared = [_prepare(database, root, item) for item in documents]
@@ -108,12 +118,13 @@ def import_observations(
     if len(keys) != len(set(keys)) or len(ids) != len(set(ids)):
         raise AnalyticsError("import file repeats an outcome id or idempotency key")
     modes = {item.replay for item in prepared}
-    if modes == {True}:
-        return [item.outcome for item in prepared]
     if False in modes and True in modes:
         raise AnalyticsError("import must be entirely new or an exact replay")
+    if modes == {True} or validate_only:
+        return [item.outcome for item in prepared]
     created_by = documents[0].created_by
     observed = min(item.outcome.observed_at for item in prepared)
+    summary = f"accepted {len(prepared)} rows"
     with database.transaction() as connection:
         stored = [_apply(connection, item, None) for item in prepared]
         if before_commit is not None:
@@ -124,6 +135,8 @@ def import_observations(
                 import_id=digest,
                 project_id=stored[0].project_id,
                 content_sha256=digest,
+                profile_id=profile.profile_id,
+                validation_summary=summary,
                 outcome_ids=[item.outcome_id for item in stored],
                 created_at=observed,
                 created_by=created_by,
@@ -132,7 +145,7 @@ def import_observations(
                     created_by=created_by,
                     tool="clipforge-analytics",
                     tool_version="0",
-                    source_asset_ids=[stored[0].source_asset_id],
+                    source_asset_ids=sorted({item.source_asset_id for item in stored}),
                 ),
             ),
         )
@@ -146,7 +159,7 @@ def list_outcomes(
 ) -> list[PerformanceOutcome]:
     chosen = comparison_filter or ComparisonFilter()
     with database.connect() as connection:
-        rows = _load_pairs(connection, project_id)
+        rows = _with_effective_labels(connection, project_id, _load_pairs(connection, project_id))
     matched = [outcome for outcome, snapshot in rows if _kept(outcome, snapshot, chosen)]
     return sorted(matched, key=lambda item: (item.observed_at, item.outcome_id))
 
@@ -278,7 +291,7 @@ def compare_project(
 ) -> AnalyticsComparison:
     chosen = comparison_filter or ComparisonFilter()
     with database.connect() as connection:
-        pairs = _load_pairs(connection, project_id)
+        pairs = _with_effective_labels(connection, project_id, _load_pairs(connection, project_id))
     return compare_outcomes(
         project_id=project_id,
         dimension=dimension,
@@ -894,8 +907,9 @@ def _insert_import(connection: object, record: AnalyticsImportRecord) -> None:
     connection.execute(
         """
         INSERT INTO analytics_imports (
-            import_id, project_id, content_sha256, outcome_count, created_at, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            import_id, project_id, content_sha256, outcome_count, created_at, created_by,
+            profile_id, validation_summary, outcome_ids_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record.import_id,
@@ -904,6 +918,121 @@ def _insert_import(connection: object, record: AnalyticsImportRecord) -> None:
             len(record.outcome_ids),
             record.created_at.isoformat(),
             record.created_by,
+            record.profile_id,
+            record.validation_summary,
+            json.dumps(record.outcome_ids),
+        ),
+    )
+
+
+def list_imports(database: Database, project_id: str) -> list[tuple[str, str, int]]:
+    """Return import id, profile id, and row count. This does not write."""
+    with database.connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT import_id, profile_id, outcome_count FROM analytics_imports
+            WHERE project_id = ?
+            ORDER BY created_at, import_id
+            """,
+            (project_id,),
+        ).fetchall()
+    return [(str(row["import_id"]), str(row["profile_id"]), int(row["outcome_count"])) for row in rows]
+
+
+def show_import(database: Database, import_id: str) -> str:
+    """Show one import record. This does not write."""
+    with database.connect() as connection:
+        record = _import_record(connection, import_id)
+    payload = record.model_dump_json()
+    if any(token in payload for token in ("/tmp/", "/home/", "/Users/", "\\", "://")):
+        raise AnalyticsError("stored import contains a forbidden path or URL")
+    return payload
+
+
+def verify_import(database: Database, import_id: str) -> str:
+    """Re-read one import. This does not write."""
+    with database.connect() as connection:
+        row = _import_row(connection, import_id)
+        stored_ids = _stored_outcome_ids(row)
+        summary = str(row["validation_summary"])
+        if any(token in summary for token in ("/tmp/", "/home/", "/Users/", "\\", "://")):
+            raise AnalyticsError("stored import contains a forbidden path or URL")
+        if len(str(row["content_sha256"])) != 64:
+            raise AnalyticsError("stored import hash is not SHA-256")
+        if stored_ids and len(stored_ids) != int(row["outcome_count"]):
+            raise AnalyticsError("stored import row count does not match its outcome ids")
+        for outcome_id in stored_ids:
+            outcome = _outcome_by_id(connection, outcome_id)
+            if outcome is None or outcome.project_id != str(row["project_id"]):
+                raise AnalyticsError("stored import names a missing outcome")
+        profile_id = str(row["profile_id"])
+    note = "stored" if stored_ids else "not stored on this row"
+    return f"PASS import\nprofile: {profile_id}\noutcome_ids: {note}"
+
+
+def _with_effective_labels(
+    connection: object,
+    project_id: str,
+    pairs: list[tuple[PerformanceOutcome, EditorialFeatureSnapshot]],
+) -> list[tuple[PerformanceOutcome, EditorialFeatureSnapshot]]:
+    from clipforge.analytics.labels import apply_effective_pair, load_effective_map
+
+    labels = load_effective_map(connection, project_id)
+    return [
+        apply_effective_pair(outcome, snapshot, labels.get(outcome.artifact_id)) for outcome, snapshot in pairs
+    ]
+
+
+def _import_row(connection: object, import_id: str) -> sqlite3.Row:
+    if not isinstance(connection, sqlite3.Connection):
+        raise AnalyticsError("internal connection was not a database connection")
+    found = connection.execute(
+        "SELECT * FROM analytics_imports WHERE import_id = ?",
+        (import_id,),
+    ).fetchone()
+    if not isinstance(found, sqlite3.Row):
+        raise AnalyticsError(f"no import {import_id}")
+    return found
+
+
+def _stored_outcome_ids(row: sqlite3.Row) -> list[str]:
+    try:
+        parsed = json.loads(str(row["outcome_ids_json"]))
+    except (TypeError, json.JSONDecodeError, KeyError) as exc:
+        raise AnalyticsError("stored import outcome ids are not valid") from exc
+    if not isinstance(parsed, list) or any(not isinstance(item, str) for item in parsed):
+        raise AnalyticsError("stored import outcome ids are not valid")
+    return [str(item) for item in parsed]
+
+
+def _import_record(connection: object, import_id: str) -> AnalyticsImportRecord:
+    row = _import_row(connection, import_id)
+    outcome_ids = _stored_outcome_ids(row)
+    if not outcome_ids:
+        raise AnalyticsError("outcome ids were not stored with this import")
+    sources: list[str] = []
+    for outcome_id in outcome_ids:
+        outcome = _outcome_by_id(connection, outcome_id)
+        if outcome is None or outcome.project_id != str(row["project_id"]):
+            raise AnalyticsError("stored import names a missing outcome")
+        if outcome.source_asset_id not in sources:
+            sources.append(outcome.source_asset_id)
+    created = datetime.fromisoformat(str(row["created_at"]))
+    return AnalyticsImportRecord(
+        import_id=str(row["import_id"]),
+        project_id=str(row["project_id"]),
+        content_sha256=str(row["content_sha256"]),
+        profile_id=str(row["profile_id"]),
+        validation_summary=str(row["validation_summary"]),
+        outcome_ids=outcome_ids,
+        created_at=created,
+        created_by=str(row["created_by"]),
+        provenance=ArtifactProvenance(
+            created_at=created,
+            created_by=str(row["created_by"]),
+            tool="clipforge-analytics",
+            tool_version="0",
+            source_asset_ids=sorted(sources),
         ),
     )
 

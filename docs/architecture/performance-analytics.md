@@ -1,6 +1,6 @@
 # Performance analytics
 
-Round 13 records what a person observed about an artifact that Clipforge already produced. It does not publish, approve, rank a clip as viral, or change the edit.
+Round 13 records what a person observed about an artifact that Clipforge already produced. It does not publish, approve, rank a clip as viral, or change the edit. Round 14 adds label history, local CSV normalization, and a loopback page in [analytics operations](analytics-operations.md).
 
 ## What is stored
 

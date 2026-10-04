@@ -55,6 +55,7 @@ markers = [
     "review: local review-surface tests; the browser smoke uses an already installed browser",
     "hero: Hero draft tests; the real render smoke is the only test that launches a browser",
     "model_smoke: local model-weight tests, excluded from CI",
+    "analytics: local analytics page tests; the browser smoke uses an already installed browser",
 ]
 
 [tool.ruff]

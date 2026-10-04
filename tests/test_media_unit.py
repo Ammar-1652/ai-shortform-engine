@@ -395,7 +395,7 @@ def test_migration_4_upgrades_a_version_3_file(tmp_path: Path) -> None:
     connection.commit()
     connection.close()
     database = Database(path)
-    assert database.initialize() == 5
+    assert database.initialize() == 6
     database.health_check()
     with database.connect() as checked:
         assert get_project(checked, "project-keep").name == "Keep"

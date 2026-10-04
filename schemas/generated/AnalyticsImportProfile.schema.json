@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "description": "A local parser profile. It does not contact a platform.",
+  "properties": {
+    "columns": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Columns",
+      "type": "object"
+    },
+    "formats": {
+      "items": {
+        "enum": [
+          "json",
+          "jsonl",
+          "csv"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Formats",
+      "type": "array"
+    },
+    "kind": {
+      "enum": [
+        "native",
+        "tabular"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "profile_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "unknown_columns": {
+      "default": "reject",
+      "enum": [
+        "reject",
+        "ignore"
+      ],
+      "title": "Unknown Columns",
+      "type": "string"
+    }
+  },
+  "required": [
+    "profile_id",
+    "kind",
+    "formats"
+  ],
+  "title": "AnalyticsImportProfile",
+  "type": "object"
+}

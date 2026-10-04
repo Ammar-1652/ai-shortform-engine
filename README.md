@@ -44,18 +44,17 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge qa run SOURCE_ID` writes a `qa_set_json` artifact for the current advanced Hero draft. `list`, `show`, and `verify` only read. `qa gate` succeeds only when technical and campaign QA both pass and still match the current artifact.
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
-- `clipforge analytics record` and `clipforge analytics import` append local outcome observations for an artifact that is already in the database. `list`, `show`, `verify`, and `compare` only read. Missing metrics stay missing. Comparisons are descriptive. They do not approve, optimize, or publish.
+- `clipforge analytics record` and `clipforge analytics import` append local outcome observations for an artifact that is already in the database. CSV, JSON, and JSONL exports can be normalized with `--profile`. `labels set` appends a manual label. `list`, `show`, `verify`, `compare`, `labels history`, and `dashboard verify` only read. `dashboard` serves a loopback page on `127.0.0.1`. Missing metrics stay missing. Comparisons are descriptive. They do not approve, optimize, or publish.
 
 ## What does not work yet
 
 - Full-source WhisperX transcription
 - Active-speaker detection, face recognition, and dynamic reframing
 - Music. Local B-roll and SFX are supported. Music is prohibited.
-- Publishing and analytics
+- Publishing
 - A review UI on any address other than loopback
 - Envato search or download
-- Publishing
-- Analytics and learning
+- Platform API clients, viewer tracking, and automatic optimization
 
 `clipforge --help` only lists commands that run. There is no publish command.
 

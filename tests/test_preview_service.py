@@ -120,7 +120,7 @@ def test_full_set_preserves_order_hashes_and_digest(tmp_path: Path) -> None:
     assert doctor.exit_code == 0
     assert "720x1280" in doctor.stdout
     assert "provisional-caption-v1" in doctor.stdout
-    assert "schema_version: 5" in doctor.stdout
+    assert "schema_version: 6" in doctor.stdout
     shown = runner.invoke(
         app,
         [

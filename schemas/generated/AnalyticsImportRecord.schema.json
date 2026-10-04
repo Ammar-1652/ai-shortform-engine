@@ -124,6 +124,13 @@
       "title": "Outcome Ids",
       "type": "array"
     },
+    "profile_id": {
+      "default": "clipforge-observation-v1",
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Profile Id",
+      "type": "string"
+    },
     "project_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -137,6 +144,12 @@
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
+      "type": "string"
+    },
+    "validation_summary": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Validation Summary",
       "type": "string"
     }
   },
