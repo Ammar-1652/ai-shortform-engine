@@ -269,6 +269,7 @@ def test_feature_snapshot_is_deterministic_and_comparison_skips_missing_values(t
         dimension="platform",
         created_by="ada",
     )
+    assert document.provenance.source_asset_ids == ["source-1"]
     assert [item.key for item in document.cohorts] == ["reel", "tiktok"]
     tiktok = next(item for item in document.cohorts if item.key == "tiktok")
     reel = next(item for item in document.cohorts if item.key == "reel")
@@ -396,6 +397,10 @@ def test_review_snapshot_does_not_change_the_review_row(tmp_path: Path) -> None:
         stored = get_review(connection, "review-1")
     assert stored.decision == "approved"
     assert stored.notes == "looks fine"
+    with database.transaction() as connection:
+        connection.execute("DELETE FROM reviews WHERE review_id = ?", ("review-1",))
+    with pytest.raises(AnalyticsError, match="review"):
+        verify_outcome(database, work, outcome.outcome_id)
 
 
 def _ready(tmp_path: Path, *, features: bool = False) -> tuple[Database, Path, str]:
