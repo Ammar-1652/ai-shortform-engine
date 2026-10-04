@@ -36,6 +36,7 @@ def _fail(exc: BaseException) -> NoReturn:
 
 
 def _filter(
+    *,
     platform: str | None,
     campaign_id: str | None,
     geography: str | None,
@@ -43,6 +44,18 @@ def _filter(
     source_asset_id: str | None,
     observed_from: str | None,
     observed_to: str | None,
+    duration_bucket: str | None,
+    hook_type: str | None,
+    topic_tag: str | None,
+    cta: str | None,
+    caption_presence: str | None,
+    broll_presence: str | None,
+    sfx_presence: str | None,
+    typography_presence: str | None,
+    diagram_presence: str | None,
+    reframing_strategy: str | None,
+    motion_library_version: str | None,
+    rank_band: str | None,
 ) -> ComparisonFilter:
     try:
         return ComparisonFilter(
@@ -53,6 +66,18 @@ def _filter(
             source_asset_id=source_asset_id,
             observed_from=_time(observed_from),
             observed_to=_time(observed_to),
+            duration_bucket=duration_bucket,
+            hook_type=hook_type,
+            topic_tag=topic_tag,
+            cta=cta,
+            caption_presence=caption_presence,
+            broll_presence=broll_presence,
+            sfx_presence=sfx_presence,
+            typography_presence=typography_presence,
+            diagram_presence=diagram_presence,
+            reframing_strategy=reframing_strategy,
+            motion_library_version=motion_library_version,
+            rank_band=rank_band,
         )
     except ValueError as exc:
         _fail(exc)
@@ -124,16 +149,40 @@ def analytics_list(
     source_asset_id: Annotated[str | None, typer.Option("--artifact-source")] = None,
     observed_from: Annotated[str | None, typer.Option("--from")] = None,
     observed_to: Annotated[str | None, typer.Option("--to")] = None,
+    duration_bucket: Annotated[str | None, typer.Option("--duration-bucket")] = None,
+    hook_type: Annotated[str | None, typer.Option("--hook-type")] = None,
+    topic_tag: Annotated[str | None, typer.Option("--topic-tag")] = None,
+    cta: Annotated[str | None, typer.Option("--cta")] = None,
+    caption_presence: Annotated[str | None, typer.Option("--caption-presence")] = None,
+    broll_presence: Annotated[str | None, typer.Option("--broll-presence")] = None,
+    sfx_presence: Annotated[str | None, typer.Option("--sfx-presence")] = None,
+    typography_presence: Annotated[str | None, typer.Option("--typography-presence")] = None,
+    diagram_presence: Annotated[str | None, typer.Option("--diagram-presence")] = None,
+    reframing_strategy: Annotated[str | None, typer.Option("--reframing-strategy")] = None,
+    motion_library_version: Annotated[str | None, typer.Option("--motion-library-version")] = None,
+    rank_band: Annotated[str | None, typer.Option("--rank-band")] = None,
 ) -> None:
     """List outcomes. Does not write."""
     chosen = _filter(
-        platform,
-        campaign_id,
-        geography,
-        profile_id,
-        source_asset_id,
-        observed_from,
-        observed_to,
+        platform=platform,
+        campaign_id=campaign_id,
+        geography=geography,
+        profile_id=profile_id,
+        source_asset_id=source_asset_id,
+        observed_from=observed_from,
+        observed_to=observed_to,
+        duration_bucket=duration_bucket,
+        hook_type=hook_type,
+        topic_tag=topic_tag,
+        cta=cta,
+        caption_presence=caption_presence,
+        broll_presence=broll_presence,
+        sfx_presence=sfx_presence,
+        typography_presence=typography_presence,
+        diagram_presence=diagram_presence,
+        reframing_strategy=reframing_strategy,
+        motion_library_version=motion_library_version,
+        rank_band=rank_band,
     )
     try:
         rows = list_outcomes(Database(resolve_db_path(db)), project_id, chosen)
@@ -183,13 +232,46 @@ def analytics_compare(
     profile_id: Annotated[str | None, typer.Option("--profile-id")] = None,
     observed_from: Annotated[str | None, typer.Option("--from")] = None,
     observed_to: Annotated[str | None, typer.Option("--to")] = None,
+    source_asset_id: Annotated[str | None, typer.Option("--artifact-source")] = None,
+    duration_bucket: Annotated[str | None, typer.Option("--duration-bucket")] = None,
+    hook_type: Annotated[str | None, typer.Option("--hook-type")] = None,
+    topic_tag: Annotated[str | None, typer.Option("--topic-tag")] = None,
+    cta: Annotated[str | None, typer.Option("--cta")] = None,
+    caption_presence: Annotated[str | None, typer.Option("--caption-presence")] = None,
+    broll_presence: Annotated[str | None, typer.Option("--broll-presence")] = None,
+    sfx_presence: Annotated[str | None, typer.Option("--sfx-presence")] = None,
+    typography_presence: Annotated[str | None, typer.Option("--typography-presence")] = None,
+    diagram_presence: Annotated[str | None, typer.Option("--diagram-presence")] = None,
+    reframing_strategy: Annotated[str | None, typer.Option("--reframing-strategy")] = None,
+    motion_library_version: Annotated[str | None, typer.Option("--motion-library-version")] = None,
+    rank_band: Annotated[str | None, typer.Option("--rank-band")] = None,
 ) -> None:
     """Describe cohorts. Does not write."""
     if by not in DIMENSIONS:
         _fail(AnalyticsError(f"unknown comparison dimension {by}"))
     if output_format not in {"text", "json"}:
         _fail(AnalyticsError("format must be text or json"))
-    chosen = _filter(platform, campaign_id, geography, profile_id, None, observed_from, observed_to)
+    chosen = _filter(
+        platform=platform,
+        campaign_id=campaign_id,
+        geography=geography,
+        profile_id=profile_id,
+        source_asset_id=source_asset_id,
+        observed_from=observed_from,
+        observed_to=observed_to,
+        duration_bucket=duration_bucket,
+        hook_type=hook_type,
+        topic_tag=topic_tag,
+        cta=cta,
+        caption_presence=caption_presence,
+        broll_presence=broll_presence,
+        sfx_presence=sfx_presence,
+        typography_presence=typography_presence,
+        diagram_presence=diagram_presence,
+        reframing_strategy=reframing_strategy,
+        motion_library_version=motion_library_version,
+        rank_band=rank_band,
+    )
     try:
         document = compare_project(
             Database(resolve_db_path(db)),
