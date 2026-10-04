@@ -16,6 +16,8 @@ from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.hero_cmd import hero_app
 from clipforge.cli.media_cmd import media_app
 from clipforge.cli.preview_cmd import preview_app
+from clipforge.cli.profile_cmd import profile_app
+from clipforge.cli.qa_cmd import qa_app
 from clipforge.cli.review_cmd import review_app
 from clipforge.cli.source import source_app
 from clipforge.cli.storage_cmd import storage_app
@@ -48,6 +50,8 @@ app.add_typer(candidate_app, name="candidate")
 app.add_typer(preview_app, name="preview")
 app.add_typer(review_app, name="review")
 app.add_typer(hero_app, name="hero")
+app.add_typer(profile_app, name="profile")
+app.add_typer(qa_app, name="qa")
 
 
 def _version_callback(value: bool) -> None:
@@ -87,7 +91,7 @@ def project_create(
     db: Annotated[Path | None, typer.Option("--db", help="SQLite database path.")] = None,
     profile_id: Annotated[
         str | None,
-        typer.Option("--profile-id", help="Optional campaign profile id. Not loaded from disk yet."),
+        typer.Option("--profile-id", help="Campaign profile id. Omit it to leave the project unprofiled."),
     ] = None,
 ) -> None:
     """Create a project row. Prints the new project id."""
@@ -97,6 +101,13 @@ def project_create(
         created_by = getpass.getuser()
     except OSError as exc:
         _fail(ClipforgeError(f"could not determine the OS user for provenance: {exc}"))
+    if profile_id is not None:
+        from clipforge.policy.loader import PolicyError, resolve_profile
+
+        try:
+            resolve_profile(profile_id)
+        except (PolicyError, ValidationError) as exc:
+            _fail(exc)
     try:
         project = Project(
             project_id=str(uuid.uuid4()),
@@ -135,7 +146,28 @@ def project_list(
         return
     for project in projects:
         created = project.created_at.isoformat()
-        typer.echo(f"{project.project_id}\t{project.name}\t{created}")
+        profile = project.profile_id or "-"
+        typer.echo(f"{project.project_id}\t{project.name}\t{created}\t{profile}")
+
+
+@project_app.command("set-profile")
+def project_set_profile(
+    project_id: Annotated[str, typer.Argument(help="Existing project id.")],
+    profile_id: Annotated[str, typer.Argument(help="Campaign profile id.")],
+    db: Annotated[Path | None, typer.Option("--db", help="SQLite database path.")] = None,
+) -> None:
+    """Assign a profile to an existing project. Unknown profiles are rejected."""
+    from clipforge.policy.loader import PolicyError, resolve_profile
+    from clipforge.storage import update_project_profile
+
+    try:
+        resolve_profile(profile_id)
+        database = Database(resolve_db_path(db))
+        with database.transaction() as connection:
+            project = update_project_profile(connection, project_id, profile_id)
+    except (ClipforgeError, PolicyError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(f"{project.project_id}\t{project.profile_id}")
 
 
 @db_app.command("init")

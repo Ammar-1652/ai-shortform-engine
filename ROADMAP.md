@@ -54,7 +54,7 @@ A loopback page plays the current rough previews and appends a human decision fo
 
 Status: merged on main as `7c1b22cf9266319119350b3db9e80fe18d9d155b`. See `docs/operations/round-08-validation.md`.
 
-Approved candidates on the current rough preview are force-aligned as clips and rendered as a separate Hero draft. The motion library is `motion-library-v1`. The draft can be reviewed. It is not published. Dynamic reframing, B-roll, music, and sound effects stay deferred.
+Approved candidates on the current rough preview are force-aligned as clips and rendered as a separate Hero draft. The motion library is `motion-library-v1`. The draft can be reviewed. It is not published. Dynamic reframing stays deferred. Local B-roll and SFX are implemented in Round 10. Music remains prohibited.
 
 The Hero review workflow that follows this merge is recorded in `docs/operations/round-09-validation.md`. The product round below is still Envato.
 
@@ -64,13 +64,15 @@ Official Envato MCP for search, plus an asset request that cannot land in an edi
 
 ## Round 10 — Advanced Hero editing
 
-Status: in progress on `round-10-advanced-hero`, started from `57980d6848728a7a7e218d58d311e6db49db7219`. See `docs/operations/round-10-validation.md`.
+Status: merged on main as `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`. See `docs/operations/round-10-validation.md`.
 
-B-roll, typography, diagrams, SFX, semantic emphasis, and reframing that does not treat a face as the speaker. Envato search and download stay on the round above. Publishing and music stay deferred.
+Advanced Hero B-roll, typography, diagrams, SFX, semantic emphasis, and contain rendering are implemented. Music stays prohibited. A face is not a speaker. Remaining limits are Envato, publishing, analytics, full-source WhisperX, speaker attribution, face recognition, and optional OCR.
 
 ## Round 11 — Profiles, policy engine, QA
 
-Campaign profiles select rules. Technical QA and campaign QA are hard gates. A pass requires check evidence.
+Status: in progress on `round-11-profiles-policy-qa`, started from `81d49fff27f6ee8a2765746fc9054ac3e27a55ba`.
+
+Campaign profiles select rules. Technical QA and campaign QA are hard gates. A pass requires check evidence. The gate does not publish.
 
 ## Round 12 — Jobs, cache, restart, batch
 

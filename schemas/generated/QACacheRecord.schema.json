@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "QAStatus": {
+      "enum": [
+        "pass",
+        "fail",
+        "insufficient_evidence"
+      ],
+      "title": "QAStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Sidecar for the current QA set. It stores hashes, not filesystem paths.",
+  "properties": {
+    "artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "manifest_size_bytes": {
+      "minimum": 1,
+      "title": "Manifest Size Bytes",
+      "type": "integer"
+    },
+    "profile_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "profile_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Sha256",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "qa_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Qa Set Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/QAStatus"
+    },
+    "target_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Target Artifact Id",
+      "type": "string"
+    },
+    "target_artifact_kind": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Target Artifact Kind",
+      "type": "string"
+    },
+    "target_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Manifest Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "qa_set_id",
+    "artifact_id",
+    "target_artifact_id",
+    "target_artifact_kind",
+    "target_manifest_sha256",
+    "profile_id",
+    "profile_sha256",
+    "manifest_sha256",
+    "manifest_size_bytes",
+    "status",
+    "created_at"
+  ],
+  "title": "QACacheRecord",
+  "type": "object"
+}
