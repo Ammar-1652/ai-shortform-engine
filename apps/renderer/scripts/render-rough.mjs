@@ -6,11 +6,20 @@
  * asr.flac are served from this run's staging directory.
  */
 
-import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
+import { mkdirSync } from "node:fs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const isolationDir = process.argv[4];
+if (typeof isolationDir === "string" && isolationDir.length > 0) {
+  mkdirSync(isolationDir, { recursive: true });
+  process.env.TMPDIR = isolationDir;
+  process.env.TMP = isolationDir;
+  process.env.TEMP = isolationDir;
+}
+const { bundle } = await import("@remotion/bundler");
+const { renderMedia, selectComposition } = await import("@remotion/renderer");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entryPoint = path.resolve(here, "../src/rough-preview/index.tsx");

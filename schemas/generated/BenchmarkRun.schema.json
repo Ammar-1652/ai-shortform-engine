@@ -161,6 +161,19 @@
           "title": "Error Category",
           "type": "string"
         },
+        "execution": {
+          "default": "recorded_evidence",
+          "enum": [
+            "recorded_evidence",
+            "executed_stage",
+            "cache_hit",
+            "not_run",
+            "blocked",
+            "unavailable"
+          ],
+          "title": "Execution",
+          "type": "string"
+        },
         "finished_at": {
           "format": "date-time",
           "title": "Finished At",
@@ -214,7 +227,8 @@
             "failed",
             "blocked",
             "not_run",
-            "unavailable"
+            "unavailable",
+            "blocked_for_external_publish"
           ],
           "title": "Status",
           "type": "string"
@@ -550,7 +564,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Qa Result",
       "type": "string"
@@ -588,7 +603,8 @@
         "failed",
         "blocked",
         "not_run",
-        "unavailable"
+        "unavailable",
+        "blocked_for_external_publish"
       ],
       "title": "Readiness",
       "type": "string"

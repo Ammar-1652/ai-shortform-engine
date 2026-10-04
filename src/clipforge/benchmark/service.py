@@ -53,6 +53,8 @@ _ORDER = (
     "hero_review",
     "analytics",
     "publish_export",
+    "platform_dry_run",
+    "platform_submit",
 )
 _KINDS = {
     "transcript": "transcript_json",
@@ -66,7 +68,7 @@ _KINDS = {
     "advanced_render": "advanced_hero_draft_set_json",
     "qa": "qa_set_json",
 }
-_OPTIONAL = {"analytics"}
+_OPTIONAL = {"analytics", "platform_dry_run", "platform_submit"}
 _SET_FIELDS = {
     "candidate_mining": ("candidate_set_id", "candidate_set_sha256"),
     "rough_preview": ("preview_set_id", "preview_set_sha256"),
@@ -102,6 +104,7 @@ def run_benchmark(
     candidate_id: str | None = None,
     voice_provider: str = "none",
     force: bool = False,
+    execute: bool = False,
     created_by: str = "benchmark",
     sidecar_hook: object | None = None,
 ) -> BenchmarkRun:
@@ -153,6 +156,7 @@ def run_benchmark(
             candidate_id=candidate_id,
             stamp=stamp,
             fixture_kind=fixture_kind,
+            execute=execute,
         )
         stage = stage.model_copy(update={"elapsed_ms": int((monotonic() - tick) * 1000)})
         stages.append(stage)
@@ -165,6 +169,8 @@ def run_benchmark(
         warnings.append("VoiceStudio was requested and is reported by the voice doctor")
     if any(stage.error_category == "synthetic_fixture" for stage in stages):
         warnings.append("synthetic analytics fixture is not real viewer evidence")
+    if fixture_kind == "deterministic_synthetic":
+        warnings.append("synthetic_only")
     elapsed_ms = int((monotonic() - started) * 1000)
     evidence = [stage.artifact_sha256 for stage in stages if stage.artifact_sha256]
     run_id = _run_id(manifest.content_sha256, fixture_kind, approved, evidence)
@@ -268,7 +274,15 @@ def verify_run(database: Database, work_root: Path, benchmark_id: str) -> str:
 
 def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> V1ReadinessReport:
     document = _read(work_root.resolve(), benchmark_id)
-    skipped = {"candidate_review", "hero_review", "analytics", "qa", "publish_export"}
+    skipped = {
+        "candidate_review",
+        "hero_review",
+        "analytics",
+        "qa",
+        "publish_export",
+        "platform_dry_run",
+        "platform_submit",
+    }
     technical_names = [name for name in _ORDER if name not in skipped]
     technical = _rollup(document, technical_names)
     editorial = _status(document, "hero_review")
@@ -295,6 +309,19 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         and os.environ.get("CLIPFORGE_VOICESTUDIO_LIVE_SMOKE", "").strip() == "1"
     ):
         voice = "not_run"
+    live = os.environ.get("CLIPFORGE_PLATFORM_LIVE_SMOKE", "").strip() == "1"
+    upload = "not_run" if live else "not_configured"
+    dry = _status(document, "platform_dry_run")
+    if local_delivery == "passed" and upload == "not_configured":
+        overall = "blocked_for_external_publish"
+    real_state = "unavailable"
+    real_reason = "no authorized source supplied"
+    produced = any(
+        stage.stage == "publish_export" and stage.execution == "executed_stage" for stage in document.stages
+    )
+    if document.fixture_kind == "real_authorized" and produced and local_delivery == "passed":
+        real_state = "passed"
+        real_reason = "authorized source delivery was executed and verified"
     return V1ReadinessReport(
         benchmark_run_id=document.benchmark_run_id,
         technical=_readiness(technical),
@@ -303,9 +330,12 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         qa=_readiness(qa),
         local_delivery=_readiness(local_delivery),
         platform_publishing="not_implemented",
+        platform_adapter="passed",
+        platform_dry_run=_readiness(dry),
+        external_upload=upload,  # type: ignore[arg-type]
         voicestudio=_readiness(voice),
-        real_source_verified="unavailable",
-        real_source_reason="no authorized source supplied",
+        real_source_verified=real_state,  # type: ignore[arg-type]
+        real_source_reason=real_reason,
         overall=_readiness(overall),
         blocking_limitations=limitations,
         manual_steps=steps,
@@ -327,6 +357,7 @@ def _one(
     candidate_id: str | None,
     stamp: datetime,
     fixture_kind: str,
+    execute: bool,
 ) -> tuple[BenchmarkStage, dict[str, str]]:
     if name == "ingest":
         if not rights_ok:
@@ -361,6 +392,10 @@ def _one(
                 {},
             )
         return _stage(name, "not_run", stamp, cache_hit=False, error_category="not_run"), {}
+    if name == "platform_dry_run":
+        return _platform_dry_run(database, root, source_asset_id, candidate_id, approved, stamp)
+    if name == "platform_submit":
+        return _platform_submit(stamp)
     if name == "publish_export":
         from clipforge.publish.service import observe_stage
 
@@ -368,6 +403,8 @@ def _one(
         if chosen is None and approved:
             chosen = sorted(approved)[0]
         observed = observe_stage(database, root, source_asset_id, chosen)
+        if execute and observed["status"] != "passed" and chosen is not None:
+            return _export_for_execute(database, root, source_asset_id, chosen, stamp)
         status = observed["status"]
         category = observed["error_category"]
         delivery_id = observed["delivery_id"]
@@ -395,6 +432,8 @@ def _one(
     with database.connect() as connection:
         row = find_artifact(connection, project_id, source_asset_id, kind)
     if row is None:
+        if execute and name not in {"candidate_review", "hero_review"}:
+            return _execute_missing(database, root, source_asset_id, name, stamp)
         return _gap(name, stamp, "missing_evidence")
     digest = _hash_artifact(root, row)
     if digest is None:
@@ -457,6 +496,7 @@ def _stage(
     delivery_id: str | None = None,
     delivery_manifest_sha256: str | None = None,
     readiness_classification: str | None = None,
+    execution: str | None = None,
 ) -> BenchmarkStage:
     if readiness_classification is None:
         if error_category == "synthetic_fixture":
@@ -465,6 +505,15 @@ def _stage(
             readiness_classification = "technical_ready"
         else:
             readiness_classification = "blocked"
+    if execution is None:
+        if status == "passed" and cache_hit:
+            execution = "recorded_evidence"
+        elif status == "not_run":
+            execution = "not_run"
+        elif status == "unavailable":
+            execution = "unavailable"
+        else:
+            execution = "blocked"
     return BenchmarkStage(
         stage=name,
         status=status,  # type: ignore[arg-type]
@@ -480,11 +529,272 @@ def _stage(
         delivery_id=delivery_id,
         delivery_manifest_sha256=delivery_manifest_sha256,
         readiness_classification=readiness_classification,
+        execution=execution,  # type: ignore[arg-type]
     )
 
 
+def _export_for_execute(
+    database: Database,
+    root: Path,
+    source_asset_id: str,
+    candidate_id: str,
+    stamp: datetime,
+) -> tuple[BenchmarkStage, dict[str, str]]:
+    """Copy the local package when execute is set. This does not upload."""
+    from clipforge.publish.errors import PublishError
+    from clipforge.publish.service import export_delivery
+
+    try:
+        exported = export_delivery(
+            database,
+            root,
+            source_asset_id,
+            candidate_id,
+            created_by="benchmark",
+        )
+    except PublishError as exc:
+        return (
+            _stage(
+                "publish_export",
+                "blocked",
+                stamp,
+                cache_hit=False,
+                error_category=exc.category,
+                human=True,
+                execution="blocked",
+            ),
+            {},
+        )
+    return (
+        _stage(
+            "publish_export",
+            "passed",
+            stamp,
+            cache_hit=False,
+            artifact_id=exported.artifact_id,
+            job_id=exported.job_id,
+            delivery_id=exported.delivery_id,
+            delivery_manifest_sha256=exported.manifest_sha256,
+            readiness_classification="local_delivery_ready",
+            execution="executed_stage",
+        ),
+        {},
+    )
+
+
+def _platform_dry_run(
+    database: Database,
+    root: Path,
+    source_asset_id: str,
+    candidate_id: str | None,
+    approved: list[str],
+    stamp: datetime,
+) -> tuple[BenchmarkStage, dict[str, str]]:
+    """Validate the current package with DryRunPublisher. No socket is opened."""
+    from clipforge.platform.publisher import DryRunPublisher
+    from clipforge.platform.service import dry_run_attempt
+    from clipforge.publish.errors import PublishError
+    from clipforge.publish.service import observe_stage
+    from clipforge.schemas.publish import PublishTarget
+    from clipforge.storage import list_jobs
+
+    chosen = candidate_id
+    if chosen is None and approved:
+        chosen = sorted(approved)[0]
+    observed = observe_stage(database, root, source_asset_id, chosen)
+    if observed["status"] != "passed" or not observed["delivery_id"] or not observed["manifest_sha256"]:
+        return (
+            _stage(
+                "platform_dry_run",
+                "not_run",
+                stamp,
+                cache_hit=False,
+                error_category="not_run",
+                execution="not_run",
+            ),
+            {},
+        )
+    delivery_id = str(observed["delivery_id"])
+    manifest_sha = str(observed["manifest_sha256"])
+    with database.connect() as connection:
+        source = get_source_asset(connection, source_asset_id)
+        jobs = list_jobs(connection, source.project_id)
+    for job in jobs:
+        payload = job.payload
+        if job.kind != "platform_publish" or payload.get("state") != "dry_run_passed":
+            continue
+        same = payload.get("delivery_id") == delivery_id and payload.get("manifest_sha256") == manifest_sha
+        attempt_id = payload.get("attempt_id")
+        if same and attempt_id:
+            return (
+                _stage(
+                    "platform_dry_run",
+                    "passed",
+                    stamp,
+                    cache_hit=True,
+                    artifact_id=attempt_id,
+                    artifact_sha256=manifest_sha,
+                    job_id=job.job_id,
+                    readiness_classification="platform_dry_run",
+                    execution="cache_hit",
+                ),
+                {},
+            )
+    if chosen is None:
+        return (
+            _stage(
+                "platform_dry_run",
+                "not_run",
+                stamp,
+                cache_hit=False,
+                error_category="not_run",
+                execution="not_run",
+            ),
+            {},
+        )
+    target = PublishTarget(
+        platform="fake",
+        account_label="benchmark",
+        destination_id="local-dry-run",
+        title="Local dry run",
+        description="Validates the local package only.",
+        tags=["benchmark"],
+        campaign_id="unprofiled",
+        privacy="public",
+        delivery_id=delivery_id,
+        manifest_sha256=manifest_sha,
+    )
+    try:
+        attempt = dry_run_attempt(
+            database,
+            root,
+            source_asset_id,
+            chosen,
+            target,
+            publisher=DryRunPublisher(),
+        )
+    except PublishError as exc:
+        return (
+            _stage(
+                "platform_dry_run",
+                "blocked",
+                stamp,
+                cache_hit=False,
+                error_category=exc.category,
+                human=True,
+                execution="blocked",
+            ),
+            {},
+        )
+    return (
+        _stage(
+            "platform_dry_run",
+            "passed",
+            stamp,
+            cache_hit=False,
+            artifact_id=attempt.attempt_id,
+            artifact_sha256=manifest_sha,
+            readiness_classification="platform_dry_run",
+            execution="executed_stage",
+        ),
+        {},
+    )
+
+
+def _platform_submit(stamp: datetime) -> tuple[BenchmarkStage, dict[str, str]]:
+    """Remote submit stays not_run. No adapter is contacted from a benchmark."""
+    return (
+        _stage(
+            "platform_submit",
+            "not_run",
+            stamp,
+            cache_hit=False,
+            error_category="not_configured",
+            execution="not_run",
+        ),
+        {},
+    )
+
+
+def _execute_missing(
+    database: Database,
+    root: Path,
+    source_asset_id: str,
+    name: str,
+    stamp: datetime,
+) -> tuple[BenchmarkStage, dict[str, str]]:
+    """Run one missing stage. An existing artifact is not treated as execution."""
+    try:
+        if name == "media_prepare":
+            from clipforge.media.prepare import prepare_source
+
+            result = prepare_source(
+                database=database,
+                source_asset_id=source_asset_id,
+                work_root=root,
+                created_by="benchmark",
+            )
+            mode = "cache_hit" if result.proxy_from_cache else "executed_stage"
+            return (
+                _stage(
+                    name,
+                    "passed",
+                    stamp,
+                    cache_hit=result.proxy_from_cache,
+                    execution=mode,
+                    job_id=result.job_id,
+                ),
+                {},
+            )
+        if name == "transcript":
+            return (
+                _stage(
+                    name,
+                    "unavailable",
+                    stamp,
+                    cache_hit=False,
+                    error_category="model_not_downloaded",
+                    execution="unavailable",
+                ),
+                {},
+            )
+        return (
+            _stage(
+                name,
+                "blocked",
+                stamp,
+                cache_hit=False,
+                error_category="not_executed",
+                execution="blocked",
+                human=True,
+            ),
+            {},
+        )
+    except ClipforgeError:
+        return (
+            _stage(
+                name,
+                "blocked",
+                stamp,
+                cache_hit=False,
+                error_category="execute_failed",
+                execution="blocked",
+                human=True,
+            ),
+            {},
+        )
+
+
 def _readiness(value: str) -> Readiness:
-    if value not in {"passed", "failed", "blocked", "not_run", "unavailable"}:
+    allowed = {
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable",
+        "blocked_for_external_publish",
+    }
+    if value not in allowed:
         raise BenchmarkError("readiness status is unknown")
     if value == "passed":
         return "passed"
@@ -494,6 +804,8 @@ def _readiness(value: str) -> Readiness:
         return "blocked"
     if value == "not_run":
         return "not_run"
+    if value == "blocked_for_external_publish":
+        return "blocked_for_external_publish"
     return "unavailable"
 
 

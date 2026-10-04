@@ -1,0 +1,74 @@
+{
+  "additionalProperties": false,
+  "description": "Safe provenance returned by a provider. Credentials are rejected.",
+  "properties": {
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "platform": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Platform",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "public_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Public Url"
+    },
+    "remote_item_id": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Remote Item Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "published",
+      "title": "Status",
+      "type": "string"
+    },
+    "submitted_at": {
+      "format": "date-time",
+      "title": "Submitted At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "platform",
+    "manifest_sha256",
+    "submitted_at",
+    "provider_version",
+    "status"
+  ],
+  "title": "PublishReceipt",
+  "type": "object"
+}

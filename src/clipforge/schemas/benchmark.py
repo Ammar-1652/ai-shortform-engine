@@ -10,7 +10,22 @@ from clipforge.schemas.common import EntityId, Versioned
 from clipforge.schemas.provenance import ArtifactProvenance
 
 _SHA = r"^[0-9a-f]{64}$"
-Readiness = Literal["passed", "failed", "blocked", "not_run", "unavailable"]
+Readiness = Literal[
+    "passed",
+    "failed",
+    "blocked",
+    "not_run",
+    "unavailable",
+    "blocked_for_external_publish",
+]
+Execution = Literal[
+    "recorded_evidence",
+    "executed_stage",
+    "cache_hit",
+    "not_run",
+    "blocked",
+    "unavailable",
+]
 FixtureKind = Literal["real_authorized", "deterministic_synthetic"]
 
 
@@ -39,6 +54,7 @@ class BenchmarkStage(Versioned):
     delivery_id: EntityId | None = None
     delivery_manifest_sha256: str | None = Field(default=None, pattern=_SHA)
     readiness_classification: str = Field(default="not_recorded", max_length=40)
+    execution: Execution = "recorded_evidence"
 
     @model_validator(mode="after")
     def times_move_forward(self) -> Self:
@@ -121,6 +137,11 @@ class V1ReadinessReport(Versioned):
     qa: Readiness
     local_delivery: Readiness
     platform_publishing: Literal["not_implemented"] = "not_implemented"
+    platform_adapter: Literal["passed", "unavailable"] = "passed"
+    platform_dry_run: Readiness = "not_run"
+    external_upload: Literal["not_configured", "not_run", "passed", "failed", "blocked", "unavailable"] = (
+        "not_configured"
+    )
     voicestudio: Readiness
     real_source_verified: Readiness
     real_source_reason: str = Field(min_length=1, max_length=160)

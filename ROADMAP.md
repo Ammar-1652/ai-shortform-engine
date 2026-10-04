@@ -100,6 +100,12 @@ Record a local readiness pass across the existing production chain and keep huma
 
 ## Round 16 — Local delivery export
 
-Status: in progress on `round-16-local-delivery-export`, started from `67ae3c3126aa8046da9cb0f6b8becb4603801395`.
+Status: merged on main as `dcbd18ac10826cfc684c893b8b9a14e9baed1200`. See `docs/operations/round-16-validation.md`.
 
 Copy an approved Advanced Hero into a verified local package. External platform publishing is not implemented. Real-source verification still requires an authorized source. See `docs/architecture/local-delivery-export.md`.
+
+## Round 17 — Real-source validation and platform boundary
+
+Status: in progress on `round-17-real-source-platform-boundary`, started from `dcbd18ac10826cfc684c893b8b9a14e9baed1200`.
+
+Keep local delivery, isolate Remotion browser renders, and add a fail-closed platform boundary. Fake and dry-run publishers do not upload. A real source is never inferred from a synthetic fixture. See `docs/architecture/platform-publishing.md`.

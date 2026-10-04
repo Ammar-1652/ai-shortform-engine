@@ -1,0 +1,168 @@
+{
+  "additionalProperties": false,
+  "description": "Local delivery and external upload are separate.",
+  "properties": {
+    "editorial": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Editorial",
+      "type": "string"
+    },
+    "external_upload": {
+      "enum": [
+        "not_configured",
+        "not_run",
+        "passed",
+        "failed",
+        "blocked",
+        "unavailable"
+      ],
+      "title": "External Upload",
+      "type": "string"
+    },
+    "local_delivery": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Local Delivery",
+      "type": "string"
+    },
+    "overall": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable",
+        "blocked_for_external_publish"
+      ],
+      "title": "Overall",
+      "type": "string"
+    },
+    "platform_adapter": {
+      "enum": [
+        "passed",
+        "unavailable"
+      ],
+      "title": "Platform Adapter",
+      "type": "string"
+    },
+    "platform_dry_run": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Platform Dry Run",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "qa": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Qa",
+      "type": "string"
+    },
+    "real_source_verified": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Real Source Verified",
+      "type": "string"
+    },
+    "reason": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "rights": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Rights",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "technical": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Technical",
+      "type": "string"
+    },
+    "voicestudio": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Voicestudio",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "technical",
+    "editorial",
+    "rights",
+    "qa",
+    "local_delivery",
+    "platform_adapter",
+    "platform_dry_run",
+    "external_upload",
+    "real_source_verified",
+    "voicestudio",
+    "overall",
+    "reason"
+  ],
+  "title": "PublishReadiness",
+  "type": "object"
+}
