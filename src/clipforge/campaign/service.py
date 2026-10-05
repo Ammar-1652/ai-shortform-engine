@@ -178,11 +178,19 @@ def ingest_campaign(
             for item in selected_files()
         )
     decisions = _decisions(now, confirmed=operator_confirmed)
+    sources = inventory_sources()
+    if operator_confirmed:
+        sources = [
+            item.model_copy(update={"rights_state": "allowed"})
+            if item.source_id in {row.source_id for row in selected_files()}
+            else item
+            for item in sources
+        ]
     document = SourceInventoryManifest(
         manifest_id="inventory-antoine-sallis",
         campaign_id=CAMPAIGN_ID,
         policy_sha256=policy_sha256(),
-        sources=inventory_sources(),
+        sources=sources,
         acquisitions=acquisitions,
         rights=rights,
         decisions=decisions,
@@ -217,6 +225,10 @@ def verify_campaign(work_root: Path) -> str:
             raise CampaignError("acquired source is missing", code="missing_source")
         if sha256_file(path) != item.sha256:
             raise CampaignError("source hash changed", code="source_mutated")
+    source_states = {item.source_id: item.rights_state for item in document.sources}
+    for acquisition in document.acquisitions:
+        if acquisition.download_status == "acquired" and source_states.get(acquisition.source_id) != "allowed":
+            raise CampaignError("source rights are not allowed", code="rights_unverified")
     unselected = [
         item.download_status
         for item in document.acquisitions
