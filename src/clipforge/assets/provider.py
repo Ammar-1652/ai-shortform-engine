@@ -58,6 +58,7 @@ class EnvatoMcpDiscoveryProvider:
         self.client = client or EnvatoMcpClient()
         self.calls = 0
         self.tools: list[str] = []
+        self.tool_specs: list[dict[str, Any]] = []
 
     def doctor(self) -> str:
         if not envato_enabled():
@@ -82,7 +83,8 @@ class EnvatoMcpDiscoveryProvider:
             )
         try:
             self.client.initialize()
-            self.tools = [str(item.get("name")) for item in self.client.list_tools() if item.get("name")]
+            self.tool_specs = [item for item in self.client.list_tools() if item.get("name")]
+            self.tools = [str(item.get("name")) for item in self.tool_specs]
         except AssetError as exc:
             return "\n".join(
                 [
@@ -115,36 +117,28 @@ class EnvatoMcpDiscoveryProvider:
         if not self.tools:
             self.client.initialize()
             self.tools = [str(item.get("name")) for item in self.client.list_tools() if item.get("name")]
-        tool = _search_tool(self.tools, filters)
+        tool = _search_tool(self.tool_specs, filters)
         if tool is None:
             raise AssetError("envato mcp did not advertise a search tool", code="provider_unavailable")
         arguments: dict[str, Any] = {"searchTerms": query, "perPage": 5}
-        nested: dict[str, str] = {}
-        orientation = filters.get("orientation")
-        if orientation in {"horizontal", "vertical"}:
-            nested["orientation"] = orientation
-        resolution = filters.get("resolution")
-        if resolution:
-            nested["resolution"] = resolution
-        if nested:
-            arguments["filters"] = nested
-        result = self.client.call_tool(tool, arguments)
+        arguments["filters"] = dict(filters)
+        result = self.client.call_tool(str(tool.get("name")), arguments)
         return _rows_from_tool(result)
 
 
-def _search_tool(names: list[str], filters: dict[str, str]) -> str | None:
+def _search_tool(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[str, Any] | None:
+    """Select an advertised search tool and preserve every requested filter."""
+    names = [str(item.get("name")) for item in specs]
     preferred = {
         "video": "search_stock_video",
         "audio": "search_music",
         "image": "search_photos",
         "graphic": "search_graphics",
     }.get(filters.get("asset_type", ""), "search_items")
-    if preferred in names:
-        return preferred
-    if "search_items" in names:
-        return "search_items"
-    return None
-
+    selected = preferred if preferred in names else ("search_items" if "search_items" in names else None)
+    if selected is None:
+        return None
+    return next(item for item in specs if item.get("name") == selected)
 
 def _rows_from_tool(result: dict[str, Any]) -> list[dict[str, Any]]:
     content = result.get("content")
