@@ -142,6 +142,7 @@ def test_failed_preview_does_not_promote_a_partial(tmp_path: Path, monkeypatch: 
     assert len(list(fixture.work.rglob("preview.mp4"))) == 1
 
 
+@pytest.mark.browser
 def test_real_remotion_preview_uses_the_trimmed_span(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

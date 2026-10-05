@@ -33,7 +33,7 @@ from tests.test_advanced_hero import _register_asset
 from tests.test_hero_review_browser import DebugPage
 from tests.test_hero_service import CountingAligner, _hero
 
-pytestmark = pytest.mark.preview
+pytestmark = [pytest.mark.preview, pytest.mark.browser]
 _PHRASE = "Café costs $12.50 説明 please."
 
 
