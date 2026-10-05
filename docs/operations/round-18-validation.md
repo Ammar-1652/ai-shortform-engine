@@ -56,7 +56,7 @@ The selected campaign sources are configured as `CampaignSource.rights_state = a
 
 Acquisition records persist public probe facts and verification re-probes them. If probing fails, the acquired file is removed before the failure is reported.
 
-The Envato adapter now initializes and retains the advertised tool specifications on a direct search and forwards the complete filter object. This fixes the previous path where tool names were populated but tool specifications remained empty.
+The Envato adapter now initializes and retains the advertised tool specifications on a direct search, selects the typed tool, translates supported filters to the live schema, and rejects unsupported filters before `tools/call`. For stock video, `1080p` becomes `1080p (Full HD)` and `category` becomes the native category field. `format`, compatible software, style, and ambiguous duration labels are rejected explicitly; numeric `--min-duration` and `--max-duration` are supported.
 
 After these corrections, static compilation of the changed Python files passed. The next GitHub Actions run was not started because the account payment or spending limit blocked every job; no code conclusion can be drawn from that run. The previous 417-test green result remains the last full suite result.
 
