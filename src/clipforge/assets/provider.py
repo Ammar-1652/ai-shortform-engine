@@ -114,9 +114,10 @@ class EnvatoMcpDiscoveryProvider:
         self.calls += 1
         if not envato_enabled() or not envato_live():
             raise AssetError("envato mcp live search is not enabled", code="not_configured")
-        if not self.tools:
+        if not self.tool_specs:
             self.client.initialize()
-            self.tools = [str(item.get("name")) for item in self.client.list_tools() if item.get("name")]
+            self.tool_specs = [item for item in self.client.list_tools() if item.get("name")]
+            self.tools = [str(item.get("name")) for item in self.tool_specs]
         tool = _search_tool(self.tool_specs, filters)
         if tool is None:
             raise AssetError("envato mcp did not advertise a search tool", code="provider_unavailable")
@@ -127,7 +128,11 @@ class EnvatoMcpDiscoveryProvider:
 
 
 def _search_tool(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[str, Any] | None:
-    """Select an advertised search tool and preserve every requested filter."""
+    """Select an advertised search tool and preserve every requested filter.
+
+    The official MCP may advertise a generic filters object, so filters are
+    passed through unchanged instead of being silently discarded.
+    """
     names = [str(item.get("name")) for item in specs]
     preferred = {
         "video": "search_stock_video",
