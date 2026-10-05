@@ -18,7 +18,7 @@ pnpm --dir apps/renderer typecheck
 pnpm --dir apps/renderer test
 ```
 
-The first Round 20 commit passed local checks and both self-hosted CI runs. The integrity fix on this branch is checked with the same commands before it is pushed. A campaign run is not treated as succeeded until package files, reviews, producer jobs, and symlink confinement have been rechecked.
+Local checks on the integrity fix passed: ruff, format, mypy, schema check, and doctor. Pytest: 470 passed, 1 skipped. Renderer: 23 tests passed. The corrected commit `535dde0c2b6fa3f7ead6c57d63d8a2bd413a8a89` then passed both self-hosted runs. Push CI: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37334872752. Pull-request CI: https://github.com/Ammar-1652/ai-shortform-engine/actions/runs/37334878071. Each run completed analytics, benchmark, media, python, review, candidate, renderer, hero, vision, transcription, and preview. A campaign run is not treated as succeeded until package files, reviews, producer jobs, and symlink confinement have been rechecked.
 
 ## Campaign run
 
