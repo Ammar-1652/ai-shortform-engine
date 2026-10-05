@@ -5,7 +5,7 @@ on:
   pull_request:
 
 concurrency:
-  group: clipforge-${{ github.workflow }}-${{ github.ref }}
+  group: clipforge-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -101,6 +101,8 @@ jobs:
   preview:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, clipforge]
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -118,6 +120,10 @@ jobs:
           command -v ffmpeg
           command -v ffprobe
           command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
+      - name: Report preview resources
+        run: |
+          free -h
+          df -h /dev/shm
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Install renderer dependencies
