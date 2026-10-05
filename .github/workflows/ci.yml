@@ -4,9 +4,14 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: clipforge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   python:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -26,10 +31,9 @@ jobs:
       - name: Doctor
         run: uv run clipforge doctor
 
-  # ubuntu-24.04 is pinned so apt's ffmpeg stays reproducible. ubuntu-latest
-  # moves to Ubuntu 26 on 2026-10-19. The other jobs stay on ubuntu-latest.
   media:
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -39,12 +43,13 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Install FFmpeg from Ubuntu packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: command -v ffmpeg && command -v ffprobe
       - name: Media integration tests
         run: uv run pytest -m media
 
   transcription:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     env:
       HF_HUB_OFFLINE: "1"
       HF_HUB_DISABLE_TELEMETRY: "1"
@@ -62,7 +67,8 @@ jobs:
         run: uv run pytest -m transcription
 
   vision:
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -72,14 +78,15 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Install FFmpeg from Ubuntu packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: command -v ffmpeg && command -v ffprobe
       - name: Import visual-analysis packages without downloading a model
         run: uv run python -c "import scenedetect, cv2, av, mediapipe"
       - name: Vision tests
         run: uv run pytest -m vision
 
   candidate:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -92,7 +99,8 @@ jobs:
         run: uv run pytest -m candidate
 
   preview:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -109,11 +117,9 @@ jobs:
           cache-dependency-path: apps/renderer/pnpm-lock.yaml
       - name: Install FFmpeg and a system browser
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          if ! command -v google-chrome && ! command -v google-chrome-stable && ! command -v chromium && ! command -v chromium-browser; then
-            sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
-          fi
+          command -v ffmpeg
+          command -v ffprobe
+          command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Install renderer dependencies
@@ -123,7 +129,8 @@ jobs:
         run: uv run pytest -m preview
 
   review:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -131,14 +138,15 @@ jobs:
           enable-cache: true
           python-version: "3.11"
       - name: Install FFmpeg from Ubuntu packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: command -v ffmpeg && command -v ffprobe
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Candidate review tests
         run: uv run pytest -m review
 
   analytics:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -146,18 +154,15 @@ jobs:
           enable-cache: true
           python-version: "3.11"
       - name: Install a system browser
-        run: |
-          sudo apt-get update
-          if ! command -v google-chrome && ! command -v google-chrome-stable && ! command -v chromium && ! command -v chromium-browser; then
-            sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
-          fi
+        run: command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Analytics page tests
         run: uv run pytest -m analytics
 
   benchmark:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -166,18 +171,17 @@ jobs:
           python-version: "3.11"
       - name: Install FFmpeg and a system browser
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          if ! command -v google-chrome && ! command -v google-chrome-stable && ! command -v chromium && ! command -v chromium-browser; then
-            sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
-          fi
+          command -v ffmpeg
+          command -v ffprobe
+          command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Benchmark and narration tests
         run: uv run pytest -m benchmark
 
   hero:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     env:
       HF_HUB_OFFLINE: "1"
       HF_HUB_DISABLE_TELEMETRY: "1"
@@ -188,14 +192,15 @@ jobs:
           enable-cache: true
           python-version: "3.11"
       - name: Install FFmpeg from Ubuntu packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: command -v ffmpeg && command -v ffprobe
       - name: Install Python dependencies
         run: uv sync --frozen --all-groups
       - name: Hero draft tests
         run: uv run pytest -m hero
 
   renderer:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, linux, x64, clipforge]
     defaults:
       run:
         working-directory: apps/renderer
