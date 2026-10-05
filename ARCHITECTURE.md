@@ -14,7 +14,7 @@ Owns how work is requested, recorded, and stopped.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Files live in `configs/profiles/`. `profile-organic` and `profile-paid-campaign` use the same core. The files are not executed. See [docs/architecture/profiles-policy-qa.md](docs/architecture/profiles-policy-qa.md).
 - Policies: `ComplianceRule` with severity fixed to `block`. `configs/policies/source-rights.json` and `configs/policies/asset-rights.json` are deterministic evaluators, not plugins.
 - Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.
-- Campaign operator: `clipforge campaign operator` appends a `CampaignSelectionDocument` under the work root and can serve a read-only board on `127.0.0.1`. `acquire` copies a selected allowed source into the work root only after hash, size, confinement, and ffprobe checks. `produce` calls the existing campaign runner and writes `campaigns/production/<run_id>/manifest.json`. SQLite stays at schema 6. See [docs/architecture/campaign-operator-control-plane.md](docs/architecture/campaign-operator-control-plane.md), [docs/architecture/source-acquisition.md](docs/architecture/source-acquisition.md), [docs/architecture/campaign-production-aggregate.md](docs/architecture/campaign-production-aggregate.md), [ADR 0057](docs/adr/0057-campaign-operator-selection-and-control-plane.md), [ADR 0058](docs/adr/0058-source-acquisition-and-policy-intake.md), and [ADR 0059](docs/adr/0059-aggregate-campaign-production.md).
+- Campaign operator: `clipforge campaign operator` appends a `CampaignSelectionDocument` under the work root and can serve a read-only board on `127.0.0.1`. `acquire` copies a selected allowed source into the work root only after hash, size, confinement, and ffprobe checks. `produce` calls the existing campaign runner and writes `campaigns/production/<run_id>/manifest.json`. `whop` imports an operator-exported snapshot and does not open an account session. SQLite stays at schema 6. See [docs/architecture/campaign-operator-control-plane.md](docs/architecture/campaign-operator-control-plane.md), [docs/architecture/source-acquisition.md](docs/architecture/source-acquisition.md), [docs/architecture/campaign-production-aggregate.md](docs/architecture/campaign-production-aggregate.md), [docs/architecture/provider-boundaries.md](docs/architecture/provider-boundaries.md), [ADR 0057](docs/adr/0057-campaign-operator-selection-and-control-plane.md), [ADR 0058](docs/adr/0058-source-acquisition-and-policy-intake.md), [ADR 0059](docs/adr/0059-aggregate-campaign-production.md), and [ADR 0060](docs/adr/0060-whop-and-envato-provider-boundaries.md).
 
 ### Media plane
 
@@ -45,6 +45,7 @@ Owns files that are not the long-form source, and the rights on every file inclu
 
 - Source media: `SourceAsset.license_record_id` references `asset_license_records`, and that record's `asset_id` must be the source id. A version-1 file is migrated by inserting `unknown` placeholders. Those placeholders stay blocked.
 - Campaign assets, local assets, Envato assets, graphics, audio, fonts: `AssetKind` on `AssetReference`.
+- Envato handoff: a verified registration is hash-bound, probe-checked, rights-bound, and confined. Advanced Hero planning rejects a stale or unverified Envato asset before a render job is inserted. Campaigns that do not request Envato assets are unchanged. See [docs/architecture/provider-boundaries.md](docs/architecture/provider-boundaries.md).
 - Rights: `AssetLicenseRecord`. `require_rights_cleared` blocks `unknown`, `prohibited`, and missing evidence.
 - Motion library: `motion-library-v1` writes `MotionEvent` values for a caption reveal, caption emphasis, and short opening and closing fades. Events do not change the TimeMap. See [ADR 0039](docs/adr/0039-deterministic-motion-library.md).
 
@@ -92,7 +93,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 The following are not stubbed as successful commands:
 
 - Full-source WhisperX, dynamic reframing, B-roll, music, and sound effects
-- Envato MCP
+- Envato direct download and live Whop crawling. Search, snapshot import, and manual registration exist. Clipforge does not fetch provider bytes or store account credentials.
 - Remotion Player and publishing UI
 - Publishing APIs. Local delivery export does not upload.
 - Cloud workers

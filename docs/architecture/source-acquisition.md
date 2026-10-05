@@ -78,3 +78,5 @@ The page shows acquisition status, byte size, SHA-256, probe facts, the relative
 ## Privacy
 
 Manifests, job payloads, board JSON, and checksums store ids, hashes, sizes, codecs, and relative paths. They do not store absolute paths, bearer tokens, cookies, or account identifiers.
+
+Round 25 adds a typed Whop snapshot import and a manual Envato registration. Those paths are described in [provider-boundaries.md](provider-boundaries.md). This acquisition document still does not download Envato media.

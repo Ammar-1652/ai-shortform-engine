@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Annotated, NoReturn
@@ -66,6 +67,13 @@ from clipforge.campaign.service import (
     show_text,
     verify_campaign,
 )
+from clipforge.campaign.whop import (
+    import_whop_snapshot,
+    list_whop_imports,
+    show_whop_campaign,
+    verify_whop_import,
+    whop_doctor,
+)
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.storage import Database
@@ -73,8 +81,10 @@ from clipforge.storage import Database
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
 operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
 acquire_app = typer.Typer(no_args_is_help=True, help="Acquire selected sources into the work root.")
+whop_app = typer.Typer(no_args_is_help=True, help="Import a local Whop snapshot. No account session.")
 campaign_app.add_typer(operator_app, name="operator")
 operator_app.add_typer(acquire_app, name="acquire")
+operator_app.add_typer(whop_app, name="whop")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -249,6 +259,74 @@ def campaign_verify(
         )
     except (ClipforgeError, OSError) as exc:
         _fail(exc)
+
+
+@whop_app.command("doctor")
+def whop_doctor_command() -> None:
+    """Report Whop intake. Live account access stays unconfigured."""
+    typer.echo(whop_doctor())
+
+
+@whop_app.command("import")
+def whop_import_command(
+    path: Annotated[Path, typer.Option("--file")],
+    project_id: Annotated[str, typer.Option("--project")],
+    force: Annotated[bool, typer.Option("--force")] = False,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Import a local JSON or JSONL snapshot. This does not contact Whop."""
+    try:
+        attempt = import_whop_snapshot(
+            resolve_work_dir(work_dir),
+            path.read_bytes(),
+            project_id=project_id,
+            force=force,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(attempt.import_id)
+    typer.echo(f"whop_live: {attempt.whop_live}")
+    typer.echo(f"status: {attempt.status}")
+
+
+@whop_app.command("list")
+def whop_list_command(
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """List snapshot imports. This command does not write."""
+    try:
+        rows = list_whop_imports(resolve_work_dir(work_dir))
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(json.dumps([item.import_id for item in rows]))
+
+
+@whop_app.command("show")
+def whop_show_command(
+    campaign_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show one imported campaign. This command does not write."""
+    try:
+        payload = show_whop_campaign(resolve_work_dir(work_dir), campaign_id)
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(json.dumps(payload, sort_keys=True))
+
+
+@whop_app.command("verify")
+def whop_verify_command(
+    import_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Re-check one import. This command does not write."""
+    try:
+        attempt = verify_whop_import(resolve_work_dir(work_dir), import_id)
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(attempt.import_id)
+    typer.echo(f"status: {attempt.status}")
+    typer.echo(attempt.snapshot_sha256)
 
 
 @operator_app.command("doctor")

@@ -317,9 +317,49 @@ def import_snapshot(
     )
 
 
-def board_campaigns() -> dict[str, object]:
+def _provider_campaign_ids(work_root: Path | None) -> list[str]:
+    if work_root is None:
+        return []
+    from clipforge.assets.handoff import list_envato_assets, list_envato_requests
+    from clipforge.campaign.whop import list_whop_imports
+
+    found: set[str] = set()
+    for attempt in list_whop_imports(work_root):
+        for campaign in attempt.campaigns:
+            found.add(campaign.campaign_id)
+    for request in list_envato_requests(work_root):
+        found.add(request.campaign_id)
+    for asset in list_envato_assets(work_root):
+        found.add(asset.campaign_id)
+    return sorted(found)
+
+
+def _provider_campaign_card(campaign_id: str) -> dict[str, object]:
     return {
-        "campaigns": [CAMPAIGN_ID],
+        "campaign_id": campaign_id,
+        "title": campaign_id,
+        "policy_id": "provider-intake",
+        "policy_fingerprint": "",
+        "language": "en-US",
+        "alignment": "not_requested",
+        "narration": "not_requested",
+        "voicestudio": "unavailable",
+        "publishing": "deferred",
+        "whop_live": "not_configured",
+        "envato": "discovery_only",
+        "policy_rules": [],
+        "sources": [],
+        "envato_records": [],
+    }
+
+
+def board_campaigns(work_root: Path | None = None) -> dict[str, object]:
+    names = [CAMPAIGN_ID]
+    for campaign_id in _provider_campaign_ids(work_root):
+        if campaign_id not in names:
+            names.append(campaign_id)
+    return {
+        "campaigns": names,
         "publishing": "deferred",
         "whop_live": "not_configured",
         "envato": "discovery_only",
@@ -332,6 +372,8 @@ def board_campaign(
     database: Database | None = None,
 ) -> dict[str, object]:
     if campaign_id != CAMPAIGN_ID:
+        if campaign_id in _provider_campaign_ids(work_root):
+            return _provider_campaign_card(campaign_id)
         raise CampaignError("campaign is not in the local catalogue", code="missing_campaign")
     policy = antoine_policy()
     english = capability_for(policy.default_language)
