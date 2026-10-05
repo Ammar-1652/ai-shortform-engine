@@ -14,6 +14,7 @@ Owns how work is requested, recorded, and stopped.
 - Profiles: `CampaignProfile` with mode `organic` or `paid_campaign`. Files live in `configs/profiles/`. `profile-organic` and `profile-paid-campaign` use the same core. The files are not executed. See [docs/architecture/profiles-policy-qa.md](docs/architecture/profiles-policy-qa.md).
 - Policies: `ComplianceRule` with severity fixed to `block`. `configs/policies/source-rights.json` and `configs/policies/asset-rights.json` are deterministic evaluators, not plugins.
 - Review decisions: `ReviewDecision`. Candidate and Hero reviews name a `candidate_id`. Caption, framing, and final reviews name an `artifact_id`, including a rejected final review. `reviews.artifact_id` references `artifacts` when it is set. There is no candidate table yet, so `candidate_id` is not a foreign key.
+- Campaign operator: `clipforge campaign operator` appends a `CampaignSelectionDocument` under the work root and can serve a read-only board on `127.0.0.1`. Execution stays in the campaign production runner. SQLite stays at schema 6. See [docs/architecture/campaign-operator-control-plane.md](docs/architecture/campaign-operator-control-plane.md) and [ADR 0057](docs/adr/0057-campaign-operator-selection-and-control-plane.md).
 
 ### Media plane
 

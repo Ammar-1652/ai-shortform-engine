@@ -1,0 +1,165 @@
+(function () {
+  var board = document.getElementById("board");
+
+  function text(parent, value) {
+    var row = document.createElement("p");
+    row.textContent = value == null ? "" : String(value);
+    parent.appendChild(row);
+  }
+
+  function clear(node) {
+    while (node.firstChild) {
+      node.removeChild(node.firstChild);
+    }
+  }
+
+  function renderCampaign(payload) {
+    var card = document.createElement("section");
+    card.className = "card";
+    text(card, "campaign " + payload.campaign_id);
+    text(card, "title " + payload.title);
+    text(card, "policy " + payload.policy_id + " " + payload.policy_fingerprint);
+    text(card, "language " + payload.language);
+    text(card, "alignment " + payload.alignment);
+    text(card, "narration " + payload.narration);
+    text(card, "voicestudio " + payload.voicestudio);
+    text(card, "publishing " + payload.publishing);
+    text(card, "whop_live " + payload.whop_live);
+    text(card, "envato " + payload.envato);
+    var rules = payload.policy_rules || [];
+    for (var ruleIndex = 0; ruleIndex < rules.length; ruleIndex += 1) {
+      var rule = rules[ruleIndex];
+      text(card, "rule " + rule.rule_id + " " + rule.outcome + " " + rule.name);
+      text(card, rule.description);
+    }
+    var sources = payload.sources || [];
+    for (var index = 0; index < sources.length; index += 1) {
+      renderSource(card, sources[index]);
+    }
+    var records = payload.envato_records || [];
+    for (var recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+      renderEnvato(card, records[recordIndex]);
+    }
+    board.appendChild(card);
+    loadRuns(payload.campaign_id, card);
+  }
+
+  function renderSource(card, source) {
+    text(card, "source " + source.source_id);
+    text(card, source.display_name);
+    text(card, source.notes);
+    text(
+      card,
+      "rights " +
+        source.rights_state +
+        " selected " +
+        source.selected +
+        " verification " +
+        source.verification +
+        " reason " +
+        source.reason_code
+    );
+    text(card, "sha256 " + source.source_sha256);
+    text(card, "duration_us " + source.duration_us);
+    text(card, "size_bytes " + source.size_bytes);
+    text(card, "language " + source.language + " narration " + source.narration);
+  }
+
+  function renderEnvato(card, record) {
+    text(card, "envato_provider " + record.provider + " " + record.provider_version);
+    text(card, "search_tool " + record.search_tool);
+    text(card, "query " + record.query);
+    text(card, "item_id " + record.item_id);
+    text(card, "item_url " + record.item_url);
+    text(card, "duration_seconds " + record.duration_seconds);
+    text(card, "direct_download_url " + record.direct_download_url);
+    text(card, "rights_status " + record.rights_status);
+    text(card, "license_evidence_status " + record.license_evidence_status);
+    text(card, "download_status " + record.download_status);
+    text(card, "renderable " + record.renderable + " reason " + record.reason_code);
+  }
+
+  function loadRuns(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/runs")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var runs = payload.runs || [];
+        text(card, "runs " + runs.length);
+        for (var index = 0; index < runs.length; index += 1) {
+          loadRun(runs[index].campaign_run_id, card);
+        }
+      });
+  }
+
+  function loadRun(runId, card) {
+    fetch("/api/campaign-runs/" + runId)
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "run " + payload.campaign_run_id);
+        text(card, "fingerprint " + payload.fingerprint);
+        text(card, "status " + payload.status + " " + payload.reason_code);
+        text(card, "readiness " + payload.readiness);
+        text(card, "publishing " + payload.publishing);
+        var sources = payload.sources || [];
+        for (var index = 0; index < sources.length; index += 1) {
+          loadSource(runId, sources[index].source_id, card);
+        }
+      });
+  }
+
+  function loadSource(runId, sourceId, card) {
+    fetch("/api/campaign-runs/" + runId + "/source/" + sourceId)
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (source) {
+        text(card, "stage_source " + source.source_id + " " + source.status + " " + source.reason_code);
+        text(card, "cache " + source.cache_status);
+        text(card, "sha256 " + source.source_sha256);
+        text(card, "review " + source.review_decision);
+        text(card, "hero_review " + source.hero_review_id);
+        text(card, "qa " + source.qa_status + " " + source.qa_set_id);
+        text(card, "delivery " + source.delivery_relative);
+        text(card, "candidate_review " + source.candidate_review_path);
+        text(card, "hero_review_path " + source.hero_review_path);
+        var stages = source.stages || [];
+        for (var index = 0; index < stages.length; index += 1) {
+          var stage = stages[index];
+          text(
+            card,
+            "stage " +
+              stage.stage +
+              " " +
+              stage.status +
+              " cache_hit " +
+              stage.cache_hit +
+              " " +
+              stage.reason_code
+          );
+        }
+      });
+  }
+
+  fetch("/api/campaigns")
+    .then(function (response) {
+      return response.json();
+    })
+    .then(function (payload) {
+      clear(board);
+      text(board, "publishing " + payload.publishing);
+      text(board, "whop_live " + payload.whop_live);
+      text(board, "envato " + payload.envato);
+      var names = payload.campaigns || [];
+      for (var index = 0; index < names.length; index += 1) {
+        fetch("/api/campaigns/" + names[index])
+          .then(function (response) {
+            return response.json();
+          })
+          .then(renderCampaign);
+      }
+    });
+})();

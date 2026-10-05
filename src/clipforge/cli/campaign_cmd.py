@@ -9,6 +9,22 @@ from typing import Annotated, NoReturn
 import typer
 
 from clipforge.campaign.antoine import CAMPAIGN_ID
+from clipforge.campaign.board import open_campaign_board
+from clipforge.campaign.operator import (
+    doctor_text as operator_doctor_text,
+)
+from clipforge.campaign.operator import (
+    import_snapshot,
+    list_sources_text,
+    resume_run,
+    run_selection,
+    select_sources,
+    status_text,
+    verify_selection,
+)
+from clipforge.campaign.operator import (
+    show_text as operator_show_text,
+)
 from clipforge.campaign.production import (
     list_campaign_runs,
     plan_campaign,
@@ -38,6 +54,8 @@ from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.storage import Database
 
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
+operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
+campaign_app.add_typer(operator_app, name="operator")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -212,6 +230,181 @@ def campaign_verify(
         )
     except (ClipforgeError, OSError) as exc:
         _fail(exc)
+
+
+@operator_app.command("doctor")
+def operator_doctor() -> None:
+    """Read operator readiness. This command does not write."""
+    typer.echo(operator_doctor_text())
+
+
+@operator_app.command("list")
+def operator_list() -> None:
+    """List catalogue campaigns. This command does not write."""
+    typer.echo(CAMPAIGN_ID)
+
+
+@operator_app.command("show")
+def operator_show(campaign_id: str) -> None:
+    """Show one catalogue campaign. This command does not write."""
+    try:
+        typer.echo(operator_show_text(campaign_id))
+    except ClipforgeError as exc:
+        _fail(exc)
+
+
+@operator_app.command("sources")
+def operator_sources(campaign_id: str) -> None:
+    """List catalogue sources. This command does not write."""
+    try:
+        typer.echo(list_sources_text(campaign_id))
+    except ClipforgeError as exc:
+        _fail(exc)
+
+
+@operator_app.command("select")
+def operator_select(
+    campaign_id: str,
+    source: Annotated[list[str], typer.Option("--source")],
+    project_id: Annotated[str, typer.Option("--project")],
+    operator_id: Annotated[str, typer.Option("--operator")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    narration: Annotated[bool, typer.Option("--narration/--no-narration")] = False,
+    expect: Annotated[str | None, typer.Option("--expect")] = None,
+) -> None:
+    """Append one source selection. An identical selection is returned unchanged."""
+    try:
+        document = select_sources(
+            resolve_work_dir(work_dir),
+            campaign_id=campaign_id,
+            source_ids=source,
+            project_id=project_id,
+            operator_id=operator_id,
+            language=language,
+            narration_enabled=narration,
+            expected_sidecar_sha256=expect,
+            database=Database(resolve_db_path(db)),
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(document.selection_id)
+    typer.echo(document.status)
+
+
+@operator_app.command("verify")
+def operator_verify(
+    selection_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Re-check one selection. This command does not write."""
+    try:
+        typer.echo(
+            verify_selection(
+                resolve_work_dir(work_dir),
+                selection_id,
+                database=Database(resolve_db_path(db)),
+            )
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("run")
+def operator_run(
+    selection_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Run one selection through the existing campaign runner."""
+    try:
+        typer.echo(
+            run_selection(
+                Database(resolve_db_path(db)),
+                resolve_work_dir(work_dir),
+                selection_id,
+                created_by="operator",
+            )
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("resume")
+def operator_resume(
+    campaign_run_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Resume one production run. Only incomplete sources are retried."""
+    try:
+        typer.echo(
+            resume_run(
+                Database(resolve_db_path(db)),
+                resolve_work_dir(work_dir),
+                campaign_run_id,
+                created_by="operator",
+            )
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("status")
+def operator_status(
+    campaign_run_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show one production run. This command does not write."""
+    try:
+        typer.echo(status_text(resolve_work_dir(work_dir), campaign_run_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("import")
+def operator_import(
+    path: Annotated[Path, typer.Option("--file")],
+    project_id: Annotated[str, typer.Option("--project")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Import a local campaign snapshot. This does not contact an account."""
+    try:
+        document = import_snapshot(
+            resolve_work_dir(work_dir),
+            path.read_bytes(),
+            database=Database(resolve_db_path(db)),
+            project_id=project_id,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(document.selection_id)
+
+
+@operator_app.command("serve")
+def operator_serve(
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port")] = 8772,
+) -> None:
+    """Serve the loopback campaign board. This server has no write route."""
+    try:
+        database_path = resolve_db_path(db)
+        database = Database(database_path) if database_path.is_file() else None
+        server = open_campaign_board(
+            work_root=resolve_work_dir(work_dir),
+            host=host,
+            port=port,
+            database=database,
+        )
+    except ClipforgeError as exc:
+        _fail(exc)
+    typer.echo(f"campaign_board: http://127.0.0.1:{server.server_address[1]}/")
+    server.serve_forever()
 
 
 @campaign_app.command("resume")
