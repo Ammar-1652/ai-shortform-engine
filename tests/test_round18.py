@@ -451,7 +451,7 @@ def test_narration_stays_off_until_enabled(tmp_path: Path) -> None:
         render_plan(database, work, enabled, provider, script_text="A different script.")
 
 
-def test_voicestudio_plan_asks_for_the_omnivoice_engine(tmp_path: Path) -> None:
+def test_voicestudio_plan_uses_the_discovered_engine(tmp_path: Path) -> None:
     database, work = _chain(tmp_path)
 
     class Capture(FakeVoiceProvider):
@@ -462,6 +462,19 @@ def test_voicestudio_plan_asks_for_the_omnivoice_engine(tmp_path: Path) -> None:
             return super().generate(request)
 
     provider = Capture()
+    with pytest.raises(ClipforgeError, match="missing"):
+        build_plan(
+            project_id="project-1",
+            source_asset_id="source-1",
+            candidate_id="cand-1",
+            script_text="Café costs $12.50 today.",
+            language="en-US",
+            enabled=True,
+            operator_reason="controlled narration check",
+            provider="voicestudio",
+            model_id="KittenML/kitten-tts-mini-0.8",
+            model_license="allowed",
+        )
     plan = build_plan(
         project_id="project-1",
         source_asset_id="source-1",
@@ -471,8 +484,19 @@ def test_voicestudio_plan_asks_for_the_omnivoice_engine(tmp_path: Path) -> None:
         enabled=True,
         operator_reason="controlled narration check",
         provider="voicestudio",
-        model_id="omnivoice",
+        voice_id="expr-voice-2-f",
+        engine_id="kittentts",
+        model_id="KittenML/kitten-tts-mini-0.8",
+        model_revision="c02725660cea441db4c383af69f1f26f5cd00947",
+        provider_version="0.5.7",
         model_license="allowed",
+        license_evidence_id="apache-2.0-kitten-tts-mini-0.8",
+        consent_record_id="round19-kittentts-preset",
+        sample_rate=24_000,
+        channels=1,
+        target_duration_us=1_000_000,
+        duration_tolerance_us=2_000_000,
     )
     render_plan(database, work, plan, provider, script_text="Café costs $12.50 today.")
-    assert provider.seen == "omnivoice"
+    assert provider.seen == "kittentts"
+    assert provider.calls == 1

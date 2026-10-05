@@ -106,7 +106,7 @@ def test_voice_doctor_reads_health_and_capabilities(monkeypatch: pytest.MonkeyPa
             self.payload = payload
             self.headers = {"Content-Type": "application/json"}
 
-        def read(self) -> bytes:
+        def read(self, _amount: int = -1) -> bytes:
             return self.payload
 
     class Connection:

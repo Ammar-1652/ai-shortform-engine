@@ -71,6 +71,7 @@ def advanced_render(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     force: Annotated[bool, typer.Option("--force")] = False,
+    narration_artifact: Annotated[str | None, typer.Option("--narration-artifact")] = None,
 ) -> None:
     """Render stored advanced plans with the production Remotion backend."""
     from clipforge.hero.advanced_service import render_advanced_drafts
@@ -81,6 +82,7 @@ def advanced_render(
             source_asset_id=source_asset_id,
             work_root=resolve_work_dir(work_dir),
             force=force,
+            narration_artifact_id=narration_artifact,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

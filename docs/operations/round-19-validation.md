@@ -1,6 +1,6 @@
 # Round 19 validation
 
-Round 19 starts from `9209df919d5f6a7503a5e1ae77da9773fc038209` on branch `round-19-real-source-voice-multilingual`. Status: PARTIAL. Both authorized sources now have a verified local delivery package. VoiceStudio live narration did not run. External platform publishing stays deferred. This file records commands and measured identities. It does not store credentials, cookies, bearer tokens, or filesystem paths.
+Round 19 starts from `9209df919d5f6a7503a5e1ae77da9773fc038209` on branch `round-19-real-source-voice-multilingual`. Status: PASS. Both authorized sources have a verified local delivery package, and one candidate also has a narration-enabled delivery from a commercially permitted VoiceStudio engine. External platform publishing stays deferred. This file records commands and measured identities. It does not store credentials, cookies, bearer tokens, or filesystem paths.
 
 ## Sources
 
@@ -47,7 +47,7 @@ WhisperX is not in the default project lock. Production English alignment uses W
 
 Narration is disabled unless `CLIPFORGE_VOICESTUDIO_ENABLED=1`. `CLIPFORGE_VOICESTUDIO_URL` selects the local service and defaults to loopback port 3900. Doctor then checks `GET /health` and `GET /.well-known/voicestudio-speech`. Generation uses the documented `POST /v1/audio/speech` body: model, voice, input, ISO 639-1 language, and WAV. The narration record stores the audio hash, size, duration, language, voice and model ids, provider version, and license identity. Cache identity includes the script hash, so a changed script misses. Fake-provider tests cover that path when the service is absent.
 
-`bun` 1.4.2 is installed for this user. VoiceStudio 0.5.7 is checked out outside this repository and is not vendored. `bun run dev:api` binds `127.0.0.1:3900`. With `CLIPFORGE_VOICESTUDIO_ENABLED=1`, `clipforge voice doctor` reported `health: ok`, protocol `voicestudio.speech.v1`, and service version `0.5.7`. A disabled doctor still reports `health: not_called` and does not open a socket. The speech route rejects model id `voicestudio`. Clipforge now sends engine id `omnivoice`. The default weight is `k2-fsa/OmniVoice`, which is not treated as commercially permitted. A live `POST /v1/audio/speech` for `Café costs $12.50 today.` loaded those weights and then returned no audio before a 180 second client timeout. No narration file was probed, hashed, or mixed into a Hero. Live smoke is not `voice_live_pass`. Fake-provider tests still cover cache hits, script changes, and provider-version changes.
+`bun` 1.4.2 is installed for this user. VoiceStudio 0.5.7 is checked out outside this repository and is not vendored. The service binds `127.0.0.1:3900`. Discovery reports protocol `voicestudio.speech.v1` and service version `0.5.7`. `GET /engines` lists `kittentts` as available, CPU-only, 24000 Hz, 1 channel, and not a cloning engine. `POST /v1/audio/speech` takes `model` as the engine id, `voice`, `input`, `language`, and `response_format`. The default `k2-fsa/OmniVoice` weight is not commercially permitted and was not used for this output. The selected model is `KittenML/kitten-tts-mini-0.8`, revision `c02725660cea441db4c383af69f1f26f5cd00947`, license Apache-2.0, voice `expr-voice-2-f`. A disabled doctor still does not open a socket. See [ADR 0055](../adr/0055-commercial-narration-engine.md).
 
 ## Envato
 
@@ -117,7 +117,13 @@ Arabic and Japanese checks stay `alignment_not_claimed`. English alignment is th
 
 ## VoiceStudio
 
-VoiceStudio 0.5.7 answered on loopback. Doctor and discovery passed. The Café narration request did not return audio: the service loaded `k2-fsa/OmniVoice` and the client timed out after 180 seconds with zero bytes. The previous process also exited during `model_load` with about 2 GiB free. No narration artifact was stored and no Hero was re-rendered with narration. The default model remains non-commercial, so a commercial delivery would fail closed. The round stays PARTIAL for that reason. Narration stays disabled unless a plan is explicitly enabled. A disabled plan does not contact the service.
+The first `kittentts` request spent its time loading the engine and returned no bytes before a 180 second client timeout. The following request, after that load, returned a 242078-byte WAV in about 4 seconds. ffprobe reports PCM signed 16-bit, 24000 Hz, mono, duration 5.041667 seconds. SHA-256 `bac1ab0aed6316fe28060c5f95f10b9260cbd860c523b382bb05edc81ddbdc97`. Artifact `18e63eb2-fa0e-4c20-a603-2e26066b4af7`. `voice verify` returned PASS.
+
+The identical request was a cache hit and did not call the speech route again. A changed script produced `215279544392748472777f026c94dbbbdea9d388144c2e2dee5bf8d266c69c88`. A changed model revision produced `c6375cc88b8e6baca5f96bcc162fa0852d5cc6339fdb40d5b881cb9ca1383777`. Voice `expr-voice-2-m` produced `3e26750cc21ca2948f38ef3df9ff032aa0ac478aa5a7e01ce765868e0b4bec4d`. Restoring the original identity returned the first hash.
+
+Advanced Hero set `6abeb53f-c513-4cb7-88eb-689a3b2544f6` rendered with that narration. The MP4 is 1080×1920, H.264, AAC, 48000 Hz stereo, 30/1, 18.475 seconds, SHA-256 `c1a8a90f0cacc21025a372ae9198de3cd352999792b90f7172a7817ef7cf84b5`. QA set `11c825cb-d7af-4244-909c-619d06b925f1` passed, SHA-256 `892524068c362610bae348a4e9c44825fe6cde63a6785314596fb0e96d17961b`. Local delivery `e5a07bd9c23e489c0c5228a21a568c79` has manifest SHA-256 `80ff81a1eb571c2221c2acdf4e20632eebeadf07bdf16b8002682ab84bd50ea7`. `publish verify` returned local delivery passed and external platform `not_configured`. The earlier delivery manifests were not replaced.
+
+Narration stays disabled unless a plan is explicitly enabled. A disabled plan does not contact the service. KittenTTS is English-only, so this is not an Arabic or Japanese alignment claim.
 
 ## Remaining limitations
 
@@ -125,5 +131,5 @@ VoiceStudio 0.5.7 answered on loopback. Doctor and discovery passed. The Café n
 - Arabic and Japanese timing is provisional and is not a WhisperX claim.
 - External platform publishing stays deferred. No publisher is registered.
 - Review decisions are controlled validation notes. They are not automatic approval.
-- VoiceStudio live narration did not return audio, so cache, hash, and narration-through-Hero checks for that service were not run.
-- The self-hosted CI URL for this remediation commit is the Actions run on PR #19.
+- KittenTTS does not clone a voice and does not align Arabic or Japanese.
+- The self-hosted CI URL for this narration commit is the Actions run on PR #19.

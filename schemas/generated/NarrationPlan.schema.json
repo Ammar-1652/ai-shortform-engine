@@ -47,12 +47,35 @@
       "title": "Channels",
       "type": "integer"
     },
+    "commercial_use": {
+      "default": "allowed",
+      "enum": [
+        "allowed",
+        "prohibited",
+        "unknown",
+        "cc_by_nc"
+      ],
+      "title": "Commercial Use",
+      "type": "string"
+    },
+    "consent_record_id": {
+      "default": "consent-1",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Consent Record Id",
+      "type": "string"
+    },
     "consent_status": {
       "enum": [
         "recorded",
         "missing"
       ],
       "title": "Consent Status",
+      "type": "string"
+    },
+    "conversion_recipe": {
+      "default": "identity",
+      "title": "Conversion Recipe",
       "type": "string"
     },
     "ducking_policy": {
@@ -64,9 +87,23 @@
       "title": "Ducking Policy",
       "type": "string"
     },
+    "duration_tolerance_us": {
+      "default": 100000,
+      "maximum": 2000000,
+      "minimum": 0,
+      "title": "Duration Tolerance Us",
+      "type": "integer"
+    },
     "enabled": {
       "title": "Enabled",
       "type": "boolean"
+    },
+    "engine_id": {
+      "default": "fake-engine",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Engine Id",
+      "type": "string"
     },
     "gain_db": {
       "default": 0,
@@ -89,6 +126,13 @@
     "language": {
       "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
       "title": "Language",
+      "type": "string"
+    },
+    "license_evidence_id": {
+      "default": "evidence-voice",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "License Evidence Id",
       "type": "string"
     },
     "loudness_lufs": {
@@ -119,10 +163,26 @@
       "title": "Model License",
       "type": "string"
     },
+    "model_revision": {
+      "default": "rev-1",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
     "operator_reason": {
       "maxLength": 400,
       "minLength": 1,
       "title": "Operator Reason",
+      "type": "string"
+    },
+    "output_use": {
+      "default": "internal",
+      "enum": [
+        "commercial",
+        "internal"
+      ],
+      "title": "Output Use",
       "type": "string"
     },
     "plan_id": {
@@ -190,6 +250,16 @@
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Voice Id",
+      "type": "string"
+    },
+    "voice_type": {
+      "default": "preset",
+      "enum": [
+        "designed",
+        "cloned",
+        "preset"
+      ],
+      "title": "Voice Type",
       "type": "string"
     }
   },
