@@ -109,6 +109,28 @@ class WhisperXAlignment:
         )
 
 
+def production_alignment_backend(
+    language: str | None,
+    *,
+    allow_model_download: bool = False,
+) -> WhisperXAlignment:
+    """Pick the live aligner for one language. A missing model is not a pass.
+
+    Unit tests inject ``FakeForcedAlignment`` themselves. A production campaign
+    does not.
+    """
+    from clipforge.language.registry import alignment_claim
+
+    normalized = "en-US" if language in {None, "", "en"} else language
+    try:
+        claim = alignment_claim(normalized)
+    except ValueError as exc:
+        raise MediaError("unsupported_language") from exc
+    if claim != "whisperx":
+        raise MediaError("alignment_not_claimed")
+    return WhisperXAlignment(allow_model_download=allow_model_download)
+
+
 def alignment_config_sha256(*, model_name: str, whisperx_version: str, device: str) -> str:
     payload = {"device": device, "model_name": model_name, "whisperx_version": whisperx_version}
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")

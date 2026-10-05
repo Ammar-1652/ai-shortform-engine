@@ -1,0 +1,181 @@
+{
+  "additionalProperties": false,
+  "description": "Why one candidate was kept. The runner does not approve it.",
+  "properties": {
+    "advanced_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Advanced Artifact Id"
+    },
+    "alignment_status": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Alignment Status",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "caption_quality": {
+      "default": "provisional",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Caption Quality",
+      "type": "string"
+    },
+    "delivery_status": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Delivery Status",
+      "type": "string"
+    },
+    "hero_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hero Artifact Id"
+    },
+    "hero_review_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hero Review Id"
+    },
+    "narration_status": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Narration Status",
+      "type": "string"
+    },
+    "preview_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Preview Artifact Id"
+    },
+    "qa_status": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Qa Status",
+      "type": "string"
+    },
+    "rank": {
+      "minimum": 1,
+      "title": "Rank",
+      "type": "integer"
+    },
+    "review_decision": {
+      "default": "not_recorded",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Review Decision",
+      "type": "string"
+    },
+    "review_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "score": {
+      "default": "unavailable",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Score",
+      "type": "string"
+    },
+    "selection_reason": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Selection Reason",
+      "type": "string"
+    },
+    "source_end_us": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source End Us"
+    },
+    "source_start_us": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Start Us"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "rank",
+    "selection_reason",
+    "alignment_status",
+    "narration_status",
+    "qa_status",
+    "delivery_status"
+  ],
+  "title": "CampaignCandidateRecord",
+  "type": "object"
+}

@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from clipforge import __version__
 from clipforge.errors import ClipforgeError, MediaError, StorageError
 from clipforge.jobs.promote import PromotionError, promote
@@ -850,18 +852,75 @@ def _cache_hit(
     return None
 
 
-def _package_ok(root: Path, document: PublishPackageDocument, manifest: Path) -> bool:
-    if manifest.is_symlink() or not manifest.is_file():
-        return False
+def explain_package(root: Path, manifest: Path) -> tuple[PublishPackageDocument | None, str | None]:
+    """Return a loaded package, or a reason code when the bytes are not intact.
+
+    The reason is ``None`` only when every listed file, the checksum, and the
+    package directory are regular paths inside the work root.
+    """
+    if _symlink_component(root, manifest):
+        return None, "symlink"
+    if not manifest.is_file():
+        return None, "delivery_missing"
+    try:
+        ensure_within(root, manifest.resolve())
+    except ClipforgeError:
+        return None, "traversal"
+    try:
+        document = PublishPackageDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return None, "malformed_package"
     package = manifest.parent
-    if package.is_symlink():
-        return False
+    if package.is_symlink() or not package.is_dir():
+        return document, "symlink"
+    expected = root / "deliveries" / document.delivery_id
+    if package.resolve() != expected.resolve():
+        return document, "traversal"
     for item in document.files:
         path = _relative_file(root, item.relative_path)
-        if path is None or path.stat().st_size != item.size_bytes or sha256_file(path) != item.sha256:
-            return False
+        if path is None:
+            if _symlink_component(root, root / item.relative_path):
+                return document, "symlink"
+            return document, "delivery_missing"
+        try:
+            path.resolve().relative_to(package.resolve())
+        except ValueError:
+            return document, "traversal"
+        size = path.stat().st_size
+        if item.role == "video" and size == 0:
+            return document, "zero_byte_video"
+        if size != item.size_bytes or sha256_file(path) != item.sha256:
+            return document, "delivery_changed"
     checksum = package / "checksums.sha256"
-    return _checksums_match(package, document, checksum)
+    if checksum.is_symlink():
+        return document, "symlink"
+    if not checksum.is_file():
+        return document, "checksum_missing"
+    try:
+        matched = _checksums_match(package, document, checksum)
+    except PublishError:
+        return document, "checksum_changed"
+    if not matched:
+        return document, "checksum_changed"
+    return document, None
+
+
+def _symlink_component(root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def _package_ok(root: Path, document: PublishPackageDocument, manifest: Path) -> bool:
+    loaded, reason = explain_package(root, manifest)
+    return reason is None and loaded is not None and loaded.delivery_id == document.delivery_id
 
 
 def _checksums_match(package: Path, document: PublishPackageDocument, checksum: Path) -> bool:
