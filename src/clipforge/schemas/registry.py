@@ -58,6 +58,11 @@ from clipforge.schemas.campaign import (
     SourceInventoryManifest,
     SourceRightsEvidence,
 )
+from clipforge.schemas.campaign_operator import (
+    CampaignImportSnapshot,
+    CampaignSelectionDocument,
+    CampaignSourceChoice,
+)
 from clipforge.schemas.campaign_run import (
     CampaignCandidateRecord,
     CampaignProductionRun,
@@ -311,6 +316,9 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CampaignCandidateRecord,
     CampaignSourceRun,
     CampaignProductionRun,
+    CampaignSourceChoice,
+    CampaignSelectionDocument,
+    CampaignImportSnapshot,
     SourceAcquisition,
     SourceRightsEvidence,
     OperatorAction,

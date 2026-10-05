@@ -897,6 +897,11 @@ def _bind_one(database: Database, source_id: str) -> _Bound:
     return _Bound(source_id, binding, None, digest)
 
 
+def bind_campaign_source(database: Database, source_id: str) -> _Bound:
+    """Re-check one catalogue source. This reads the manifest and does not write."""
+    return _bind_one(database, source_id)
+
+
 def _reject_mixed(bound: list[_Bound]) -> None:
     projects = {item.binding.project_id for item in bound if item.binding is not None}
     if len(projects) > 1:

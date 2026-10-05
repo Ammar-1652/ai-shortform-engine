@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "description": "Operator-supplied catalogue snapshot. It is not a live account crawl.\n\nA remote reference is metadata. This document does not download it.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "language": {
+      "default": "en-US",
+      "title": "Language",
+      "type": "string"
+    },
+    "narration_enabled": {
+      "default": false,
+      "title": "Narration Enabled",
+      "type": "boolean"
+    },
+    "operator_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
+    "policy_state": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Policy State",
+      "type": "string"
+    },
+    "remote_media_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Remote Media Ref"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_state": {
+      "enum": [
+        "selected",
+        "withheld"
+      ],
+      "title": "Selection State",
+      "type": "string"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "source_ids",
+    "operator_id",
+    "policy_state",
+    "selection_state"
+  ],
+  "title": "CampaignImportSnapshot",
+  "type": "object"
+}

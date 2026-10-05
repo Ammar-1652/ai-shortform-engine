@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "description": "One catalogue source named by an operator selection.",
+  "properties": {
+    "rights_state": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Rights State",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "source_sha256",
+    "rights_state"
+  ],
+  "title": "CampaignSourceChoice",
+  "type": "object"
+}

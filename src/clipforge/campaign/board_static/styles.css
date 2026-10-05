@@ -1,0 +1,28 @@
+body {
+  font-family: sans-serif;
+  margin: 1.5rem;
+  background: #f6f4ef;
+  color: #1c1915;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 1rem;
+}
+
+.card {
+  border: 1px solid #c8c2b4;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: #fffdf8;
+}
+
+p {
+  margin: 0.2rem 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: #1c1915;
+}
