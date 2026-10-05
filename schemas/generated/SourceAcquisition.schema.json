@@ -62,6 +62,31 @@
       "title": "Operator Confirmation",
       "type": "boolean"
     },
+    "probe_facts": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Probe Facts"
+    },
     "provider": {
       "maxLength": 40,
       "minLength": 1,
