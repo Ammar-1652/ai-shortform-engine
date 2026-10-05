@@ -63,11 +63,15 @@ A live `POST /v1/audio/speech` with engine `kittentts`, voice `expr-voice-2-f`, 
 
 The live search flags were unset, so this round did not send a new MCP request and did not rewrite `asset_download_requests.json` or `asset_download_requests.md`. The Round 19 search remains the last live record: provider 3.2.4, tool `search_stock_video`, query `office desk`, filters mapped to categories, orientation, `1080p (Full HD)`, and duration bounds. A container filter was rejected before `tools/call`. Direct download URLs stayed null, and campaign policy blocked every row. Round 20 tests reject a blocked hit, a remote URL, and a hit with no license evidence before it can enter a render. An Envato miss does not fail a campaign that does not need outside assets.
 
+## Review, producer, and alignment checks
+
+Hero and candidate decisions use the newest review for the current artifact. A later `rejected` or `changes_requested` decision overrides an older approval stored on the delivery package. Every stage artifact requires a succeeded producer job before `run` can mark the source succeeded. English alignment is the Hero alignment file: its hash, model, revision, transcript hash, source, and producer are checked. Invalidating a succeeded run sets the campaign job to `blocked` together with the sidecar.
+
 ## Integrity correction
 
 A later review found that manifest hashes alone accepted a corrupt MP4, a review for another artifact, a symlink parent, and a cache hit that did not re-read the files. The corrected runner loads the publish package, checks every listed file and `checksums.sha256`, requires succeeded producer jobs, and binds the candidate review to the current preview artifact. The hero approval must match the current hero or advanced artifact.
 
-On the restored authorized files, campaign run `018328af-e84b-4274-be72-41f4685c7945` verified. A second run was a cache hit and sent no narration request. Replacing one byte of the src-before-famous delivery MP4 made the next run `partial` and stopped that source from staying `succeeded`. The original video bytes were restored. Their SHA-256 is `c1a8a90f0cacc21025a372ae9198de3cd352999792b90f7172a7817ef7cf84b5`.
+On the restored authorized files, campaign run `6e49eeda-f095-4fe5-9832-c30f07806a19` verified after the review and producer checks. A second unchanged run was a cache hit and sent no narration request. A temporary newer Hero rejection on the current src-before-famous Hero artifact made the next run `partial` with `review_rejected` and left the other source succeeded. A temporary failed transcript producer blocked that source. Removing the alignment file returned `alignment_missing`. Those temporary rows and the alignment file were restored before the final verified run. An earlier verified run in the same sequence was `a50374d4-553d-42fe-b7fa-4d39ad9d0aa0`. The prior run `018328af-e84b-4274-be72-41f4685c7945` verified. A second run was a cache hit and sent no narration request. Replacing one byte of the src-before-famous delivery MP4 made the next run `partial` and stopped that source from staying `succeeded`. The original video bytes were restored. Their SHA-256 is `c1a8a90f0cacc21025a372ae9198de3cd352999792b90f7172a7817ef7cf84b5`.
 
 ## Recovery
 

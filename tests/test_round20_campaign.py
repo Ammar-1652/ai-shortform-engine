@@ -41,6 +41,7 @@ from clipforge.media.local_file import path_to_file_uri
 from clipforge.schemas.assets import AssetSearchHit
 from clipforge.schemas.campaign_run import CampaignCandidateRecord, CampaignProductionRun
 from clipforge.schemas.governance import ReviewDecision
+from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.project import Project
@@ -367,12 +368,13 @@ def test_security_bindings_and_stale_evidence(tmp_path: Path) -> None:
         verify_campaign_run(world.database, world.work, document.campaign_run_id)
     assert transcript.value.code == "transcript_changed"
     source.transcript.write_bytes(b"transcript-before")
+    original_alignment = json.loads(source.manifest.read_text(encoding="utf-8"))["alignment_sha256"]
     _patch_manifest(source.manifest, "alignment_sha256", "b" * 64)
     _refresh_checksum(source.manifest)
     with pytest.raises(CampaignError) as alignment:
         verify_campaign_run(world.database, world.work, document.campaign_run_id)
     assert alignment.value.code == "alignment_changed"
-    _patch_manifest(source.manifest, "alignment_sha256", "a" * 64)
+    _patch_manifest(source.manifest, "alignment_sha256", original_alignment)
     _refresh_checksum(source.manifest)
     _patch_manifest(source.manifest, "qa_set_sha256", "c" * 64)
     _refresh_checksum(source.manifest)
@@ -642,6 +644,19 @@ def _insert_source(
         ),
     )
     delivery_id = f"delivery-{slug}"
+    alignment_id = f"align-{slug}"
+    alignment_sha = _write_alignment(
+        work,
+        project_id=project_id,
+        asset_id=asset_id,
+        candidate_id=candidate_id,
+        alignment_id=alignment_id,
+        transcript_id=ids["transcript_json"],
+        transcript_sha=sha256_file(paths["transcript_json"]),
+        preview_id=ids["rough_preview_set_json"],
+        review_id=review_id,
+        job_id=job_id,
+    )
     manifest = _write_package(
         work,
         delivery_id=delivery_id,
@@ -653,6 +668,8 @@ def _insert_source(
         advanced_id=advanced_id,
         mine_id=mine_id,
         source_sha=digest,
+        alignment_id=alignment_id,
+        alignment_sha=alignment_sha,
     )
     publish_id = f"publish-{slug}"
     _point(connection, project_id, job_id, asset_id, publish_id, "publish_package_json", manifest)
@@ -686,6 +703,8 @@ def _write_package(
     advanced_id: str,
     mine_id: str,
     source_sha: str,
+    alignment_id: str,
+    alignment_sha: str,
 ) -> Path:
     package = work / "deliveries" / delivery_id
     video_dir = package / "candidates" / candidate_id
@@ -724,8 +743,8 @@ def _write_package(
         advanced_artifact_size_bytes=2,
         advanced_plan_id=f"plan-{delivery_id}",
         advanced_plan_sha256="e" * 64,
-        alignment_id=f"align-{delivery_id}",
-        alignment_sha256="a" * 64,
+        alignment_id=alignment_id,
+        alignment_sha256=alignment_sha,
         qa_set_id=f"qa-doc-{delivery_id}",
         qa_set_sha256=qa_hash,
         approval_review_id=hero_review_id,
@@ -739,6 +758,66 @@ def _write_package(
     manifest.write_text(document.model_dump_json(indent=2) + "\n", encoding="utf-8")
     (package / "checksums.sha256").write_text(_checksum_text(package, delivery_id, files), encoding="utf-8")
     return manifest
+
+
+def _write_alignment(
+    work: Path,
+    *,
+    project_id: str,
+    asset_id: str,
+    candidate_id: str,
+    alignment_id: str,
+    transcript_id: str,
+    transcript_sha: str,
+    preview_id: str,
+    review_id: str,
+    job_id: str,
+) -> str:
+    path = (
+        work
+        / "projects"
+        / project_id
+        / "sources"
+        / asset_id
+        / "hero"
+        / "alignments"
+        / candidate_id
+        / "alignment.json"
+    )
+    path.parent.mkdir(parents=True)
+    document = ForcedAlignmentDocument(
+        alignment_id=alignment_id,
+        project_id=project_id,
+        source_asset_id=asset_id,
+        candidate_id=candidate_id,
+        transcript_id=transcript_id,
+        transcript_sha256=transcript_sha,
+        asr_audio_sha256="ab" * 32,
+        time_map_sha256="cd" * 32,
+        review_id=review_id,
+        review_digest="ef" * 32,
+        rough_preview_artifact_id=preview_id,
+        model_name="WAV2VEC2_ASR_BASE_960H",
+        whisperx_version="3.4.5",
+        device="cpu",
+        config_sha256="12" * 32,
+        words=[
+            AlignedWord(
+                word_id=f"word-{candidate_id}",
+                candidate_id=candidate_id,
+                text="Hello",
+                source_start_us=0,
+                source_end_us=1_000,
+                output_start_us=0,
+                output_end_us=1_000,
+                output_start_frame=0,
+                output_end_frame_exclusive=1,
+            )
+        ],
+        provenance=provenance([asset_id], job_id=job_id),
+    )
+    path.write_text(document.model_dump_json() + "\n", encoding="utf-8")
+    return sha256_file(path)
 
 
 def _checksum_text(package: Path, delivery_id: str, files: list[PublishFile]) -> str:

@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 
 from clipforge.campaign.production import resume_campaign, run_campaign, verify_campaign_run
 from clipforge.campaign.providers import CampaignError
+from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.jobs import JobRecord, JobStatus
-from clipforge.storage import insert_job
+from clipforge.storage import insert_job, insert_review
 from tests.helpers import stamp
 from tests.test_round20_campaign import _refresh_checksum, _world
 
@@ -263,8 +265,282 @@ def test_narration_requires_a_succeeded_producer(tmp_path: Path) -> None:
     assert exc.value.code == "producer_failed"
 
 
+@pytest.mark.parametrize(
+    "artifact_id",
+    [
+        "transcript_json-before",
+        "visual_analysis_json-before",
+        "mine-before",
+        "rough_preview_set_json-before",
+        "hero_draft_set_json-before",
+        "advanced-before",
+        "qa-before",
+        "publish-before",
+    ],
+)
+def test_failed_producer_blocks_the_run(tmp_path: Path, artifact_id: str) -> None:
+    world = _world(tmp_path)
+    failed_job = f"failed-{artifact_id}"
+    with world.database.transaction() as connection:
+        insert_job(
+            connection,
+            JobRecord(
+                job_id=failed_job,
+                project_id=world.project_id,
+                kind="fixture",
+                status=JobStatus.FAILED,
+                created_at=stamp(),
+                updated_at=stamp(),
+                error_message="encoder",
+                payload={},
+            ),
+        )
+        connection.execute(
+            "UPDATE artifacts SET job_id = ? WHERE artifact_id = ?",
+            (failed_job, artifact_id),
+        )
+    document = run_campaign(world.database, world.work)
+    by_id = {item.source_id: item for item in document.sources}
+    assert document.status != "succeeded"
+    assert by_id["src-before-famous"].status != "succeeded"
+    assert by_id["src-american-secret"].status == "succeeded"
+    with world.database.connect() as connection:
+        row = connection.execute(
+            "SELECT status FROM jobs WHERE kind = 'campaign_production' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert row[0] != "succeeded"
+    again = run_campaign(world.database, world.work)
+    assert again.status != "succeeded"
+
+
+def test_missing_transcription_producer_blocks_the_run(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    with world.database.transaction() as connection:
+        connection.execute("UPDATE artifacts SET job_id = NULL WHERE artifact_id = 'transcript_json-before'")
+    document = run_campaign(world.database, world.work)
+    by_id = {item.source_id: item for item in document.sources}
+    assert by_id["src-before-famous"].reason_code == "producer_missing"
+    assert by_id["src-american-secret"].status == "succeeded"
+
+
+def test_newer_hero_rejection_invalidates_the_cache(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    first = run_campaign(world.database, world.work)
+    cached = run_campaign(world.database, world.work)
+    assert cached.campaign_run_id == first.campaign_run_id
+    _add_hero_review(world, "hero-rejected", "rejected")
+    with pytest.raises(CampaignError) as exc:
+        verify_campaign_run(world.database, world.work, first.campaign_run_id)
+    assert exc.value.code == "review_rejected"
+    third = run_campaign(world.database, world.work)
+    by_id = {item.source_id: item for item in third.sources}
+    assert third.campaign_run_id != first.campaign_run_id
+    assert by_id["src-before-famous"].status != "succeeded"
+    assert by_id["src-before-famous"].reason_code == "review_rejected"
+    assert by_id["src-american-secret"].status == "succeeded"
+    stored = _campaign_text(world.work, first.campaign_run_id)
+    assert stored["status"] == "blocked"
+    assert _campaign_job_status(world, first.campaign_run_id) == "blocked"
+
+
+def test_newer_changes_requested_and_a_later_approval(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    first = run_campaign(world.database, world.work)
+    _add_hero_review(world, "hero-changes", "changes_requested")
+    with pytest.raises(CampaignError) as exc:
+        verify_campaign_run(world.database, world.work, first.campaign_run_id)
+    assert exc.value.code == "review_changes_requested"
+    blocked = run_campaign(world.database, world.work)
+    assert {item.source_id: item.reason_code for item in blocked.sources}["src-before-famous"] == (
+        "review_changes_requested"
+    )
+    _add_hero_review(world, "hero-approved-again", "approved", days=2)
+    restored = run_campaign(world.database, world.work)
+    assert restored.status == "succeeded"
+    assert verify_campaign_run(world.database, world.work, restored.campaign_run_id).startswith("PASS")
+
+
+def test_hero_review_bindings(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    with world.database.transaction() as connection:
+        connection.execute("DELETE FROM reviews WHERE review_id = 'hero-review-before'")
+    _add_hero_review(world, "hero-other-candidate", "approved", candidate_id="candidate-secret")
+    other = run_campaign(world.database, world.work)
+    assert {item.source_id: item.reason_code for item in other.sources}["src-before-famous"] == "stale_review"
+    with world.database.transaction() as connection:
+        connection.execute("DELETE FROM reviews WHERE review_id = 'hero-other-candidate'")
+    _add_hero_review(
+        world,
+        "hero-other-source",
+        "approved",
+        artifact_id="hero_draft_set_json-secret",
+    )
+    cross = run_campaign(world.database, world.work, force=True)
+    assert {item.source_id: item.reason_code for item in cross.sources}["src-before-famous"] == "cross_source"
+    with world.database.transaction() as connection:
+        connection.execute("DELETE FROM reviews WHERE review_id = 'hero-other-source'")
+    _add_hero_review(world, "hero-wrong-subject", "approved", subject_kind="caption")
+    wrong = run_campaign(world.database, world.work, force=True)
+    assert {item.source_id: item.reason_code for item in wrong.sources}["src-before-famous"] == "review_subject"
+    with world.database.transaction() as connection:
+        connection.execute("DELETE FROM reviews WHERE artifact_id = 'hero_draft_set_json-before'")
+    missing = run_campaign(world.database, world.work, force=True)
+    assert _reason(missing, "src-before-famous") == "review_missing"
+
+
+def test_alignment_file_failures(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    document = run_campaign(world.database, world.work)
+    path = _alignment_path(world.work, "before")
+    original = path.read_bytes()
+    path.unlink()
+    with pytest.raises(CampaignError) as verify_missing:
+        verify_campaign_run(world.database, world.work, document.campaign_run_id)
+    assert verify_missing.value.code == "alignment_missing"
+    missing = run_campaign(world.database, world.work, force=True)
+    assert _reason(missing, "src-before-famous") == "alignment_missing"
+    path.write_bytes(b"not-json")
+    corrupt = run_campaign(world.database, world.work, force=True)
+    assert _reason(corrupt, "src-before-famous") == "alignment_changed"
+    path.write_bytes(original)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["whisperx_version"] = "9.9.9"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    _retie_alignment_hash(world.work, "before")
+    revised = run_campaign(world.database, world.work, force=True)
+    assert {item.source_id: item.reason_code for item in revised.sources}["src-before-famous"] == (
+        "model_revision_changed"
+    )
+    path.write_bytes(original)
+    _retie_alignment_hash(world.work, "before")
+    manifest = world.work / "deliveries" / "delivery-before" / "manifest.json"
+    package = json.loads(manifest.read_text(encoding="utf-8"))
+    package["alignment_id"] = "align-secret"
+    manifest.write_text(json.dumps(package), encoding="utf-8")
+    _refresh_checksum(manifest)
+    wrong = run_campaign(world.database, world.work, force=True)
+    assert _reason(wrong, "src-before-famous") == "alignment_changed"
+
+
+def test_invalidation_keeps_sidecar_and_job_together(tmp_path: Path) -> None:
+    world = _world(tmp_path)
+    first = run_campaign(world.database, world.work)
+    _video(world.work, "before").write_bytes(b"broken")
+
+    def cancel(step: str) -> None:
+        if step == "cancellation":
+            raise CampaignError("cancelled", code="cancelled")
+
+    cancelled = run_campaign(world.database, world.work, invalidation_hook=cancel)
+    assert cancelled.status != "succeeded"
+    assert _campaign_text(world.work, first.campaign_run_id)["status"] == "succeeded"
+    assert _campaign_job_status(world, first.campaign_run_id) == "succeeded"
+
+    def fail_db(step: str) -> None:
+        if step == "database":
+            raise RuntimeError("database unavailable")
+
+    failed_db = run_campaign(world.database, world.work, invalidation_hook=fail_db)
+    assert failed_db.status != "succeeded"
+    assert _campaign_text(world.work, first.campaign_run_id)["status"] == "succeeded"
+    assert _campaign_job_status(world, first.campaign_run_id) == "succeeded"
+
+    def fail_sidecar(step: str) -> None:
+        if step == "sidecar":
+            raise RuntimeError("sidecar unavailable")
+
+    failed_side = run_campaign(world.database, world.work, invalidation_hook=fail_sidecar)
+    assert failed_side.status != "succeeded"
+    assert _campaign_text(world.work, first.campaign_run_id)["status"] == "succeeded"
+    assert _campaign_job_status(world, first.campaign_run_id) == "succeeded"
+    applied = run_campaign(world.database, world.work)
+    assert _campaign_text(world.work, first.campaign_run_id)["status"] == "blocked"
+    assert _campaign_job_status(world, first.campaign_run_id) == "blocked"
+    assert applied.status != "succeeded"
+
+
+def _reason(document: object, source_id: str) -> str:
+    sources = document.sources
+    return str({item.source_id: item.reason_code for item in sources}[source_id])
+
+
 def _video(work: Path, slug: str) -> Path:
     return work / "deliveries" / f"delivery-{slug}" / "candidates" / f"candidate-{slug}" / "video.mp4"
+
+
+def _alignment_path(work: Path, slug: str) -> Path:
+    return (
+        work
+        / "projects"
+        / "project-1"
+        / "sources"
+        / f"asset-{slug}"
+        / "hero"
+        / "alignments"
+        / f"candidate-{slug}"
+        / "alignment.json"
+    )
+
+
+def _retie_alignment_hash(work: Path, slug: str) -> None:
+    import hashlib
+
+    path = _alignment_path(work, slug)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest = work / "deliveries" / f"delivery-{slug}" / "manifest.json"
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    payload["alignment_sha256"] = digest
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    _refresh_checksum(manifest)
+
+
+def _add_hero_review(
+    world: object,
+    review_id: str,
+    decision: str,
+    *,
+    candidate_id: str = "candidate-before",
+    artifact_id: str = "hero_draft_set_json-before",
+    subject_kind: str = "hero",
+    days: int = 1,
+) -> None:
+    database = world.database
+    with database.transaction() as connection:
+        insert_review(
+            connection,
+            ReviewDecision(
+                review_id=review_id,
+                project_id="project-1",
+                artifact_id=artifact_id,
+                candidate_id=candidate_id,
+                subject_kind=subject_kind,  # type: ignore[arg-type]
+                decision=decision,  # type: ignore[arg-type]
+                reviewer_id="reviewer",
+                created_at=stamp() + timedelta(days=days),
+                notes="",
+            ),
+        )
+
+
+def _campaign_text(work: Path, campaign_run_id: str) -> dict[str, object]:
+    path = work / "campaigns" / "runs" / campaign_run_id / "manifest.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+    return payload
+
+
+def _campaign_job_status(world: object, campaign_run_id: str) -> str:
+    database = world.database
+    with database.connect() as connection:
+        rows = connection.execute(
+            "SELECT status, payload_json FROM jobs WHERE kind = 'campaign_production'"
+        ).fetchall()
+    for status, payload_json in rows:
+        payload = json.loads(payload_json)
+        if payload.get("campaign_run_id") == campaign_run_id:
+            return str(status)
+    raise AssertionError(campaign_run_id)
 
 
 def _set_review(world: object, review_id: str, column: str, value: str) -> None:

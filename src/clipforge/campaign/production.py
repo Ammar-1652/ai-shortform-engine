@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from clipforge.campaign.antoine import CAMPAIGN_ID, inventory_sources, selected_files
 from clipforge.campaign.providers import CampaignError
 from clipforge.errors import MediaError, StorageError
-from clipforge.hero.advanced_assets import confine_file_uri
+from clipforge.hero.advanced_assets import confine_file_uri, confine_work_path
 from clipforge.language.registry import (
     ENGLISH_ALIGNMENT_CHECKPOINT,
     ENGLISH_ALIGNMENT_MODEL,
@@ -55,6 +55,8 @@ from clipforge.schemas.campaign_run import (
     StageName,
     StageStatus,
 )
+from clipforge.schemas.governance import ReviewDecision
+from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.voice import NarrationAudioArtifact
@@ -63,7 +65,6 @@ from clipforge.storage import (
     find_artifact,
     get_artifact,
     get_job,
-    get_review,
     insert_artifact,
     insert_job,
     list_artifacts_for_source,
@@ -148,6 +149,7 @@ class _Narration:
     artifact_id: str | None
     audio_sha256: str | None
     reason: str
+    job_id: str | None = None
 
 
 def source_may_proceed(rights_state: str) -> bool:
@@ -227,6 +229,7 @@ def run_campaign(
     created_by: str = "campaign",
     narration_probe: NarrationProbe | None = None,
     promotion_hook: PromotionHook | None = None,
+    invalidation_hook: PromotionHook | None = None,
 ) -> CampaignProductionRun:
     """Execute or reuse one campaign. A failed source does not erase the others."""
     planned = plan_campaign(
@@ -257,7 +260,7 @@ def run_campaign(
         cached = _cached_run(root, document.fingerprint)
         if cached is not None and _evidence_current(database, root, cached):
             return cached
-    _invalidate_stale(database, root, planned.campaign_id)
+    _invalidate_stale(database, root, planned.campaign_id, invalidation_hook)
     _publish(database, root, document, created_by, replace_job=False, promotion_hook=promotion_hook)
     return document
 
@@ -592,6 +595,7 @@ def _stage(
         return CampaignStageRecord(
             stage="narration",
             status="succeeded" if ok else "blocked",
+            job_id=narration.job_id,
             artifact_id=narration.artifact_id,
             artifact_sha256=narration.audio_sha256,
             cache_hit=ok,
@@ -606,27 +610,7 @@ def _stage(
             reason_code="source_hash_matched",
         )
     if stage == "align":
-        if claim != "whisperx":
-            return CampaignStageRecord(
-                stage="align",
-                status="not_run",
-                cache_hit=False,
-                reason_code="alignment_not_claimed",
-            )
-        if package is None or not package.alignment_sha256:
-            return CampaignStageRecord(
-                stage="align",
-                status="blocked",
-                cache_hit=False,
-                reason_code="alignment_missing",
-            )
-        return CampaignStageRecord(
-            stage="align",
-            status="succeeded",
-            cache_hit=True,
-            artifact_sha256=package.alignment_sha256,
-            reason_code="whisperx",
-        )
+        return _alignment_stage(database, root, binding, package, claim)
     if stage == "ingest":
         return CampaignStageRecord(stage="ingest", status="succeeded", cache_hit=True, reason_code="reused")
     if stage == "review":
@@ -652,6 +636,9 @@ def _stage(
                 cache_hit=False,
                 reason_code="missing_artifact",
             )
+        problem = _stage_producer_problem(database, hero, binding, "hero_draft_set_json")
+        if problem:
+            return _blocked_stage("hero_plan", problem, hero)
         return CampaignStageRecord(
             stage="hero_plan",
             status="succeeded",
@@ -677,6 +664,9 @@ def _stage(
                 cache_hit=False,
                 reason_code="missing_artifact",
             )
+        problem = _stage_producer_problem(database, row, binding, "publish_package_json")
+        if problem:
+            return _blocked_stage("delivery", problem, row)
         return CampaignStageRecord(
             stage="delivery",
             status="succeeded",
@@ -703,6 +693,9 @@ def _stage(
             cache_hit=False,
             reason_code=reason,
         )
+    problem = _stage_producer_problem(database, row, binding, kind or row.kind)
+    if problem:
+        return _blocked_stage(stage, problem, row)
     return CampaignStageRecord(
         stage=stage,
         status="succeeded",
@@ -765,7 +758,7 @@ def _narration(
             reasons.append(decision)
     if accepted:
         chosen = sorted(accepted, key=lambda item: item.artifact_id)[0]
-        return _Narration(chosen.artifact_id, chosen.audio_sha256, "verified_live")
+        return _Narration(chosen.artifact_id, chosen.audio_sha256, "verified_live", chosen.provenance.job_id)
     if probe is not None and not reasons:
         try:
             probe(language, ENGLISH_NARRATION_SCRIPT)
@@ -966,6 +959,123 @@ def _files_sha256(document: object) -> str:
     return hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
+def _blocked_stage(stage: StageName, reason: str, row: ArtifactRow) -> CampaignStageRecord:
+    return CampaignStageRecord(
+        stage=stage,
+        status="blocked",
+        job_id=row.job_id,
+        artifact_id=row.artifact_id,
+        cache_hit=False,
+        reason_code=reason,
+    )
+
+
+def _stage_producer_problem(
+    database: Database,
+    row: ArtifactRow,
+    binding: SourceBinding,
+    expected_kind: str,
+) -> str | None:
+    if row.kind != expected_kind:
+        return "artifact_missing"
+    if row.project_id != binding.project_id:
+        return "cross_project"
+    if row.source_asset_id != binding.source_asset_id:
+        return "cross_source"
+    return _producer_problem(database, row.job_id, binding.project_id)
+
+
+def _alignment_stage(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    package: _Package | None,
+    claim: str,
+) -> CampaignStageRecord:
+    if claim != "whisperx":
+        return CampaignStageRecord(
+            stage="align",
+            status="not_run",
+            cache_hit=False,
+            reason_code="alignment_not_claimed",
+        )
+    problem, digest, job_id, alignment_id = _alignment_facts(database, root, binding, package)
+    if problem or digest is None:
+        return CampaignStageRecord(
+            stage="align",
+            status="blocked",
+            job_id=job_id,
+            artifact_id=alignment_id,
+            artifact_sha256=digest,
+            cache_hit=False,
+            reason_code=problem or "alignment_missing",
+        )
+    return CampaignStageRecord(
+        stage="align",
+        status="succeeded",
+        job_id=job_id,
+        artifact_id=alignment_id,
+        artifact_sha256=digest,
+        cache_hit=True,
+        reason_code="whisperx",
+    )
+
+
+def _alignment_facts(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    package: _Package | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """Return problem, file sha256, producer job id, and alignment id."""
+    if package is None or not package.alignment_sha256 or not package.alignment_id:
+        return "alignment_missing", None, None, None
+    relative = (
+        f"projects/{binding.project_id}/sources/{binding.source_asset_id}/hero/alignments/"
+        f"{package.candidate_id}/alignment.json"
+    )
+    try:
+        path = confine_work_path(root, relative, label="alignment")
+    except MediaError as exc:
+        code = "symlink" if "symlink" in str(exc) else "alignment_missing"
+        return code, None, None, package.alignment_id
+    if not path.is_file():
+        return "alignment_missing", None, None, package.alignment_id
+    digest = sha256_file(path)
+    if digest != package.alignment_sha256:
+        return "alignment_changed", digest, None, package.alignment_id
+    try:
+        parsed = ForcedAlignmentDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return "alignment_changed", digest, None, package.alignment_id
+    if parsed.alignment_id != package.alignment_id:
+        return "alignment_changed", digest, None, parsed.alignment_id
+    if parsed.project_id != binding.project_id:
+        return "cross_project", digest, None, parsed.alignment_id
+    if parsed.source_asset_id != binding.source_asset_id:
+        return "cross_source", digest, None, parsed.alignment_id
+    if parsed.model_name != ENGLISH_ALIGNMENT_MODEL or parsed.whisperx_version != ENGLISH_ALIGNMENT_REVISION:
+        return "model_revision_changed", digest, None, parsed.alignment_id
+    transcript = _artifact_row(database, binding, "transcript_json")
+    if transcript is None:
+        return "alignment_changed", digest, None, parsed.alignment_id
+    transcript_sha, transcript_reason = _hash_uri(root, transcript.uri)
+    if transcript_sha is None:
+        return transcript_reason, digest, None, parsed.alignment_id
+    if transcript_sha != parsed.transcript_sha256:
+        return "transcript_changed", digest, None, parsed.alignment_id
+    hero = _artifact_row(database, binding, "hero_draft_set_json")
+    job_id = parsed.provenance.job_id or (None if hero is None else hero.job_id)
+    producer = _producer_problem(database, job_id, binding.project_id)
+    if producer == "producer_failed":
+        return "alignment_producer_failed", digest, job_id, parsed.alignment_id
+    if producer == "producer_missing":
+        return "alignment_producer_missing", digest, job_id, parsed.alignment_id
+    if producer:
+        return producer, digest, job_id, parsed.alignment_id
+    return None, digest, job_id, parsed.alignment_id
+
+
 def _producer_problem(database: Database, job_id: str | None, project_id: str) -> str | None:
     if not job_id:
         return "producer_missing"
@@ -1025,7 +1135,6 @@ def _reviews(database: Database, root: Path, binding: SourceBinding, package: _P
     try:
         with database.connect() as connection:
             rows = list_reviews(connection, binding.project_id)
-            hero_review = get_review(connection, package.approval_review_id)
     except StorageError:
         return _Reviews(
             False,
@@ -1081,23 +1190,32 @@ def _reviews(database: Database, root: Path, binding: SourceBinding, package: _P
             preview.artifact_id,
             hero.artifact_id,
         )
-    accepted = {hero.artifact_id, latest_advanced.artifact_id}
-    hero_problem = _review_problem(
-        hero_review,
+    hero_review, hero_code = _effective_hero_review(
+        database,
+        rows,
         binding,
         package.candidate_id,
-        hero_review.artifact_id or "",
-        "hero",
+        hero.artifact_id,
+        latest_advanced.artifact_id,
     )
-    if hero_review.artifact_id not in accepted:
-        hero_problem = hero_problem or "stale_review"
+    hero_problem = hero_code
     if hero_problem:
         return _Reviews(
             False,
             candidate_review.decision,
             hero_problem,
             candidate_review.review_id,
-            hero_review.review_id,
+            None if hero_review is None else hero_review.review_id,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
+    if hero_review is None:
+        return _Reviews(
+            False,
+            candidate_review.decision,
+            "review_missing",
+            candidate_review.review_id,
+            None,
             preview.artifact_id,
             hero.artifact_id,
         )
@@ -1111,6 +1229,45 @@ def _reviews(database: Database, root: Path, binding: SourceBinding, package: _P
         preview.artifact_id,
         hero.artifact_id,
     )
+
+
+def _effective_hero_review(
+    database: Database,
+    rows: list[ReviewDecision],
+    binding: SourceBinding,
+    candidate_id: str,
+    hero_artifact_id: str,
+    advanced_artifact_id: str,
+) -> tuple[ReviewDecision | None, str | None]:
+    """Return the newest Hero decision for the current artifact, not the historical package id."""
+    typed = rows
+    on_hero = effective_review(typed, hero_artifact_id, candidate_id, subject_kind="hero")
+    on_advanced = effective_review(typed, advanced_artifact_id, candidate_id, subject_kind="hero")
+    chosen = [item for item in (on_hero, on_advanced) if item is not None]
+    if chosen:
+        review = max(chosen, key=lambda item: (item.created_at, item.review_id))
+        problem = _review_problem(review, binding, candidate_id, review.artifact_id or "", "hero")
+        if problem is None:
+            problem = _review_source(database, review.artifact_id, binding.source_asset_id)
+        return review, problem
+    named = [
+        item
+        for item in typed
+        if item.candidate_id == candidate_id and item.artifact_id in {hero_artifact_id, advanced_artifact_id}
+    ]
+    if any(item.subject_kind != "hero" for item in named):
+        return None, "review_subject"
+    other_candidate = [
+        item
+        for item in typed
+        if item.subject_kind == "hero" and item.artifact_id in {hero_artifact_id, advanced_artifact_id}
+    ]
+    if other_candidate:
+        return None, "stale_review"
+    older = [item for item in typed if item.subject_kind == "hero" and item.candidate_id == candidate_id]
+    if older:
+        return None, _review_source(database, older[0].artifact_id, binding.source_asset_id) or "stale_review"
+    return None, "review_missing"
 
 
 def _review_source(database: Database, artifact_id: str | None, source_asset_id: str) -> str | None:
@@ -1390,6 +1547,8 @@ def _digest(body: object) -> str:
 
 
 def _evidence_current(database: Database, root: Path, document: CampaignProductionRun) -> bool:
+    if document.status != "succeeded" or not _campaign_job_current(database, document):
+        return False
     try:
         bound = [_bind_one(database, item.source_id) for item in document.sources]
         _reject_mixed(bound)
@@ -1397,7 +1556,15 @@ def _evidence_current(database: Database, root: Path, document: CampaignProducti
             _verify_source(database, root, document, source, item)
     except CampaignError:
         return False
-    return document.status == "succeeded"
+    return True
+
+
+def _campaign_job_current(database: Database, document: CampaignProductionRun) -> bool:
+    if document.project_id == "unresolved":
+        return False
+    with database.connect() as connection:
+        job = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
+    return job is not None and job.status is JobStatus.SUCCEEDED
 
 
 def _source_current(
@@ -1414,7 +1581,12 @@ def _source_current(
     return True
 
 
-def _invalidate_stale(database: Database, root: Path, campaign_id: str) -> None:
+def _invalidate_stale(
+    database: Database,
+    root: Path,
+    campaign_id: str,
+    hook: PromotionHook | None = None,
+) -> None:
     base = root / "campaigns" / "runs"
     if not base.is_dir() or base.is_symlink():
         return
@@ -1428,16 +1600,57 @@ def _invalidate_stale(database: Database, root: Path, campaign_id: str) -> None:
         if document.campaign_id != campaign_id or document.status != "succeeded":
             continue
         if not _evidence_current(database, root, document):
-            _invalidate_run(root, document)
+            _invalidate_run(database, root, document, hook)
 
 
-def _invalidate_run(root: Path, document: CampaignProductionRun) -> None:
-    updated = document.model_copy(update={"status": "blocked", "reason_code": "evidence_changed"})
-    text = updated.model_dump_json() + "\n"
+def _invalidate_run(
+    database: Database,
+    root: Path,
+    document: CampaignProductionRun,
+    hook: PromotionHook | None = None,
+    reason: str = "evidence_changed",
+) -> None:
+    """Mark a stale succeeded run blocked in the sidecar and the database together."""
     final = _final_manifest(root, document.campaign_run_id)
-    if final.is_symlink():
+    if _symlink_between(root, final) or not final.is_file():
         return
-    _write_contained(root, final, text)
+    previous = final.read_bytes()
+    updated = document.model_copy(update={"status": "blocked", "reason_code": reason})
+    text = updated.model_dump_json() + "\n"
+    try:
+        CampaignProductionRun.model_validate_json(text)
+        _step(hook, "cancellation")
+    except (CampaignError, ValidationError, ValueError):
+        return
+    snapshot: JobRecord | None = None
+    wrote = False
+    committed = False
+    try:
+        with database.transaction() as connection:
+            _step(hook, "database")
+            snapshot = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
+            if snapshot is not None:
+                update_job(
+                    connection,
+                    snapshot.model_copy(
+                        update={
+                            "status": JobStatus.BLOCKED,
+                            "updated_at": datetime.now(UTC),
+                            "error_message": reason,
+                        }
+                    ),
+                )
+            _step(hook, "database_commit")
+        committed = True
+        _step(hook, "sidecar")
+        _write_contained(root, final, text)
+        wrote = True
+    except Exception:
+        if wrote:
+            _write_contained(root, final, previous.decode("utf-8"))
+        if committed and snapshot is not None:
+            with database.transaction() as connection:
+                update_job(connection, snapshot)
 
 
 def _publish(
@@ -1725,8 +1938,14 @@ def _verify_source(
     if package_reason or package is None:
         raise CampaignError("delivery package is not intact", code=package_reason or "delivery_missing")
     align = next(item for item in source.stages if item.stage == "align")
-    if document.alignment_provider == "whisperx" and package.alignment_sha256 != align.artifact_sha256:
-        raise CampaignError("alignment hash changed", code="alignment_changed")
+    if document.alignment_provider == "whisperx":
+        problem, digest, _job_id, alignment_id = _alignment_facts(database, root, bound.binding, package)
+        if problem:
+            raise CampaignError("alignment evidence is not current", code=problem)
+        if digest != align.artifact_sha256 or alignment_id != align.artifact_id:
+            raise CampaignError("alignment hash changed", code="alignment_changed")
+        if document.alignment_checkpoint_sha256 != ENGLISH_ALIGNMENT_CHECKPOINT:
+            raise CampaignError("alignment checkpoint changed", code="model_revision_changed")
     if package.qa_set_sha256 != source.qa_set_sha256:
         raise CampaignError("qa hash changed", code="qa_changed")
     if source.narration_artifact_id and source.narration_audio_sha256:
@@ -1762,8 +1981,10 @@ def _verify_source(
             raise CampaignError("campaign artifact row is missing", code="artifact_missing") from exc
         if row.project_id != bound.binding.project_id or row.source_asset_id != bound.binding.source_asset_id:
             raise CampaignError("campaign artifact belongs to another source", code="cross_source")
+        if stage.job_id is None or stage.job_id != row.job_id:
+            raise CampaignError("campaign producer is not succeeded", code="producer_missing")
         producer = _producer_problem(database, row.job_id, bound.binding.project_id)
-        if producer and stage.job_id is not None:
+        if producer:
             raise CampaignError("campaign producer is not succeeded", code=producer)
         digest, reason = _hash_uri(root, row.uri)
         if digest is None:
