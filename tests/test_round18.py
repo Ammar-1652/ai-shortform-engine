@@ -9,7 +9,11 @@ from pathlib import Path
 import pytest
 
 from clipforge.assets.mcp_client import AssetError
-from clipforge.assets.provider import DryRunAssetDiscoveryProvider, FakeAssetDiscoveryProvider
+from clipforge.assets.provider import (
+    DryRunAssetDiscoveryProvider,
+    EnvatoMcpDiscoveryProvider,
+    FakeAssetDiscoveryProvider,
+)
 from clipforge.assets.service import acquire_local, search_assets, verify_asset, write_requests
 from clipforge.campaign.antoine import FILES, selected_files
 from clipforge.campaign.policy import caption_decision, evaluate_mode, footage_priority, language_decision
@@ -159,6 +163,45 @@ def test_translation_does_not_replace_source_text() -> None:
     assert any(item.language == "ar" and item.text_direction == "rtl" for item in profiles())
     whisper = [item for item in capabilities() if item.provider_id == "whisperx" and item.language == "ja"]
     assert whisper[0].supported_status == "not_claimed"
+
+
+def test_envato_forwards_every_requested_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    class StubClient:
+        url = "https://mcp.envato.com/mcp"
+        server_version = "test"
+
+        def __init__(self) -> None:
+            self.arguments: dict[str, object] = {}
+
+        def initialize(self) -> dict[str, object]:
+            return {}
+
+        def list_tools(self) -> list[dict[str, object]]:
+            return [{"name": "search_stock_video", "inputSchema": {"properties": {"filters": {}}}}]
+
+        def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
+            assert name == "search_stock_video"
+            self.arguments = arguments
+            return {"structuredContent": {"results": []}}
+
+    monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_ENABLED", "1")
+    monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_LIVE_SMOKE", "1")
+    client = StubClient()
+    provider = EnvatoMcpDiscoveryProvider(client)  # type: ignore[arg-type]
+    filters = {
+        "category": "stock-video",
+        "asset_type": "video",
+        "format": "mp4",
+        "compatible_software": "premiere-pro",
+        "genre": "business",
+        "style": "clean",
+        "duration": "short",
+        "orientation": "vertical",
+        "resolution": "1080p",
+        "intended_use": "campaign",
+    }
+    assert provider.search("office", filters) == []
+    assert client.arguments["filters"] == filters
 
 
 def test_envato_search_does_not_invent_urls(tmp_path: Path) -> None:
