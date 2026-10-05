@@ -154,6 +154,9 @@ def ingest_campaign(
                 try:
                     probe_facts = _probe_facts(destination)
                 except MediaError as exc:
+                    # Do not leave an acquired file that has no verifiable
+                    # inventory record.
+                    destination.unlink(missing_ok=True)
                     raise CampaignError("acquired source could not be probed", code="probe_failed") from exc
             acquired_at = now
             local_path = relative
