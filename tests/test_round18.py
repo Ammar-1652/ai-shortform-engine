@@ -264,7 +264,10 @@ def test_envato_maps_supported_filters_and_rejects_unsupported() -> None:
                                             },
                                             "categories": {
                                                 "anyOf": [
-                                                    {"type": "string", "enum": ["Stock Footage", "Motion Graphics"]},
+                                                    {
+                                                        "type": "string",
+                                                        "enum": ["Stock Footage", "Motion Graphics"],
+                                                    },
                                                     {"type": "null"},
                                                 ]
                                             },
