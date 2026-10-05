@@ -518,6 +518,8 @@ def _require_acquisition_or_binding(
         acquired = latest_successful_result(root, choice.source_id, choice.source_sha256)
         if bound.binding is not None and bound.binding.source_sha256 == choice.source_sha256:
             continue
+        if bound.reason == "source_changed":
+            continue
         if acquired is None:
             raise CampaignError("selected source has no verified acquisition", code="acquisition_missing")
 

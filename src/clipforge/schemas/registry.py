@@ -160,6 +160,12 @@ from clipforge.schemas.preview import (
     RoughPreviewSetDocument,
     RoughPreviewSetSummary,
 )
+from clipforge.schemas.production_manifest import (
+    CampaignProductionCacheRecord,
+    CampaignProductionManifest,
+    CampaignProductionSource,
+    CampaignProductionStageFact,
+)
 from clipforge.schemas.project import Project
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.publish import (
@@ -335,6 +341,10 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CampaignSourceBinding,
     CampaignOperatorBinding,
     CampaignAcquisitionAttempt,
+    CampaignProductionStageFact,
+    CampaignProductionCacheRecord,
+    CampaignProductionSource,
+    CampaignProductionManifest,
     SourceAcquisition,
     SourceRightsEvidence,
     OperatorAction,

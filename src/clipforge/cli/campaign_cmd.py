@@ -16,6 +16,15 @@ from clipforge.campaign.acquisition import (
     show_acquisition,
     verify_acquisition,
 )
+from clipforge.campaign.aggregate import (
+    list_productions,
+    produce,
+    production_plan,
+    production_report,
+    resume_production,
+    show_production,
+    verify_production,
+)
 from clipforge.campaign.antoine import CAMPAIGN_ID
 from clipforge.campaign.board import open_campaign_board
 from clipforge.campaign.operator import (
@@ -493,6 +502,117 @@ def acquire_resume(
         _fail(exc)
     typer.echo(document.acquisition_id)
     typer.echo(document.status)
+
+
+@operator_app.command("produce")
+def operator_produce(
+    selection_id: str,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    expect: Annotated[str | None, typer.Option("--expect")] = None,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Produce one selection through the existing campaign runner."""
+    try:
+        document = produce(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            selection_id,
+            operator_id=operator_id,
+            force=force,
+            expected_selection_sha256=expect,
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+    typer.echo(document.run_id)
+    typer.echo(document.status)
+
+
+@operator_app.command("production-plan")
+def operator_production_plan(
+    selection_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Describe a production. This command does not write."""
+    try:
+        typer.echo(production_plan(Database(resolve_db_path(db)), resolve_work_dir(work_dir), selection_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("production-show")
+def operator_production_show(
+    run_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show one production aggregate. This command does not write."""
+    try:
+        typer.echo(show_production(resolve_work_dir(work_dir), run_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("production-list")
+def operator_production_list(
+    campaign_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """List production aggregates. This command does not write."""
+    try:
+        for run_id in list_productions(resolve_work_dir(work_dir), campaign_id):
+            typer.echo(run_id)
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("production-verify")
+def operator_production_verify(
+    run_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Re-check one production aggregate. This command does not write."""
+    try:
+        typer.echo(verify_production(Database(resolve_db_path(db)), resolve_work_dir(work_dir), run_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@operator_app.command("production-resume")
+def operator_production_resume(
+    run_id: str,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    expect: Annotated[str | None, typer.Option("--expect")] = None,
+) -> None:
+    """Resume one production. Only incomplete pipeline sources are retried."""
+    try:
+        document = resume_production(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            run_id,
+            operator_id=operator_id,
+            expected_selection_sha256=expect,
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+    typer.echo(document.run_id)
+    typer.echo(document.status)
+
+
+@operator_app.command("production-report")
+def operator_production_report(
+    run_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Summarize one production. This command does not write."""
+    try:
+        typer.echo(production_report(resolve_work_dir(work_dir), run_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
 
 
 @operator_app.command("serve")

@@ -44,6 +44,52 @@
     loadRuns(payload.campaign_id, card);
     loadPolicy(payload.campaign_id, card);
     loadAcquisitions(payload.campaign_id, card);
+    loadProductions(payload.campaign_id, card);
+  }
+
+  function loadProductions(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/productions")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var rows = payload.productions || [];
+        text(card, "productions " + rows.length);
+        for (var index = 0; index < rows.length; index += 1) {
+          loadProduction(rows[index].run_id, card);
+        }
+      });
+  }
+
+  function loadProduction(runId, card) {
+    fetch("/api/campaign-productions/" + runId)
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "production " + payload.run_id + " " + payload.status + " " + payload.reason_code);
+        text(card, "language " + payload.language);
+        text(card, "cache_hit " + payload.cache_hit);
+        var sources = payload.sources || [];
+        for (var index = 0; index < sources.length; index += 1) {
+          var source = sources[index];
+          text(
+            card,
+            "produced " +
+              source.source_id +
+              " " +
+              source.status +
+              " review " +
+              source.review_decision +
+              " qa " +
+              source.qa_set_id +
+              " narration " +
+              source.narration_status
+          );
+          text(card, "delivery " + source.delivery_relative);
+          text(card, "media_sha256 " + source.final_media_sha256);
+        }
+      });
   }
 
   function loadPolicy(campaignId, card) {

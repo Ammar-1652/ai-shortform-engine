@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "One pipeline stage copied from the existing campaign run.",
+  "properties": {
+    "cache_hit": {
+      "title": "Cache Hit",
+      "type": "boolean"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "stage": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Stage",
+      "type": "string"
+    },
+    "status": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "stage",
+    "status",
+    "cache_hit",
+    "reason_code"
+  ],
+  "title": "CampaignProductionStageFact",
+  "type": "object"
+}

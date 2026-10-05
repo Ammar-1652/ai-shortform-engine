@@ -1,0 +1,51 @@
+{
+  "additionalProperties": false,
+  "description": "Identity of one aggregate. A hit still revalidates the pipeline evidence.",
+  "properties": {
+    "cache_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cache Key",
+      "type": "string"
+    },
+    "catalogue_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Catalogue Fingerprint",
+      "type": "string"
+    },
+    "hit": {
+      "title": "Hit",
+      "type": "boolean"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "cache_key",
+    "pipeline_fingerprint",
+    "selection_sha256",
+    "policy_fingerprint",
+    "catalogue_fingerprint",
+    "hit"
+  ],
+  "title": "CampaignProductionCacheRecord",
+  "type": "object"
+}
