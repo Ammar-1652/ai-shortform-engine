@@ -22,8 +22,12 @@ from clipforge.campaign.providers import (
     CampaignError,
     CampaignSourceProvider,
     DryRunSourceProvider,
+    GoogleDriveSourceProvider,
 )
+from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
+from clipforge.media.process import ProcessRunner
+from clipforge.media.probe import probe_file
 from clipforge.media.workspace import ensure_within
 from clipforge.schemas.campaign import (
     OperatorAction,
@@ -133,6 +137,7 @@ def ingest_campaign(
             continue
         digest = None
         size = None
+        probe_facts = None
         acquired_at = None
         local_path = None
         if status == "acquired":
@@ -140,6 +145,11 @@ def ingest_campaign(
                 raise CampaignError("acquired source is missing", code="missing_source")
             digest = sha256_file(destination)
             size = destination.stat().st_size
+            if isinstance(provider, GoogleDriveSourceProvider):
+                try:
+                    probe_facts = _probe_facts(destination)
+                except MediaError as exc:
+                    raise CampaignError("acquired source could not be probed", code="probe_failed") from exc
             acquired_at = now
             local_path = relative
         acquisitions.append(
@@ -149,6 +159,7 @@ def ingest_campaign(
                 local_path=local_path,
                 digest=digest,
                 size=size,
+                probe_facts=probe_facts,
                 acquired_at=acquired_at,
                 confirmed=operator_confirmed and status == "acquired",
                 error_code="none" if status != "provider_unavailable" else "provider_unavailable",
@@ -225,6 +236,13 @@ def verify_campaign(work_root: Path) -> str:
             raise CampaignError("acquired source is missing", code="missing_source")
         if sha256_file(path) != item.sha256:
             raise CampaignError("source hash changed", code="source_mutated")
+        if item.probe_facts is not None:
+            try:
+                current_probe = _probe_facts(path)
+            except MediaError as exc:
+                raise CampaignError("source probe changed", code="probe_changed") from exc
+            if current_probe != item.probe_facts:
+                raise CampaignError("source probe facts changed", code="probe_changed")
     source_states = {item.source_id: item.rights_state for item in document.sources}
     for acquisition in document.acquisitions:
         if acquisition.download_status == "acquired" and source_states.get(acquisition.source_id) != "allowed":
@@ -239,6 +257,29 @@ def verify_campaign(work_root: Path) -> str:
     return "PASS campaign inventory"
 
 
+def _probe_facts(path: Path) -> dict[str, str | int | None]:
+    _, probe = probe_file(path, ProcessRunner(), video_override=None, audio_override=None, log_path=None)
+    video = probe.video_streams[probe.selection.video_stream_index]
+    audio = None
+    if probe.selection.audio_stream_index is not None:
+        audio = next((item for item in probe.audio_streams if item.index == probe.selection.audio_stream_index), None)
+    rate = None
+    if video.avg_frame_rate is not None:
+        rate = f"{video.avg_frame_rate.numerator}/{video.avg_frame_rate.denominator}"
+    return {
+        "size_bytes": path.stat().st_size,
+        "duration_us": probe.timeline.canonical_duration_us,
+        "width": video.width,
+        "height": video.height,
+        "video_codec": video.codec_name,
+        "audio_codec": audio.codec_name if audio is not None else None,
+        "frame_rate": rate,
+        "audio_sample_rate": audio.sample_rate if audio is not None else None,
+        "audio_channels": audio.channels if audio is not None else None,
+        "ffprobe_version": probe.ffprobe_version,
+    }
+
+
 def _acquisition(
     source_id: str,
     status: str,
@@ -246,6 +287,7 @@ def _acquisition(
     local_path: str | None = None,
     digest: str | None = None,
     size: int | None = None,
+    probe_facts: dict[str, str | int | None] | None = None,
     acquired_at: datetime | None = None,
     confirmed: bool = False,
     error_code: str = "none",
@@ -259,6 +301,7 @@ def _acquisition(
         local_relative_path=local_path,
         sha256=digest,
         size_bytes=size,
+        probe_facts=probe_facts,
         acquired_at=acquired_at,
         operator_confirmation=confirmed,
         error_code=error_code,
