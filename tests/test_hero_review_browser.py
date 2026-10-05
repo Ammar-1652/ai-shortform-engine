@@ -27,7 +27,7 @@ from clipforge.review.service import LOOPBACK_HOST
 from tests.candidate_support import SOURCE_ID
 from tests.test_hero_review import _PHRASE, _hero_stack
 
-pytestmark = [pytest.mark.hero, pytest.mark.review]
+pytestmark = [pytest.mark.hero, pytest.mark.review, pytest.mark.browser]
 
 
 def test_local_browser_reviews_a_hero_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

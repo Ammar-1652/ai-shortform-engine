@@ -16,7 +16,7 @@ from clipforge.errors import MediaError
 from clipforge.preview.browser import resolve_browser
 from tests.test_round13 import _ready
 
-pytestmark = pytest.mark.analytics
+pytestmark = [pytest.mark.analytics, pytest.mark.browser]
 
 
 def test_browser_reviews_labels_and_rejects_a_stale_write(tmp_path: Path) -> None:

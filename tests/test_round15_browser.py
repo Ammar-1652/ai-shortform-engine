@@ -16,7 +16,7 @@ from clipforge.voice.provider import FakeVoiceProvider
 from clipforge.voice.service import generate_narration
 from tests.test_round15 import _chain, _narration
 
-pytestmark = pytest.mark.benchmark
+pytestmark = [pytest.mark.benchmark, pytest.mark.browser]
 
 
 def test_browser_shows_readiness_and_narration_text(tmp_path: Path) -> None:

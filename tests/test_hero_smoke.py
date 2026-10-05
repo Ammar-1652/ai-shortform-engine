@@ -22,7 +22,7 @@ from clipforge.review.service import DecisionContext, record_decision, review_bo
 from tests.candidate_support import PROJECT_ID, SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 
-pytestmark = pytest.mark.hero
+pytestmark = [pytest.mark.hero, pytest.mark.browser]
 
 
 def test_real_hero_render_is_portrait_and_captioned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

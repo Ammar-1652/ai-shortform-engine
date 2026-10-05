@@ -57,6 +57,7 @@ markers = [
     "model_smoke: local model-weight tests, excluded from CI",
     "analytics: local analytics page tests; the browser smoke uses an already installed browser",
     "benchmark: local readiness and narration tests; the browser smoke uses an already installed browser",
+    "browser: tests that launch Chrome or Remotion; CI runs this marker once, after the other Python tests",
 ]
 
 [tool.ruff]
