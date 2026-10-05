@@ -10,7 +10,7 @@ CLIPFORGE_ENVATO_MCP_LIVE_SMOKE=0
 
 `clipforge assets doctor` reports the endpoint, the enabled flag, the connection state, advertised tools, and that authentication is delegated. It does not print secrets.
 
-`clipforge assets envato search` accepts a query plus category, asset type, format, software, genre, style, duration, orientation, resolution, intended use, and campaign id. Missing provider fields stay null.
+`clipforge assets envato search` accepts a query plus campaign context and filter options. The adapter reads the live tool schema before calling Envato: asset type selects the typed search tool; supported values such as orientation, resolution, category, genre, and numeric duration bounds are translated to Envato's native names and enums. Unsupported constraints such as video format, compatible software, style, or ambiguous `--duration short` fail with `unsupported_filter` instead of being sent as invalid keys. `--min-duration` and `--max-duration` use seconds. Missing provider fields stay null.
 
 `clipforge assets envato request` writes `asset_download_requests.json` and `asset_download_requests.md`. Those files tell a person which item page to open. `download_status` is `manual_download_required` unless campaign policy rejects the row.
 
