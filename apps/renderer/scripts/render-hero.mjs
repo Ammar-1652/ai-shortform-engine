@@ -38,6 +38,17 @@ const runDir = path.resolve(path.dirname(batchPath));
 const stagingDir = path.join(runDir, "staging");
 const chromiumOptions = { gl: "swangle" };
 
+function stagedBasename(value) {
+  if (typeof value !== "string" || value.includes("..")) {
+    throw new Error("staged media name is not safe");
+  }
+  const name = path.basename(value);
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(name)) {
+    throw new Error("staged media name is not safe");
+  }
+  return name;
+}
+
 function contained(filePath, root) {
   const resolved = path.resolve(filePath);
   const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
@@ -69,11 +80,8 @@ for (const item of batch.items) {
       throw new Error(`refusing remote media URL in ${key}`);
     }
   }
-  const videoName = path.basename(input.video_path);
-  const audioName = path.basename(input.audio_path);
-  if (videoName !== "analysis.mp4" || audioName !== "asr.flac") {
-    throw new Error("hero media must be the staged analysis.mp4 and asr.flac");
-  }
+  const videoName = stagedBasename(input.video_path);
+  const audioName = stagedBasename(input.audio_path);
   contained(path.join(stagingDir, videoName), stagingDir);
   contained(path.join(stagingDir, audioName), stagingDir);
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
@@ -124,6 +132,7 @@ for (const item of batch.items) {
     browserExecutable,
     chromiumOptions,
     concurrency: 1,
+    timeoutInMilliseconds: Math.min(90_000, Math.max(20_000, Number(item.input.duration_in_frames) * 80)),
     crf: item.h264Crf,
     pixelFormat: "yuv420p",
     audioCodec: "aac",

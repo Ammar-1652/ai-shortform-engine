@@ -100,7 +100,7 @@ def render_plan(
         profile=VoiceProviderProfile(
             provider_id=plan.provider,
             provider_version=plan.provider_version,
-            engine_id="fake-engine" if plan.provider == "fake" else "voicestudio",
+            engine_id="fake-engine" if plan.provider == "fake" else "omnivoice",
             model_id=plan.model_id,
             model_revision="rev-1",
             language=plan.language,

@@ -380,8 +380,11 @@ def _render_run(
         database, source_asset_id, root, profile_fingerprint=rough.fingerprint(), create_workspace=False
     )
     staging = run_dir / "staging"
-    _link(inputs.proxy_path, staging / "analysis.mp4", root)
-    _link(inputs.asr_path, staging / "asr.flac", root)
+    if renderer.requires_browser:
+        staging.mkdir(parents=True, exist_ok=True)
+    else:
+        _link(inputs.proxy_path, staging / "analysis.mp4", root)
+        _link(inputs.asr_path, staging / "asr.flac", root)
     items: list[dict[str, object]] = []
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
@@ -421,8 +424,21 @@ def _render_run(
         )
         prepared.append((rank, candidate_id, plan, render_input, output))
     batch = run_dir / "batch.json"
-    batch.write_text(json_dumps({"items": items}), encoding="utf-8")
-    renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
+    if renderer.requires_browser:
+        for item, (_rank, candidate_id, _plan, render_input, _output) in zip(items, prepared, strict=True):
+            _stage_candidate_base(
+                inputs,
+                staging,
+                candidate_id,
+                render_input.duration_in_frames,
+                root,
+                run_dir / "logs" / f"{candidate_id}.trim.log",
+            )
+            batch.write_text(json_dumps({"items": [item]}), encoding="utf-8")
+            renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
+    else:
+        batch.write_text(json_dumps({"items": items}), encoding="utf-8")
+        renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
     _cleanup_dir(staging, root)
     outputs: list[AdvancedHeroDraftOutput] = []
     for rank, candidate_id, plan, render_input, output in prepared:
@@ -445,7 +461,7 @@ def _render_run(
                 alignment_sha256=plan.alignment_sha256,
                 hero_plan_id=plan.hero_plan_id,
                 hero_plan_sha256=plan.hero_plan_sha256,
-                advanced_plan_sha256=render_input.advanced_plan_sha256,
+                advanced_plan_sha256=sha256_file(workspace.advanced_plan_file(candidate_id)),
                 render_input_sha256=sha256_file(output.parent / "render-input.json"),
                 preview_relative_path=f"candidates/{candidate_id}/advanced.mp4",
                 preview_sha256=sha256_file(output),
@@ -767,6 +783,41 @@ def _asset_path(workspace: SourceWorkspace, asset_id: str, root: Path) -> Path:
     if entry is None:
         raise MediaError(f"advanced asset {asset_id} is not in the local catalog")
     return confine_work_path(root, entry.relative_path, label=f"advanced asset {asset_id}")
+
+
+def _stage_candidate_base(
+    inputs: object,
+    staging: Path,
+    candidate_id: str,
+    frame_count: int,
+    root: Path,
+    log_path: Path,
+) -> None:
+    """Replace the shared base names with one short candidate clip."""
+    from clipforge.preview.trim import stage_candidate_span
+
+    candidates = inputs.candidate_document.candidates  # type: ignore[attr-defined]
+    candidate = next(item for item in candidates if item.candidate_id == candidate_id)
+    segment = candidate.time_map.segments[0]
+    for name in ("analysis.mp4", "asr.flac", "span.mp4", "span.flac", "span.recipe.json"):
+        path = staging / name
+        if path.is_symlink():
+            raise MediaError("refusing to replace a symlinked advanced stage file")
+        if path.exists():
+            path.unlink()
+    staged = stage_candidate_span(
+        inputs.proxy_path,  # type: ignore[attr-defined]
+        inputs.asr_path,  # type: ignore[attr-defined]
+        staging,
+        stem="span",
+        start_us=segment.source_start_us,
+        end_us=segment.source_end_us,
+        frame_count=frame_count,
+        root=root,
+        log_path=log_path,
+    )
+    staged.video_path.rename(staging / "analysis.mp4")
+    staged.audio_path.rename(staging / "asr.flac")
 
 
 def _link(source: Path, destination: Path, root: Path) -> None:

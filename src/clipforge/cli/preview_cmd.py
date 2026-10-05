@@ -53,6 +53,10 @@ def preview_render(
     ] = False,
     db: Annotated[Path | None, typer.Option("--db", help="SQLite database path.")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir", help="Derived-media work root.")] = None,
+    candidate_id: Annotated[
+        str | None,
+        typer.Option("--candidate-id", help="Render one selected candidate. Omit it to render the set."),
+    ] = None,
 ) -> None:
     """Render rough previews for every selected candidate. Does not publish."""
     from clipforge.preview.service import render_previews
@@ -63,6 +67,7 @@ def preview_render(
             source_asset_id=source_asset_id,
             work_root=resolve_work_dir(work_dir),
             force=force,
+            candidate_id=candidate_id,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

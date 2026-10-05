@@ -10,6 +10,15 @@ import { parseHeroInput } from "./validation.js";
  * The picture is contained. Caption text is a React text node revealed from
  * forced word frames. Motion is a short fade plus a small emphasis scale.
  */
+function stagedName(filePath: string): string {
+  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(name) || name.includes("..")) {
+    throw new Error("staged media name is not safe");
+  }
+  return name;
+}
+
 export function HeroDraft(raw: HeroDraftInput) {
   const input = parseHeroInput(raw);
   const frame = useCurrentFrame();
@@ -22,14 +31,14 @@ export function HeroDraft(raw: HeroDraftInput) {
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
         <OffthreadVideo
-          src={staticFile("analysis.mp4")}
+          src={staticFile(stagedName(input.video_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
           muted
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
         <Audio
-          src={staticFile("asr.flac")}
+          src={staticFile(stagedName(input.audio_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
         />

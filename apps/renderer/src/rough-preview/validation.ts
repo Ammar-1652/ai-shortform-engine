@@ -31,6 +31,12 @@ const TOP_KEYS = new Set([
   "background",
   "timing_quality",
   "captions",
+  "source_start_us",
+  "source_end_us",
+  "proxy_sha256",
+  "staged_video_sha256",
+  "staged_audio_sha256",
+  "staged_duration_us",
 ]);
 
 const CUE_KEYS = new Set([

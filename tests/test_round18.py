@@ -29,6 +29,7 @@ from clipforge.campaign.providers import (
 from clipforge.campaign.service import ingest_campaign, verify_campaign
 from clipforge.errors import ClipforgeError, MediaError
 from clipforge.language.matrix import capabilities, profiles, require_language, separate_translation
+from clipforge.schemas.voice import NarrationRequest
 from clipforge.voice.plan import build_plan, render_plan, verify_plan, write_plan
 from clipforge.voice.provider import FakeVoiceProvider
 from tests.test_round15 import _chain
@@ -448,3 +449,30 @@ def test_narration_stays_off_until_enabled(tmp_path: Path) -> None:
     assert verify_plan(database, work, rendered).startswith("PASS")
     with pytest.raises(ClipforgeError, match="script changed"):
         render_plan(database, work, enabled, provider, script_text="A different script.")
+
+
+def test_voicestudio_plan_asks_for_the_omnivoice_engine(tmp_path: Path) -> None:
+    database, work = _chain(tmp_path)
+
+    class Capture(FakeVoiceProvider):
+        seen: str = ""
+
+        def generate(self, request: NarrationRequest) -> bytes:
+            self.seen = request.profile.engine_id
+            return super().generate(request)
+
+    provider = Capture()
+    plan = build_plan(
+        project_id="project-1",
+        source_asset_id="source-1",
+        candidate_id="cand-1",
+        script_text="Café costs $12.50 today.",
+        language="en-US",
+        enabled=True,
+        operator_reason="controlled narration check",
+        provider="voicestudio",
+        model_id="omnivoice",
+        model_license="allowed",
+    )
+    render_plan(database, work, plan, provider, script_text="Café costs $12.50 today.")
+    assert provider.seen == "omnivoice"

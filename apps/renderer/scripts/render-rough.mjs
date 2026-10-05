@@ -39,6 +39,30 @@ const runDir = path.resolve(path.dirname(batchPath));
 const stagingDir = path.join(runDir, "staging");
 const chromiumOptions = { gl: "swangle" };
 
+function stagedBasename(value) {
+  if (typeof value !== "string" || value.includes("..")) {
+    throw new Error("staged media name is not safe");
+  }
+  const name = path.basename(value);
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(name)) {
+    throw new Error("staged media name is not safe");
+  }
+  return name;
+}
+
+function memoryReport() {
+  const usage = process.memoryUsage();
+  let availableKb = null;
+  try {
+    const text = readFileSync("/proc/meminfo", "utf8");
+    const line = text.split("\n").find((item) => item.startsWith("MemAvailable:"));
+    availableKb = line ? Number(line.split(/\s+/)[1]) : null;
+  } catch {
+    availableKb = null;
+  }
+  return { rss: usage.rss, heapUsed: usage.heapUsed, memAvailableKb: availableKb };
+}
+
 function contained(filePath, root) {
   const resolved = path.resolve(filePath);
   const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
@@ -67,11 +91,8 @@ for (const item of batch.items) {
       throw new Error(`refusing remote media URL in ${key}`);
     }
   }
-  const videoName = path.basename(input.video_path);
-  const audioName = path.basename(input.audio_path);
-  if (videoName !== "analysis.mp4" || audioName !== "asr.flac") {
-    throw new Error("rough preview media must be the staged analysis.mp4 and asr.flac");
-  }
+  const videoName = stagedBasename(input.video_path);
+  const audioName = stagedBasename(input.audio_path);
   contained(path.join(stagingDir, videoName), stagingDir);
   contained(path.join(stagingDir, audioName), stagingDir);
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
@@ -98,6 +119,20 @@ const bundleSeconds = (Date.now() - bundleStarted) / 1000;
 let renderSeconds = 0;
 for (const item of batch.items) {
   const started = Date.now();
+  const frames = Number(item.input.duration_in_frames);
+  const timeoutInMilliseconds = Math.min(90_000, Math.max(20_000, frames * 80));
+  process.stderr.write(
+    `${JSON.stringify({
+      event: "rough-preview-watch",
+      phase: "start",
+      candidate_id: item.watch?.candidate_id ?? item.input.candidate_id,
+      source_id: item.watch?.source_id ?? "",
+      duration_in_frames: frames,
+      staged_duration_us: item.watch?.staged_duration_us ?? null,
+      memory: memoryReport(),
+      timeout_ms: timeoutInMilliseconds,
+    })}\n`,
+  );
   const composition = await selectComposition({
     serveUrl,
     id: "RoughPreview",
@@ -127,8 +162,19 @@ for (const item of batch.items) {
     audioCodec: "aac",
     overwrite: true,
     muted: false,
+    timeoutInMilliseconds,
   });
   renderSeconds += (Date.now() - started) / 1000;
+  process.stderr.write(
+    `${JSON.stringify({
+      event: "rough-preview-watch",
+      phase: "promoted-by-python-after-process",
+      candidate_id: item.watch?.candidate_id ?? item.input.candidate_id,
+      elapsed_ms: Date.now() - started,
+      memory: memoryReport(),
+      node_exit: 0,
+    })}\n`,
+  );
 }
 
 process.stderr.write(

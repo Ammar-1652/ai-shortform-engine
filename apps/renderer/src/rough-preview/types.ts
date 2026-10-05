@@ -30,6 +30,12 @@ export type RoughPreviewInput = {
   readonly background: "neutral-dark-v1";
   readonly timing_quality: "provisional";
   readonly captions: readonly RoughCaptionCue[];
+  readonly source_start_us?: number;
+  readonly source_end_us?: number;
+  readonly proxy_sha256?: string;
+  readonly staged_video_sha256?: string;
+  readonly staged_audio_sha256?: string;
+  readonly staged_duration_us?: number;
 };
 
 export const COMPOSITION_ID = "RoughPreview" as const;

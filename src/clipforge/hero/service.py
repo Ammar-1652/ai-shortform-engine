@@ -360,8 +360,10 @@ def _render_run(
     allow_model_download: bool,
 ) -> tuple[HeroDraftSetDocument, Path]:
     staging = run_dir / "staging"
-    _link_or_copy(inputs.proxy_path, staging / "analysis.mp4", root)
-    _link_or_copy(inputs.asr_path, staging / "asr.flac", root)
+    staging.mkdir(parents=True, exist_ok=True)
+    if not renderer.requires_browser:
+        _link_or_copy(inputs.proxy_path, staging / "analysis.mp4", root)
+        _link_or_copy(inputs.asr_path, staging / "asr.flac", root)
     prepared: list[tuple[CandidateClip, ReviewDecision, ForcedAlignmentDocument, HeroPlanDocument]] = []
     for candidate, review in chosen:
         directory = inputs.pair.workspace.make_hero_candidate_dir(hero_set_id, candidate.candidate_id)
@@ -398,6 +400,14 @@ def _render_run(
             plan,
             root,
             inputs.pair.workspace.partial_for(directory / "plan.json"),
+        )
+        canonical_plan = inputs.pair.workspace.hero_plan_file(candidate.candidate_id)
+        canonical_plan.parent.mkdir(parents=True, exist_ok=True)
+        publish_json(
+            canonical_plan,
+            plan,
+            root,
+            inputs.pair.workspace.partial_for(canonical_plan),
         )
         prepared.append((candidate, review, alignment, plan))
     config = alignment_identity_config(
@@ -504,6 +514,33 @@ def _render_one(
     directory = inputs.pair.workspace.hero_candidate_dir(hero_set_id, candidate.candidate_id)
     alignment_sha = sha256_file(directory / "alignment.json")
     plan_sha = sha256_file(directory / "plan.json")
+    segment = candidate.time_map.segments[0]
+    staging = run_dir / "staging"
+    video_name = "analysis.mp4"
+    audio_name = "asr.flac"
+    trim_frame = media_trim_frame(segment.source_start_us)
+    if renderer.requires_browser:
+        from clipforge.preview.trim import stage_candidate_span
+
+        audio_path = staging / f"{candidate.candidate_id}.flac"
+        if not audio_path.is_file():
+            _trim_asr(inputs.asr_path, audio_path, segment.source_start_us, segment.source_end_us, root)
+        staged = stage_candidate_span(
+            inputs.proxy_path,
+            inputs.asr_path,
+            staging,
+            stem=f"{candidate.candidate_id}-picture",
+            start_us=segment.source_start_us,
+            end_us=segment.source_end_us,
+            frame_count=candidate.time_map.to_time_map().output_frame_count(
+                FrameRate(profile.fps_numerator, profile.fps_denominator)
+            ),
+            root=root,
+            log_path=run_dir / "logs" / f"{candidate.candidate_id}.trim.log",
+        )
+        video_name = staged.video_path.name
+        audio_name = audio_path.name
+        trim_frame = 0
     rendered = _render_input(
         candidate,
         alignment,
@@ -514,6 +551,9 @@ def _render_one(
         run_dir,
         alignment_sha,
         plan_sha,
+        video_name=video_name,
+        audio_name=audio_name,
+        trim_frame=trim_frame,
     )
     input_path = directory / "render-input.json"
     publish_json(input_path, rendered, root, inputs.pair.workspace.partial_for(input_path))
@@ -577,6 +617,10 @@ def _render_input(
     run_dir: Path,
     alignment_sha256: str,
     edit_plan_sha256: str,
+    *,
+    video_name: str = "analysis.mp4",
+    audio_name: str = "asr.flac",
+    trim_frame: int | None = None,
 ) -> HeroRenderInput:
     if plan.edit_plan.stage != "hero":
         raise MediaError("Hero render refuses a plan whose stage is not hero")
@@ -613,9 +657,9 @@ def _render_input(
     return HeroRenderInput(
         candidate_id=candidate.candidate_id,
         hero_set_id=hero_set_id,
-        video_path=str(run_dir / "staging" / "analysis.mp4"),
-        audio_path=str(run_dir / "staging" / "asr.flac"),
-        media_trim_frame=media_trim_frame(segment.source_start_us),
+        video_path=str(run_dir / "staging" / video_name),
+        audio_path=str(run_dir / "staging" / audio_name),
+        media_trim_frame=media_trim_frame(segment.source_start_us) if trim_frame is None else trim_frame,
         duration_in_frames=frame_count,
         alignment_sha256=alignment_sha256,
         edit_plan_sha256=edit_plan_sha256,

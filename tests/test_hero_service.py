@@ -525,9 +525,14 @@ def test_caption_overlap_fails_closed() -> None:
         hero_caption_cues(words)
 
 
-def test_cli_align_does_not_fall_back_when_whisperx_is_missing(tmp_path: Path) -> None:
+def test_cli_align_does_not_fall_back_when_whisperx_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     if importlib.util.find_spec("whisperx") is not None:
         pytest.skip("WhisperX is installed, so the missing-package failure is not the local path")
+    # An operator side environment must not turn this into an ffmpeg attempt.
+    monkeypatch.setenv("CLIPFORGE_ALIGN_PYTHON", str(tmp_path / "missing-align-python"))
     fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
     result = runner.invoke(
         app,
