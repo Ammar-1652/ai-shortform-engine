@@ -26,8 +26,8 @@ from clipforge.campaign.providers import (
 )
 from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
-from clipforge.media.process import ProcessRunner
 from clipforge.media.probe import probe_file
+from clipforge.media.process import ProcessRunner
 from clipforge.media.workspace import ensure_within
 from clipforge.schemas.campaign import (
     OperatorAction,
@@ -108,7 +108,7 @@ def ingest_campaign(
     created_by: str = "campaign",
 ) -> SourceInventoryManifest:
     """Acquire selected sources whose CampaignSource rights state is allowed.
-    
+
     Operator confirmation is retained as provenance when supplied, but it is not
     a prerequisite for an explicitly allowed CampaignSource.
     Unselected files are recorded and not fetched.
@@ -265,7 +265,10 @@ def _probe_facts(path: Path) -> dict[str, str | int | None]:
     video = probe.video_streams[probe.selection.video_stream_index]
     audio = None
     if probe.selection.audio_stream_index is not None:
-        audio = next((item for item in probe.audio_streams if item.index == probe.selection.audio_stream_index), None)
+        audio = next(
+            (item for item in probe.audio_streams if item.index == probe.selection.audio_stream_index),
+            None,
+        )
     rate = None
     if video.avg_frame_rate is not None:
         rate = f"{video.avg_frame_rate.numerator}/{video.avg_frame_rate.denominator}"

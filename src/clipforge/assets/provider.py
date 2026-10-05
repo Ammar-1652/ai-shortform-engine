@@ -145,6 +145,7 @@ def _search_tool(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[s
         return None
     return next(item for item in specs if item.get("name") == selected)
 
+
 def _rows_from_tool(result: dict[str, Any]) -> list[dict[str, Any]]:
     content = result.get("content")
     rows: list[dict[str, Any]] = []

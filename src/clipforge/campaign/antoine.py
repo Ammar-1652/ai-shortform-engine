@@ -133,7 +133,8 @@ def policy_rules() -> list[CampaignPolicyRule]:
         (
             "human-asset",
             "Human supplied assets",
-            "A supplied asset is allowed when CampaignSource marks it allowed; otherwise campaign-guide and operator evidence are required.",
+            "A supplied asset is allowed when CampaignSource marks it allowed; "
+            "otherwise campaign-guide and operator evidence are required.",
             "human_supplied_asset",
             "rights_unverified",
         ),
