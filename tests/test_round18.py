@@ -41,6 +41,11 @@ def test_only_two_sources_are_selected_and_under_200_mb() -> None:
     held = [item for item in FILES if not item.selected]
     assert len(held) == 3
     assert {item.download_status for item in held} == {"not_selected_for_round_18"}
+    assert {item.drive_id for item in held} == {
+        "1XNL03ZU4XPxeFxJMkiDeeLMnA-fqt9fu",
+        "1VFb8LWdMnsJYultiTSH74trSDFW635hi",
+        "1Cd7D2CR8_bMuGL9NcLDMnS2QXJ1eKxZC",
+    }
 
 
 def test_native_editor_is_allowed_and_black_box_is_blocked() -> None:
@@ -63,6 +68,16 @@ def test_caption_review_and_effects() -> None:
 
 
 def test_ingest_fetches_two_files_and_refuses_the_rest(tmp_path: Path) -> None:
+    unconfirmed_root = tmp_path / "unconfirmed"
+    unconfirmed = ingest_campaign(unconfirmed_root, FakeSourceProvider(), operator_confirmed=False)
+    assert all(
+        item.rights_state == "rights_unverified"
+        for item in unconfirmed.sources
+        if item.source_id in {row.source_id for row in selected_files()}
+    )
+    with pytest.raises(CampaignError, match="rights"):
+        verify_campaign(unconfirmed_root)
+
     provider = FakeSourceProvider()
     document = ingest_campaign(tmp_path, provider, operator_confirmed=True)
     acquired = [item for item in document.acquisitions if item.download_status == "acquired"]
