@@ -311,10 +311,10 @@ def test_envato_maps_supported_filters_and_rejects_unsupported() -> None:
                 "resolution": "1080p (Full HD)",
             },
         }
-        with pytest.raises(AssetError, match="format") as exc:
-            provider.search("office", {"asset_type": "video", "format": "mp4"})
-        assert exc.value.code == "unsupported_filter"
-        assert client.calls == 1
+        deferred = provider.search("office", {"asset_type": "video", "format": "mp4"})
+        assert deferred == []
+        assert "format" not in client.arguments.get("filters", {})
+        assert client.calls == 2
     finally:
         monkeypatch.undo()
 

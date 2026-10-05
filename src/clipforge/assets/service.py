@@ -75,6 +75,8 @@ def write_requests(
     query: str,
     filters: dict[str, str],
     campaign_id: str,
+    sent_filters: dict[str, object] | None = None,
+    deferred_filters: dict[str, str] | None = None,
 ) -> tuple[Path, Path]:
     root = work_root.resolve()
     now = datetime.now(UTC)
@@ -97,8 +99,11 @@ def write_requests(
     json_path = directory / "asset_download_requests.json"
     md_path = directory / "asset_download_requests.md"
     payload = {
+        "normalized_query": query,
         "query": query,
         "filters": filters,
+        "sent_filters": sent_filters or {},
+        "deferred_filters": deferred_filters or {},
         "requests": [item.model_dump(mode="json") for item in requests],
         "created_at": now.isoformat(),
     }

@@ -9,6 +9,15 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from clipforge.schemas.acquisition import (
+    CampaignAcquisitionAttempt,
+    CampaignAcquisitionRequest,
+    CampaignAcquisitionResult,
+    CampaignOperatorBinding,
+    CampaignSourceBinding,
+    MediaConstraints,
+    ProbeFacts,
+)
 from clipforge.schemas.advanced import (
     AdvancedHeroCacheRecord,
     AdvancedHeroDraftOutput,
@@ -319,6 +328,13 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CampaignSourceChoice,
     CampaignSelectionDocument,
     CampaignImportSnapshot,
+    MediaConstraints,
+    ProbeFacts,
+    CampaignAcquisitionRequest,
+    CampaignAcquisitionResult,
+    CampaignSourceBinding,
+    CampaignOperatorBinding,
+    CampaignAcquisitionAttempt,
     SourceAcquisition,
     SourceRightsEvidence,
     OperatorAction,

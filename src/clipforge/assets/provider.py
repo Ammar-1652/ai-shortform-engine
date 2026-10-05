@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from clipforge.assets.filters import search_arguments, search_spec
+from clipforge.assets.filters import apply_post_filters, search_arguments, search_spec
 from clipforge.assets.mcp_client import AssetError, EnvatoMcpClient, envato_enabled, envato_live
 
 
@@ -50,6 +50,27 @@ class DryRunAssetDiscoveryProvider:
         del filters
         self.calls += 1
         return []
+
+
+class FakeEnvatoMcpProvider:
+    """In-memory Envato tool. It does not open a socket or invent a download URL."""
+
+    def __init__(self, specs: list[dict[str, Any]], rows: list[dict[str, Any]] | None = None) -> None:
+        self.tool_specs = specs
+        self.rows = list(rows or [])
+        self.calls = 0
+        self.last_arguments: dict[str, Any] = {}
+        self.last_report: dict[str, str] = {}
+        self.last_deferred: dict[str, str] = {}
+
+    def search(self, query: str, filters: dict[str, str]) -> list[dict[str, Any]]:
+        self.calls += 1
+        tool = search_spec(self.tool_specs, filters)
+        arguments, report, deferred = search_arguments(tool, query, filters)
+        self.last_arguments = arguments
+        self.last_report = report
+        self.last_deferred = deferred
+        return apply_post_filters(self.rows, deferred)
 
 
 class EnvatoMcpDiscoveryProvider:
@@ -120,9 +141,12 @@ class EnvatoMcpDiscoveryProvider:
             self.tool_specs = [item for item in self.client.list_tools() if item.get("name")]
             self.tools = [str(item.get("name")) for item in self.tool_specs]
         tool = search_spec(self.tool_specs, filters)
-        arguments, _filter_mapping = search_arguments(tool, query, filters)
+        arguments, report, deferred = search_arguments(tool, query, filters)
+        self.last_arguments = arguments
+        self.last_report = report
+        self.last_deferred = deferred
         result = self.client.call_tool(str(tool.get("name")), arguments)
-        return _rows_from_tool(result)
+        return apply_post_filters(_rows_from_tool(result), deferred)
 
 
 def _rows_from_tool(result: dict[str, Any]) -> list[dict[str, Any]]:

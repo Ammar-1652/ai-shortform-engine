@@ -42,6 +42,56 @@
     }
     board.appendChild(card);
     loadRuns(payload.campaign_id, card);
+    loadPolicy(payload.campaign_id, card);
+    loadAcquisitions(payload.campaign_id, card);
+  }
+
+  function loadPolicy(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/policy")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "policy_fingerprint " + payload.policy_fingerprint);
+      });
+  }
+
+  function loadAcquisitions(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/acquisitions")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var rows = payload.acquisitions || [];
+        text(card, "acquisitions " + rows.length);
+        for (var index = 0; index < rows.length; index += 1) {
+          loadAcquisition(rows[index].acquisition_id, card);
+        }
+      });
+  }
+
+  function loadAcquisition(acquisitionId, card) {
+    fetch("/api/acquisitions/" + acquisitionId)
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "acquisition " + payload.acquisition_id + " " + payload.status + " " + payload.reason_code);
+        var sources = payload.sources || [];
+        for (var index = 0; index < sources.length; index += 1) {
+          var source = sources[index];
+          text(card, "acquired " + source.source_id + " " + source.status + " " + source.cache_status);
+          text(card, "sha256 " + source.source_sha256);
+          text(card, "bytes " + source.byte_size);
+          text(card, "path " + source.relative_path);
+          text(card, "failure " + source.failure_code);
+          if (source.probe) {
+            text(card, "duration_us " + source.probe.duration_us);
+            text(card, "video " + source.probe.video_codec + " " + source.probe.width + " " + source.probe.height);
+            text(card, "audio " + source.probe.audio_codec + " " + source.probe.sample_rate);
+          }
+        }
+      });
   }
 
   function renderSource(card, source) {

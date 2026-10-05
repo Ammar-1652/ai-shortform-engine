@@ -8,6 +8,14 @@ from typing import Annotated, NoReturn
 
 import typer
 
+from clipforge.campaign.acquisition import (
+    list_acquisitions,
+    plan_acquisition,
+    resume_acquisition,
+    run_acquisition,
+    show_acquisition,
+    verify_acquisition,
+)
 from clipforge.campaign.antoine import CAMPAIGN_ID
 from clipforge.campaign.board import open_campaign_board
 from clipforge.campaign.operator import (
@@ -55,7 +63,9 @@ from clipforge.storage import Database
 
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
 operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
+acquire_app = typer.Typer(no_args_is_help=True, help="Acquire selected sources into the work root.")
 campaign_app.add_typer(operator_app, name="operator")
+operator_app.add_typer(acquire_app, name="acquire")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -382,6 +392,107 @@ def operator_import(
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
     typer.echo(document.selection_id)
+
+
+@acquire_app.command("plan")
+def acquire_plan(
+    selection_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Describe one acquisition. This command does not write."""
+    try:
+        typer.echo(plan_acquisition(Database(resolve_db_path(db)), resolve_work_dir(work_dir), selection_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@acquire_app.command("run")
+def acquire_run(
+    selection_id: str,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    expect: Annotated[str | None, typer.Option("--expect")] = None,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Acquire the sources in one selection. An unchanged attempt is reused."""
+    try:
+        document = run_acquisition(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            selection_id,
+            operator_id=operator_id,
+            force=force,
+            expected_selection_sha256=expect,
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+    typer.echo(document.acquisition_id)
+    typer.echo(document.status)
+
+
+@acquire_app.command("list")
+def acquire_list(
+    campaign_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """List acquisition attempts. This command does not write."""
+    try:
+        for acquisition_id in list_acquisitions(resolve_work_dir(work_dir), campaign_id):
+            typer.echo(acquisition_id)
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@acquire_app.command("show")
+def acquire_show(
+    acquisition_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show one acquisition attempt. This command does not write."""
+    try:
+        typer.echo(show_acquisition(resolve_work_dir(work_dir), acquisition_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@acquire_app.command("verify")
+def acquire_verify(
+    acquisition_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Re-check one acquisition. This command does not write."""
+    try:
+        typer.echo(
+            verify_acquisition(Database(resolve_db_path(db)), resolve_work_dir(work_dir), acquisition_id)
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@acquire_app.command("resume")
+def acquire_resume(
+    acquisition_id: str,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    expect: Annotated[str | None, typer.Option("--expect")] = None,
+) -> None:
+    """Retry incomplete sources. A verified source stays in place."""
+    try:
+        document = resume_acquisition(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            acquisition_id,
+            operator_id=operator_id,
+            expected_selection_sha256=expect,
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+    typer.echo(document.acquisition_id)
+    typer.echo(document.status)
 
 
 @operator_app.command("serve")
