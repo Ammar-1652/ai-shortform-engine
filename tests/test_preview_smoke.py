@@ -15,7 +15,7 @@ from clipforge.preview.verify import verify_preview
 from tests.candidate_support import SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 
-pytestmark = pytest.mark.preview
+pytestmark = [pytest.mark.preview, pytest.mark.browser]
 
 
 def test_real_remotion_preview_is_vertical_and_contained(
