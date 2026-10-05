@@ -49,6 +49,17 @@ Profiles exist for `en-US`, `en-GB`, `fr-FR`, `es-ES`, `de-DE`, `ar`, and `ja`. 
 
 External platform publishing stays deferred. It does not block technical readiness.
 
+
+## Follow-up corrections
+
+The selected campaign sources are configured as `CampaignSource.rights_state = allowed`. That state is authoritative, so `campaign ingest` and `campaign verify` do not require `CLIPFORGE_CAMPAIGN_OPERATOR_CONFIRM=1`. The flag remains optional provenance.
+
+Acquisition records persist public probe facts and verification re-probes them. If probing fails, the acquired file is removed before the failure is reported.
+
+The Envato adapter now initializes and retains the advertised tool specifications on a direct search and forwards the complete filter object. This fixes the previous path where tool names were populated but tool specifications remained empty.
+
+After these corrections, static compilation of the changed Python files passed. The next GitHub Actions run was not started because the account payment or spending limit blocked every job; no code conclusion can be drawn from that run. The previous 417-test green result remains the last full suite result.
+
 ## Local commands
 
 Both full pytest runs used `uv run pytest -q --tb=line -p no:cacheprovider`.
