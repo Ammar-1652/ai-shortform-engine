@@ -71,16 +71,16 @@ def test_caption_review_and_effects() -> None:
     assert caption_decision("Get rich quick @antoinesallis #AntoineSallis #a #b", reviewed=True) == "blocked"
 
 
-def test_ingest_fetches_two_files_and_refuses_the_rest(tmp_path: Path) -> None:
-    unconfirmed_root = tmp_path / "unconfirmed"
-    unconfirmed = ingest_campaign(unconfirmed_root, FakeSourceProvider(), operator_confirmed=False)
+def test_ingest_fetches_two_files_and_allowed_sources_need_no_confirmation(tmp_path: Path) -> None:
+    # CampaignSource.rights_state is authoritative. The explicit allowed state
+    # permits verification even when the operator-confirmed flag is omitted.
+    unconfirmed = ingest_campaign(tmp_path / "unconfirmed", FakeSourceProvider(), operator_confirmed=False)
     assert all(
-        item.rights_state == "rights_unverified"
+        item.rights_state == "allowed"
         for item in unconfirmed.sources
         if item.source_id in {row.source_id for row in selected_files()}
     )
-    with pytest.raises(CampaignError, match="rights"):
-        verify_campaign(unconfirmed_root)
+    assert verify_campaign(tmp_path / "unconfirmed") == "PASS campaign inventory"
 
     provider = FakeSourceProvider()
     document = ingest_campaign(tmp_path, provider, operator_confirmed=True)
@@ -100,6 +100,38 @@ def test_ingest_fetches_two_files_and_refuses_the_rest(tmp_path: Path) -> None:
     text = (tmp_path / "campaigns" / "antoine-sallis" / "inventory.json").read_text(encoding="utf-8")
     assert "bearer " not in text.lower()
     assert "token=" not in text.lower()
+
+
+def test_drive_acquisition_persists_and_rechecks_probe_facts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = GoogleDriveSourceProvider()
+
+    def fake_acquire(source_id: str, destination: Path) -> str:
+        assert source_id in {row.source_id for row in selected_files()}
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"verified-media")
+        return "acquired"
+
+    facts = {
+        "size_bytes": 14,
+        "duration_us": 1_000_000,
+        "width": 1920,
+        "height": 1080,
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "frame_rate": "30/1",
+        "audio_sample_rate": 44100,
+        "audio_channels": 2,
+        "ffprobe_version": "6.1",
+    }
+    monkeypatch.setattr(provider, "acquire", fake_acquire)
+    monkeypatch.setattr("clipforge.campaign.service._probe_facts", lambda _path: dict(facts))
+    document = ingest_campaign(tmp_path, provider, operator_confirmed=False)
+    acquired = [row for row in document.acquisitions if row.download_status == "acquired"]
+    assert len(acquired) == 2
+    assert all(row.probe_facts == facts for row in acquired)
+    assert verify_campaign(tmp_path) == "PASS campaign inventory"
 
 
 def test_drive_provider_does_not_download_when_disabled(
