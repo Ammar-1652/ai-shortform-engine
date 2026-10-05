@@ -59,7 +59,7 @@ FILES: tuple[DriveFile, ...] = (
     ),
     DriveFile(
         source_id="src-og-cuicide",
-        drive_id="9UQaKdtK0bM-not-selected",
+        drive_id="1XNL03ZU4XPxeFxJMkiDeeLMnA-fqt9fu",
         display_name=(
             "Copy of YTDown.com_YouTube_OG-Cuicide-In-The-Building-with-Antoine-_"
             "Media_9UQaKdtK0bM_001_1080p.mp4"
@@ -69,14 +69,14 @@ FILES: tuple[DriveFile, ...] = (
     ),
     DriveFile(
         source_id="src-sept-1",
-        drive_id="antoine-sept-1-not-selected",
+        drive_id="1VFb8LWdMnsJYultiTSH74trSDFW635hi",
         display_name="Antoine - Sept 1.mp4",
         size_bytes=0,
         selected=False,
     ),
     DriveFile(
         source_id="src-sept-3",
-        drive_id="antoine-septemberr-3-not-selected",
+        drive_id="1Cd7D2CR8_bMuGL9NcLDMnS2QXJ1eKxZC",
         display_name="Antoine Septemberr 3.mp4",
         size_bytes=0,
         selected=False,
@@ -205,7 +205,7 @@ def antoine_policy() -> CampaignPolicy:
 def inventory_sources() -> list[CampaignSource]:
     rows: list[CampaignSource] = []
     for item in FILES:
-        rights = "allowed" if item.selected else "rights_unverified"
+        rights = "rights_unverified"
         priority = "round_18_selected" if item.selected else "not_selected_for_round_18"
         rows.append(
             CampaignSource(
