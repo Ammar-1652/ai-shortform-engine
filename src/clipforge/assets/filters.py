@@ -174,6 +174,9 @@ def _validate(value: str | int | bool, schema: dict[str, Any], key: str) -> None
         if isinstance(value, str):
             if len(value) < branch.get("minLength", 0) or len(value) > branch.get("maxLength", 1_000_000):
                 raise AssetError(f"{key} has an invalid length", code="invalid_filter")
-        elif isinstance(value, int) and not isinstance(value, bool):
-            if value < branch.get("minimum", value) or value > branch.get("maximum", value):
-                raise AssetError(f"{key} is outside the supported range", code="invalid_filter")
+        elif (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and (value < branch.get("minimum", value) or value > branch.get("maximum", value))
+        ):
+            raise AssetError(f"{key} is outside the supported range", code="invalid_filter")
