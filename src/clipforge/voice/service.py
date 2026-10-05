@@ -89,6 +89,8 @@ def generate_narration(
         sample_rate=rate,
         channels=channels,
         codec=codec,
+        language=request.language,
+        provider_version=request.profile.provider_version,
         consent_record_id=request.profile.consent_record_id,
         license_evidence_id=request.profile.license_evidence_id,
         model_license=request.profile.model_license,

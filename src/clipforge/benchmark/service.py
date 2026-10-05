@@ -124,7 +124,7 @@ def run_benchmark(
     sidecar_hook: object | None = None,
 ) -> BenchmarkRun:
     """Record the current chain. Missing approvals block the run and write that fact."""
-    if fixture_kind not in {"real_authorized", "deterministic_synthetic"}:
+    if fixture_kind not in {"real_authorized", "real_source", "deterministic_synthetic"}:
         raise BenchmarkError("fixture kind must be real_authorized or deterministic_synthetic")
     if voice_provider not in {"none", "voicestudio", "fake"}:
         raise BenchmarkError("voice provider must be none, fake, or voicestudio")
@@ -287,6 +287,14 @@ def verify_run(database: Database, work_root: Path, benchmark_id: str) -> str:
     return "PASS benchmark"
 
 
+def _named(status: str, passed_name: str) -> str:
+    if status == "passed":
+        return passed_name
+    if status in {"failed", "blocked", "not_run", "unavailable"}:
+        return status
+    return "blocked"
+
+
 def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> V1ReadinessReport:
     document = _read(work_root.resolve(), benchmark_id)
     skipped = {
@@ -318,7 +326,7 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         "VoiceStudio is optional and is not a required gate",
         "analytics evidence does not approve, optimize, or publish content",
     ]
-    if document.fixture_kind != "real_authorized":
+    if document.fixture_kind == "deterministic_synthetic":
         limitations.append("synthetic evidence is not real-source verification")
     steps = list(document.manual_actions)
     if "candidate review" not in " ".join(steps):
@@ -344,9 +352,13 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         stage.stage in {"publish_export", "local_delivery"} and stage.execution == "executed_stage"
         for stage in document.stages
     )
-    if document.fixture_kind == "real_authorized" and produced and local_delivery == "passed":
+    if document.fixture_kind in {"real_authorized", "real_source"} and produced and local_delivery == "passed":
         real_state = "passed"
         real_reason = "authorized source delivery was executed and verified"
+    evidence_class = "real_source" if document.fixture_kind == "real_source" else "synthetic_only"
+    voice_result = "voice_disabled"
+    if os.environ.get("CLIPFORGE_VOICESTUDIO_ENABLED", "").strip() == "1":
+        voice_result = "voice_provider_unavailable"
     return V1ReadinessReport(
         benchmark_run_id=document.benchmark_run_id,
         technical=_readiness(technical),
@@ -361,6 +373,13 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         voicestudio=_readiness(voice),
         real_source_verified=real_state,  # type: ignore[arg-type]
         real_source_reason=real_reason,
+        evidence_class=evidence_class,  # type: ignore[arg-type]
+        voice_result=voice_result,  # type: ignore[arg-type]
+        multilingual_result="not_run",
+        alignment_claim="alignment_not_claimed" if evidence_class == "real_source" else "not_run",
+        technical_result=_named(technical, "technical_pass"),  # type: ignore[arg-type]
+        local_delivery_result=_named(local_delivery, "local_delivery_pass"),  # type: ignore[arg-type]
+        external_publishing="external_publishing_deferred",
         overall=_readiness(overall),
         blocking_limitations=limitations,
         manual_steps=steps,

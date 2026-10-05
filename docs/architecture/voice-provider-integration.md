@@ -6,7 +6,7 @@ Narration is optional. Clipforge works when VoiceStudio is not installed.
 
 `VoiceProvider` exposes `doctor`, `capabilities`, `generate`, and `verify_audio`. `FakeVoiceProvider` writes deterministic PCM silence and is what tests use. `VoiceStudioProvider` talks to a separate local process over HTTP. Clipforge does not copy VoiceStudio source, vendor it, or depend on its Python package.
 
-Discovery is `GET /.well-known/voicestudio-speech`. The accepted protocol id is `voicestudio.speech.v1`. Synthesis is `POST /v1/audio/speech` with the engine id, voice profile id, explicit script, and `response_format=wav`. That contract comes from VoiceStudio's speech platform and agentic-voice documents. Clipforge does not call a model download route.
+Discovery is `GET /.well-known/voicestudio-speech`. The accepted protocol id is `voicestudio.speech.v1`. An enabled `clipforge voice doctor` also calls `GET /health` and reports the discovery endpoint names and service version. A disabled doctor reports `health: not_called` and `capabilities: not_called` and does not open a socket. Synthesis is `POST /v1/audio/speech` with the engine id, voice profile id, explicit script, the ISO 639-1 language, and `response_format=wav`. That route is VoiceStudio's documented OpenAI-compatible speech endpoint. The discovery document itself advertises transcription and MCP transports. Clipforge does not call a model download route.
 
 ## Configuration
 

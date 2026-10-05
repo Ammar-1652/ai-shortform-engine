@@ -26,7 +26,7 @@ Execution = Literal[
     "blocked",
     "unavailable",
 ]
-FixtureKind = Literal["real_authorized", "deterministic_synthetic"]
+FixtureKind = Literal["real_authorized", "real_source", "deterministic_synthetic"]
 
 
 def _public(value: str) -> bool:
@@ -145,6 +145,15 @@ class V1ReadinessReport(Versioned):
     voicestudio: Readiness
     real_source_verified: Readiness
     real_source_reason: str = Field(min_length=1, max_length=160)
+    evidence_class: Literal["synthetic_only", "real_source"] = "synthetic_only"
+    voice_result: Literal["voice_disabled", "voice_live_pass", "voice_provider_unavailable"] = "voice_disabled"
+    multilingual_result: Literal["multilingual_pass", "not_run"] = "not_run"
+    alignment_claim: Literal["aligned", "alignment_not_claimed", "not_run"] = "not_run"
+    technical_result: Literal["technical_pass", "failed", "blocked", "not_run", "unavailable"] = "not_run"
+    local_delivery_result: Literal["local_delivery_pass", "failed", "blocked", "not_run", "unavailable"] = (
+        "not_run"
+    )
+    external_publishing: Literal["external_publishing_deferred"] = "external_publishing_deferred"
     overall: Readiness
     blocking_limitations: list[str] = Field(default_factory=list)
     manual_steps: list[str] = Field(default_factory=list)

@@ -92,6 +92,16 @@
   "additionalProperties": false,
   "description": "What is ready, what is blocked, and what a person still has to do.",
   "properties": {
+    "alignment_claim": {
+      "default": "not_run",
+      "enum": [
+        "aligned",
+        "alignment_not_claimed",
+        "not_run"
+      ],
+      "title": "Alignment Claim",
+      "type": "string"
+    },
     "benchmark_run_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -115,6 +125,21 @@
         "blocked_for_external_publish"
       ],
       "title": "Editorial",
+      "type": "string"
+    },
+    "evidence_class": {
+      "default": "synthetic_only",
+      "enum": [
+        "synthetic_only",
+        "real_source"
+      ],
+      "title": "Evidence Class",
+      "type": "string"
+    },
+    "external_publishing": {
+      "const": "external_publishing_deferred",
+      "default": "external_publishing_deferred",
+      "title": "External Publishing",
       "type": "string"
     },
     "external_upload": {
@@ -142,12 +167,33 @@
       "title": "Local Delivery",
       "type": "string"
     },
+    "local_delivery_result": {
+      "default": "not_run",
+      "enum": [
+        "local_delivery_pass",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Local Delivery Result",
+      "type": "string"
+    },
     "manual_steps": {
       "items": {
         "type": "string"
       },
       "title": "Manual Steps",
       "type": "array"
+    },
+    "multilingual_result": {
+      "default": "not_run",
+      "enum": [
+        "multilingual_pass",
+        "not_run"
+      ],
+      "title": "Multilingual Result",
+      "type": "string"
     },
     "overall": {
       "enum": [
@@ -250,6 +296,28 @@
         "blocked_for_external_publish"
       ],
       "title": "Technical",
+      "type": "string"
+    },
+    "technical_result": {
+      "default": "not_run",
+      "enum": [
+        "technical_pass",
+        "failed",
+        "blocked",
+        "not_run",
+        "unavailable"
+      ],
+      "title": "Technical Result",
+      "type": "string"
+    },
+    "voice_result": {
+      "default": "voice_disabled",
+      "enum": [
+        "voice_disabled",
+        "voice_live_pass",
+        "voice_provider_unavailable"
+      ],
+      "title": "Voice Result",
       "type": "string"
     },
     "voicestudio": {

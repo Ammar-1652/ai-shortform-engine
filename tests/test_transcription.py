@@ -117,6 +117,59 @@ def test_backend_refuses_missing_segment_or_word_timestamps() -> None:
         transcription_backend._segment(segment)
 
 
+def test_word_past_its_segment_keeps_one_microsecond_and_its_text() -> None:
+    base = _build_kwargs()
+    raw = RawSegment(
+        text=" tail",
+        start_seconds=0.0,
+        end_seconds=0.5,
+        words=(RawWord(text=" tail", start_seconds=0.6, end_seconds=0.7, probability=0.9),),
+        avg_logprob=-0.2,
+        no_speech_prob=0.01,
+        compression_ratio=1.0,
+        temperature=0.0,
+    )
+    document = build_transcript(**base, segments=[raw], canonical_duration_us=1_000_000)
+    word = document.segments[0].words[0]
+    assert word.text == " tail"
+    assert word.end_us == 500_000
+    assert word.start_us == 499_999
+    assert any("last microsecond" in note for note in document.timing_adjustments)
+
+
+def test_word_outside_its_segment_is_contained_without_rewriting_text() -> None:
+    base = _build_kwargs()
+    raw = RawSegment(
+        text=" Café",
+        start_seconds=0.5,
+        end_seconds=1.0,
+        words=(RawWord(text=" Café", start_seconds=0.3, end_seconds=0.8, probability=0.9),),
+        avg_logprob=-0.2,
+        no_speech_prob=0.01,
+        compression_ratio=1.0,
+        temperature=0.0,
+    )
+    document = build_transcript(**base, segments=[raw], canonical_duration_us=1_000_000)
+    word = document.segments[0].words[0]
+    assert word.text == " Café"
+    assert word.start_us == 500_000
+    assert word.end_us == 800_000
+    assert any("clamped from 300000 us" in note for note in document.timing_adjustments)
+
+
+def test_empty_engine_span_keeps_the_word_and_records_the_adjustment() -> None:
+    base = _build_kwargs()
+    document = build_transcript(
+        **base,
+        segments=[_segment(0.2, 0.2, "Café")],
+        canonical_duration_us=1_000_000,
+    )
+    word = document.segments[0].words[0]
+    assert word.text == " Café"
+    assert word.end_us == word.start_us + 1
+    assert any("empty engine span" in note for note in document.timing_adjustments)
+
+
 def test_timestamp_edges_fail_closed() -> None:
     base = _build_kwargs()
     over = _segment(0.0, 1.05, "near")

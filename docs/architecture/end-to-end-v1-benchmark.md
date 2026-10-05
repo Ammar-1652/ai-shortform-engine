@@ -51,13 +51,14 @@ Promotion writes a partial manifest, validates it, inserts the job and artifact,
 
 ## Readiness
 
-`clipforge benchmark readiness` separates technical, editorial, rights, QA, local delivery, platform publishing, VoiceStudio, and real-source verification. `local_delivery` is `passed` only after a package verifies. `platform_publishing` stays `not_implemented`. `real_source_verified` stays `unavailable` with reason `no authorized source supplied` when no authorized source was supplied. A synthetic fixture is never reported as real-source verification. VoiceStudio stays `unavailable` unless `CLIPFORGE_VOICESTUDIO_URL` and `CLIPFORGE_VOICESTUDIO_LIVE_SMOKE=1` are set, and even then the benchmark records `not_run` until a provider actually responds. Overall stays `blocked` while local delivery is not `passed`. The report lists the remaining manual steps. External publishing is not passed because a local package exists.
+`clipforge benchmark readiness` separates technical, editorial, rights, QA, local delivery, platform publishing, VoiceStudio, and real-source verification. `local_delivery` is `passed` only after a package verifies, and the report then says `local_delivery_pass`. A passing technical rollup says `technical_pass`. `platform_publishing` stays `not_implemented`. `external_publishing` stays `external_publishing_deferred`. `real_source_verified` stays `unavailable` with reason `no authorized source supplied` when no authorized source was supplied. `evidence_class` is `synthetic_only` for the deterministic fixture. `--fixture real_source` records `evidence_class: real_source` and still leaves `real_source_verified` unavailable until that fixture has an executed, verified local delivery. A synthetic fixture is never reported as real-source verification. `voice_result` stays `voice_disabled` unless VoiceStudio is enabled, and an enabled provider that was not shown to answer is `voice_provider_unavailable`, not `voice_live_pass`. `alignment_claim` stays `alignment_not_claimed` or `not_run` until a real aligner result is recorded. Overall stays `blocked` while local delivery is not `passed`. The report lists the remaining manual steps. External publishing is not passed because a local package exists.
 
 ## Commands
 
 ```text
 clipforge benchmark doctor
 clipforge benchmark run SOURCE_ID --fixture-kind deterministic_synthetic
+clipforge benchmark run SOURCE_ID --fixture real_source
 clipforge benchmark list PROJECT_ID
 clipforge benchmark show BENCHMARK_ID
 clipforge benchmark verify BENCHMARK_ID

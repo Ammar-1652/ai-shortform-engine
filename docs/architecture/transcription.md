@@ -26,7 +26,7 @@ Auto compute type prefers `int8` on CPU and `int8_float16` on CUDA when that typ
 
 ASR sample 0 is canonical video time 0. faster-whisper seconds convert with `Decimal(str(seconds))` and half-up to microseconds. An end up to 100 ms past the canonical duration is clamped and recorded in `timing_adjustments`. A larger miss fails the job. The Round 2 audio offset is not applied again.
 
-Word timestamps are provisional. WhisperX, later, aligns a selected Hero range. It is not installed here.
+Word timestamps are provisional. WhisperX, later, aligns a selected Hero range. It is not installed here. An engine span whose start and end become the same microsecond is extended by 1 µs when that still fits in the source, and the adjustment is stored. A word time that falls outside its own segment, but still inside the source, is clamped into that segment and the original microsecond is stored in `timing_adjustments`. A word that would otherwise collapse at the segment boundary keeps one microsecond inside that segment. Word order inside the segment is restored by a recorded clamp. The words are not reordered in the text. The word text is not changed. A backwards span, or a timestamp more than 100 ms outside the source, still fails closed.
 
 ## Document
 

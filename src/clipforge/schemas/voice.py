@@ -148,6 +148,8 @@ class NarrationAudioArtifact(Versioned):
     sample_rate: int = Field(ge=8000, le=96000)
     channels: int = Field(ge=1, le=2)
     codec: str = Field(min_length=1, max_length=40)
+    language: str | None = None
+    provider_version: str | None = None
     consent_record_id: EntityId
     license_evidence_id: EntityId
     model_license: LicenseState | None = None
@@ -160,6 +162,16 @@ class NarrationAudioArtifact(Versioned):
     @classmethod
     def narration_text_is_public(cls, value: str) -> str:
         return _reject_text(value, "narration")
+
+    @field_validator("language", "provider_version")
+    @classmethod
+    def optional_labels_are_public(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        checked = _reject_text(value, "narration")
+        if len(checked) > 40:
+            raise ValueError("narration label is too long")
+        return checked
 
     @model_validator(mode="after")
     def lineage_is_present(self) -> Self:

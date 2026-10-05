@@ -71,33 +71,59 @@ class VoiceStudioProvider:
         self.timeout_s = timeout_s
         self.allow_remote = allow_remote
         self.calls = 0
+        self.service_version = ""
+        self.capability_names = ""
 
     def doctor(self) -> str:
         if not self.enabled:
-            return "PASS voice: provider disabled"
+            return "PASS voice: provider disabled; health: not_called; capabilities: not_called"
         self._require_endpoint()
+        health = self._get("/health")
         document = self._get("/.well-known/voicestudio-speech")
+        status = health.get("status") if isinstance(health, dict) else None
         protocol = document.get("protocol") if isinstance(document, dict) else None
-        if protocol != "voicestudio.speech.v1":
-            raise VoiceError("VoiceStudio discovery protocol was not recognized")
-        return "PASS voice: local endpoint answered"
+        version = document.get("service_version") if isinstance(document, dict) else None
+        endpoints = document.get("endpoints") if isinstance(document, dict) else None
+        if status != "ok" or protocol != "voicestudio.speech.v1":
+            raise VoiceError("VoiceStudio health or discovery protocol was not recognized")
+        if not isinstance(version, str) or not version or len(version) > 40:
+            raise VoiceError("VoiceStudio service version was not recognized")
+        names = sorted(endpoints) if isinstance(endpoints, dict) else []
+        if not names or any(not isinstance(name, str) for name in names):
+            raise VoiceError("VoiceStudio capabilities were not recognized")
+        self.service_version = version
+        self.capability_names = ",".join(names)
+        return (
+            "PASS voice: local endpoint answered; "
+            f"health: ok; protocol: {protocol}; service_version: {version}; "
+            f"capabilities: {self.capability_names}"
+        )
 
     def capabilities(self) -> dict[str, str]:
         if not self.enabled:
             return {"provider": "voicestudio", "enabled": "0", "network": "none"}
         self.doctor()
-        return {"provider": "voicestudio", "enabled": "1", "protocol": "voicestudio.speech.v1"}
+        return {
+            "provider": "voicestudio",
+            "enabled": "1",
+            "network": "loopback",
+            "protocol": "voicestudio.speech.v1",
+            "service_version": self.service_version,
+            "capabilities": self.capability_names,
+        }
 
     def generate(self, request: NarrationRequest) -> bytes:
         if not self.enabled:
             raise VoiceError("VoiceStudio is disabled")
         self._require_endpoint()
         self.calls += 1
+        language = request.language.split("-", 1)[0]
         body = json.dumps(
             {
                 "model": request.profile.engine_id,
                 "voice": request.voice_profile_id,
                 "input": request.script_text,
+                "language": language,
                 "response_format": "wav",
             }
         ).encode("utf-8")
