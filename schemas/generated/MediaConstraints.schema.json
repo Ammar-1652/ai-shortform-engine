@@ -1,0 +1,113 @@
+{
+  "additionalProperties": false,
+  "description": "What an acquired file must satisfy. Empty codec lists mean any decodable codec.",
+  "properties": {
+    "allowed_audio_codecs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Audio Codecs",
+      "type": "array"
+    },
+    "allowed_video_codecs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Video Codecs",
+      "type": "array"
+    },
+    "frame_rate_denominator": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Frame Rate Denominator"
+    },
+    "frame_rate_numerator": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Frame Rate Numerator"
+    },
+    "max_duration_us": {
+      "default": 21600000000,
+      "minimum": 1,
+      "title": "Max Duration Us",
+      "type": "integer"
+    },
+    "max_height": {
+      "default": 4320,
+      "minimum": 1,
+      "title": "Max Height",
+      "type": "integer"
+    },
+    "max_width": {
+      "default": 7680,
+      "minimum": 1,
+      "title": "Max Width",
+      "type": "integer"
+    },
+    "min_duration_us": {
+      "default": 1,
+      "minimum": 0,
+      "title": "Min Duration Us",
+      "type": "integer"
+    },
+    "min_height": {
+      "default": 2,
+      "minimum": 1,
+      "title": "Min Height",
+      "type": "integer"
+    },
+    "min_width": {
+      "default": 2,
+      "minimum": 1,
+      "title": "Min Width",
+      "type": "integer"
+    },
+    "require_audio": {
+      "default": true,
+      "title": "Require Audio",
+      "type": "boolean"
+    },
+    "require_video": {
+      "default": true,
+      "title": "Require Video",
+      "type": "boolean"
+    },
+    "sample_rate": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Rate"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "MediaConstraints",
+  "type": "object"
+}

@@ -35,6 +35,27 @@ _VALUES = {
     },
     "categories": {"stock-footage": "Stock Footage", "motion-graphics": "Motion Graphics"},
 }
+# Generic Clipforge names mapped to fields each Envato tool actually accepts.
+# A name that is absent here, or absent from the tool schema, is not sent.
+SUPPORTED_ENVATO_FIELDS: dict[str, dict[str, str]] = {
+    "search_stock_video": {
+        "orientation": "orientation",
+        "resolution": "resolution",
+        "category": "categories",
+        "min_duration": "min_media_length",
+        "max_duration": "max_media_length",
+    },
+    "search_photos": {
+        "orientation": "orientation",
+        "category": "categories",
+    },
+    "search_music": {
+        "min_duration": "min_media_length",
+        "max_duration": "max_media_length",
+    },
+}
+MAX_PER_PAGE = 5
+MAX_PAGES = 3
 
 
 def search_spec(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[str, Any]:
@@ -51,8 +72,8 @@ def search_spec(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[st
 
 def search_arguments(
     spec: dict[str, Any], query: str, filters: dict[str, str]
-) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate native filters. Incompatible constraints fail before tools/call."""
+) -> tuple[dict[str, Any], dict[str, str], dict[str, str]]:
+    """Build a tool call. Unsupported generic filters stay local for post-filtering."""
     schema = spec.get("inputSchema", {})
     properties = _object_properties(schema)
     if "searchTerms" not in properties:
@@ -60,7 +81,10 @@ def search_arguments(
     _validate(query, properties["searchTerms"], "searchTerms")
     arguments: dict[str, Any] = {"searchTerms": query}
     if "perPage" in properties:
-        arguments["perPage"] = 5
+        maximum = _integer_maximum(properties["perPage"])
+        arguments["perPage"] = min(MAX_PER_PAGE, maximum)
+    if "page" in properties:
+        arguments["page"] = min(1, MAX_PAGES)
     item_type = _item_type(filters)
     if "itemType" in properties:
         if item_type is None:
@@ -73,6 +97,8 @@ def search_arguments(
     # to claim support without the typed schema for the requested item type.
     applied: dict[str, Any] = {}
     report: dict[str, str] = {}
+    deferred: dict[str, str] = {}
+    explicit = SUPPORTED_ENVATO_FIELDS.get(str(spec.get("name")), {})
     for key, raw in filters.items():
         if key in {"asset_type", "item_type"}:
             report[key] = "tool_selection"
@@ -88,14 +114,17 @@ def search_arguments(
                 "duration is ambiguous; use min_duration and max_duration in seconds",
                 code="unsupported_filter",
             )
-        candidates = (key, *_ALIASES.get(key, ()))
-        target = next((name for name in candidates if name in native_properties), None)
+        mapped = explicit.get(key)
+        target: str | None
+        if mapped is not None and mapped in native_properties:
+            target = mapped
+        else:
+            candidates = (key, *_ALIASES.get(key, ()))
+            target = next((name for name in candidates if name in native_properties), None)
         if target is None:
-            raise AssetError(
-                f"{key} is unsupported by {spec.get('name')}; supported filters: "
-                + ", ".join(sorted(native_properties)),
-                code="unsupported_filter",
-            )
+            report[key] = "post_filter"
+            deferred[key] = raw
+            continue
         value = _coerce(raw, native_properties[target], target)
         if target in applied and applied[target] != value:
             raise AssetError(f"conflicting values for {target}", code="invalid_filter")
@@ -107,7 +136,57 @@ def search_arguments(
         raise AssetError("minimum duration exceeds maximum duration", code="invalid_filter")
     if applied:
         arguments["filters"] = applied
-    return arguments, report
+    return arguments, report, deferred
+
+
+def apply_post_filters(rows: list[dict[str, Any]], deferred: dict[str, str]) -> list[dict[str, Any]]:
+    """Drop hits that contradict a filter the provider did not accept. Missing fields stay."""
+    kept: list[dict[str, Any]] = []
+    for row in rows:
+        if _row_matches(row, deferred):
+            kept.append(row)
+    return kept
+
+
+def _row_matches(row: dict[str, Any], deferred: dict[str, str]) -> bool:
+    for key, raw in deferred.items():
+        if key in {"min_duration", "max_duration"}:
+            duration = row.get("duration_seconds")
+            if duration is None:
+                continue
+            try:
+                limit = int(raw)
+                seconds = float(duration)
+            except (TypeError, ValueError):
+                return False
+            if key == "min_duration" and seconds < limit:
+                return False
+            if key == "max_duration" and seconds > limit:
+                return False
+            continue
+        value = row.get(key)
+        if value is None and key == "format":
+            value = row.get("formats")
+        if value is None:
+            continue
+        if isinstance(value, list):
+            if raw.lower() not in {str(item).lower() for item in value}:
+                return False
+            continue
+        if str(value).lower() != raw.lower() and raw.lower() not in str(value).lower():
+            return False
+    return True
+
+
+def _integer_maximum(schema: dict[str, Any]) -> int:
+    maxima: list[int] = []
+    for branch in _branches(schema):
+        maximum = branch.get("maximum")
+        if isinstance(maximum, int):
+            maxima.append(maximum)
+    if not maxima:
+        return MAX_PER_PAGE
+    return max(1, min(maxima))
 
 
 def _item_type(filters: dict[str, str]) -> str | None:

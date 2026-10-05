@@ -215,5 +215,23 @@ class WhopCampaignProvider:
         raise CampaignError("authorized browser session was not supplied", code="provider_unavailable")
 
 
+class WhopSnapshotConnector:
+    """A later adapter can implement this. This build does not open a session."""
+
+    name = "whop"
+
+    def read_snapshot(self) -> bytes | None:
+        return None
+
+
+def whop_live_import() -> bytes:
+    """Live Whop import is unavailable until an approved connector is configured."""
+    connector = WhopSnapshotConnector()
+    payload = connector.read_snapshot()
+    if payload is None:
+        raise CampaignError("whop live is not configured", code="not_configured")
+    return payload
+
+
 def selected_source_ids() -> list[str]:
     return [item.source_id for item in selected_files()]

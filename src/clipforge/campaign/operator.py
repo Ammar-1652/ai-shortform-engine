@@ -253,6 +253,7 @@ def run_selection(
     _revalidate(document, database)
     if document.status != "ready":
         raise CampaignError("campaign selection is not ready", code=document.reason_code)
+    _require_acquisition_or_binding(root, database, document)
     produced = run_campaign(
         database,
         root,
@@ -262,6 +263,18 @@ def run_selection(
         narration_enabled=document.narration_enabled,
         created_by=created_by,
         narration_probe=narration_probe,
+    )
+    from clipforge.campaign.acquisition import write_operator_binding
+
+    write_operator_binding(
+        root,
+        campaign_run_id=produced.campaign_run_id,
+        campaign_id=produced.campaign_id,
+        selection=document,
+        selection_sha256=_file_sha(root, document.selection_id),
+        produced_sources=[item.model_dump(mode="json") for item in produced.sources],
+        language=produced.language,
+        narration_enabled=produced.narration_enabled,
     )
     return produced.campaign_run_id
 
@@ -492,6 +505,21 @@ def _readiness(status: str, sources: list[dict[str, object]]) -> str:
     if status == "failed":
         return "failed"
     return "partial"
+
+
+def _require_acquisition_or_binding(
+    root: Path, database: Database, document: CampaignSelectionDocument
+) -> None:
+    """A bound unchanged source may run. Otherwise a verified acquisition is required."""
+    from clipforge.campaign.acquisition import latest_successful_result
+
+    for choice in document.sources:
+        bound = bind_campaign_source(database, choice.source_id)
+        acquired = latest_successful_result(root, choice.source_id, choice.source_sha256)
+        if bound.binding is not None and bound.binding.source_sha256 == choice.source_sha256:
+            continue
+        if acquired is None:
+            raise CampaignError("selected source has no verified acquisition", code="acquisition_missing")
 
 
 def _revalidate(document: CampaignSelectionDocument, database: Database | None) -> None:

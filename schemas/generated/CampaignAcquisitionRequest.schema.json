@@ -1,0 +1,240 @@
+{
+  "$defs": {
+    "MediaConstraints": {
+      "additionalProperties": false,
+      "description": "What an acquired file must satisfy. Empty codec lists mean any decodable codec.",
+      "properties": {
+        "allowed_audio_codecs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Audio Codecs",
+          "type": "array"
+        },
+        "allowed_video_codecs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Video Codecs",
+          "type": "array"
+        },
+        "frame_rate_denominator": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Rate Denominator"
+        },
+        "frame_rate_numerator": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Rate Numerator"
+        },
+        "max_duration_us": {
+          "default": 21600000000,
+          "minimum": 1,
+          "title": "Max Duration Us",
+          "type": "integer"
+        },
+        "max_height": {
+          "default": 4320,
+          "minimum": 1,
+          "title": "Max Height",
+          "type": "integer"
+        },
+        "max_width": {
+          "default": 7680,
+          "minimum": 1,
+          "title": "Max Width",
+          "type": "integer"
+        },
+        "min_duration_us": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Min Duration Us",
+          "type": "integer"
+        },
+        "min_height": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Min Height",
+          "type": "integer"
+        },
+        "min_width": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Min Width",
+          "type": "integer"
+        },
+        "require_audio": {
+          "default": true,
+          "title": "Require Audio",
+          "type": "boolean"
+        },
+        "require_video": {
+          "default": true,
+          "title": "Require Video",
+          "type": "boolean"
+        },
+        "sample_rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Rate"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "MediaConstraints",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One source the operator asked to acquire. It does not copy the file.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "catalogue_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Catalogue Fingerprint",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "display_name": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "expected_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Sha256"
+    },
+    "expected_size_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Size Bytes"
+    },
+    "max_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Max Bytes",
+      "type": "integer"
+    },
+    "media_constraints": {
+      "$ref": "#/$defs/MediaConstraints"
+    },
+    "operator_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
+    "origin": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Origin",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Fingerprint",
+      "type": "string"
+    },
+    "selection_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Selection Id",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "selection_id",
+    "project_id",
+    "source_id",
+    "display_name",
+    "origin",
+    "max_bytes",
+    "media_constraints",
+    "policy_fingerprint",
+    "selection_fingerprint",
+    "catalogue_fingerprint",
+    "operator_id",
+    "created_at"
+  ],
+  "title": "CampaignAcquisitionRequest",
+  "type": "object"
+}

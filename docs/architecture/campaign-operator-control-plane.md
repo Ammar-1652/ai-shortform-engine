@@ -35,10 +35,16 @@ clipforge campaign operator run SELECTION_ID
 clipforge campaign operator resume RUN_ID
 clipforge campaign operator status RUN_ID
 clipforge campaign operator import --file CAMPAIGN_SNAPSHOT.json --project PROJECT_ID
+clipforge campaign operator acquire plan SELECTION_ID
+clipforge campaign operator acquire run SELECTION_ID
+clipforge campaign operator acquire list CAMPAIGN_ID
+clipforge campaign operator acquire show ACQUISITION_ID
+clipforge campaign operator acquire verify ACQUISITION_ID
+clipforge campaign operator acquire resume ACQUISITION_ID
 clipforge campaign operator serve --host 127.0.0.1 --port 8772
 ```
 
-Read-only commands are `doctor`, `list`, `show`, `sources`, `verify`, and `status`. They do not modify the database or a sidecar. `serve` has no POST, PUT, or DELETE handler.
+Read-only commands are `doctor`, `list`, `show`, `sources`, `verify`, `status`, `acquire plan`, `acquire list`, `acquire show`, and `acquire verify`. They do not modify the database or a sidecar. `serve` has no POST, PUT, or DELETE handler.
 
 `select` and `import` validate before they write. `run` refuses a selection that is not `ready`, then calls `run_campaign` with that selection's source ids, language, and narration flag. `resume` calls `resume_campaign`. A cache hit returns the existing verified run, does not call narration, and does not copy the delivery again. Resume retries sources that are not still verified and leaves a succeeded sibling in place. A failed replacement does not delete the previous manifest until the runner promotes a new one.
 
@@ -58,6 +64,10 @@ GET /api/campaigns/<campaign_id>/sources
 GET /api/campaigns/<campaign_id>/runs
 GET /api/campaign-runs/<run_id>
 GET /api/campaign-runs/<run_id>/source/<source_id>
+GET /api/campaigns/<campaign_id>/acquisitions
+GET /api/acquisitions/<acquisition_id>
+GET /api/campaigns/<campaign_id>/envato
+GET /api/campaigns/<campaign_id>/policy
 ```
 
 The page shows campaign identity, policy rules, sources in source-id order, rights, verification, SHA-256, duration and size when the database is present, language and narration capability, stage and cache status, candidate review, Hero review id, QA, delivery as `deliveries/<id>/manifest.json`, the failure reason, and review paths `review/candidates/<id>` and `hero-review/candidates/<id>`. Publishing is `deferred`. The page does not autoplay media. Static files do not use `eval`, `innerHTML`, remote scripts, remote fonts, analytics, or a CDN. Strings from the campaign are inserted with `textContent`.
