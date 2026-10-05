@@ -107,7 +107,12 @@ def ingest_campaign(
     operator_confirmed: bool = False,
     created_by: str = "campaign",
 ) -> SourceInventoryManifest:
-    """Acquire selected sources. Unselected files are recorded and not fetched."""
+    """Acquire selected sources whose CampaignSource rights state is allowed.
+    
+    Operator confirmation is retained as provenance when supplied, but it is not
+    a prerequisite for an explicitly allowed CampaignSource.
+    Unselected files are recorded and not fetched.
+    """
     root = work_root.resolve()
     if root.is_symlink():
         raise CampaignError("campaign work root is a symlink", code="symlink")
@@ -189,14 +194,9 @@ def ingest_campaign(
             for item in selected_files()
         )
     decisions = _decisions(now, confirmed=operator_confirmed)
+    # CampaignSource.rights_state is authoritative. An explicitly allowed
+    # source does not wait for a duplicate operator confirmation flag.
     sources = inventory_sources()
-    if operator_confirmed:
-        sources = [
-            item.model_copy(update={"rights_state": "allowed"})
-            if item.source_id in {row.source_id for row in selected_files()}
-            else item
-            for item in sources
-        ]
     document = SourceInventoryManifest(
         manifest_id="inventory-antoine-sallis",
         campaign_id=CAMPAIGN_ID,
