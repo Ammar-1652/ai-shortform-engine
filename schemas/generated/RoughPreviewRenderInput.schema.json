@@ -169,10 +169,43 @@
       "title": "Preview Set Id",
       "type": "string"
     },
+    "proxy_sha256": {
+      "default": "",
+      "title": "Proxy Sha256",
+      "type": "string"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "staged_audio_sha256": {
+      "default": "",
+      "title": "Staged Audio Sha256",
+      "type": "string"
+    },
+    "staged_duration_us": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Staged Duration Us",
+      "type": "integer"
+    },
+    "staged_video_sha256": {
+      "default": "",
+      "title": "Staged Video Sha256",
       "type": "string"
     },
     "timing_quality": {

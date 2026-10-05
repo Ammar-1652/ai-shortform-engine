@@ -22,6 +22,7 @@ describe("advanced hero composition", () => {
     expect(source).toContain("{typeText}");
     expect(source).toContain("diagram.payload?.left_label");
     expect(source).toContain("staticFile(name)");
+    expect(source).toContain("names.narration");
   });
 
   it("converts SFX gain from dB and rejects music-range values", () => {

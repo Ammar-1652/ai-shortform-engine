@@ -10,9 +10,11 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from clipforge.errors import MediaError
@@ -167,9 +169,15 @@ def build_alignment(
         start_frame = frame_at_or_after(output_start, frame_count)
         end_frame = frame_at_or_after(output_end, frame_count)
         if start_frame >= end_frame:
-            raise MediaError(
-                f"aligned word {word.word_id} has no Hero frame. Provisional timing was not substituted."
-            )
+            # A sub-frame word still occupies the frame that contains its start.
+            if start_frame < frame_count:
+                end_frame = start_frame + 1
+            elif start_frame > 0:
+                start_frame -= 1
+            else:
+                raise MediaError(
+                    f"aligned word {word.word_id} has no Hero frame. Provisional timing was not substituted."
+                )
         aligned.append(
             AlignedWord(
                 word_id=word.word_id,
@@ -276,14 +284,18 @@ def align_span_with_whisperx(
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_DATASETS_OFFLINE"] = "1"
-        _require_cached_punkt()
     try:
         import whisperx  # type: ignore[import-not-found]
-    except ImportError as exc:
-        raise MediaError(
-            "WhisperX is not installed. Hero alignment does not fall back to provisional timings. "
-            "Install WhisperX locally before hero align. Clipforge does not download it automatically."
-        ) from exc
+    except ImportError:
+        return _align_with_side_python(
+            audio_path,
+            words,
+            source_start_us=source_start_us,
+            source_end_us=source_end_us,
+            allow_model_download=allow_model_download,
+        )
+    if not allow_model_download:
+        _require_cached_punkt()
     audio = whisperx.load_audio(audio_path)
     start_sample = (source_start_us * 16) // 1000
     end_sample = (source_end_us * 16) // 1000
@@ -412,15 +424,128 @@ def _block_model_downloads(allow_model_download: bool) -> Iterator[None]:
         torch.hub.download_url_to_file = original
 
 
-def _whisperx_version() -> str:
-    try:
-        import whisperx
-    except ImportError as exc:
+def _align_python() -> Path | None:
+    configured = os.environ.get("CLIPFORGE_ALIGN_PYTHON", "").strip()
+    default = Path.home() / ".local" / "clipforge-hero-align" / "bin" / "python"
+    candidate = Path(configured) if configured else default
+    # A venv interpreter is commonly a symlink. Keep that path so its site-packages load.
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def _align_with_side_python(
+    audio_path: str,
+    words: list[TranscriptWord],
+    *,
+    source_start_us: int,
+    source_end_us: int,
+    allow_model_download: bool,
+) -> list[tuple[int, int]]:
+    """Run the optional alignment interpreter. The result is still production WhisperX."""
+    import subprocess
+
+    python = _align_python()
+    if python is None:
         raise MediaError(
             "WhisperX is not installed. Hero alignment does not fall back to provisional timings. "
             "Install WhisperX locally before hero align. Clipforge does not download it automatically."
-        ) from exc
-    del whisperx
+        )
+    worker = Path(__file__).with_name("align_worker.py")
+    env = dict(os.environ)
+    nltk_data = python.parent.parent / "nltk_data"
+    if nltk_data.is_dir():
+        env["NLTK_DATA"] = str(nltk_data)
+    if not allow_model_download:
+        env["HF_HUB_OFFLINE"] = "1"
+        env["TRANSFORMERS_OFFLINE"] = "1"
+        env["HF_DATASETS_OFFLINE"] = "1"
+    payload = {
+        "audio_path": audio_path,
+        "source_start_us": source_start_us,
+        "source_end_us": source_end_us,
+        "allow_model_download": allow_model_download,
+        "words": [{"text": word.text} for word in words],
+    }
+    completed = subprocess.run(
+        [str(python), str(worker)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    if completed.returncode != 0 or not completed.stdout.strip():
+        raise MediaError(
+            "WhisperX alignment failed. Provisional timings were not used. "
+            "The transcript text was not rewritten."
+        )
+    try:
+        document = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise MediaError("WhisperX returned a malformed result. Provisional timings were not used.") from exc
+    returned = document.get("words")
+    if not isinstance(returned, list):
+        raise MediaError("WhisperX returned no words. Provisional timings were not used.")
+    pairs: list[tuple[str, int, int]] = []
+    for item in returned:
+        if not isinstance(item, dict):
+            raise MediaError("WhisperX returned a word without text or times.")
+        token = item.get("text")
+        start = item.get("start_us")
+        end = item.get("end_us")
+        if not isinstance(token, str) or isinstance(start, bool) or isinstance(end, bool):
+            raise MediaError("WhisperX returned a word without text or times.")
+        if not isinstance(start, int) or not isinstance(end, int):
+            raise MediaError("WhisperX returned a word without text or times.")
+        pairs.append((token, start, end))
+    if len(pairs) != len(words):
+        raise MediaError(
+            "WhisperX word count does not match the transcript evidence. "
+            "Hero alignment does not invent or drop words."
+        )
+    bounds: list[tuple[int, int]] = []
+    for expected, (token, start, end) in zip(words, pairs, strict=True):
+        if token.strip() != expected.text.strip():
+            raise MediaError(
+                f"WhisperX text {token!r} does not match transcript word {expected.text!r}. "
+                "The transcript text was not rewritten."
+            )
+        if end <= start:
+            raise MediaError("WhisperX returned a word with no positive duration.")
+        bounds.append((source_start_us + start, source_start_us + end))
+    return bounds
+
+
+def _whisperx_version() -> str:
+    try:
+        import whisperx
+    except ImportError:
+        whisperx = None
+    if whisperx is not None:
+        del whisperx
+        return _installed_whisperx_version()
+    python = _align_python()
+    if python is None:
+        raise MediaError(
+            "WhisperX is not installed. Hero alignment does not fall back to provisional timings. "
+            "Install WhisperX locally before hero align. Clipforge does not download it automatically."
+        )
+    import subprocess
+
+    completed = subprocess.run(
+        [str(python), "-c", "import importlib.metadata as meta; print(meta.version('whisperx'))"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    found = completed.stdout.strip()
+    if completed.returncode != 0 or not found or "/" in found or len(found) > 40:
+        raise MediaError("WhisperX is installed but its version could not be read.")
+    return found
+
+
+def _installed_whisperx_version() -> str:
     try:
         from importlib.metadata import version
 

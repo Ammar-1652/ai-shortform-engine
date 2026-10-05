@@ -366,6 +366,7 @@
     "fixture_kind": {
       "enum": [
         "real_authorized",
+        "real_source",
         "deterministic_synthetic"
       ],
       "title": "Fixture Kind",

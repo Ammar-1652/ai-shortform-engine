@@ -92,11 +92,12 @@ class NarrationRequest(Versioned):
     duration_tolerance_us: int = Field(default=100_000, ge=0, le=2_000_000)
     output_format: Literal["wav"] = "wav"
     output_use: OutputUse
+    conversion_recipe: str = "identity"
     profile: VoiceProviderProfile
     created_by: str = Field(min_length=1, max_length=80)
     provenance: ArtifactProvenance
 
-    @field_validator("script_text", "created_by")
+    @field_validator("script_text", "created_by", "conversion_recipe")
     @classmethod
     def script_is_public(cls, value: str) -> str:
         return _reject_text(value, "narration script")
@@ -148,6 +149,8 @@ class NarrationAudioArtifact(Versioned):
     sample_rate: int = Field(ge=8000, le=96000)
     channels: int = Field(ge=1, le=2)
     codec: str = Field(min_length=1, max_length=40)
+    language: str | None = None
+    provider_version: str | None = None
     consent_record_id: EntityId
     license_evidence_id: EntityId
     model_license: LicenseState | None = None
@@ -160,6 +163,16 @@ class NarrationAudioArtifact(Versioned):
     @classmethod
     def narration_text_is_public(cls, value: str) -> str:
         return _reject_text(value, "narration")
+
+    @field_validator("language", "provider_version")
+    @classmethod
+    def optional_labels_are_public(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        checked = _reject_text(value, "narration")
+        if len(checked) > 40:
+            raise ValueError("narration label is too long")
+        return checked
 
     @model_validator(mode="after")
     def lineage_is_present(self) -> Self:
@@ -182,10 +195,19 @@ class NarrationPlan(Versioned):
     campaign_policy_decision: str = Field(min_length=1, max_length=80)
     language: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
     voice_id: EntityId
+    voice_type: VoiceType = "preset"
     provider: str = Field(min_length=1, max_length=40)
     provider_version: str = Field(min_length=1, max_length=40)
+    engine_id: str = Field(default="fake-engine", min_length=1, max_length=40)
     model_id: str = Field(min_length=1, max_length=80)
+    model_revision: str = Field(default="rev-1", min_length=1, max_length=80)
     model_license: LicenseState
+    commercial_use: LicenseState = "allowed"
+    output_use: OutputUse = "internal"
+    license_evidence_id: str = Field(default="evidence-voice", min_length=1, max_length=80)
+    consent_record_id: str = Field(default="consent-1", min_length=1, max_length=80)
+    conversion_recipe: str = "identity"
+    duration_tolerance_us: int = Field(default=100_000, ge=0, le=2_000_000)
     consent_status: Literal["recorded", "missing"]
     source_script_sha256: str = Field(pattern=_SHA)
     artifact_id: EntityId | None = None
@@ -199,7 +221,18 @@ class NarrationPlan(Versioned):
     ducking_policy: Literal["none", "duck_source"] = "none"
     timing_policy: TimingPolicy
 
-    @field_validator("operator_reason", "campaign_policy_decision", "provider", "provider_version", "model_id")
+    @field_validator(
+        "operator_reason",
+        "campaign_policy_decision",
+        "provider",
+        "provider_version",
+        "engine_id",
+        "model_id",
+        "model_revision",
+        "license_evidence_id",
+        "consent_record_id",
+        "conversion_recipe",
+    )
     @classmethod
     def plan_text_is_public(cls, value: str) -> str:
         return _reject_text(value, "narration plan")

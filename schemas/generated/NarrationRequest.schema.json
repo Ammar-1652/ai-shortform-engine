@@ -231,6 +231,11 @@
       "title": "Channels",
       "type": "integer"
     },
+    "conversion_recipe": {
+      "default": "identity",
+      "title": "Conversion Recipe",
+      "type": "string"
+    },
     "created_by": {
       "maxLength": 80,
       "minLength": 1,

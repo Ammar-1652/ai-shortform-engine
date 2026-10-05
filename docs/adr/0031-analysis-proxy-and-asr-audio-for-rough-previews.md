@@ -11,7 +11,7 @@ Round 2 already produced a deterministic analysis proxy and an ASR FLAC whose sa
 
 Rough previews read `proxy/analysis.mp4` for the picture and `audio/asr.flac` for speech. The original source is not copied and is not the visual input. The proxy is review quality. It is not a Hero master.
 
-Both files are hard-linked into `previews/runs/<preview_set_id>/staging/` for one Remotion bundle. A copy is used only when the hard link fails. Staging is deleted after the run validates. It is not an artifact.
+Both files are hard-linked into `previews/runs/<preview_set_id>/staging/` for one Remotion bundle when the backend does not launch a browser. A copy is used only when the hard link fails. A browser render trims a candidate-local clip first. See [ADR 0054](0054-candidate-local-render-staging.md). Staging is deleted after the run validates. It is not an artifact.
 
 Video and audio use the same preview-grid trim. `media_trim_frame` is the 30/1 frame that contains the candidate's canonical start, so the seek can be up to one output frame early. Stored source bounds stay the TimeMap microseconds. They are not rewritten to that grid.
 

@@ -20,6 +20,7 @@ from clipforge.cli.campaign_cmd import campaign_app
 from clipforge.cli.candidate_cmd import candidate_app
 from clipforge.cli.hero_cmd import hero_app
 from clipforge.cli.job_cmd import job_app
+from clipforge.cli.language_cmd import language_app
 from clipforge.cli.media_cmd import media_app
 from clipforge.cli.platform_cmd import platform_app
 from clipforge.cli.preview_cmd import preview_app
@@ -70,6 +71,7 @@ app.add_typer(publish_app, name="publish")
 app.add_typer(platform_app, name="platform")
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(assets_app, name="assets")
+app.add_typer(language_app, name="language")
 
 
 def _version_callback(value: bool) -> None:

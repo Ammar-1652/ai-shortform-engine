@@ -38,6 +38,7 @@ def benchmark_doctor() -> None:
 def benchmark_run(
     source_id: Annotated[str, typer.Argument()],
     fixture_kind: Annotated[str, typer.Option("--fixture-kind")] = "deterministic_synthetic",
+    fixture: Annotated[str | None, typer.Option("--fixture")] = None,
     candidate_id: Annotated[str | None, typer.Option("--candidate-id")] = None,
     voice_provider: Annotated[str, typer.Option("--voice-provider")] = "none",
     force: Annotated[bool, typer.Option("--force")] = False,
@@ -51,7 +52,7 @@ def benchmark_run(
             Database(resolve_db_path(db)),
             resolve_work_dir(work_dir),
             source_id,
-            fixture_kind=fixture_kind,
+            fixture_kind=fixture or fixture_kind,
             candidate_id=candidate_id,
             voice_provider=voice_provider,
             force=force,
@@ -117,4 +118,11 @@ def benchmark_readiness(
         report = readiness_report(Database(resolve_db_path(db)), resolve_work_dir(work_dir), benchmark_id)
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
+    typer.echo(f"evidence_class: {report.evidence_class}")
+    typer.echo(f"technical_result: {report.technical_result}")
+    typer.echo(f"local_delivery_result: {report.local_delivery_result}")
+    typer.echo(f"voice_result: {report.voice_result}")
+    typer.echo(f"multilingual_result: {report.multilingual_result}")
+    typer.echo(f"alignment_claim: {report.alignment_claim}")
+    typer.echo(f"external_publishing: {report.external_publishing}")
     typer.echo(report.model_dump_json())

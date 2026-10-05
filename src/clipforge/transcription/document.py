@@ -166,9 +166,56 @@ def _span(start_seconds: float, end_seconds: float, duration_us: int, label: str
         notes.append(start_note)
     if end_note is not None:
         notes.append(end_note)
-    if end_us <= start_us:
+    if end_us < start_us:
         raise MediaError(f"{label} ends at or before its start ({start_us} us .. {end_us} us)")
+    if end_us == start_us:
+        if start_us + 1 > duration_us:
+            raise MediaError(f"{label} ends at its start and cannot be extended inside the source")
+        notes.append(f"{label} end extended by 1 us from an empty engine span ({start_us} us)")
+        end_us += 1
     return start_us, end_us, notes
+
+
+def _place_word(
+    start_us: int,
+    end_us: int,
+    *,
+    segment_start: int,
+    segment_end: int,
+    previous_start: int | None,
+    label: str,
+) -> tuple[int, int, list[str]]:
+    """Keep a provisional word inside its segment. Text is not an argument."""
+    notes: list[str] = []
+    if end_us <= start_us:
+        if start_us < segment_end:
+            notes.append(f"{label} end extended by 1 us after segment containment ({start_us} us)")
+            end_us = start_us + 1
+        elif segment_end > segment_start:
+            notes.append(f"{label} placed on the last microsecond of its segment")
+            start_us = segment_end - 1
+            end_us = segment_end
+    if previous_start is not None and start_us < previous_start:
+        notes.append(f"{label} start clamped from {start_us} us to {previous_start} us")
+        start_us = previous_start
+        if end_us <= start_us:
+            if start_us < segment_end:
+                notes.append(f"{label} end extended by 1 us after word-order containment ({start_us} us)")
+                end_us = start_us + 1
+            else:
+                raise MediaError(f"{label} does not fit after the previous word")
+    if start_us < segment_start or end_us > segment_end or end_us <= start_us:
+        raise MediaError(f"{label} has no positive duration after timing checks")
+    return start_us, end_us, notes
+
+
+def _contain(value_us: int, low_us: int, high_us: int, label: str) -> tuple[int, str | None]:
+    """Pull a provisional word time into its segment. The source clock was already checked."""
+    if value_us < low_us:
+        return low_us, f"{label} clamped from {value_us} us to {low_us} us"
+    if value_us > high_us:
+        return high_us, f"{label} clamped from {value_us} us to {high_us} us"
+    return value_us, None
 
 
 def _words(
@@ -194,33 +241,23 @@ def _words(
             f"segment {ordinal} word {index}",
         )
         notes.extend(span_notes)
-        start_us, start_note = clamp_endpoint(
-            start_us, low_us=segment_start, high_us=segment_end, label=f"segment {ordinal} word {index} start"
-        )
-        end_us, end_note = clamp_endpoint(
-            end_us, low_us=segment_start, high_us=segment_end, label=f"segment {ordinal} word {index} end"
-        )
+        start_label = f"segment {ordinal} word {index} start"
+        end_label = f"segment {ordinal} word {index} end"
+        start_us, start_note = _contain(start_us, segment_start, segment_end, start_label)
+        end_us, end_note = _contain(end_us, segment_start, segment_end, end_label)
         if start_note is not None:
             notes.append(start_note)
         if end_note is not None:
             notes.append(end_note)
-        if end_us <= start_us:
-            raise MediaError(f"segment {ordinal} word {index} has no positive duration after timing checks")
-        if previous is not None and start_us < previous:
-            if previous - start_us <= TIMING_TOLERANCE_US:
-                notes.append(
-                    f"segment {ordinal} word {index} start clamped from {start_us} us to {previous} us"
-                )
-                start_us = previous
-            else:
-                raise MediaError(
-                    f"segment {ordinal} word {index} starts before the previous word by more than "
-                    f"{TIMING_TOLERANCE_US} us. The words were not reordered."
-                )
-        if end_us <= start_us:
-            raise MediaError(f"segment {ordinal} word {index} collapsed while restoring word order")
-        if end_us > segment_end:
-            raise MediaError(f"segment {ordinal} word {index} still ends outside the segment")
+        start_us, end_us, placed = _place_word(
+            start_us,
+            end_us,
+            segment_start=segment_start,
+            segment_end=segment_end,
+            previous_start=previous,
+            label=f"segment {ordinal} word {index}",
+        )
+        notes.extend(placed)
         try:
             words.append(
                 TranscriptWord(

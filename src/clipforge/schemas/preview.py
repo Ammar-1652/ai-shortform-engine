@@ -94,6 +94,12 @@ class RoughPreviewRenderInput(Versioned):
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     timing_quality: Literal["provisional"] = "provisional"
     captions: list[RoughCaptionCue] = Field(default_factory=list)
+    source_start_us: int = Field(default=0, ge=0)
+    source_end_us: int = Field(default=0, ge=0)
+    proxy_sha256: str = ""
+    staged_video_sha256: str = ""
+    staged_audio_sha256: str = ""
+    staged_duration_us: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def captions_fit_the_composition(self) -> Self:

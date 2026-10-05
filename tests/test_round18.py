@@ -29,6 +29,7 @@ from clipforge.campaign.providers import (
 from clipforge.campaign.service import ingest_campaign, verify_campaign
 from clipforge.errors import ClipforgeError, MediaError
 from clipforge.language.matrix import capabilities, profiles, require_language, separate_translation
+from clipforge.schemas.voice import NarrationRequest
 from clipforge.voice.plan import build_plan, render_plan, verify_plan, write_plan
 from clipforge.voice.provider import FakeVoiceProvider
 from tests.test_round15 import _chain
@@ -448,3 +449,54 @@ def test_narration_stays_off_until_enabled(tmp_path: Path) -> None:
     assert verify_plan(database, work, rendered).startswith("PASS")
     with pytest.raises(ClipforgeError, match="script changed"):
         render_plan(database, work, enabled, provider, script_text="A different script.")
+
+
+def test_voicestudio_plan_uses_the_discovered_engine(tmp_path: Path) -> None:
+    database, work = _chain(tmp_path)
+
+    class Capture(FakeVoiceProvider):
+        seen: str = ""
+
+        def generate(self, request: NarrationRequest) -> bytes:
+            self.seen = request.profile.engine_id
+            return super().generate(request)
+
+    provider = Capture()
+    with pytest.raises(ClipforgeError, match="missing"):
+        build_plan(
+            project_id="project-1",
+            source_asset_id="source-1",
+            candidate_id="cand-1",
+            script_text="Café costs $12.50 today.",
+            language="en-US",
+            enabled=True,
+            operator_reason="controlled narration check",
+            provider="voicestudio",
+            model_id="KittenML/kitten-tts-mini-0.8",
+            model_license="allowed",
+        )
+    plan = build_plan(
+        project_id="project-1",
+        source_asset_id="source-1",
+        candidate_id="cand-1",
+        script_text="Café costs $12.50 today.",
+        language="en-US",
+        enabled=True,
+        operator_reason="controlled narration check",
+        provider="voicestudio",
+        voice_id="expr-voice-2-f",
+        engine_id="kittentts",
+        model_id="KittenML/kitten-tts-mini-0.8",
+        model_revision="c02725660cea441db4c383af69f1f26f5cd00947",
+        provider_version="0.5.7",
+        model_license="allowed",
+        license_evidence_id="apache-2.0-kitten-tts-mini-0.8",
+        consent_record_id="round19-kittentts-preset",
+        sample_rate=24_000,
+        channels=1,
+        target_duration_us=1_000_000,
+        duration_tolerance_us=2_000_000,
+    )
+    render_plan(database, work, plan, provider, script_text="Café costs $12.50 today.")
+    assert provider.seen == "kittentts"
+    assert provider.calls == 1

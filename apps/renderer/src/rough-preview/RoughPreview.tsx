@@ -11,6 +11,15 @@ import { parseRenderInput } from "./validation.js";
  * Video and speech share `media_trim_frame` on the 30/1 preview grid.
  * Caption text is a React text node. There is no word highlight.
  */
+function stagedName(filePath: string): string {
+  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(name) || name.includes("..")) {
+    throw new Error("staged media name is not safe");
+  }
+  return name;
+}
+
 export function RoughPreview(raw: RoughPreviewInput) {
   const input = parseRenderInput(raw);
   const frame = useCurrentFrame();
@@ -19,14 +28,14 @@ export function RoughPreview(raw: RoughPreviewInput) {
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       <AbsoluteFill>
         <OffthreadVideo
-          src={staticFile("analysis.mp4")}
+          src={staticFile(stagedName(input.video_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
           muted
           style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT }}
         />
         <Audio
-          src={staticFile("asr.flac")}
+          src={staticFile(stagedName(input.audio_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
         />

@@ -85,7 +85,8 @@ def _identity(
     problems.extend(_sidecar(document, record, inputs))
     expected_ids = [item.candidate_id for item in inputs.candidate_document.candidates]
     got_ids = [item.candidate_id for item in document.previews]
-    if got_ids != expected_ids:
+    single = len(got_ids) == 1 and got_ids[0] in expected_ids
+    if got_ids != expected_ids and not single:
         problems.append("preview order does not match the current candidate set")
     by_id = {item.candidate_id: item for item in inputs.candidate_document.candidates}
     for preview in document.previews:

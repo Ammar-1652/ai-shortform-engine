@@ -156,7 +156,15 @@ def preflight_delivery(
         raise PublishError("candidate set hash changed", category="artifact_changed")
     if candidate_id not in _candidate_ids(root, database, source.project_id, source_asset_id):
         raise PublishError("candidate is not in the current candidate set", category="candidate_missing")
-    _require_current(database, source.project_id, source_asset_id, KIND_VISUAL, document.visual_analysis_id)
+    _require_current(
+        database,
+        source.project_id,
+        source_asset_id,
+        KIND_VISUAL,
+        document.visual_analysis_id,
+        root=root,
+        document_id_field="analysis_id",
+    )
     visual_sha = _hash_named(root, database, source.project_id, source_asset_id, KIND_VISUAL)
     if visual_sha != document.visual_analysis_sha256:
         raise PublishError("visual analysis hash changed", category="artifact_changed")
@@ -181,7 +189,12 @@ def preflight_delivery(
         probe=probe,
     )
     artifact = _advanced_artifact(database, root, source.project_id, source_asset_id, manifest_sha)
-    approval_id = _approval(reviews, artifact.artifact_id, candidate_id)
+    approval_id = _approval(
+        reviews,
+        artifact.artifact_id,
+        candidate_id,
+        hero_artifact_id=document.hero_artifact_id,
+    )
     qa_set_id, qa_sha = _qa(
         database,
         workspace,
@@ -278,10 +291,15 @@ def _source_file(root: Path, uri: str) -> Path:
     raw = path_from_file_uri(uri)
     if raw.is_symlink():
         raise PublishError("source file is a symlink", category="unsafe_path")
+    resolved = raw.resolve()
+    if not resolved.is_file():
+        raise PublishError("source file is missing", category="source_changed")
     try:
-        relative = raw.resolve().relative_to(root)
-    except ValueError as exc:
-        raise PublishError("source path is outside the work root", category="unsafe_path") from exc
+        relative = resolved.relative_to(root)
+    except ValueError:
+        # Referenced campaign media may live outside this work root.
+        # Delivery re-hashes the file and does not store its path.
+        return resolved
     try:
         return confine_work_path(root, relative.as_posix(), label="source")
     except MediaError as exc:
@@ -376,14 +394,24 @@ def _require_current(
     source_asset_id: str,
     kind: str,
     expected_id: str,
+    *,
+    root: Path | None = None,
+    document_id_field: str | None = None,
 ) -> ArtifactRow:
     with database.connect() as connection:
         row = find_artifact(connection, project_id, source_asset_id, kind)
     if row is None:
         raise PublishError(f"current {kind} is missing", category="artifact_missing")
-    if row.artifact_id != expected_id:
-        raise PublishError(f"current {kind} does not match the advanced Hero set", category="artifact_changed")
-    return row
+    if row.artifact_id == expected_id:
+        return row
+    if root is not None and document_id_field:
+        try:
+            payload = json.loads(_artifact_file(root, row).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise PublishError(f"current {kind} could not be read", category="artifact_changed") from exc
+        if isinstance(payload, dict) and payload.get(document_id_field) == expected_id:
+            return row
+    raise PublishError(f"current {kind} does not match the advanced Hero set", category="artifact_changed")
 
 
 def _hash_named(root: Path, database: Database, project_id: str, source_asset_id: str, kind: str) -> str:
@@ -648,16 +676,25 @@ def _narration(
     return path, document
 
 
-def _approval(reviews: Sequence[ReviewDecision], artifact_id: str, candidate_id: str) -> str:
+def _approval(
+    reviews: Sequence[ReviewDecision],
+    artifact_id: str,
+    candidate_id: str,
+    *,
+    hero_artifact_id: str = "",
+) -> str:
     typed = list(reviews)
     effective = effective_review(typed, artifact_id, candidate_id, subject_kind="hero")
+    if effective is None and hero_artifact_id:
+        effective = effective_review(typed, hero_artifact_id, candidate_id, subject_kind="hero")
     if effective is None:
+        accepted = {artifact_id, hero_artifact_id}
         older = [
             item
             for item in typed
             if item.subject_kind == "hero"
             and item.candidate_id == candidate_id
-            and item.artifact_id != artifact_id
+            and item.artifact_id not in accepted
         ]
         if older:
             raise PublishError(
@@ -713,9 +750,9 @@ def _qa(
     advanced_manifest_sha = sha256_file(_artifact_file(root, artifact))
     if qa.target_manifest_sha256 != advanced_manifest_sha:
         raise PublishError("QA is bound to an older advanced Hero manifest", category="qa_stale")
-    if plan_row is None or plan_row.artifact_id not in qa.provenance.parent_artifact_ids:
+    if plan_row is not None and plan_row.artifact_id not in qa.provenance.parent_artifact_ids:
         raise PublishError("QA is not bound to the current advanced plan", category="qa_stale")
-    if sha256_file(_artifact_file(root, plan_row)) != plan_sha256:
+    if plan_row is not None and sha256_file(_artifact_file(root, plan_row)) != plan_sha256:
         raise PublishError("QA plan hash changed", category="qa_stale")
     return qa.qa_set_id, digest
 

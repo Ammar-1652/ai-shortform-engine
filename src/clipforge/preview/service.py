@@ -95,6 +95,7 @@ def render_previews(
     profile: RoughPreviewProfile | None = None,
     backend: RoughRenderBackend | None = None,
     created_by: str | None = None,
+    candidate_id: str | None = None,
 ) -> PreviewRenderResult:
     """Render every selected candidate for ``source_asset_id``."""
     root = work_root.resolve()
@@ -125,7 +126,7 @@ def render_previews(
             create_workspace=True,
         )
         _fail_stale(database, inputs)
-        if not force and _cache_ready(database, inputs, active):
+        if not force and _cache_ready(database, inputs, active, candidate_id):
             return _cache_result(database, inputs, started)
         if renderer.requires_browser:
             from clipforge.preview.browser import resolve_browser
@@ -151,6 +152,7 @@ def render_previews(
                 now,
                 root,
                 run_dir,
+                candidate_id,
             )
             digest = sha256_file(manifest)
             record = _cache_record(inputs, document, job.job_id, digest, manifest.stat().st_size, now)
@@ -182,22 +184,48 @@ def _render_run(
     now: datetime,
     root: Path,
     run_dir: Path,
+    candidate_id: str | None = None,
 ) -> tuple[RoughPreviewSetDocument, Path]:
-    _stage_media(inputs, run_dir, root)
+    browser = backend.requires_browser
+    if not browser:
+        _stage_media(inputs, run_dir, root)
+    else:
+        staging = run_dir / "staging"
+        ensure_within(root, staging)
+        staging.mkdir(parents=True, exist_ok=True)
     items: list[dict[str, object]] = []
     built: list[tuple[CandidateClip, RoughPreviewRenderInput, Path, Path]] = []
-    for candidate in inputs.candidate_document.candidates:
+    chosen = _selected(inputs, candidate_id)
+    for candidate in chosen:
         directory = inputs.pair.workspace.preview_candidate_dir(preview_set_id, candidate.candidate_id)
         directory.mkdir()
-        rendered = _render_input(inputs, candidate, profile, preview_set_id, run_dir)
+        rendered = _render_input(
+            inputs,
+            candidate,
+            profile,
+            preview_set_id,
+            run_dir,
+            browser=browser,
+        )
         input_path = directory / "render-input.json"
         partial = inputs.pair.workspace.partial_for(directory / "preview.mp4")
         publish_json(input_path, rendered, root, inputs.pair.workspace.partial_for(input_path))
+        segment = candidate.time_map.segments[0]
         items.append(
             {
                 "outputPath": str(partial),
                 "h264Crf": profile.h264_crf,
                 "input": json.loads(dump_json(rendered)),
+                "watch": {
+                    "candidate_id": candidate.candidate_id,
+                    "source_id": inputs.pair.source.source_asset_id,
+                    "source_start_us": segment.source_start_us,
+                    "source_end_us": segment.source_end_us,
+                    "duration_in_frames": rendered.duration_in_frames,
+                    "staged_duration_us": rendered.staged_duration_us,
+                    "proxy_sha256": rendered.proxy_sha256,
+                    "staged_video_sha256": rendered.staged_video_sha256,
+                },
             }
         )
         built.append((candidate, rendered, input_path, partial))
@@ -228,12 +256,24 @@ def _render_run(
     return stored, manifest
 
 
+def _selected(inputs: PreviewInputs, candidate_id: str | None) -> list[CandidateClip]:
+    rows = list(inputs.candidate_document.candidates)
+    if candidate_id is None:
+        return rows
+    chosen = [item for item in rows if item.candidate_id == candidate_id]
+    if not chosen:
+        raise MediaError(f"candidate {candidate_id} is not in the current selected set")
+    return chosen
+
+
 def _render_input(
     inputs: PreviewInputs,
     candidate: CandidateClip,
     profile: RoughPreviewProfile,
     preview_set_id: str,
     run_dir: Path,
+    *,
+    browser: bool,
 ) -> RoughPreviewRenderInput:
     segment = candidate.time_map.segments[0]
     time_map = candidate.time_map.to_time_map()
@@ -250,14 +290,46 @@ def _render_input(
         frame_count=frame_count,
         mining_id=inputs.candidate_document.mining_id,
     )
+    video_path = run_dir / "staging" / "analysis.mp4"
+    audio_path = run_dir / "staging" / "asr.flac"
+    trim_frame = media_trim_frame(segment.source_start_us)
+    staged_video_sha = ""
+    staged_audio_sha = ""
+    staged_duration = 0
+    if browser:
+        from clipforge.preview.trim import stage_candidate_span
+
+        staged = stage_candidate_span(
+            inputs.proxy_path,
+            inputs.asr_path,
+            run_dir / "staging",
+            stem=candidate.candidate_id,
+            start_us=segment.source_start_us,
+            end_us=segment.source_end_us,
+            frame_count=frame_count,
+            root=inputs.pair.workspace.root,
+            log_path=run_dir / "logs" / f"{candidate.candidate_id}.trim.log",
+        )
+        video_path = staged.video_path
+        audio_path = staged.audio_path
+        trim_frame = 0
+        staged_video_sha = staged.video_sha256
+        staged_audio_sha = staged.audio_sha256
+        staged_duration = staged.duration_us
     return RoughPreviewRenderInput(
         candidate_id=candidate.candidate_id,
         preview_set_id=preview_set_id,
-        video_path=str(run_dir / "staging" / "analysis.mp4"),
-        audio_path=str(run_dir / "staging" / "asr.flac"),
-        media_trim_frame=media_trim_frame(segment.source_start_us),
+        video_path=str(video_path),
+        audio_path=str(audio_path),
+        media_trim_frame=trim_frame,
         duration_in_frames=frame_count,
         captions=captions,
+        source_start_us=segment.source_start_us,
+        source_end_us=segment.source_end_us,
+        proxy_sha256=inputs.proxy_sha256,
+        staged_video_sha256=staged_video_sha,
+        staged_audio_sha256=staged_audio_sha,
+        staged_duration_us=staged_duration,
     )
 
 
@@ -418,7 +490,12 @@ def _confirm(
     return current
 
 
-def _cache_ready(database: Database, inputs: PreviewInputs, profile: RoughPreviewProfile) -> bool:
+def _cache_ready(
+    database: Database,
+    inputs: PreviewInputs,
+    profile: RoughPreviewProfile,
+    candidate_id: str | None = None,
+) -> bool:
     from clipforge.transcription.io import read_text
 
     sidecar = inputs.pair.workspace.preview_sidecar()
@@ -451,6 +528,12 @@ def _cache_ready(database: Database, inputs: PreviewInputs, profile: RoughPrevie
             return False
         document = RoughPreviewSetDocument.model_validate_json(read_text(path))
     except (OSError, ValidationError, ValueError, MediaError):
+        return False
+    selected = [item.candidate_id for item in inputs.candidate_document.candidates]
+    rendered = [item.candidate_id for item in document.previews]
+    if candidate_id is None and rendered != selected:
+        return False
+    if candidate_id is not None and rendered != [candidate_id]:
         return False
     return not preview_problems(
         document,

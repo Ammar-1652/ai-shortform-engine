@@ -189,6 +189,18 @@
       "title": "Job Id",
       "type": "string"
     },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
     "license_evidence_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -239,6 +251,18 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Provider Id",
       "type": "string"
+    },
+    "provider_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Version"
     },
     "sample_rate": {
       "maximum": 96000,

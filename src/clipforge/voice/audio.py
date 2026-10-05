@@ -12,6 +12,10 @@ from clipforge.errors import ClipforgeError
 class VoiceError(ClipforgeError):
     """Narration cannot be stored or does not verify."""
 
+    def __init__(self, message: str, *, code: str = "voice_error") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 def wav_bytes(duration_us: int, sample_rate: int, channels: int) -> bytes:
     """Silence with an exact integer-microsecond duration."""

@@ -103,6 +103,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         style={contained}
       />
       <Audio src={staticFile(speech)} durationInFrames={input.duration_in_frames} />
+      {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
+        <Audio src={staticFile(names.narration)} />
+      ) : null}
       {(input.broll ?? []).map((item) => {
         const name = item.asset_id ? names[item.asset_id] : undefined;
         if (!name) {

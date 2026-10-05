@@ -13,7 +13,7 @@ Hero alignment runs only on a candidate whose effective review for the current r
 
 Every stored word is `alignment_quality = forced`, with source and output microseconds, half-open Hero frames, the WhisperX version, and the alignment configuration hash. A count or text mismatch fails the job. Provisional times are not substituted. A normal run sets `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, and `HF_DATASETS_OFFLINE` to 1, requires cached English NLTK punkt data, and blocks `torch.hub` downloads. `model_cache_only` is passed only when the installed loader declares that parameter. English alignment uses torchaudio `WAV2VEC2_ASR_BASE_960H`. WhisperX is not a default project dependency. Model download requires `--allow-model-download`.
 
-Tests inject `FakeForcedAlignment`. Production commands use the WhisperX adapter.
+Tests inject `FakeForcedAlignment`. Production commands use the WhisperX adapter. When the package is not importable, the adapter uses the optional side interpreter from [ADR 0054](0054-candidate-local-render-staging.md). A missing interpreter still fails closed.
 
 ## Alternatives considered
 
