@@ -193,6 +193,7 @@ class SourceAcquisition(Versioned):
     local_relative_path: str | None = None
     sha256: str | None = Field(default=None, pattern=_SHA)
     size_bytes: int | None = Field(default=None, ge=0)
+    probe_facts: dict[str, str | int | None] | None = None
     acquired_at: AwareDatetime | None = None
     operator_confirmation: bool = False
     error_code: str = Field(default="none", max_length=80)
