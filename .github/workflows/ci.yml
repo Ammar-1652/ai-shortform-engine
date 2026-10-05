@@ -1,53 +1,18 @@
 name: CI
 
 on:
-  push:
   pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
-  group: clipforge-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  group: clipforge-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  python:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Ruff
-        run: uv run ruff check . && uv run ruff format --check .
-      - name: mypy
-        run: uv run mypy
-      - name: pytest
-        run: uv run pytest -m "not media and not transcription and not vision and not candidate and not preview and not review and not hero and not model_smoke and not analytics and not benchmark"
-      - name: Schema check
-        run: uv run clipforge schema check
-      - name: Doctor
-        run: uv run clipforge doctor
-
-  media:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Install FFmpeg from Ubuntu packages
-        run: command -v ffmpeg && command -v ffprobe
-      - name: Media integration tests
-        run: uv run pytest -m media
-
-  transcription:
+  verify-python:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, clipforge]
     env:
@@ -55,168 +20,147 @@ jobs:
       HF_HUB_DISABLE_TELEMETRY: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Import the ASR packages without loading a model
-        run: uv run python -c "import faster_whisper, ctranslate2"
-      - name: Deterministic transcription tests
-        run: uv run pytest -m transcription
+      - name: Check local tools
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          export UV_CACHE_DIR="${HOME}/.cache/clipforge/uv"
+          echo "UV_CACHE_DIR=${UV_CACHE_DIR}" >> "$GITHUB_ENV"
+          python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'
+          command -v uv
+          command -v ffmpeg
+          command -v ffprobe
+          uv --version
+          ffmpeg -version | head -n 1
+          if [ -n "$(find "$UV_CACHE_DIR" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+            echo "uv_cache=hit" >> "$GITHUB_ENV"
+          else
+            echo "uv_cache=miss" >> "$GITHUB_ENV"
+          fi
+          echo "tool_check_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
 
-  vision:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
       - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Install FFmpeg from Ubuntu packages
-        run: command -v ffmpeg && command -v ffprobe
-      - name: Import visual-analysis packages without downloading a model
-        run: uv run python -c "import scenedetect, cv2, av, mediapipe"
-      - name: Vision tests
-        run: uv run pytest -m vision
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          mkdir -p "$UV_CACHE_DIR"
+          uv sync --frozen --all-groups
+          echo "python_setup_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
 
-  candidate:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Candidate mining tests
-        run: uv run pytest -m candidate
+      - name: Ruff, mypy, schema, and doctor
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+          uv run clipforge schema check
+          uv run clipforge doctor
+          echo "python_checks_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
 
-  preview:
+      - name: Python tests
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          uv run pytest -m "not browser and not model_smoke" --override-ini addopts="-q -ra"
+          echo "pytest_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
+
+      - name: Record Python timing
+        if: always()
+        run: |
+          {
+            echo "### verify-python"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- runner: self-hosted, linux, x64, clipforge"
+            echo "- uv cache: ${uv_cache:-unknown}"
+            echo "- tool check: ${tool_check_seconds:-0}s"
+            echo "- dependency setup: ${python_setup_seconds:-0}s"
+            echo "- ruff, mypy, schema, doctor: ${python_checks_seconds:-0}s"
+            echo "- pytest excluding browser and model_smoke: ${pytest_seconds:-0}s"
+            echo "- network during tests: Hugging Face hub offline"
+            echo "- actions cache upload: none"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify-renderer-browser:
+    needs: verify-python
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, clipforge]
     env:
+      HF_HUB_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
       NODE_OPTIONS: --max-old-space-size=2048
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-      - name: Install FFmpeg and a system browser
+      - name: Check renderer tools
         run: |
+          set -euo pipefail
+          started=$SECONDS
+          export UV_CACHE_DIR="${HOME}/.cache/clipforge/uv"
+          echo "UV_CACHE_DIR=${UV_CACHE_DIR}" >> "$GITHUB_ENV"
+          command -v node
+          command -v pnpm
           command -v ffmpeg
           command -v ffprobe
+          command -v uv
           command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
-      - name: Report preview resources
-        run: |
-          free -h
-          df -h /dev/shm
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
+          node -v
+          pnpm -v
+          store="${HOME}/.cache/clipforge/pnpm-store"
+          if [ -n "$(find "$store" -mindepth 1 -print -quit 2>/dev/null)" ]; then
+            echo "pnpm_cache=hit" >> "$GITHUB_ENV"
+          else
+            echo "pnpm_cache=miss" >> "$GITHUB_ENV"
+          fi
+          echo "renderer_tool_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
+
       - name: Install renderer dependencies
         working-directory: apps/renderer
-        run: pnpm install --frozen-lockfile
-      - name: Rough preview tests
-        run: uv run pytest -m preview
-
-  review:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install FFmpeg from Ubuntu packages
-        run: command -v ffmpeg && command -v ffprobe
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Candidate review tests
-        run: uv run pytest -m review
-
-  analytics:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install a system browser
-        run: command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Analytics page tests
-        run: uv run pytest -m analytics
-
-  benchmark:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install FFmpeg and a system browser
         run: |
-          command -v ffmpeg
-          command -v ffprobe
-          command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Benchmark and narration tests
-        run: uv run pytest -m benchmark
+          set -euo pipefail
+          started=$SECONDS
+          mkdir -p "${HOME}/.cache/clipforge/pnpm-store"
+          pnpm install --frozen-lockfile --store-dir "${HOME}/.cache/clipforge/pnpm-store"
+          echo "renderer_setup_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
 
-  hero:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    env:
-      HF_HUB_OFFLINE: "1"
-      HF_HUB_DISABLE_TELEMETRY: "1"
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          enable-cache: false
-          python-version: "3.11"
-      - name: Install FFmpeg from Ubuntu packages
-        run: command -v ffmpeg && command -v ffprobe
-      - name: Install Python dependencies
-        run: uv sync --frozen --all-groups
-      - name: Hero draft tests
-        run: uv run pytest -m hero
-
-  renderer:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64, clipforge]
-    defaults:
-      run:
+      - name: Renderer lint, typecheck, and Vitest
         working-directory: apps/renderer
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Lint, typecheck, test
-        run: pnpm lint && pnpm typecheck && pnpm test
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          echo "renderer_checks_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          mkdir -p "$UV_CACHE_DIR"
+          uv sync --frozen --all-groups
+          echo "browser_setup_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
+
+      - name: Browser and Remotion smoke
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          uv run pytest -m browser --override-ini addopts="-q -ra"
+          echo "browser_seconds=$((SECONDS - started))" >> "$GITHUB_ENV"
+
+      - name: Record renderer timing
+        if: always()
+        run: |
+          {
+            echo "### verify-renderer-browser"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- runner: self-hosted, linux, x64, clipforge"
+            echo "- pnpm store: ${pnpm_cache:-unknown}"
+            echo "- tool check: ${renderer_tool_seconds:-0}s"
+            echo "- renderer install: ${renderer_setup_seconds:-0}s"
+            echo "- lint, typecheck, vitest: ${renderer_checks_seconds:-0}s"
+            echo "- python setup for browser smoke: ${browser_setup_seconds:-0}s"
+            echo "- browser smoke: ${browser_seconds:-0}s"
+            echo "- browser concurrency: 1"
+            echo "- network during tests: Hugging Face hub offline"
+            echo "- actions cache upload: none"
+          } >> "$GITHUB_STEP_SUMMARY"

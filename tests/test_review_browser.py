@@ -18,7 +18,7 @@ from clipforge.review.service import LOOPBACK_HOST
 from tests.candidate_support import SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 
-pytestmark = pytest.mark.review
+pytestmark = [pytest.mark.review, pytest.mark.browser]
 
 
 def test_local_browser_can_review_a_preview(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
