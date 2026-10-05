@@ -66,6 +66,11 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
     database, work = _chain(tmp_path)
     first = run_benchmark(database, work, "source-1", fixture_kind="deterministic_synthetic", created_by="ada")
     assert [stage.stage for stage in first.stages] == [
+        "campaign_discovery",
+        "policy_snapshot",
+        "source_inventory",
+        "source_acquisition",
+        "language_profile",
         "ingest",
         "media_prepare",
         "transcript",
@@ -77,11 +82,12 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
         "hero_plan",
         "hero_render",
         "advanced_plan",
+        "optional_voice_narration",
         "advanced_render",
         "qa",
         "hero_review",
         "analytics",
-        "publish_export",
+        "local_delivery",
         "platform_dry_run",
         "platform_submit",
     ]
@@ -93,7 +99,7 @@ def test_full_synthetic_chain_is_deterministic_and_blocks_delivery(tmp_path: Pat
     analytics = next(stage for stage in first.stages if stage.stage == "analytics")
     assert analytics.status == "passed"
     assert analytics.error_category == "synthetic_fixture"
-    publish = next(stage for stage in first.stages if stage.stage == "publish_export")
+    publish = next(stage for stage in first.stages if stage.stage == "local_delivery")
     assert publish.status == "blocked"
     assert "/tmp/" not in first.model_dump_json()
     assert "://" not in first.model_dump_json()

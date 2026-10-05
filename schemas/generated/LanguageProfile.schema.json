@@ -1,0 +1,91 @@
+{
+  "additionalProperties": false,
+  "description": "One BCP-47 language the operator can select.",
+  "properties": {
+    "alignment_provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Alignment Provider",
+      "type": "string"
+    },
+    "campaign_policy_status": {
+      "enum": [
+        "allowed",
+        "blocked",
+        "needs_operator_confirmation",
+        "needs_policy_clarification",
+        "needs_operator_clarification",
+        "rights_unverified",
+        "unsupported_language",
+        "unsupported_feature"
+      ],
+      "title": "Campaign Policy Status",
+      "type": "string"
+    },
+    "caption_locale": {
+      "maxLength": 16,
+      "minLength": 2,
+      "title": "Caption Locale",
+      "type": "string"
+    },
+    "iso_code": {
+      "pattern": "^[a-z]{2}$",
+      "title": "Iso Code",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "script": {
+      "maxLength": 8,
+      "minLength": 3,
+      "title": "Script",
+      "type": "string"
+    },
+    "supported_status": {
+      "enum": [
+        "supported",
+        "optional",
+        "not_claimed",
+        "unsupported"
+      ],
+      "title": "Supported Status",
+      "type": "string"
+    },
+    "text_direction": {
+      "enum": [
+        "ltr",
+        "rtl"
+      ],
+      "title": "Text Direction",
+      "type": "string"
+    },
+    "voice_provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Voice Provider",
+      "type": "string"
+    }
+  },
+  "required": [
+    "language",
+    "iso_code",
+    "script",
+    "text_direction",
+    "caption_locale",
+    "alignment_provider",
+    "voice_provider",
+    "supported_status",
+    "campaign_policy_status"
+  ],
+  "title": "LanguageProfile",
+  "type": "object"
+}

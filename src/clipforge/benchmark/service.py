@@ -37,6 +37,11 @@ from clipforge.storage.repository import ArtifactRow
 KIND = "v1_benchmark_run_json"
 _CLEARED = {RightsStatus.OWNED, RightsStatus.LICENSED, RightsStatus.CAMPAIGN_PROVIDED}
 _ORDER = (
+    "campaign_discovery",
+    "policy_snapshot",
+    "source_inventory",
+    "source_acquisition",
+    "language_profile",
     "ingest",
     "media_prepare",
     "transcript",
@@ -48,11 +53,12 @@ _ORDER = (
     "hero_plan",
     "hero_render",
     "advanced_plan",
+    "optional_voice_narration",
     "advanced_render",
     "qa",
     "hero_review",
     "analytics",
-    "publish_export",
+    "local_delivery",
     "platform_dry_run",
     "platform_submit",
 )
@@ -68,7 +74,16 @@ _KINDS = {
     "advanced_render": "advanced_hero_draft_set_json",
     "qa": "qa_set_json",
 }
-_OPTIONAL = {"analytics", "platform_dry_run", "platform_submit"}
+_OPTIONAL = {"analytics", "optional_voice_narration", "platform_dry_run", "platform_submit"}
+_EARLY = {
+    "campaign_discovery",
+    "policy_snapshot",
+    "source_inventory",
+    "source_acquisition",
+    "language_profile",
+    "optional_voice_narration",
+}
+_STOP = {"failed", "blocked", "unavailable", "policy_blocked", "rights_unverified"}
 _SET_FIELDS = {
     "candidate_mining": ("candidate_set_id", "candidate_set_sha256"),
     "rough_preview": ("preview_set_id", "preview_set_sha256"),
@@ -163,7 +178,7 @@ def run_benchmark(
         fields.update(extra)
         if stage.human_action_required and stage.status == "blocked":
             manual.append(_action(name))
-        if stage.status in {"failed", "blocked", "unavailable"} and name not in _OPTIONAL:
+        if stage.status in _STOP and name not in _OPTIONAL:
             stopped = True
     if voice_provider == "voicestudio":
         warnings.append("VoiceStudio was requested and is reported by the voice doctor")
@@ -280,15 +295,24 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
         "analytics",
         "qa",
         "publish_export",
+        "local_delivery",
         "platform_dry_run",
         "platform_submit",
+        "campaign_discovery",
+        "policy_snapshot",
+        "source_inventory",
+        "source_acquisition",
+        "language_profile",
+        "optional_voice_narration",
     }
     technical_names = [name for name in _ORDER if name not in skipped]
     technical = _rollup(document, technical_names)
     editorial = _status(document, "hero_review")
     rights = _status(document, "ingest")
     qa = document.qa_result
-    local_delivery = _status(document, "publish_export")
+    local_delivery = _status(document, "local_delivery")
+    if local_delivery == "not_run":
+        local_delivery = _status(document, "publish_export")
     limitations = [
         "External platform publishing is not implemented; local delivery export is available.",
         "VoiceStudio is optional and is not a required gate",
@@ -317,7 +341,8 @@ def readiness_report(database: Database, work_root: Path, benchmark_id: str) -> 
     real_state = "unavailable"
     real_reason = "no authorized source supplied"
     produced = any(
-        stage.stage == "publish_export" and stage.execution == "executed_stage" for stage in document.stages
+        stage.stage in {"publish_export", "local_delivery"} and stage.execution == "executed_stage"
+        for stage in document.stages
     )
     if document.fixture_kind == "real_authorized" and produced and local_delivery == "passed":
         real_state = "passed"
@@ -396,7 +421,19 @@ def _one(
         return _platform_dry_run(database, root, source_asset_id, candidate_id, approved, stamp)
     if name == "platform_submit":
         return _platform_submit(stamp)
-    if name == "publish_export":
+    if name in _EARLY:
+        return (
+            _stage(
+                name,
+                "not_run",
+                stamp,
+                cache_hit=False,
+                error_category="not_configured",
+                execution="not_run",
+            ),
+            {},
+        )
+    if name in {"publish_export", "local_delivery"}:
         from clipforge.publish.service import observe_stage
 
         chosen = candidate_id
@@ -404,7 +441,7 @@ def _one(
             chosen = sorted(approved)[0]
         observed = observe_stage(database, root, source_asset_id, chosen)
         if execute and observed["status"] != "passed" and chosen is not None:
-            return _export_for_execute(database, root, source_asset_id, chosen, stamp)
+            return _export_for_execute(database, root, source_asset_id, chosen, stamp, stage_name=name)
         status = observed["status"]
         category = observed["error_category"]
         delivery_id = observed["delivery_id"]
@@ -539,6 +576,8 @@ def _export_for_execute(
     source_asset_id: str,
     candidate_id: str,
     stamp: datetime,
+    *,
+    stage_name: str,
 ) -> tuple[BenchmarkStage, dict[str, str]]:
     """Copy the local package when execute is set. This does not upload."""
     from clipforge.publish.errors import PublishError
@@ -555,7 +594,7 @@ def _export_for_execute(
     except PublishError as exc:
         return (
             _stage(
-                "publish_export",
+                stage_name,
                 "blocked",
                 stamp,
                 cache_hit=False,
@@ -567,7 +606,7 @@ def _export_for_execute(
         )
     return (
         _stage(
-            "publish_export",
+            stage_name,
             "passed",
             stamp,
             cache_hit=False,
@@ -815,7 +854,8 @@ def _overall(stages: list[BenchmarkStage], rights_ok: bool) -> str:
         return "failed"
     if any(stage.status == "unavailable" for stage in required):
         return "unavailable"
-    if any(stage.status in {"blocked", "not_run"} for stage in required) or not rights_ok:
+    blocking = {"blocked", "not_run", "policy_blocked", "rights_unverified"}
+    if any(stage.status in blocking for stage in required) or not rights_ok:
         return "blocked"
     return "passed"
 

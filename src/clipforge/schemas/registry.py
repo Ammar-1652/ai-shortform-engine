@@ -43,8 +43,21 @@ from clipforge.schemas.analytics import (
     PerformanceMetrics,
     PerformanceOutcome,
 )
+from clipforge.schemas.assets import AssetDownloadRequest, AssetSearchHit
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
+from clipforge.schemas.campaign import (
+    Campaign,
+    CampaignPolicy,
+    CampaignPolicyRule,
+    CampaignSource,
+    OperatorAction,
+    PolicyDecision,
+    ProbeSummary,
+    SourceAcquisition,
+    SourceInventoryManifest,
+    SourceRightsEvidence,
+)
 from clipforge.schemas.candidates import (
     CandidateDeduplicationDecision,
     CandidateEvidenceBundle,
@@ -101,6 +114,13 @@ from clipforge.schemas.ingest import (
     VideoStreamInfo,
 )
 from clipforge.schemas.jobs import JobRecord, QACheck, QAResult, RenderArtifact, RenderJob
+from clipforge.schemas.language import (
+    LanguageAlignmentDocument,
+    LanguageCapability,
+    LanguageCaptionProfile,
+    LanguageProfile,
+    TranslatedTranscript,
+)
 from clipforge.schemas.media import (
     FaceObservation,
     MediaProbe,
@@ -151,7 +171,12 @@ from clipforge.schemas.vision import (
     VisualAnalysisDocument,
     VisualAnalysisSummary,
 )
-from clipforge.schemas.voice import NarrationAudioArtifact, NarrationRequest, VoiceProviderProfile
+from clipforge.schemas.voice import (
+    NarrationAudioArtifact,
+    NarrationPlan,
+    NarrationRequest,
+    VoiceProviderProfile,
+)
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     Project,
@@ -269,8 +294,26 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     BenchmarkStage,
     V1ReadinessReport,
     NarrationAudioArtifact,
+    NarrationPlan,
     NarrationRequest,
     VoiceProviderProfile,
+    Campaign,
+    CampaignPolicy,
+    CampaignPolicyRule,
+    CampaignSource,
+    SourceAcquisition,
+    SourceRightsEvidence,
+    OperatorAction,
+    SourceInventoryManifest,
+    PolicyDecision,
+    ProbeSummary,
+    LanguageProfile,
+    LanguageCapability,
+    TranslatedTranscript,
+    LanguageAlignmentDocument,
+    LanguageCaptionProfile,
+    AssetSearchHit,
+    AssetDownloadRequest,
     BatchChild,
     BatchManifest,
     ReviewDecision,

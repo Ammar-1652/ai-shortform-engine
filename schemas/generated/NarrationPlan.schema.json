@@ -1,0 +1,219 @@
+{
+  "additionalProperties": false,
+  "description": "An operator decision to narrate, or an explicit choice not to.",
+  "properties": {
+    "actual_duration_us": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actual Duration Us"
+    },
+    "artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Id"
+    },
+    "campaign_policy_decision": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Campaign Policy Decision",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "channels": {
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "consent_status": {
+      "enum": [
+        "recorded",
+        "missing"
+      ],
+      "title": "Consent Status",
+      "type": "string"
+    },
+    "ducking_policy": {
+      "default": "none",
+      "enum": [
+        "none",
+        "duck_source"
+      ],
+      "title": "Ducking Policy",
+      "type": "string"
+    },
+    "enabled": {
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "gain_db": {
+      "default": 0,
+      "title": "Gain Db",
+      "type": "number"
+    },
+    "generated_audio_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generated Audio Sha256"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "loudness_lufs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Loudness Lufs"
+    },
+    "model_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_license": {
+      "enum": [
+        "allowed",
+        "prohibited",
+        "unknown",
+        "cc_by_nc"
+      ],
+      "title": "Model License",
+      "type": "string"
+    },
+    "operator_reason": {
+      "maxLength": 400,
+      "minLength": 1,
+      "title": "Operator Reason",
+      "type": "string"
+    },
+    "plan_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_script_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Script Sha256",
+      "type": "string"
+    },
+    "target_duration_us": {
+      "exclusiveMinimum": 0,
+      "title": "Target Duration Us",
+      "type": "integer"
+    },
+    "timing_policy": {
+      "enum": [
+        "preserve_duration",
+        "bounded_time_stretch",
+        "reject_if_out_of_range"
+      ],
+      "title": "Timing Policy",
+      "type": "string"
+    },
+    "voice_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Voice Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "enabled",
+    "operator_reason",
+    "campaign_policy_decision",
+    "language",
+    "voice_id",
+    "provider",
+    "provider_version",
+    "model_id",
+    "model_license",
+    "consent_status",
+    "source_script_sha256",
+    "target_duration_us",
+    "sample_rate",
+    "channels",
+    "timing_policy"
+  ],
+  "title": "NarrationPlan",
+  "type": "object"
+}

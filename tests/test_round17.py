@@ -236,7 +236,7 @@ def test_real_source_is_not_inferred(tmp_path: Path) -> None:
     assert all(stage.execution != "executed_stage" for stage in executed.stages if stage.stage == "transcript")
     assert "synthetic_only" in executed.warnings
     assert executed.stages
-    publish = next(stage for stage in executed.stages if stage.stage == "publish_export")
+    publish = next(stage for stage in executed.stages if stage.stage == "local_delivery")
     assert publish.execution != "executed_stage"
 
 

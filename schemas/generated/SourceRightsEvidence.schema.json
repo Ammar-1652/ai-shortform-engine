@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "Why a source may be edited. A Drive folder listing is not enough.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "evidence_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "evidence_kind": {
+      "enum": [
+        "campaign_guide",
+        "operator_authorization"
+      ],
+      "title": "Evidence Kind",
+      "type": "string"
+    },
+    "recorded_by": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Recorded By",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "statement": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Statement",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "campaign_id",
+    "source_id",
+    "evidence_kind",
+    "statement",
+    "recorded_by"
+  ],
+  "title": "SourceRightsEvidence",
+  "type": "object"
+}

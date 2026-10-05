@@ -1,0 +1,108 @@
+{
+  "additionalProperties": false,
+  "description": "One append-only decision bound to a policy hash.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "allowed",
+        "blocked",
+        "needs_operator_confirmation",
+        "needs_policy_clarification",
+        "needs_operator_clarification",
+        "rights_unverified",
+        "unsupported_language",
+        "unsupported_feature"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "decision_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "evaluator_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Evaluator Version",
+      "type": "string"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "human_confirmation": {
+      "enum": [
+        "unconfirmed",
+        "confirmed",
+        "not_required"
+      ],
+      "title": "Human Confirmation",
+      "type": "string"
+    },
+    "implementation_mode": {
+      "enum": [
+        "external_black_box_ai_tool",
+        "clipforge_native_editor",
+        "human_supplied_asset",
+        "voice_narration_provider"
+      ],
+      "title": "Implementation Mode",
+      "type": "string"
+    },
+    "policy_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Policy Id",
+      "type": "string"
+    },
+    "policy_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "rule_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Rule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision_id",
+    "campaign_id",
+    "policy_id",
+    "policy_sha256",
+    "rule_id",
+    "decision",
+    "implementation_mode",
+    "evaluator_version",
+    "human_confirmation",
+    "created_at"
+  ],
+  "title": "PolicyDecision",
+  "type": "object"
+}

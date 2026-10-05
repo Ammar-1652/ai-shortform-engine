@@ -64,5 +64,6 @@ There is no public vulnerability mailbox yet. Report issues to the repository ow
 ## What this repository refuses to automate
 
 - External platform publishing. Local delivery export copies an approved file and does not upload it. Platform attempts must not store access tokens, refresh tokens, API keys, cookies, or authorization headers.
+- Campaign acquisition and Envato MCP. Drive and Whop sessions stay opt-in. Envato credentials stay with the MCP host. Inventory, request files, and job payloads must not store tokens, cookies, or authorization headers.
 - Treating model output as legal clearance
 - Using an asset with no rights evidence

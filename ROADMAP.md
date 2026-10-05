@@ -106,6 +106,12 @@ Copy an approved Advanced Hero into a verified local package. External platform 
 
 ## Round 17 — Real-source validation and platform boundary
 
-Status: in progress on `round-17-real-source-platform-boundary`, started from `dcbd18ac10826cfc684c893b8b9a14e9baed1200`.
+Status: merged on main as `646c805fc4490042597c173f468c1e6ed3a1d32d`.
 
 Keep local delivery, isolate Remotion browser renders, and add a fail-closed platform boundary. Fake and dry-run publishers do not upload. A real source is never inferred from a synthetic fixture. See `docs/architecture/platform-publishing.md`.
+
+## Round 18 — Campaign ingestion, multilingual voice, and Envato discovery
+
+Status: in progress on `round-18-campaign-ingestion-multilingual-voice-envato`, started from `646c805fc4490042597c173f468c1e6ed3a1d32d`.
+
+Ingest the two selected Antoine Sallis sources, keep native Clipforge editing allowed, and block black-box editors. Voice narration stays optional. Envato search uses the official MCP server and does not download files. External publishing stays deferred. See `docs/architecture/campaign-ingestion.md`.
