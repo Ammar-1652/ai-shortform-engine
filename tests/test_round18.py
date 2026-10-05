@@ -27,7 +27,7 @@ from clipforge.campaign.providers import (
     WhopCampaignProvider,
 )
 from clipforge.campaign.service import ingest_campaign, verify_campaign
-from clipforge.errors import ClipforgeError
+from clipforge.errors import ClipforgeError, MediaError
 from clipforge.language.matrix import capabilities, profiles, require_language, separate_translation
 from clipforge.voice.plan import build_plan, render_plan, verify_plan, write_plan
 from clipforge.voice.provider import FakeVoiceProvider
@@ -132,6 +132,24 @@ def test_drive_acquisition_persists_and_rechecks_probe_facts(
     assert len(acquired) == 2
     assert all(row.probe_facts == facts for row in acquired)
     assert verify_campaign(tmp_path) == "PASS campaign inventory"
+
+
+def test_probe_failure_removes_unverifiable_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = GoogleDriveSourceProvider()
+
+    def fake_acquire(_source_id: str, destination: Path) -> str:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"unverified-media")
+        return "acquired"
+
+    def fail_probe(_path: Path) -> dict[str, str | int | None]:
+        raise MediaError("ffprobe failed")
+
+    monkeypatch.setattr(provider, "acquire", fake_acquire)
+    monkeypatch.setattr("clipforge.campaign.service._probe_facts", fail_probe)
+    with pytest.raises(CampaignError, match="probed"):
+        ingest_campaign(tmp_path, provider)
+    assert not list((tmp_path / "campaigns").rglob("*.mp4"))
 
 
 def test_drive_provider_does_not_download_when_disabled(
