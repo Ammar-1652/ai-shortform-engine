@@ -215,43 +215,104 @@ def test_translation_does_not_replace_source_text() -> None:
     assert whisper[0].supported_status == "not_claimed"
 
 
-def test_envato_forwards_every_requested_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_envato_maps_supported_filters_and_rejects_unsupported() -> None:
     class StubClient:
         url = "https://mcp.envato.com/mcp"
         server_version = "test"
 
         def __init__(self) -> None:
             self.arguments: dict[str, object] = {}
+            self.calls = 0
 
         def initialize(self) -> dict[str, object]:
             return {}
 
         def list_tools(self) -> list[dict[str, object]]:
-            return [{"name": "search_stock_video", "inputSchema": {"properties": {"filters": {}}}}]
+            return [
+                {
+                    "name": "search_stock_video",
+                    "inputSchema": {
+                        "additionalProperties": False,
+                        "properties": {
+                            "searchTerms": {"type": "string", "minLength": 1, "maxLength": 60},
+                            "perPage": {"type": "integer", "minimum": 1, "maximum": 20},
+                            "filters": {
+                                "anyOf": [
+                                    {
+                                        "type": "object",
+                                        "additionalProperties": False,
+                                        "properties": {
+                                            "orientation": {
+                                                "anyOf": [
+                                                    {"type": "string", "enum": ["horizontal", "vertical"]},
+                                                    {"type": "null"},
+                                                ]
+                                            },
+                                            "resolution": {
+                                                "anyOf": [
+                                                    {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "720p (HD)",
+                                                            "1080p (Full HD)",
+                                                            "2K",
+                                                            "4K (UHD)",
+                                                        ],
+                                                    },
+                                                    {"type": "null"},
+                                                ]
+                                            },
+                                            "categories": {
+                                                "anyOf": [
+                                                    {"type": "string", "enum": ["Stock Footage", "Motion Graphics"]},
+                                                    {"type": "null"},
+                                                ]
+                                            },
+                                        },
+                                    },
+                                    {"type": "null"},
+                                ]
+                            },
+                        },
+                        "required": ["searchTerms"],
+                    },
+                }
+            ]
 
         def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
             assert name == "search_stock_video"
+            self.calls += 1
             self.arguments = arguments
             return {"structuredContent": {"results": []}}
 
-    monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_ENABLED", "1")
-    monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_LIVE_SMOKE", "1")
-    client = StubClient()
-    provider = EnvatoMcpDiscoveryProvider(client)  # type: ignore[arg-type]
-    filters = {
-        "category": "stock-video",
-        "asset_type": "video",
-        "format": "mp4",
-        "compatible_software": "premiere-pro",
-        "genre": "business",
-        "style": "clean",
-        "duration": "short",
-        "orientation": "vertical",
-        "resolution": "1080p",
-        "intended_use": "campaign",
-    }
-    assert provider.search("office", filters) == []
-    assert client.arguments["filters"] == filters
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_ENABLED", "1")
+        monkeypatch.setenv("CLIPFORGE_ENVATO_MCP_LIVE_SMOKE", "1")
+        client = StubClient()
+        provider = EnvatoMcpDiscoveryProvider(client)  # type: ignore[arg-type]
+        supported = {
+            "asset_type": "video",
+            "category": "Stock Footage",
+            "orientation": "vertical",
+            "resolution": "1080p",
+        }
+        assert provider.search("office", supported) == []
+        assert client.arguments == {
+            "searchTerms": "office",
+            "perPage": 5,
+            "filters": {
+                "categories": "Stock Footage",
+                "orientation": "vertical",
+                "resolution": "1080p (Full HD)",
+            },
+        }
+        with pytest.raises(AssetError, match="format") as exc:
+            provider.search("office", {"asset_type": "video", "format": "mp4"})
+        assert exc.value.code == "unsupported_filter"
+        assert client.calls == 1
+    finally:
+        monkeypatch.undo()
 
 
 def test_envato_search_does_not_invent_urls(tmp_path: Path) -> None:
