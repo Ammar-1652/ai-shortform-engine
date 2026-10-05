@@ -22,7 +22,7 @@ Not downloaded, `download_status = not_selected_for_round_18`:
 - `Antoine - Sept 1.mp4`
 - `Antoine Septemberr 3.mp4`
 
-Rights evidence is the campaign guide plus an explicit operator confirmation. Drive folder membership is not rights evidence. Newest-footage priority stays `needs_operator_clarification`.
+Each selected `CampaignSource` is configured with `rights_state = allowed`, so acquisition and verification do not wait for a duplicate operator-confirmation flag. The manifest still records campaign-guide evidence and any optional operator action. Drive folder membership is not rights evidence. Newest-footage priority stays `needs_operator_clarification`. Every acquired source also stores size, duration, dimensions, codecs, frame rate, audio facts, and ffprobe version; verification re-probes and rejects drift.
 
 ## Policy
 
@@ -37,7 +37,7 @@ A live `search_stock_video` for `office desk`, vertical, 1080p, returned five it
 - `docs/operations/assets/antoine-sallis/asset_download_requests.json`
 - `docs/operations/assets/antoine-sallis/asset_download_requests.md`
 
-Envato did not download a file. None of those assets entered a render.
+Envato did not download a file. None of those assets entered a render. The adapter initializes the advertised tool specs on search and forwards the complete requested filter object; it never silently drops a filter.
 
 ## VoiceStudio and languages
 
