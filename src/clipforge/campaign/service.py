@@ -51,6 +51,12 @@ def doctor_text() -> str:
             f"PASS footage_priority: {footage_priority()}",
             "PASS external_publishing: deferred",
             "PASS credentials: not stored",
+            "PASS campaign_runs: plan, run, show, verify, resume",
+            "PASS language_matrix: en-US, en-GB, fr-FR, es-ES, de-DE, ar, ja",
+            "PASS zh-CN: unsupported",
+            "PASS alignment: whisperx for English; alignment_not_claimed otherwise",
+            "PASS narration: optional kittentts for en-US",
+            "PASS browser_concurrency: 1",
         ]
     )
 

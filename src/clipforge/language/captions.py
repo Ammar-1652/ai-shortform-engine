@@ -54,6 +54,18 @@ def build_cues(
     return cues
 
 
+def wrap_caption(text: str, *, language: str, width: int = 12) -> list[str]:
+    """Keep source characters in order. Japanese wraps by character, not by a reversed word."""
+    profile = require_language(language)
+    if width < 1:
+        raise ValueError("caption width must be positive")
+    if not text or text.strip() != text:
+        raise ValueError("caption text is empty")
+    if profile.language == "ja":
+        return [text[index : index + width] for index in range(0, len(text), width)]
+    return [text]
+
+
 def assert_no_overlap(cues: list[CaptionCue]) -> None:
     previous = -1
     for cue in cues:

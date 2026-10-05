@@ -1,0 +1,104 @@
+{
+  "additionalProperties": false,
+  "description": "One stage for one source. A cache hit still names the producer it reused.",
+  "properties": {
+    "artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Id"
+    },
+    "artifact_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Sha256"
+    },
+    "cache_hit": {
+      "default": false,
+      "title": "Cache Hit",
+      "type": "boolean"
+    },
+    "job_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "stage": {
+      "enum": [
+        "source_verify",
+        "ingest",
+        "media_prepare",
+        "transcribe",
+        "vision",
+        "mine",
+        "preview",
+        "review",
+        "align",
+        "hero_plan",
+        "hero_render",
+        "advanced",
+        "qa",
+        "narration",
+        "delivery"
+      ],
+      "title": "Stage",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "partial",
+        "blocked",
+        "failed",
+        "cancelled",
+        "not_run"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "stage",
+    "status",
+    "reason_code"
+  ],
+  "title": "CampaignStageRecord",
+  "type": "object"
+}

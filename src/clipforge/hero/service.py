@@ -26,6 +26,7 @@ from clipforge.hero.alignment import (
     WhisperXAlignment,
     alignment_config_sha256,
     build_alignment,
+    production_alignment_backend,
 )
 from clipforge.hero.backend import HeroRenderBackend, RemotionHeroRenderBackend
 from clipforge.hero.captions import hero_caption_pieces
@@ -115,6 +116,19 @@ def default_hero_profile() -> HeroProfile:
     return _PROFILE
 
 
+def _select_aligner(
+    inputs: PreviewInputs,
+    alignment_backend: ForcedAlignmentBackend | None,
+    allow_model_download: bool,
+) -> ForcedAlignmentBackend:
+    if alignment_backend is not None:
+        return alignment_backend
+    return production_alignment_backend(
+        inputs.pair.transcript.detected_language,
+        allow_model_download=allow_model_download,
+    )
+
+
 def render_hero_drafts(
     *,
     database: Database,
@@ -177,7 +191,7 @@ def render_hero_drafts(
             from clipforge.preview.browser import resolve_browser
 
             resolve_browser()
-        aligner = alignment_backend or WhisperXAlignment(allow_model_download=allow_model_download)
+        aligner = _select_aligner(inputs, alignment_backend, allow_model_download)
         _require_budget(root)
         _fail_stale(database, inputs)
         now = datetime.now(UTC)
@@ -275,7 +289,7 @@ def align_hero_candidate(
         current = require_current_preview(database, source_asset_id, root)
         reviews = _reviews(database, inputs.pair.source.project_id)
         pair = _require_approved(inputs, reviews, current.artifact_id, candidate_id)
-        aligner = alignment_backend or WhisperXAlignment(allow_model_download=allow_model_download)
+        aligner = _select_aligner(inputs, alignment_backend, allow_model_download)
         staging = inputs.pair.workspace.hero_root() / "staging"
         inputs.pair.workspace.prepare_hero_file(staging / "asr.flac")
         _link_or_copy(inputs.asr_path, staging / "asr.flac", root)

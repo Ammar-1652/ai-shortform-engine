@@ -33,6 +33,24 @@ def doctor_text(provider: AssetDiscoveryProvider | None = None) -> str:
     )
 
 
+def render_block_reason(hit: AssetSearchHit) -> str | None:
+    """Why a discovery hit must stay out of a render. None means the hit is still not downloaded.
+
+    A blocked, remote, or unlicensed hit never becomes render media. This does not fetch bytes.
+    """
+    if hit.campaign_policy_decision != "allowed":
+        return hit.rejection_reason or "policy_blocked"
+    if hit.direct_download_url is not None:
+        return "remote_url"
+    if hit.download_status == "rejected" or hit.selection_status == "rejected":
+        return hit.rejection_reason or "rejected"
+    if not hit.license_evidence or not hit.sha256:
+        return "missing_license_evidence"
+    if hit.local_path is None:
+        return "not_local"
+    return None
+
+
 def search_assets(
     provider: AssetDiscoveryProvider,
     *,

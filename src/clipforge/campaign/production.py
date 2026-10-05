@@ -1,0 +1,1377 @@
+"""Campaign production runs. A verified stage is reused. Publishing stays deferred.
+
+The runner does not call FakeForcedAlignment and does not approve a Hero.
+Narration stays on the verified English KittenTTS identity. Other languages
+are recorded as unavailable instead of borrowing that artifact.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Literal
+from uuid import uuid4
+
+from pydantic import ValidationError
+
+from clipforge.campaign.antoine import CAMPAIGN_ID, inventory_sources, selected_files
+from clipforge.campaign.providers import CampaignError
+from clipforge.errors import StorageError
+from clipforge.language.registry import (
+    ENGLISH_ALIGNMENT_CHECKPOINT,
+    ENGLISH_ALIGNMENT_MODEL,
+    ENGLISH_ALIGNMENT_REVISION,
+    ENGLISH_NARRATION_ENGINE,
+    ENGLISH_NARRATION_LICENSE,
+    ENGLISH_NARRATION_MODEL,
+    ENGLISH_NARRATION_REVISION,
+    ENGLISH_NARRATION_SCRIPT,
+    ENGLISH_NARRATION_SCRIPT_SHA256,
+    ENGLISH_NARRATION_VOICE,
+    alignment_claim,
+    alignment_identity_matches,
+    capability_for,
+)
+from clipforge.media.hashing import sha256_file
+from clipforge.media.local_file import path_from_file_uri
+from clipforge.schemas.campaign import CampaignSource
+from clipforge.schemas.campaign_run import (
+    STAGES,
+    CampaignCandidateRecord,
+    CampaignProductionRun,
+    CampaignSourceRun,
+    CampaignStageRecord,
+    RunStatus,
+    StageName,
+    StageStatus,
+)
+from clipforge.schemas.jobs import JobRecord, JobStatus
+from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.voice import NarrationAudioArtifact
+from clipforge.storage import (
+    Database,
+    find_artifact,
+    get_artifact,
+    get_review,
+    insert_artifact,
+    insert_job,
+    list_artifacts_for_source,
+    list_jobs,
+    update_job,
+)
+from clipforge.storage.repository import ArtifactRow
+
+KIND = "campaign_production_run_json"
+BROWSER_CONCURRENCY = 1
+_NARRATION_SOURCE = "src-before-famous"
+_STAGE_KINDS: dict[StageName, str] = {
+    "media_prepare": "analysis_proxy",
+    "transcribe": "transcript_json",
+    "vision": "visual_analysis_json",
+    "mine": "candidate_set_json",
+    "preview": "rough_preview_set_json",
+    "hero_render": "hero_draft_set_json",
+    "advanced": "advanced_hero_draft_set_json",
+    "qa": "qa_set_json",
+    "narration": "narration_audio",
+    "delivery": "publish_package_json",
+}
+_ZERO = "0" * 64
+NarrationProbe = Callable[[str, str], None]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceBinding:
+    """A catalogue id matched to one ingested asset. The path is not stored."""
+
+    source_id: str
+    source_asset_id: str
+    project_id: str
+    source_sha256: str
+    rights_state: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Bound:
+    source_id: str
+    binding: SourceBinding | None
+    reason: str | None
+    expected_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Package:
+    delivery_id: str
+    candidate_id: str
+    candidate_rank: int
+    approval_review_id: str
+    qa_set_id: str
+    qa_set_sha256: str
+    alignment_id: str | None
+    alignment_sha256: str | None
+    advanced_artifact_id: str | None
+    candidate_set_id: str | None
+    manifest_sha256: str
+    artifact_id: str
+    job_id: str | None
+    broll_status: str
+    sfx_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Narration:
+    artifact_id: str | None
+    audio_sha256: str | None
+    reason: str
+
+
+def source_may_proceed(rights_state: str) -> bool:
+    """An allowed CampaignSource does not wait for another confirmation."""
+    return rights_state == "allowed"
+
+
+def plan_campaign(
+    *,
+    campaign_id: str = CAMPAIGN_ID,
+    source_ids: list[str] | None = None,
+    language: str = "en-US",
+    narration_enabled: bool = True,
+) -> CampaignProductionRun:
+    """Describe the run. This does not insert jobs or open a provider socket."""
+    chosen = _choose(campaign_id, source_ids)
+    capability = capability_for(language)
+    claim = alignment_claim(language)
+    live_voice = narration_enabled and capability.narration_evidence == "verified_live"
+    now = datetime.now(UTC)
+    fingerprint = _selection_fingerprint(
+        campaign_id,
+        [item.source_id for item in chosen],
+        language,
+        narration_enabled,
+    )
+    sources = [
+        _empty_source(
+            item.source_id,
+            item.rights_state,
+            narration_enabled and item.source_id == _NARRATION_SOURCE,
+            claim,
+        )
+        for item in chosen
+    ]
+    status: RunStatus
+    reason: str
+    if any(not source_may_proceed(item.rights_state) for item in chosen):
+        status, reason = "blocked", "rights_not_allowed"
+    else:
+        status, reason = "partial", "planned"
+    return CampaignProductionRun(
+        campaign_run_id=f"plan-{fingerprint[:16]}",
+        project_id="unresolved",
+        campaign_id=campaign_id,
+        created_at=now,
+        completed_at=None,
+        source_ids=[item.source_id for item in chosen],
+        language=capability.language,
+        narration_enabled=narration_enabled,
+        voice_id=ENGLISH_NARRATION_VOICE if live_voice else None,
+        engine_id=ENGLISH_NARRATION_ENGINE if live_voice else None,
+        model_id=ENGLISH_NARRATION_MODEL if live_voice else None,
+        model_revision=ENGLISH_NARRATION_REVISION if live_voice else None,
+        model_license=ENGLISH_NARRATION_LICENSE if live_voice else None,
+        alignment_provider="whisperx" if claim == "whisperx" else "none",
+        alignment_language=capability.language,
+        alignment_model=ENGLISH_ALIGNMENT_MODEL if claim == "whisperx" else None,
+        alignment_revision=ENGLISH_ALIGNMENT_REVISION if claim == "whisperx" else None,
+        alignment_checkpoint_sha256=ENGLISH_ALIGNMENT_CHECKPOINT if claim == "whisperx" else None,
+        fingerprint=fingerprint,
+        sources=sources,
+        status=status,
+        reason_code=reason,
+    )
+
+
+def run_campaign(
+    database: Database,
+    work_root: Path,
+    *,
+    campaign_id: str = CAMPAIGN_ID,
+    source_ids: list[str] | None = None,
+    language: str = "en-US",
+    narration_enabled: bool = True,
+    force: bool = False,
+    created_by: str = "campaign",
+    narration_probe: NarrationProbe | None = None,
+) -> CampaignProductionRun:
+    """Execute or reuse one campaign. A failed source does not erase the others."""
+    planned = plan_campaign(
+        campaign_id=campaign_id,
+        source_ids=source_ids,
+        language=language,
+        narration_enabled=narration_enabled,
+    )
+    if planned.reason_code == "rights_not_allowed":
+        raise CampaignError("campaign source rights are not allowed", code="rights_not_allowed")
+    root = work_root.resolve()
+    bound = [_bind_one(database, item.source_id) for item in planned.sources]
+    _reject_mixed(bound)
+    sources = [
+        _execute_source(
+            database,
+            root,
+            planned_source,
+            item,
+            narration_enabled=narration_enabled and planned_source.source_id == _NARRATION_SOURCE,
+            language=language,
+            narration_probe=narration_probe,
+        )
+        for planned_source, item in zip(planned.sources, bound, strict=True)
+    ]
+    document = _assemble(planned, sources, _project_of(bound))
+    if not force:
+        cached = _cached_run(root, document.fingerprint)
+        if cached is not None:
+            return cached
+    _publish(database, root, document, created_by, replace_job=False)
+    return document
+
+
+def resume_campaign(
+    database: Database,
+    work_root: Path,
+    campaign_run_id: str,
+    *,
+    created_by: str = "campaign",
+    narration_probe: NarrationProbe | None = None,
+) -> CampaignProductionRun:
+    """Retry sources that are not succeeded. A matching succeeded source stays cached."""
+    root = work_root.resolve()
+    current = _read(root, campaign_run_id)
+    bound = [_bind_one(database, item.source_id) for item in current.sources]
+    _reject_mixed(bound)
+    sources: list[CampaignSourceRun] = []
+    changed = False
+    for source, item in zip(current.sources, bound, strict=True):
+        fresh = item.binding is not None and item.binding.source_sha256 == source.source_sha256
+        if source.status == "succeeded" and fresh:
+            sources.append(source)
+            continue
+        changed = True
+        sources.append(
+            _execute_source(
+                database,
+                root,
+                source,
+                item,
+                narration_enabled=current.narration_enabled and source.source_id == _NARRATION_SOURCE,
+                language=current.language,
+                narration_probe=narration_probe,
+            )
+        )
+    if not changed:
+        return current
+    project_id = current.project_id if current.project_id != "unresolved" else _project_of(bound)
+    document = _assemble(current, sources, project_id)
+    restored = document.model_copy(
+        update={"campaign_run_id": current.campaign_run_id, "created_at": current.created_at}
+    )
+    document = restored.model_copy(update={"fingerprint": _evidence_fingerprint(restored)})
+    _publish(database, root, document, created_by, replace_job=True)
+    return document
+
+
+def verify_campaign_run(database: Database, work_root: Path, campaign_run_id: str) -> str:
+    """Re-check hashes. This does not render, narrate, or publish."""
+    root = work_root.resolve()
+    document = _read(root, campaign_run_id)
+    if document.status != "succeeded":
+        raise CampaignError("campaign run is not succeeded", code="not_succeeded")
+    if document.alignment_provider == "whisperx":
+        if not document.alignment_revision or not document.alignment_checkpoint_sha256:
+            raise CampaignError("alignment identity is missing", code="alignment_missing")
+        if not alignment_identity_matches(
+            revision=document.alignment_revision,
+            checkpoint=document.alignment_checkpoint_sha256,
+        ):
+            raise CampaignError("alignment model revision changed", code="model_revision_changed")
+    bound = [_bind_one(database, item.source_id) for item in document.sources]
+    _reject_mixed(bound)
+    for source, item in zip(document.sources, bound, strict=True):
+        _verify_source(database, root, document, source, item)
+    return f"PASS campaign run {document.campaign_run_id}"
+
+
+def show_campaign_run(work_root: Path, campaign_run_id: str) -> str:
+    return _read(work_root.resolve(), campaign_run_id).model_dump_json()
+
+
+def list_campaign_runs(work_root: Path) -> list[str]:
+    base = work_root.resolve() / "campaigns" / "runs"
+    if not base.is_dir():
+        return []
+    found: list[str] = []
+    for manifest in sorted(base.glob("*/manifest.json")):
+        if manifest.is_symlink() or not manifest.is_file():
+            continue
+        found.append(manifest.parent.name)
+    return found
+
+
+def _choose(campaign_id: str, source_ids: list[str] | None) -> list[CampaignSource]:
+    if campaign_id != CAMPAIGN_ID:
+        raise CampaignError("campaign is not in the local catalogue", code="missing_campaign")
+    catalogue = {item.source_id: item for item in inventory_sources()}
+    chosen_ids = [item.source_id for item in selected_files()] if source_ids is None else list(source_ids)
+    if len(chosen_ids) != len(set(chosen_ids)):
+        raise CampaignError("duplicate campaign source id", code="duplicate_source")
+    chosen = []
+    for source_id in sorted(chosen_ids):
+        item = catalogue.get(source_id)
+        if item is None:
+            raise CampaignError("campaign source is not in the catalogue", code="missing_source")
+        if item.download_status == "not_selected_for_round_18":
+            raise CampaignError("unselected source cannot enter a campaign run", code="not_selected")
+        chosen.append(item)
+    if not chosen:
+        raise CampaignError("campaign run has no sources", code="missing_source")
+    return chosen
+
+
+def _empty_source(source_id: str, rights_state: str, narration: bool, claim: str) -> CampaignSourceRun:
+    blocked = not source_may_proceed(rights_state)
+    stages: list[CampaignStageRecord] = []
+    for stage in STAGES:
+        status: StageStatus = "not_run"
+        reason = "planned"
+        if blocked:
+            status, reason = "blocked", "rights_not_allowed"
+        elif stage == "narration" and not narration:
+            reason = "narration_not_requested"
+        elif stage == "align" and claim != "whisperx":
+            reason = "alignment_not_claimed"
+        stages.append(CampaignStageRecord(stage=stage, status=status, cache_hit=False, reason_code=reason))
+    return CampaignSourceRun(
+        source_id=source_id,
+        source_sha256=_ZERO,
+        rights_state=rights_state,
+        stages=stages,
+        candidates=[],
+        status="blocked" if blocked else "partial",
+        reason_code="rights_not_allowed" if blocked else "planned",
+        cache_status="miss",
+    )
+
+
+def _execute_source(
+    database: Database,
+    root: Path,
+    planned: CampaignSourceRun,
+    bound: _Bound,
+    *,
+    narration_enabled: bool,
+    language: str,
+    narration_probe: NarrationProbe | None,
+) -> CampaignSourceRun:
+    if not source_may_proceed(planned.rights_state):
+        return _blocked_copy(planned, "rights_not_allowed", bound.expected_sha256)
+    if bound.binding is None:
+        return _blocked_copy(planned, bound.reason or "missing_source", bound.expected_sha256)
+    return _observe(
+        database,
+        root,
+        bound.binding,
+        narration_enabled=narration_enabled,
+        language=language,
+        narration_probe=narration_probe,
+    )
+
+
+def _blocked_copy(planned: CampaignSourceRun, reason: str, source_sha256: str) -> CampaignSourceRun:
+    status: RunStatus = "failed" if reason == "source_changed" else "blocked"
+    stages = [
+        item.model_copy(update={"status": status, "reason_code": reason, "cache_hit": False})
+        for item in planned.stages
+    ]
+    return planned.model_copy(
+        update={
+            "stages": stages,
+            "candidates": [],
+            "source_sha256": source_sha256,
+            "status": status,
+            "reason_code": reason,
+            "cache_status": "miss",
+            "hero_artifact_id": None,
+            "advanced_artifact_id": None,
+            "qa_set_id": None,
+            "qa_set_sha256": None,
+            "delivery_id": None,
+            "delivery_manifest_sha256": None,
+            "narration_artifact_id": None,
+            "narration_audio_sha256": None,
+        }
+    )
+
+
+def _observe(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    *,
+    narration_enabled: bool,
+    language: str,
+    narration_probe: NarrationProbe | None,
+) -> CampaignSourceRun:
+    claim = alignment_claim(language)
+    package = _package(database, root, binding)
+    narration = _narration(
+        database,
+        root,
+        binding,
+        enabled=narration_enabled,
+        language=language,
+        probe=narration_probe,
+    )
+    review_decision = "not_recorded"
+    review_ok = False
+    if package is not None:
+        review_decision, review_ok = _review_state(database, binding, package)
+    stages = [
+        _stage(
+            database,
+            root,
+            binding,
+            stage,
+            package,
+            claim=claim,
+            narration=narration,
+            narration_enabled=narration_enabled,
+            review_ok=review_ok,
+        )
+        for stage in STAGES
+    ]
+    candidate = None
+    if package is not None:
+        score, start, end = _candidate_facts(database, root, binding, package.candidate_id)
+        candidate = CampaignCandidateRecord(
+            candidate_id=package.candidate_id,
+            rank=package.candidate_rank,
+            score=score,
+            selection_reason="candidate bound to the current verified local delivery",
+            source_start_us=start,
+            source_end_us=end,
+            review_id=package.approval_review_id,
+            review_decision=review_decision,
+            caption_quality="aligned" if claim == "whisperx" and package.alignment_sha256 else "provisional",
+            alignment_status=claim if package.alignment_sha256 else "alignment_not_claimed",
+            narration_status=narration.reason if narration_enabled else "narration_not_requested",
+            qa_status="pass" if package.qa_set_sha256 else "missing",
+            delivery_status="succeeded",
+        )
+    required = [
+        item for item in stages if _stage_required(item.stage, narration_enabled=narration_enabled, claim=claim)
+    ]
+    status: RunStatus
+    reason: str
+    if package is None:
+        status, reason = "blocked", "missing_artifact"
+    elif not review_ok:
+        reason = "review_not_approved" if review_decision != "not_recorded" else "review_missing"
+        status, reason = "blocked", reason
+    elif all(item.status == "succeeded" for item in required):
+        status, reason = "succeeded", "none"
+    elif any(item.status == "failed" for item in required):
+        status, reason = "failed", next(item.reason_code for item in required if item.status == "failed")
+    elif any(item.status == "blocked" for item in required):
+        status, reason = "blocked", next(item.reason_code for item in required if item.status == "blocked")
+    else:
+        status, reason = "partial", "stage_incomplete"
+    hero_id = _artifact_id(database, binding, "hero_draft_set_json")
+    advanced_id = package.advanced_artifact_id if package is not None else None
+    cache_status = _cache_status(stages, status)
+    return CampaignSourceRun(
+        source_id=binding.source_id,
+        source_asset_id=binding.source_asset_id,
+        source_sha256=binding.source_sha256,
+        rights_state=binding.rights_state,
+        stages=stages,
+        candidates=[candidate] if candidate is not None else [],
+        hero_artifact_id=hero_id,
+        advanced_artifact_id=advanced_id,
+        qa_set_id=None if package is None else package.qa_set_id,
+        qa_set_sha256=None if package is None else package.qa_set_sha256,
+        delivery_id=None if package is None else package.delivery_id,
+        delivery_manifest_sha256=None if package is None else package.manifest_sha256,
+        narration_artifact_id=narration.artifact_id if narration_enabled else None,
+        narration_audio_sha256=narration.audio_sha256 if narration_enabled else None,
+        broll_status="absent" if package is None else package.broll_status,
+        sfx_status="absent" if package is None else package.sfx_status,
+        cache_status=cache_status,
+        status=status,
+        reason_code=reason,
+    )
+
+
+def _stage_required(stage: StageName, *, narration_enabled: bool, claim: str) -> bool:
+    if stage == "narration" and not narration_enabled:
+        return False
+    return not (stage == "align" and claim != "whisperx")
+
+
+def _cache_status(stages: list[CampaignStageRecord], status: RunStatus) -> Literal["hit", "miss", "mixed"]:
+    if status != "succeeded":
+        return "miss"
+    succeeded = [item for item in stages if item.status == "succeeded"]
+    if succeeded and all(item.cache_hit for item in succeeded):
+        return "hit"
+    if any(item.cache_hit for item in succeeded):
+        return "mixed"
+    return "miss"
+
+
+def _stage(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    stage: StageName,
+    package: _Package | None,
+    *,
+    claim: str,
+    narration: _Narration,
+    narration_enabled: bool,
+    review_ok: bool,
+) -> CampaignStageRecord:
+    if stage == "narration" and not narration_enabled:
+        return CampaignStageRecord(
+            stage="narration",
+            status="not_run",
+            cache_hit=False,
+            reason_code="narration_not_requested",
+        )
+    if stage == "narration":
+        ok = narration.artifact_id is not None and narration.audio_sha256 is not None
+        return CampaignStageRecord(
+            stage="narration",
+            status="succeeded" if ok else "blocked",
+            artifact_id=narration.artifact_id,
+            artifact_sha256=narration.audio_sha256,
+            cache_hit=ok,
+            reason_code=narration.reason,
+        )
+    if stage == "source_verify":
+        return CampaignStageRecord(
+            stage="source_verify",
+            status="succeeded",
+            cache_hit=True,
+            artifact_sha256=binding.source_sha256,
+            reason_code="source_hash_matched",
+        )
+    if stage == "align":
+        if claim != "whisperx":
+            return CampaignStageRecord(
+                stage="align",
+                status="not_run",
+                cache_hit=False,
+                reason_code="alignment_not_claimed",
+            )
+        if package is None or not package.alignment_sha256:
+            return CampaignStageRecord(
+                stage="align",
+                status="blocked",
+                cache_hit=False,
+                reason_code="alignment_missing",
+            )
+        return CampaignStageRecord(
+            stage="align",
+            status="succeeded",
+            cache_hit=True,
+            artifact_sha256=package.alignment_sha256,
+            reason_code="whisperx",
+        )
+    if stage == "ingest":
+        return CampaignStageRecord(stage="ingest", status="succeeded", cache_hit=True, reason_code="reused")
+    if stage == "review":
+        if package is None or not review_ok:
+            return CampaignStageRecord(
+                stage="review",
+                status="blocked",
+                cache_hit=False,
+                reason_code="review_missing",
+            )
+        return CampaignStageRecord(
+            stage="review",
+            status="succeeded",
+            cache_hit=True,
+            reason_code="existing_human_review",
+        )
+    if stage == "hero_plan":
+        hero = _artifact_row(database, binding, "hero_draft_set_json")
+        if hero is None:
+            return CampaignStageRecord(
+                stage="hero_plan",
+                status="blocked",
+                cache_hit=False,
+                reason_code="missing_artifact",
+            )
+        return CampaignStageRecord(
+            stage="hero_plan",
+            status="succeeded",
+            job_id=hero.job_id,
+            artifact_id=hero.artifact_id,
+            cache_hit=True,
+            reason_code="reused",
+        )
+    kind = _STAGE_KINDS.get(stage)
+    row = _row_for_stage(database, root, binding, stage, package) if kind is not None else None
+    if stage == "delivery":
+        if package is None or row is None:
+            return CampaignStageRecord(
+                stage="delivery",
+                status="blocked",
+                cache_hit=False,
+                reason_code="missing_artifact",
+            )
+        return CampaignStageRecord(
+            stage="delivery",
+            status="succeeded",
+            job_id=row.job_id,
+            artifact_id=row.artifact_id,
+            artifact_sha256=package.manifest_sha256,
+            cache_hit=True,
+            reason_code="local_delivery",
+        )
+    if row is None:
+        return CampaignStageRecord(
+            stage=stage,
+            status="blocked",
+            cache_hit=False,
+            reason_code="missing_artifact",
+        )
+    digest, reason = _hash_uri(root, row.uri)
+    if digest is None:
+        return CampaignStageRecord(
+            stage=stage,
+            status="blocked",
+            job_id=row.job_id,
+            artifact_id=row.artifact_id,
+            cache_hit=False,
+            reason_code=reason,
+        )
+    return CampaignStageRecord(
+        stage=stage,
+        status="succeeded",
+        job_id=row.job_id,
+        artifact_id=row.artifact_id,
+        artifact_sha256=digest,
+        cache_hit=True,
+        reason_code="reused",
+    )
+
+
+def _row_for_stage(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    stage: StageName,
+    package: _Package | None,
+) -> ArtifactRow | None:
+    if stage == "qa" and package is not None:
+        return _row_with_hash(database, root, binding, "qa_set_json", package.qa_set_sha256)
+    if stage == "advanced" and package is not None and package.advanced_artifact_id:
+        return _row_with_id(database, binding, package.advanced_artifact_id)
+    if stage == "mine" and package is not None and package.candidate_set_id:
+        return _row_with_id(database, binding, package.candidate_set_id)
+    if stage == "delivery" and package is not None:
+        return _row_with_id(database, binding, package.artifact_id)
+    kind = _STAGE_KINDS.get(stage)
+    if kind is None:
+        return None
+    return _artifact_row(database, binding, kind)
+
+
+def _narration(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    *,
+    enabled: bool,
+    language: str,
+    probe: NarrationProbe | None,
+) -> _Narration:
+    if not enabled:
+        return _Narration(None, None, "narration_not_requested")
+    capability = capability_for(language)
+    if capability.narration_evidence != "verified_live":
+        return _Narration(None, None, capability.narration_reason)
+    accepted: list[NarrationAudioArtifact] = []
+    reasons: list[str] = []
+    with database.connect() as connection:
+        rows = [
+            row
+            for row in list_artifacts_for_source(connection, binding.project_id, binding.source_asset_id)
+            if row.kind == "narration_audio"
+        ]
+    for row in rows:
+        decision = _classify_narration(root, row)
+        if isinstance(decision, NarrationAudioArtifact):
+            accepted.append(decision)
+        else:
+            reasons.append(decision)
+    if accepted:
+        chosen = sorted(accepted, key=lambda item: item.artifact_id)[0]
+        return _Narration(chosen.artifact_id, chosen.audio_sha256, "verified_live")
+    if probe is not None and not reasons:
+        try:
+            probe(language, ENGLISH_NARRATION_SCRIPT)
+        except CampaignError as exc:
+            if exc.code == "provider_timeout":
+                return _Narration(None, None, "provider_timeout")
+            return _Narration(None, None, "provider_unavailable")
+    for reason in (
+        "narration_changed",
+        "zero_byte_audio",
+        "model_revision_changed",
+        "voice_changed",
+        "script_changed",
+        "license_blocked",
+        "symlink",
+    ):
+        if reason in reasons:
+            return _Narration(None, None, reason)
+    return _Narration(None, None, "provider_unavailable")
+
+
+def _classify_narration(root: Path, row: ArtifactRow) -> NarrationAudioArtifact | str:
+    sidecar = root / "voice" / "audio" / f"{row.artifact_id}.json"
+    wav = root / "voice" / "audio" / f"{row.artifact_id}.wav"
+    if sidecar.is_symlink() or wav.is_symlink():
+        return "symlink"
+    if not sidecar.is_file():
+        return "provider_unavailable"
+    try:
+        document = NarrationAudioArtifact.model_validate_json(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return "provider_unavailable"
+    blocked_license = document.model_license in {"unknown", "prohibited", "cc_by_nc"}
+    if document.model_id.lower().startswith("k2-fsa/") or blocked_license:
+        return "license_blocked"
+    if document.commercial_use in {"unknown", "prohibited", "cc_by_nc"}:
+        return "license_blocked"
+    identity = (
+        document.engine_id == ENGLISH_NARRATION_ENGINE
+        and document.model_id == ENGLISH_NARRATION_MODEL
+        and document.voice_profile_id == ENGLISH_NARRATION_VOICE
+        and document.script_label == ENGLISH_NARRATION_SCRIPT
+        and document.script_sha256 == ENGLISH_NARRATION_SCRIPT_SHA256
+        and document.language == "en-US"
+    )
+    same_script = document.script_label == ENGLISH_NARRATION_SCRIPT
+    if document.model_revision != ENGLISH_NARRATION_REVISION and same_script:
+        return "model_revision_changed"
+    if document.voice_profile_id != ENGLISH_NARRATION_VOICE and same_script:
+        return "voice_changed"
+    script_hash = document.script_sha256 != ENGLISH_NARRATION_SCRIPT_SHA256
+    if not same_script or script_hash:
+        return "script_changed"
+    if not identity:
+        return "provider_unavailable"
+    if not wav.is_file():
+        return "narration_changed"
+    if wav.stat().st_size == 0:
+        return "zero_byte_audio"
+    if sha256_file(wav) != document.audio_sha256:
+        return "narration_changed"
+    return document
+
+
+def _bind_one(database: Database, source_id: str) -> _Bound:
+    rights = {item.source_id: item.rights_state for item in inventory_sources()}
+    rights_state = str(rights.get(source_id, "unknown"))
+    with database.connect() as connection:
+        row = connection.execute(
+            """
+            SELECT source_asset_id, project_id, content_sha256, original_filename
+            FROM source_manifests
+            WHERE original_filename = ?
+            """,
+            (f"{source_id}.mp4",),
+        ).fetchone()
+        uri = None
+        if row is not None:
+            found = connection.execute(
+                "SELECT uri FROM source_assets WHERE source_asset_id = ?",
+                (str(row["source_asset_id"]),),
+            ).fetchone()
+            uri = None if found is None else str(found["uri"])
+    if row is None or uri is None:
+        return _Bound(source_id, None, "missing_source", _ZERO)
+    expected = str(row["content_sha256"])
+    if not source_may_proceed(rights_state):
+        return _Bound(source_id, None, "rights_not_allowed", expected)
+    lowered = uri.lower()
+    if lowered.startswith(("http://", "https://", "s3://", "ftp://", "ftps://")):
+        return _Bound(source_id, None, "remote_source", expected)
+    if "\\" in uri or ".." in uri.split("/"):
+        return _Bound(source_id, None, "traversal", expected)
+    if not lowered.startswith("file:"):
+        return _Bound(source_id, None, "remote_source", expected)
+    path = path_from_file_uri(uri)
+    if path.is_symlink():
+        return _Bound(source_id, None, "symlink", expected)
+    if not path.is_file():
+        return _Bound(source_id, None, "missing_source", expected)
+    digest = sha256_file(path)
+    if digest != expected:
+        return _Bound(source_id, None, "source_changed", digest)
+    binding = SourceBinding(
+        source_id=source_id,
+        source_asset_id=str(row["source_asset_id"]),
+        project_id=str(row["project_id"]),
+        source_sha256=digest,
+        rights_state=rights_state,
+    )
+    return _Bound(source_id, binding, None, digest)
+
+
+def _reject_mixed(bound: list[_Bound]) -> None:
+    projects = {item.binding.project_id for item in bound if item.binding is not None}
+    if len(projects) > 1:
+        raise CampaignError("campaign sources belong to different projects", code="mixed_project")
+
+
+def _project_of(bound: list[_Bound]) -> str:
+    projects = sorted({item.binding.project_id for item in bound if item.binding is not None})
+    if len(projects) == 1:
+        return projects[0]
+    return "unresolved"
+
+
+def _package(database: Database, root: Path, binding: SourceBinding) -> _Package | None:
+    row = _artifact_row(database, binding, "publish_package_json")
+    if row is None:
+        return None
+    digest, reason = _hash_uri(root, row.uri)
+    if digest is None or reason != "reused":
+        return None
+    path = path_from_file_uri(row.uri)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    delivery_id = payload.get("delivery_id")
+    candidate_id = payload.get("candidate_id")
+    review_id = payload.get("approval_review_id")
+    qa_id = payload.get("qa_set_id")
+    qa_hash = payload.get("qa_set_sha256")
+    rank = payload.get("candidate_rank")
+    required = (delivery_id, candidate_id, review_id, qa_id, qa_hash)
+    if not all(isinstance(item, str) and item for item in required):
+        return None
+    if not isinstance(rank, int) or rank < 1:
+        return None
+    delivery = root / "deliveries" / str(delivery_id) / "manifest.json"
+    if delivery.is_symlink() or not delivery.is_file() or not _contained(root, delivery):
+        return None
+    if sha256_file(delivery) != digest:
+        return None
+    roles = _roles(payload.get("files"))
+    return _Package(
+        delivery_id=str(delivery_id),
+        candidate_id=str(candidate_id),
+        candidate_rank=rank,
+        approval_review_id=str(review_id),
+        qa_set_id=str(qa_id),
+        qa_set_sha256=str(qa_hash),
+        alignment_id=_text(payload.get("alignment_id")),
+        alignment_sha256=_sha(payload.get("alignment_sha256")),
+        advanced_artifact_id=_text(payload.get("advanced_artifact_id")),
+        candidate_set_id=_text(payload.get("candidate_set_id")),
+        manifest_sha256=digest,
+        artifact_id=row.artifact_id,
+        job_id=row.job_id,
+        broll_status="present" if "broll" in roles else "absent",
+        sfx_status="present" if "sfx" in roles else "absent",
+    )
+
+
+def _roles(value: object) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    found: set[str] = set()
+    for item in value:
+        if isinstance(item, dict) and isinstance(item.get("role"), str):
+            found.add(str(item["role"]))
+    return found
+
+
+def _text(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _sha(value: object) -> str | None:
+    if isinstance(value, str) and len(value) == 64:
+        return value
+    return None
+
+
+def _review_state(database: Database, binding: SourceBinding, package: _Package) -> tuple[str, bool]:
+    try:
+        with database.connect() as connection:
+            review = get_review(connection, package.approval_review_id)
+    except StorageError:
+        return "not_recorded", False
+    if review.project_id != binding.project_id:
+        return "cross_project", False
+    if review.candidate_id is not None and review.candidate_id != package.candidate_id:
+        return "stale_review", False
+    return review.decision, review.decision == "approved"
+
+
+def _candidate_facts(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    candidate_id: str,
+) -> tuple[str, int | None, int | None]:
+    row = _artifact_row(database, binding, "candidate_set_json")
+    if row is None:
+        return "unavailable", None, None
+    digest, reason = _hash_uri(root, row.uri)
+    if digest is None or reason != "reused":
+        return "unavailable", None, None
+    try:
+        payload = json.loads(path_from_file_uri(row.uri).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return "unavailable", None, None
+    clips = payload.get("candidates") if isinstance(payload, dict) else None
+    if not isinstance(clips, list):
+        return "unavailable", None, None
+    for clip in clips:
+        if not isinstance(clip, dict) or clip.get("candidate_id") != candidate_id:
+            continue
+        return _score_text(clip.get("creative_score")), *_span(clip.get("time_map"))
+    return "unavailable", None, None
+
+
+def _score_text(value: object) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "unavailable"
+    if value < 0 or value > 1:
+        return "unavailable"
+    return f"{float(value):.6f}"
+
+
+def _span(time_map: object) -> tuple[int | None, int | None]:
+    if not isinstance(time_map, dict):
+        return None, None
+    segments = time_map.get("segments")
+    if not isinstance(segments, list):
+        return None, None
+    starts: list[int] = []
+    ends: list[int] = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        start = segment.get("source_start_us")
+        end = segment.get("source_end_us")
+        if isinstance(start, int) and isinstance(end, int) and not isinstance(start, bool) and end > start:
+            starts.append(start)
+            ends.append(end)
+    if not starts:
+        return None, None
+    return min(starts), max(ends)
+
+
+def _artifact_row(database: Database, binding: SourceBinding, kind: str) -> ArtifactRow | None:
+    with database.connect() as connection:
+        return find_artifact(connection, binding.project_id, binding.source_asset_id, kind)
+
+
+def _artifact_id(database: Database, binding: SourceBinding, kind: str) -> str | None:
+    row = _artifact_row(database, binding, kind)
+    if row is None:
+        return None
+    return row.artifact_id
+
+
+def _row_with_id(database: Database, binding: SourceBinding, artifact_id: str) -> ArtifactRow | None:
+    with database.connect() as connection:
+        rows = list_artifacts_for_source(connection, binding.project_id, binding.source_asset_id)
+    for row in rows:
+        if row.artifact_id == artifact_id:
+            return row
+    return None
+
+
+def _row_with_hash(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    kind: str,
+    digest: str,
+) -> ArtifactRow | None:
+    with database.connect() as connection:
+        rows = [
+            row
+            for row in list_artifacts_for_source(connection, binding.project_id, binding.source_asset_id)
+            if row.kind == kind
+        ]
+    matches = [row for row in rows if _hash_uri(root, row.uri)[0] == digest]
+    if not matches:
+        return None
+    return sorted(matches, key=lambda item: item.artifact_id)[0]
+
+
+def _hash_uri(root: Path, uri: str) -> tuple[str | None, str]:
+    if "\\" in uri or ".." in uri.split("/"):
+        return None, "traversal"
+    lowered = uri.lower()
+    if lowered.startswith(("http://", "https://", "s3://", "ftp://")):
+        return None, "remote_source"
+    path = path_from_file_uri(uri)
+    if path.is_symlink():
+        return None, "symlink"
+    if not path.is_file():
+        return None, "missing_artifact"
+    if not _contained(root, path):
+        return None, "traversal"
+    return sha256_file(path), "reused"
+
+
+def _contained(root: Path, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _assemble(
+    planned: CampaignProductionRun,
+    sources: list[CampaignSourceRun],
+    project_id: str,
+) -> CampaignProductionRun:
+    status, reason = _roll_up(sources)
+    now = datetime.now(UTC)
+    document = planned.model_copy(
+        update={
+            "campaign_run_id": str(uuid4()),
+            "project_id": project_id,
+            "created_at": now,
+            "completed_at": now,
+            "sources": sources,
+            "status": status,
+            "reason_code": reason,
+        }
+    )
+    return document.model_copy(update={"fingerprint": _evidence_fingerprint(document)})
+
+
+def _roll_up(sources: list[CampaignSourceRun]) -> tuple[RunStatus, str]:
+    states = [item.status for item in sources]
+    if states and all(item == "succeeded" for item in states):
+        return "succeeded", "none"
+    if any(item == "succeeded" for item in states):
+        return "partial", "source_incomplete"
+    if any(item == "failed" for item in states):
+        return "failed", "source_failed"
+    if any(item == "cancelled" for item in states):
+        return "cancelled", "cancelled"
+    return "blocked", sources[0].reason_code if sources else "missing_source"
+
+
+def _selection_fingerprint(
+    campaign_id: str,
+    source_ids: list[str],
+    language: str,
+    narration_enabled: bool,
+) -> str:
+    body = {
+        "campaign_id": campaign_id,
+        "language": language,
+        "narration_enabled": narration_enabled,
+        "narration_model": ENGLISH_NARRATION_MODEL if narration_enabled else "",
+        "narration_revision": ENGLISH_NARRATION_REVISION if narration_enabled else "",
+        "narration_voice": ENGLISH_NARRATION_VOICE if narration_enabled else "",
+        "source_ids": source_ids,
+    }
+    return _digest(body)
+
+
+def _evidence_fingerprint(document: CampaignProductionRun) -> str:
+    body = {
+        "alignment_checkpoint_sha256": document.alignment_checkpoint_sha256,
+        "alignment_provider": document.alignment_provider,
+        "alignment_revision": document.alignment_revision,
+        "campaign_id": document.campaign_id,
+        "engine_id": document.engine_id,
+        "language": document.language,
+        "model_id": document.model_id,
+        "model_revision": document.model_revision,
+        "narration_enabled": document.narration_enabled,
+        "sources": [
+            {
+                "candidates": [item.candidate_id for item in source.candidates],
+                "delivery_id": source.delivery_id,
+                "delivery_manifest_sha256": source.delivery_manifest_sha256,
+                "narration_artifact_id": source.narration_artifact_id,
+                "narration_audio_sha256": source.narration_audio_sha256,
+                "qa_set_id": source.qa_set_id,
+                "qa_set_sha256": source.qa_set_sha256,
+                "reason_code": source.reason_code,
+                "source_id": source.source_id,
+                "source_sha256": source.source_sha256,
+                "stages": [
+                    {
+                        "artifact_id": stage.artifact_id,
+                        "artifact_sha256": stage.artifact_sha256,
+                        "cache_hit": stage.cache_hit,
+                        "reason_code": stage.reason_code,
+                        "stage": stage.stage,
+                        "status": stage.status,
+                    }
+                    for stage in source.stages
+                ],
+                "status": source.status,
+            }
+            for source in document.sources
+        ],
+        "voice_id": document.voice_id,
+    }
+    return _digest(body)
+
+
+def _digest(body: object) -> str:
+    raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _publish(
+    database: Database,
+    root: Path,
+    document: CampaignProductionRun,
+    created_by: str,
+    *,
+    replace_job: bool,
+) -> None:
+    _write(root, document)
+    if document.project_id == "unresolved":
+        return
+    now = document.completed_at or document.created_at
+    source_ids = [item.source_asset_id for item in document.sources if item.source_asset_id]
+    if not source_ids:
+        return
+    status = _job_status(document.status)
+    error = document.reason_code if status is JobStatus.FAILED else None
+    with database.transaction() as connection:
+        existing = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
+        if existing is not None and replace_job:
+            update_job(
+                connection,
+                existing.model_copy(
+                    update={
+                        "status": status,
+                        "updated_at": now,
+                        "error_message": error,
+                        "payload": {
+                            "campaign_run_id": document.campaign_run_id,
+                            "fingerprint": document.fingerprint,
+                        },
+                    }
+                ),
+            )
+            return
+        if existing is not None:
+            return
+        job_id = str(uuid4())
+        provenance = ArtifactProvenance(
+            created_at=now,
+            created_by=created_by,
+            tool="clipforge-campaign",
+            tool_version="0.1.0",
+            source_asset_ids=source_ids,
+            job_id=job_id,
+            inputs_sha256=document.fingerprint,
+        )
+        insert_job(
+            connection,
+            JobRecord(
+                job_id=job_id,
+                project_id=document.project_id,
+                kind="campaign_production",
+                status=status,
+                created_at=document.created_at,
+                updated_at=now,
+                error_message=error,
+                payload={"campaign_run_id": document.campaign_run_id, "fingerprint": document.fingerprint},
+            ),
+        )
+        insert_artifact(
+            connection,
+            artifact_id=document.campaign_run_id,
+            project_id=document.project_id,
+            job_id=job_id,
+            source_asset_id=source_ids[0],
+            kind=KIND,
+            uri=(root / "campaigns" / "runs" / document.campaign_run_id / "manifest.json").resolve().as_uri(),
+            provenance=provenance,
+        )
+
+
+def _job_status(status: RunStatus) -> JobStatus:
+    if status == "succeeded":
+        return JobStatus.SUCCEEDED
+    if status == "failed":
+        return JobStatus.FAILED
+    if status == "cancelled":
+        return JobStatus.CANCELLED
+    return JobStatus.BLOCKED
+
+
+def _find_campaign_job(
+    connection: sqlite3.Connection,
+    project_id: str,
+    campaign_run_id: str,
+) -> JobRecord | None:
+    matches = [
+        job
+        for job in list_jobs(connection, project_id)
+        if job.kind == "campaign_production" and job.payload.get("campaign_run_id") == campaign_run_id
+    ]
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _write(root: Path, document: CampaignProductionRun) -> Path:
+    directory = root / "campaigns" / "runs" / document.campaign_run_id
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "manifest.json"
+    if path.is_symlink():
+        raise CampaignError("campaign manifest is a symlink", code="symlink")
+    path.write_text(document.model_dump_json() + "\n", encoding="utf-8")
+    return path
+
+
+def _read(root: Path, campaign_run_id: str) -> CampaignProductionRun:
+    if "/" in campaign_run_id or "\\" in campaign_run_id or ".." in campaign_run_id:
+        raise CampaignError("campaign run id is not safe", code="malformed_id")
+    path = root / "campaigns" / "runs" / campaign_run_id / "manifest.json"
+    if path.is_symlink() or not path.is_file():
+        raise CampaignError("campaign run is missing", code="missing_run")
+    try:
+        return CampaignProductionRun.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+        raise CampaignError("campaign run document was rejected", code="invalid_document") from exc
+
+
+def _cached_run(root: Path, fingerprint: str) -> CampaignProductionRun | None:
+    base = root / "campaigns" / "runs"
+    if not base.is_dir():
+        return None
+    matches: list[CampaignProductionRun] = []
+    for manifest in sorted(base.glob("*/manifest.json")):
+        if manifest.is_symlink():
+            continue
+        try:
+            document = CampaignProductionRun.model_validate_json(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError):
+            continue
+        if document.fingerprint == fingerprint and document.status == "succeeded":
+            matches.append(document)
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _verify_source(
+    database: Database,
+    root: Path,
+    document: CampaignProductionRun,
+    source: CampaignSourceRun,
+    bound: _Bound,
+) -> None:
+    if bound.binding is None or bound.binding.source_sha256 != source.source_sha256:
+        code = bound.reason or "source_changed"
+        raise CampaignError("campaign source no longer matches the run", code=code)
+    if source.delivery_id is None or source.delivery_manifest_sha256 is None:
+        raise CampaignError("campaign delivery evidence is missing", code="delivery_missing")
+    manifest = root / "deliveries" / source.delivery_id / "manifest.json"
+    if manifest.is_symlink():
+        raise CampaignError("delivery manifest is a symlink", code="symlink")
+    package = _package(database, root, bound.binding)
+    if package is None:
+        raise CampaignError("delivery manifest is missing", code="delivery_missing")
+    if not source.candidates or source.candidates[0].review_id != package.approval_review_id:
+        raise CampaignError("review binding changed", code="stale_review")
+    decision, approved = _review_state(database, bound.binding, package)
+    if not approved or decision != source.candidates[0].review_decision:
+        raise CampaignError("review binding changed", code="stale_review")
+    align = next(item for item in source.stages if item.stage == "align")
+    if document.alignment_provider == "whisperx" and package.alignment_sha256 != align.artifact_sha256:
+        raise CampaignError("alignment hash changed", code="alignment_changed")
+    if package.qa_set_sha256 != source.qa_set_sha256:
+        raise CampaignError("qa hash changed", code="qa_changed")
+    if source.narration_artifact_id and source.narration_audio_sha256:
+        _verify_narration(root, source.narration_artifact_id, source.narration_audio_sha256)
+    for stage in source.stages:
+        if stage.artifact_id is None or stage.artifact_sha256 is None or stage.stage == "align":
+            continue
+        if stage.stage == "delivery":
+            continue
+        if stage.stage == "source_verify":
+            continue
+        try:
+            with database.connect() as connection:
+                row = get_artifact(connection, stage.artifact_id)
+        except StorageError:
+            continue
+        digest, reason = _hash_uri(root, row.uri)
+        if digest is None:
+            raise CampaignError("campaign artifact is not a local file", code=reason)
+        if digest != stage.artifact_sha256:
+            raise CampaignError("campaign artifact hash changed", code=_change_code(stage.stage))
+    if not manifest.is_file():
+        raise CampaignError("delivery manifest is missing", code="delivery_missing")
+    if sha256_file(manifest) != source.delivery_manifest_sha256:
+        raise CampaignError("delivery bytes changed", code="delivery_changed")
+
+
+def _verify_narration(root: Path, artifact_id: str, expected: str) -> None:
+    sidecar = root / "voice" / "audio" / f"{artifact_id}.json"
+    wav = root / "voice" / "audio" / f"{artifact_id}.wav"
+    if sidecar.is_symlink() or wav.is_symlink():
+        raise CampaignError("narration artifact is a symlink", code="symlink")
+    if not sidecar.is_file() or not wav.is_file():
+        raise CampaignError("narration artifact is missing", code="narration_missing")
+    if wav.stat().st_size == 0:
+        raise CampaignError("narration audio is empty", code="zero_byte_audio")
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CampaignError("narration artifact is missing", code="narration_missing") from exc
+    if not isinstance(payload, dict) or payload.get("audio_sha256") != expected:
+        raise CampaignError("narration hash changed", code="narration_changed")
+    if sha256_file(wav) != expected:
+        raise CampaignError("narration hash changed", code="narration_changed")
+
+
+def _change_code(stage: StageName) -> str:
+    if stage == "transcribe":
+        return "transcript_changed"
+    if stage == "qa":
+        return "qa_changed"
+    if stage == "narration":
+        return "narration_changed"
+    if stage == "delivery":
+        return "delivery_changed"
+    if stage == "align":
+        return "alignment_changed"
+    return "artifact_changed"

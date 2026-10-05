@@ -9,6 +9,14 @@ from typing import Annotated, NoReturn
 import typer
 
 from clipforge.campaign.antoine import CAMPAIGN_ID
+from clipforge.campaign.production import (
+    list_campaign_runs,
+    plan_campaign,
+    resume_campaign,
+    run_campaign,
+    show_campaign_run,
+    verify_campaign_run,
+)
 from clipforge.campaign.providers import (
     CampaignError,
     DryRunSourceProvider,
@@ -26,9 +34,10 @@ from clipforge.campaign.service import (
     verify_campaign,
 )
 from clipforge.errors import ClipforgeError
-from clipforge.paths import resolve_work_dir
+from clipforge.paths import resolve_db_path, resolve_work_dir
+from clipforge.storage import Database
 
-campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and acquisition.")
+campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -53,17 +62,76 @@ def campaign_doctor() -> None:
 
 
 @campaign_app.command("list")
-def campaign_list() -> None:
-    """List known campaigns."""
+def campaign_list(
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """List known campaigns. Pass --work-dir to include production run ids."""
     typer.echo(list_text())
+    if work_dir is not None:
+        for run_id in list_campaign_runs(resolve_work_dir(work_dir)):
+            typer.echo(run_id)
+
+
+@campaign_app.command("plan")
+def campaign_plan(
+    campaign_id: str,
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    narration: Annotated[bool, typer.Option("--narration/--no-narration")] = True,
+    source: Annotated[list[str] | None, typer.Option("--source")] = None,
+) -> None:
+    """Print one campaign plan. This does not insert jobs."""
+    try:
+        document = plan_campaign(
+            campaign_id=campaign_id,
+            source_ids=source or None,
+            language=language,
+            narration_enabled=narration,
+        )
+    except (ClipforgeError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(document.model_dump_json())
+
+
+@campaign_app.command("run")
+def campaign_run(
+    campaign_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    narration: Annotated[bool, typer.Option("--narration/--no-narration")] = True,
+    source: Annotated[list[str] | None, typer.Option("--source")] = None,
+    force: Annotated[bool, typer.Option("--force")] = False,
+) -> None:
+    """Execute explicit campaign sources, or reuse a matching succeeded run."""
+    try:
+        document = run_campaign(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            campaign_id=campaign_id,
+            source_ids=source or None,
+            language=language,
+            narration_enabled=narration,
+            force=force,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(document.campaign_run_id)
+    typer.echo(document.status)
 
 
 @campaign_app.command("show")
-def campaign_show(campaign_id: str) -> None:
-    """Show one campaign policy binding."""
-    if campaign_id != CAMPAIGN_ID:
-        _fail(CampaignError("campaign is not in the local catalogue", code="missing_campaign"))
-    typer.echo(show_text())
+def campaign_show(
+    campaign_id: str,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show a catalogue campaign or one production run."""
+    if campaign_id == CAMPAIGN_ID:
+        typer.echo(show_text())
+        return
+    try:
+        typer.echo(show_campaign_run(resolve_work_dir(work_dir), campaign_id))
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
 
 
 @campaign_app.command("inventory")
@@ -127,12 +195,39 @@ def campaign_ingest(
 @campaign_app.command("verify")
 def campaign_verify(
     campaign_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
-    """Re-hash acquired sources. This command does not download."""
-    if campaign_id != CAMPAIGN_ID:
-        _fail(CampaignError("campaign is not in the local catalogue", code="missing_campaign"))
+    """Re-hash a catalogue inventory or one production run. This command does not download."""
     try:
-        typer.echo(verify_campaign(resolve_work_dir(work_dir)))
+        if campaign_id == CAMPAIGN_ID:
+            typer.echo(verify_campaign(resolve_work_dir(work_dir)))
+            return
+        typer.echo(
+            verify_campaign_run(
+                Database(resolve_db_path(db)),
+                resolve_work_dir(work_dir),
+                campaign_id,
+            )
+        )
     except (ClipforgeError, OSError) as exc:
         _fail(exc)
+
+
+@campaign_app.command("resume")
+def campaign_resume(
+    campaign_run_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Retry incomplete campaign sources. A verified source stays cached."""
+    try:
+        document = resume_campaign(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            campaign_run_id,
+        )
+    except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+    typer.echo(document.campaign_run_id)
+    typer.echo(document.status)
