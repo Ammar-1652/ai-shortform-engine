@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from clipforge.assets.filters import search_arguments, search_spec
 from clipforge.assets.mcp_client import AssetError, EnvatoMcpClient, envato_enabled, envato_live
 
 
@@ -118,32 +119,10 @@ class EnvatoMcpDiscoveryProvider:
             self.client.initialize()
             self.tool_specs = [item for item in self.client.list_tools() if item.get("name")]
             self.tools = [str(item.get("name")) for item in self.tool_specs]
-        tool = _search_tool(self.tool_specs, filters)
-        if tool is None:
-            raise AssetError("envato mcp did not advertise a search tool", code="provider_unavailable")
-        arguments: dict[str, Any] = {"searchTerms": query, "perPage": 5}
-        arguments["filters"] = dict(filters)
+        tool = search_spec(self.tool_specs, filters)
+        arguments, _filter_mapping = search_arguments(tool, query, filters)
         result = self.client.call_tool(str(tool.get("name")), arguments)
         return _rows_from_tool(result)
-
-
-def _search_tool(specs: list[dict[str, Any]], filters: dict[str, str]) -> dict[str, Any] | None:
-    """Select an advertised search tool and preserve every requested filter.
-
-    The official MCP may advertise a generic filters object, so filters are
-    passed through unchanged instead of being silently discarded.
-    """
-    names = [str(item.get("name")) for item in specs]
-    preferred = {
-        "video": "search_stock_video",
-        "audio": "search_music",
-        "image": "search_photos",
-        "graphic": "search_graphics",
-    }.get(filters.get("asset_type", ""), "search_items")
-    selected = preferred if preferred in names else ("search_items" if "search_items" in names else None)
-    if selected is None:
-        return None
-    return next(item for item in specs if item.get("name") == selected)
 
 
 def _rows_from_tool(result: dict[str, Any]) -> list[dict[str, Any]]:
