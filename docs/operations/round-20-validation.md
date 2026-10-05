@@ -18,7 +18,7 @@ pnpm --dir apps/renderer typecheck
 pnpm --dir apps/renderer test
 ```
 
-Ruff, format, mypy (228 source files), schema check, and doctor passed. Pytest: 459 passed, 1 skipped. Renderer: 4 files, 23 tests passed. CI on the self-hosted runner is still required before this round is PASS.
+The first Round 20 commit passed local checks and both self-hosted CI runs. The integrity fix on this branch is checked with the same commands before it is pushed. A campaign run is not treated as succeeded until package files, reviews, producer jobs, and symlink confinement have been rechecked.
 
 ## Campaign run
 
@@ -26,7 +26,7 @@ Ruff, format, mypy (228 source files), schema check, and doctor passed. Pytest: 
 
 | Field | Value |
 | --- | --- |
-| Campaign run | `27397930-5f98-42b3-8c7e-93f61e3237ad` |
+| Campaign run | `018328af-e84b-4274-be72-41f4685c7945` |
 | Evidence fingerprint | `e3d7f2882e9a8a6d9d2f8a74075ad6b8d30681dcae4c1ec1ab51b394e345d706` |
 | Language | `en-US` |
 | Alignment | WhisperX `3.4.5`, `WAV2VEC2_ASR_BASE_960H`, checkpoint `488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d` |
@@ -62,6 +62,12 @@ A live `POST /v1/audio/speech` with engine `kittentts`, voice `expr-voice-2-f`, 
 ## Envato
 
 The live search flags were unset, so this round did not send a new MCP request and did not rewrite `asset_download_requests.json` or `asset_download_requests.md`. The Round 19 search remains the last live record: provider 3.2.4, tool `search_stock_video`, query `office desk`, filters mapped to categories, orientation, `1080p (Full HD)`, and duration bounds. A container filter was rejected before `tools/call`. Direct download URLs stayed null, and campaign policy blocked every row. Round 20 tests reject a blocked hit, a remote URL, and a hit with no license evidence before it can enter a render. An Envato miss does not fail a campaign that does not need outside assets.
+
+## Integrity correction
+
+A later review found that manifest hashes alone accepted a corrupt MP4, a review for another artifact, a symlink parent, and a cache hit that did not re-read the files. The corrected runner loads the publish package, checks every listed file and `checksums.sha256`, requires succeeded producer jobs, and binds the candidate review to the current preview artifact. The hero approval must match the current hero or advanced artifact.
+
+On the restored authorized files, campaign run `018328af-e84b-4274-be72-41f4685c7945` verified. A second run was a cache hit and sent no narration request. Replacing one byte of the src-before-famous delivery MP4 made the next run `partial` and stopped that source from staying `succeeded`. The original video bytes were restored. Their SHA-256 is `c1a8a90f0cacc21025a372ae9198de3cd352999792b90f7172a7817ef7cf84b5`.
 
 ## Recovery
 

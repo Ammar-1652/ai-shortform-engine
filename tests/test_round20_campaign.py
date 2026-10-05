@@ -44,6 +44,7 @@ from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.media import SourceAsset
 from clipforge.schemas.project import Project
+from clipforge.schemas.publish import PublishFile, PublishPackageDocument
 from clipforge.schemas.voice import NarrationAudioArtifact
 from clipforge.storage import (
     Database,
@@ -259,7 +260,8 @@ def test_one_failed_source_keeps_the_other(tmp_path: Path) -> None:
     assert second.status == "partial"
     stored_path = world.work / "campaigns" / "runs" / first.campaign_run_id / "manifest.json"
     stored = json.loads(stored_path.read_text(encoding="utf-8"))
-    assert stored["status"] == "succeeded"
+    assert stored["status"] == "blocked"
+    assert stored["reason_code"] == "evidence_changed"
 
 
 def test_resume_retries_only_the_incomplete_source(tmp_path: Path) -> None:
@@ -366,16 +368,20 @@ def test_security_bindings_and_stale_evidence(tmp_path: Path) -> None:
     assert transcript.value.code == "transcript_changed"
     source.transcript.write_bytes(b"transcript-before")
     _patch_manifest(source.manifest, "alignment_sha256", "b" * 64)
+    _refresh_checksum(source.manifest)
     with pytest.raises(CampaignError) as alignment:
         verify_campaign_run(world.database, world.work, document.campaign_run_id)
     assert alignment.value.code == "alignment_changed"
     _patch_manifest(source.manifest, "alignment_sha256", "a" * 64)
+    _refresh_checksum(source.manifest)
     _patch_manifest(source.manifest, "qa_set_sha256", "c" * 64)
+    _refresh_checksum(source.manifest)
     with pytest.raises(CampaignError) as qa:
         verify_campaign_run(world.database, world.work, document.campaign_run_id)
     assert qa.value.code == "qa_changed"
     original_qa = sha256_file(source.qa)
     _patch_manifest(source.manifest, "qa_set_sha256", original_qa)
+    _refresh_checksum(source.manifest)
     wav = source.wav
     assert wav is not None
     wav.write_bytes(b"different-wav")
@@ -386,7 +392,7 @@ def test_security_bindings_and_stale_evidence(tmp_path: Path) -> None:
     source.manifest.write_bytes(source.manifest.read_bytes() + b"\n")
     with pytest.raises(CampaignError) as delivery:
         verify_campaign_run(world.database, world.work, document.campaign_run_id)
-    assert delivery.value.code == "delivery_changed"
+    assert delivery.value.code == "checksum_changed"
 
 
 def test_documents_reject_paths_secrets_and_unknown_keys() -> None:
@@ -606,10 +612,25 @@ def _insert_source(
     qa_id = f"qa-{slug}"
     _point(connection, project_id, job_id, asset_id, qa_id, "qa_set_json", qa)
     review_id = f"review-{slug}"
+    hero_review_id = f"hero-review-{slug}"
     insert_review(
         connection,
         ReviewDecision(
             review_id=review_id,
+            project_id=project_id,
+            artifact_id=ids["rough_preview_set_json"],
+            candidate_id=candidate_id,
+            subject_kind="candidate",
+            decision="approved",
+            reviewer_id="reviewer",
+            created_at=stamp(),
+            notes="",
+        ),
+    )
+    insert_review(
+        connection,
+        ReviewDecision(
+            review_id=hero_review_id,
             project_id=project_id,
             artifact_id=ids["hero_draft_set_json"],
             candidate_id=candidate_id,
@@ -621,25 +642,17 @@ def _insert_source(
         ),
     )
     delivery_id = f"delivery-{slug}"
-    manifest = work / "deliveries" / delivery_id / "manifest.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(
-        json.dumps(
-            {
-                "delivery_id": delivery_id,
-                "candidate_id": candidate_id,
-                "candidate_rank": 1,
-                "approval_review_id": review_id,
-                "qa_set_id": f"qa-doc-{slug}",
-                "qa_set_sha256": sha256_file(qa),
-                "alignment_id": f"align-{slug}",
-                "alignment_sha256": "a" * 64,
-                "advanced_artifact_id": advanced_id,
-                "candidate_set_id": mine_id,
-                "files": [{"role": "video"}],
-            }
-        ),
-        encoding="utf-8",
+    manifest = _write_package(
+        work,
+        delivery_id=delivery_id,
+        project_id=project_id,
+        asset_id=asset_id,
+        candidate_id=candidate_id,
+        hero_review_id=hero_review_id,
+        qa_hash=sha256_file(qa),
+        advanced_id=advanced_id,
+        mine_id=mine_id,
+        source_sha=digest,
     )
     publish_id = f"publish-{slug}"
     _point(connection, project_id, job_id, asset_id, publish_id, "publish_package_json", manifest)
@@ -659,6 +672,82 @@ def _insert_source(
         narration_id,
         wav,
     )
+
+
+def _write_package(
+    work: Path,
+    *,
+    delivery_id: str,
+    project_id: str,
+    asset_id: str,
+    candidate_id: str,
+    hero_review_id: str,
+    qa_hash: str,
+    advanced_id: str,
+    mine_id: str,
+    source_sha: str,
+) -> Path:
+    package = work / "deliveries" / delivery_id
+    video_dir = package / "candidates" / candidate_id
+    video_dir.mkdir(parents=True)
+    video = video_dir / "video.mp4"
+    metadata = video_dir / "metadata.json"
+    video.write_bytes(b"video-bytes")
+    metadata.write_bytes(b'{"title":"clip"}\n')
+    files = [
+        PublishFile(
+            relative_path=f"deliveries/{delivery_id}/candidates/{candidate_id}/video.mp4",
+            sha256=sha256_file(video),
+            size_bytes=video.stat().st_size,
+            role="video",
+        ),
+        PublishFile(
+            relative_path=f"deliveries/{delivery_id}/candidates/{candidate_id}/metadata.json",
+            sha256=sha256_file(metadata),
+            size_bytes=metadata.stat().st_size,
+            role="metadata",
+        ),
+    ]
+    document = PublishPackageDocument(
+        delivery_id=delivery_id,
+        project_id=project_id,
+        source_asset_id=asset_id,
+        source_sha256=source_sha,
+        candidate_id=candidate_id,
+        candidate_rank=1,
+        candidate_set_id=mine_id,
+        candidate_set_sha256="b" * 64,
+        advanced_set_id=f"advanced-set-{delivery_id}",
+        advanced_set_sha256="c" * 64,
+        advanced_artifact_id=advanced_id,
+        advanced_artifact_sha256="d" * 64,
+        advanced_artifact_size_bytes=2,
+        advanced_plan_id=f"plan-{delivery_id}",
+        advanced_plan_sha256="e" * 64,
+        alignment_id=f"align-{delivery_id}",
+        alignment_sha256="a" * 64,
+        qa_set_id=f"qa-doc-{delivery_id}",
+        qa_set_sha256=qa_hash,
+        approval_review_id=hero_review_id,
+        profile_fingerprint="f" * 64,
+        caption_mode="embedded_or_unavailable",
+        cache_fingerprint="1" * 64,
+        files=files,
+        created_at=stamp(),
+    )
+    manifest = package / "manifest.json"
+    manifest.write_text(document.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    (package / "checksums.sha256").write_text(_checksum_text(package, delivery_id, files), encoding="utf-8")
+    return manifest
+
+
+def _checksum_text(package: Path, delivery_id: str, files: list[PublishFile]) -> str:
+    entries = [("manifest.json", sha256_file(package / "manifest.json"))]
+    prefix = f"deliveries/{delivery_id}/"
+    for item in files:
+        relative = item.relative_path[len(prefix) :]
+        entries.append((relative, sha256_file(package / relative)))
+    return "".join(f"{digest}  {relative}\n" for relative, digest in sorted(entries))
 
 
 def _point(
@@ -762,6 +851,13 @@ def _remove_narration(world: _World) -> None:
             path.unlink()
     with world.database.transaction() as connection:
         connection.execute("DELETE FROM artifacts WHERE artifact_id = ?", ("narration-before",))
+
+
+def _refresh_checksum(manifest: Path) -> None:
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    document = PublishPackageDocument.model_validate(payload)
+    text = _checksum_text(manifest.parent, document.delivery_id, document.files)
+    (manifest.parent / "checksums.sha256").write_text(text, encoding="utf-8")
 
 
 def _patch_manifest(path: Path, key: str, value: str) -> None:

@@ -528,6 +528,22 @@ def _flock(workspace: SourceWorkspace, lock_path: Path, *, exclusive: bool, busy
         os.close(descriptor)
 
 
+def mkdir_contained(root: Path, directory: Path) -> None:
+    """Create ``directory`` inside ``root``. A symlink on the way is refused."""
+    _mkdir_contained(root.resolve(), directory)
+
+
+def reject_symlink_chain(path: Path) -> None:
+    """Reject a symlink at ``path`` or any parent. The target is not followed."""
+    current = path
+    while True:
+        if current.is_symlink():
+            raise MediaError(f"{current.name} is a symlink")
+        if current.parent == current:
+            return
+        current = current.parent
+
+
 def ensure_within(root: Path, path: Path) -> None:
     root_resolved = root.resolve()
     path_resolved = path.resolve()

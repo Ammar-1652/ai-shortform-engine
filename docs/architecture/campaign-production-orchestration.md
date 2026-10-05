@@ -12,7 +12,7 @@ Each source then walks the same stage order: source verification, ingest, media 
 
 A second `run` with the same evidence fingerprint returns the previous succeeded document. `--force` writes a new run id and leaves the previous file in place. `resume` re-reads only sources that are not succeeded, or whose source hash no longer matches. A succeeded sibling stays as it was. One failed source does not erase the other.
 
-`verify` re-hashes the source, the delivery manifest, the QA and alignment bindings, the narration audio, and the stage artifacts. A symlink, a changed hash, a stale review, or a path that escapes the work root fails closed.
+`verify` re-checks the source, every file named by the delivery package, `checksums.sha256`, the producer job, the candidate review, the hero approval, QA, alignment, and narration. A cache hit does that again before it returns the stored run. A changed MP4, QA file, review, narration, or producer status invalidates that source. Resume rebuilds only the invalidated source and leaves a sibling that still verifies. A symlink in any path component is rejected, including a parent directory. The manifest is staged under the work root and promoted only after the database commit. A failed promotion deletes the new manifest and does not leave a succeeded job behind. Missing artifact rows fail closed. A stage is `cache_hit` only after those checks. A missing stage stays blocked. This round reuses verified artifacts. It does not launch a new render or a new narration request when the evidence is already intact, and it does not mark a missing stage succeeded.
 
 ## Source policy
 

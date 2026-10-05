@@ -80,6 +80,10 @@ class CampaignCandidateRecord(Versioned):
     source_end_us: int | None = Field(default=None, ge=0)
     review_id: EntityId | None = None
     review_decision: str = Field(default="not_recorded", min_length=1, max_length=40)
+    preview_artifact_id: EntityId | None = None
+    hero_review_id: EntityId | None = None
+    hero_artifact_id: EntityId | None = None
+    advanced_artifact_id: EntityId | None = None
     caption_quality: str = Field(default="provisional", min_length=1, max_length=40)
     alignment_status: str = Field(min_length=1, max_length=40)
     narration_status: str = Field(min_length=1, max_length=40)
@@ -128,6 +132,7 @@ class CampaignSourceRun(Versioned):
     qa_set_sha256: str | None = Field(default=None, pattern=_SHA)
     delivery_id: EntityId | None = None
     delivery_manifest_sha256: str | None = Field(default=None, pattern=_SHA)
+    delivery_files_sha256: str | None = Field(default=None, pattern=_SHA)
     narration_artifact_id: EntityId | None = None
     narration_audio_sha256: str | None = Field(default=None, pattern=_SHA)
     broll_status: str = Field(default="absent", min_length=1, max_length=40)

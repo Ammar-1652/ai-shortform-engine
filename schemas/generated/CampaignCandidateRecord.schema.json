@@ -2,6 +2,20 @@
   "additionalProperties": false,
   "description": "Why one candidate was kept. The runner does not approve it.",
   "properties": {
+    "advanced_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Advanced Artifact Id"
+    },
     "alignment_status": {
       "maxLength": 40,
       "minLength": 1,
@@ -27,11 +41,53 @@
       "title": "Delivery Status",
       "type": "string"
     },
+    "hero_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hero Artifact Id"
+    },
+    "hero_review_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hero Review Id"
+    },
     "narration_status": {
       "maxLength": 40,
       "minLength": 1,
       "title": "Narration Status",
       "type": "string"
+    },
+    "preview_artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Preview Artifact Id"
     },
     "qa_status": {
       "maxLength": 40,

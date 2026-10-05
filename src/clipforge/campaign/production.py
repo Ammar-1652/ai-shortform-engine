@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,7 +22,8 @@ from pydantic import ValidationError
 
 from clipforge.campaign.antoine import CAMPAIGN_ID, inventory_sources, selected_files
 from clipforge.campaign.providers import CampaignError
-from clipforge.errors import StorageError
+from clipforge.errors import MediaError, StorageError
+from clipforge.hero.advanced_assets import confine_file_uri
 from clipforge.language.registry import (
     ENGLISH_ALIGNMENT_CHECKPOINT,
     ENGLISH_ALIGNMENT_MODEL,
@@ -39,6 +41,9 @@ from clipforge.language.registry import (
 )
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
+from clipforge.media.workspace import mkdir_contained, reject_symlink_chain
+from clipforge.publish.service import explain_package
+from clipforge.review.service import effective_review
 from clipforge.schemas.campaign import CampaignSource
 from clipforge.schemas.campaign_run import (
     STAGES,
@@ -57,11 +62,13 @@ from clipforge.storage import (
     Database,
     find_artifact,
     get_artifact,
+    get_job,
     get_review,
     insert_artifact,
     insert_job,
     list_artifacts_for_source,
     list_jobs,
+    list_reviews,
     update_job,
 )
 from clipforge.storage.repository import ArtifactRow
@@ -83,6 +90,7 @@ _STAGE_KINDS: dict[StageName, str] = {
 }
 _ZERO = "0" * 64
 NarrationProbe = Callable[[str, str], None]
+PromotionHook = Callable[[str], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,10 +125,22 @@ class _Package:
     advanced_artifact_id: str | None
     candidate_set_id: str | None
     manifest_sha256: str
+    files_sha256: str
     artifact_id: str
     job_id: str | None
     broll_status: str
     sfx_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Reviews:
+    ok: bool
+    decision: str
+    reason: str
+    review_id: str | None
+    hero_review_id: str | None
+    preview_artifact_id: str | None
+    hero_artifact_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +226,7 @@ def run_campaign(
     force: bool = False,
     created_by: str = "campaign",
     narration_probe: NarrationProbe | None = None,
+    promotion_hook: PromotionHook | None = None,
 ) -> CampaignProductionRun:
     """Execute or reuse one campaign. A failed source does not erase the others."""
     planned = plan_campaign(
@@ -234,9 +255,10 @@ def run_campaign(
     document = _assemble(planned, sources, _project_of(bound))
     if not force:
         cached = _cached_run(root, document.fingerprint)
-        if cached is not None:
+        if cached is not None and _evidence_current(database, root, cached):
             return cached
-    _publish(database, root, document, created_by, replace_job=False)
+    _invalidate_stale(database, root, planned.campaign_id)
+    _publish(database, root, document, created_by, replace_job=False, promotion_hook=promotion_hook)
     return document
 
 
@@ -247,8 +269,9 @@ def resume_campaign(
     *,
     created_by: str = "campaign",
     narration_probe: NarrationProbe | None = None,
+    promotion_hook: PromotionHook | None = None,
 ) -> CampaignProductionRun:
-    """Retry sources that are not succeeded. A matching succeeded source stays cached."""
+    """Retry sources that are not fully verified. A verified source stays cached."""
     root = work_root.resolve()
     current = _read(root, campaign_run_id)
     bound = [_bind_one(database, item.source_id) for item in current.sources]
@@ -256,8 +279,7 @@ def resume_campaign(
     sources: list[CampaignSourceRun] = []
     changed = False
     for source, item in zip(current.sources, bound, strict=True):
-        fresh = item.binding is not None and item.binding.source_sha256 == source.source_sha256
-        if source.status == "succeeded" and fresh:
+        if source.status == "succeeded" and _source_current(database, root, current, source, item):
             sources.append(source)
             continue
         changed = True
@@ -280,7 +302,14 @@ def resume_campaign(
         update={"campaign_run_id": current.campaign_run_id, "created_at": current.created_at}
     )
     document = restored.model_copy(update={"fingerprint": _evidence_fingerprint(restored)})
-    _publish(database, root, document, created_by, replace_job=True)
+    _publish(
+        database,
+        root,
+        document,
+        created_by,
+        replace_job=True,
+        promotion_hook=promotion_hook,
+    )
     return document
 
 
@@ -426,7 +455,6 @@ def _observe(
     narration_probe: NarrationProbe | None,
 ) -> CampaignSourceRun:
     claim = alignment_claim(language)
-    package = _package(database, root, binding)
     narration = _narration(
         database,
         root,
@@ -435,10 +463,10 @@ def _observe(
         language=language,
         probe=narration_probe,
     )
-    review_decision = "not_recorded"
-    review_ok = False
-    if package is not None:
-        review_decision, review_ok = _review_state(database, binding, package)
+    package, package_reason = _package(database, root, binding)
+    reviews = _reviews(database, root, binding, package)
+    review_decision = reviews.decision
+    review_ok = reviews.ok
     stages = [
         _stage(
             database,
@@ -450,6 +478,7 @@ def _observe(
             narration=narration,
             narration_enabled=narration_enabled,
             review_ok=review_ok,
+            package_reason=package_reason,
         )
         for stage in STAGES
     ]
@@ -463,24 +492,29 @@ def _observe(
             selection_reason="candidate bound to the current verified local delivery",
             source_start_us=start,
             source_end_us=end,
-            review_id=package.approval_review_id,
+            review_id=reviews.review_id,
             review_decision=review_decision,
+            preview_artifact_id=reviews.preview_artifact_id,
+            hero_review_id=reviews.hero_review_id,
+            hero_artifact_id=reviews.hero_artifact_id,
+            advanced_artifact_id=package.advanced_artifact_id,
             caption_quality="aligned" if claim == "whisperx" and package.alignment_sha256 else "provisional",
             alignment_status=claim if package.alignment_sha256 else "alignment_not_claimed",
             narration_status=narration.reason if narration_enabled else "narration_not_requested",
             qa_status="pass" if package.qa_set_sha256 else "missing",
-            delivery_status="succeeded",
+            delivery_status="blocked" if package_reason else "succeeded",
         )
     required = [
         item for item in stages if _stage_required(item.stage, narration_enabled=narration_enabled, claim=claim)
     ]
     status: RunStatus
     reason: str
-    if package is None:
+    if package_reason:
+        status, reason = "blocked", package_reason
+    elif package is None:
         status, reason = "blocked", "missing_artifact"
     elif not review_ok:
-        reason = "review_not_approved" if review_decision != "not_recorded" else "review_missing"
-        status, reason = "blocked", reason
+        status, reason = "blocked", reviews.reason
     elif all(item.status == "succeeded" for item in required):
         status, reason = "succeeded", "none"
     elif any(item.status == "failed" for item in required):
@@ -505,6 +539,7 @@ def _observe(
         qa_set_sha256=None if package is None else package.qa_set_sha256,
         delivery_id=None if package is None else package.delivery_id,
         delivery_manifest_sha256=None if package is None else package.manifest_sha256,
+        delivery_files_sha256=None if package is None else package.files_sha256,
         narration_artifact_id=narration.artifact_id if narration_enabled else None,
         narration_audio_sha256=narration.audio_sha256 if narration_enabled else None,
         broll_status="absent" if package is None else package.broll_status,
@@ -543,6 +578,7 @@ def _stage(
     narration: _Narration,
     narration_enabled: bool,
     review_ok: bool,
+    package_reason: str | None,
 ) -> CampaignStageRecord:
     if stage == "narration" and not narration_enabled:
         return CampaignStageRecord(
@@ -627,6 +663,13 @@ def _stage(
     kind = _STAGE_KINDS.get(stage)
     row = _row_for_stage(database, root, binding, stage, package) if kind is not None else None
     if stage == "delivery":
+        if package_reason:
+            return CampaignStageRecord(
+                stage="delivery",
+                status="blocked",
+                cache_hit=False,
+                reason_code=package_reason,
+            )
         if package is None or row is None:
             return CampaignStageRecord(
                 stage="delivery",
@@ -715,7 +758,7 @@ def _narration(
             if row.kind == "narration_audio"
         ]
     for row in rows:
-        decision = _classify_narration(root, row)
+        decision = _classify_narration(database, root, binding, row)
         if isinstance(decision, NarrationAudioArtifact):
             accepted.append(decision)
         else:
@@ -744,9 +787,23 @@ def _narration(
     return _Narration(None, None, "provider_unavailable")
 
 
-def _classify_narration(root: Path, row: ArtifactRow) -> NarrationAudioArtifact | str:
-    sidecar = root / "voice" / "audio" / f"{row.artifact_id}.json"
-    wav = root / "voice" / "audio" / f"{row.artifact_id}.wav"
+def _classify_narration(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    row: ArtifactRow,
+) -> NarrationAudioArtifact | str:
+    relative_sidecar = f"voice/audio/{row.artifact_id}.json"
+    relative_wav = f"voice/audio/{row.artifact_id}.wav"
+    try:
+        from clipforge.hero.advanced_assets import confine_work_path
+
+        sidecar = confine_work_path(root, relative_sidecar, label="narration")
+        wav = confine_work_path(root, relative_wav, label="narration")
+    except MediaError as exc:
+        if "symlink" in str(exc):
+            return "symlink"
+        return "traversal"
     if sidecar.is_symlink() or wav.is_symlink():
         return "symlink"
     if not sidecar.is_file():
@@ -776,8 +833,17 @@ def _classify_narration(root: Path, row: ArtifactRow) -> NarrationAudioArtifact 
     script_hash = document.script_sha256 != ENGLISH_NARRATION_SCRIPT_SHA256
     if not same_script or script_hash:
         return "script_changed"
+    if document.language != "en-US":
+        return "language_changed"
     if not identity:
         return "provider_unavailable"
+    if document.project_id != binding.project_id or row.project_id != binding.project_id:
+        return "cross_project"
+    if document.source_asset_id != binding.source_asset_id or row.source_asset_id != binding.source_asset_id:
+        return "cross_source"
+    producer = _producer_problem(database, row.job_id, binding.project_id)
+    if producer:
+        return producer
     if not wav.is_file():
         return "narration_changed"
     if wav.stat().st_size == 0:
@@ -819,7 +885,9 @@ def _bind_one(database: Database, source_id: str) -> _Bound:
     if not lowered.startswith("file:"):
         return _Bound(source_id, None, "remote_source", expected)
     path = path_from_file_uri(uri)
-    if path.is_symlink():
+    try:
+        reject_symlink_chain(path)
+    except MediaError:
         return _Bound(source_id, None, "symlink", expected)
     if not path.is_file():
         return _Bound(source_id, None, "missing_source", expected)
@@ -849,54 +917,68 @@ def _project_of(bound: list[_Bound]) -> str:
     return "unresolved"
 
 
-def _package(database: Database, root: Path, binding: SourceBinding) -> _Package | None:
+def _package(database: Database, root: Path, binding: SourceBinding) -> tuple[_Package | None, str | None]:
     row = _artifact_row(database, binding, "publish_package_json")
     if row is None:
-        return None
-    digest, reason = _hash_uri(root, row.uri)
-    if digest is None or reason != "reused":
-        return None
-    path = path_from_file_uri(row.uri)
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    delivery_id = payload.get("delivery_id")
-    candidate_id = payload.get("candidate_id")
-    review_id = payload.get("approval_review_id")
-    qa_id = payload.get("qa_set_id")
-    qa_hash = payload.get("qa_set_sha256")
-    rank = payload.get("candidate_rank")
-    required = (delivery_id, candidate_id, review_id, qa_id, qa_hash)
-    if not all(isinstance(item, str) and item for item in required):
-        return None
-    if not isinstance(rank, int) or rank < 1:
-        return None
-    delivery = root / "deliveries" / str(delivery_id) / "manifest.json"
-    if delivery.is_symlink() or not delivery.is_file() or not _contained(root, delivery):
-        return None
-    if sha256_file(delivery) != digest:
-        return None
-    roles = _roles(payload.get("files"))
-    return _Package(
-        delivery_id=str(delivery_id),
-        candidate_id=str(candidate_id),
-        candidate_rank=rank,
-        approval_review_id=str(review_id),
-        qa_set_id=str(qa_id),
-        qa_set_sha256=str(qa_hash),
-        alignment_id=_text(payload.get("alignment_id")),
-        alignment_sha256=_sha(payload.get("alignment_sha256")),
-        advanced_artifact_id=_text(payload.get("advanced_artifact_id")),
-        candidate_set_id=_text(payload.get("candidate_set_id")),
-        manifest_sha256=digest,
+        return None, "delivery_missing"
+    if row.project_id != binding.project_id:
+        return None, "cross_project"
+    if row.source_asset_id != binding.source_asset_id:
+        return None, "cross_source"
+    producer = _producer_problem(database, row.job_id, binding.project_id)
+    manifest = path_from_file_uri(row.uri)
+    document, reason = explain_package(root, manifest)
+    if document is None:
+        return None, reason or "delivery_missing"
+    if document.project_id != binding.project_id:
+        return None, "cross_project"
+    if document.source_asset_id != binding.source_asset_id:
+        return None, "cross_source"
+    roles = {item.role for item in document.files}
+    built = _Package(
+        delivery_id=document.delivery_id,
+        candidate_id=document.candidate_id,
+        candidate_rank=document.candidate_rank,
+        approval_review_id=document.approval_review_id,
+        qa_set_id=document.qa_set_id,
+        qa_set_sha256=document.qa_set_sha256,
+        alignment_id=document.alignment_id,
+        alignment_sha256=document.alignment_sha256,
+        advanced_artifact_id=document.advanced_artifact_id,
+        candidate_set_id=document.candidate_set_id,
+        manifest_sha256=sha256_file(manifest),
+        files_sha256=_files_sha256(document),
         artifact_id=row.artifact_id,
         job_id=row.job_id,
         broll_status="present" if "broll" in roles else "absent",
         sfx_status="present" if "sfx" in roles else "absent",
     )
+    if reason:
+        return built, reason
+    if producer:
+        return built, producer
+    return built, None
+
+
+def _files_sha256(document: object) -> str:
+    files = getattr(document, "files", [])
+    lines = [f"{item.role}:{item.sha256}:{item.size_bytes}" for item in files]
+    return hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
+
+
+def _producer_problem(database: Database, job_id: str | None, project_id: str) -> str | None:
+    if not job_id:
+        return "producer_missing"
+    try:
+        with database.connect() as connection:
+            job = get_job(connection, job_id)
+    except StorageError:
+        return "producer_missing"
+    if job.project_id != project_id:
+        return "cross_project"
+    if job.status is not JobStatus.SUCCEEDED:
+        return "producer_failed"
+    return None
 
 
 def _roles(value: object) -> set[str]:
@@ -921,17 +1003,153 @@ def _sha(value: object) -> str | None:
     return None
 
 
-def _review_state(database: Database, binding: SourceBinding, package: _Package) -> tuple[str, bool]:
+def _reviews(database: Database, root: Path, binding: SourceBinding, package: _Package | None) -> _Reviews:
+    empty = _Reviews(False, "not_recorded", "review_missing", None, None, None, None)
+    if package is None:
+        return empty
+    preview = _artifact_row(database, binding, "rough_preview_set_json")
+    hero = _artifact_row(database, binding, "hero_draft_set_json")
+    if preview is None or hero is None:
+        return empty
+    preview_producer = _producer_problem(database, preview.job_id, binding.project_id)
+    if preview_producer:
+        return _Reviews(
+            False,
+            "not_recorded",
+            preview_producer,
+            None,
+            None,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
     try:
         with database.connect() as connection:
-            review = get_review(connection, package.approval_review_id)
+            rows = list_reviews(connection, binding.project_id)
+            hero_review = get_review(connection, package.approval_review_id)
     except StorageError:
-        return "not_recorded", False
-    if review.project_id != binding.project_id:
-        return "cross_project", False
-    if review.candidate_id is not None and review.candidate_id != package.candidate_id:
-        return "stale_review", False
-    return review.decision, review.decision == "approved"
+        return _Reviews(
+            False,
+            "malformed_review",
+            "malformed_review",
+            None,
+            None,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
+    candidate_review = effective_review(
+        rows,
+        preview.artifact_id,
+        package.candidate_id,
+        subject_kind="candidate",
+    )
+    if candidate_review is None:
+        named = [item for item in rows if item.candidate_id == package.candidate_id]
+        wrong_subject = [
+            item
+            for item in named
+            if item.artifact_id == preview.artifact_id and item.subject_kind != "candidate"
+        ]
+        stale = [item for item in named if item.subject_kind == "candidate"]
+        if wrong_subject:
+            code = "review_subject"
+        elif stale:
+            code = _review_source(database, stale[0].artifact_id, binding.source_asset_id) or "stale_review"
+        else:
+            code = "review_missing"
+        return _Reviews(False, "not_recorded", code, None, None, preview.artifact_id, hero.artifact_id)
+    problem = _review_problem(candidate_review, binding, package.candidate_id, preview.artifact_id, "candidate")
+    if problem is None:
+        problem = _review_source(database, candidate_review.artifact_id, binding.source_asset_id)
+    if problem:
+        return _Reviews(
+            False,
+            candidate_review.decision,
+            problem,
+            candidate_review.review_id,
+            None,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
+    latest_advanced = _artifact_row(database, binding, "advanced_hero_draft_set_json")
+    if latest_advanced is None or package.advanced_artifact_id != latest_advanced.artifact_id:
+        return _Reviews(
+            False,
+            candidate_review.decision,
+            "stale_review",
+            candidate_review.review_id,
+            None,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
+    accepted = {hero.artifact_id, latest_advanced.artifact_id}
+    hero_problem = _review_problem(
+        hero_review,
+        binding,
+        package.candidate_id,
+        hero_review.artifact_id or "",
+        "hero",
+    )
+    if hero_review.artifact_id not in accepted:
+        hero_problem = hero_problem or "stale_review"
+    if hero_problem:
+        return _Reviews(
+            False,
+            candidate_review.decision,
+            hero_problem,
+            candidate_review.review_id,
+            hero_review.review_id,
+            preview.artifact_id,
+            hero.artifact_id,
+        )
+    del root
+    return _Reviews(
+        True,
+        "approved",
+        "existing_human_review",
+        candidate_review.review_id,
+        hero_review.review_id,
+        preview.artifact_id,
+        hero.artifact_id,
+    )
+
+
+def _review_source(database: Database, artifact_id: str | None, source_asset_id: str) -> str | None:
+    if not artifact_id:
+        return "artifact_missing"
+    try:
+        with database.connect() as connection:
+            row = get_artifact(connection, artifact_id)
+    except StorageError:
+        return "artifact_missing"
+    if row.source_asset_id != source_asset_id:
+        return "cross_source"
+    return None
+
+
+def _review_problem(
+    review: object,
+    binding: SourceBinding,
+    candidate_id: str,
+    artifact_id: str,
+    subject: str,
+) -> str | None:
+    kind = getattr(review, "subject_kind", "")
+    decision = getattr(review, "decision", "")
+    if kind != subject:
+        return "review_subject"
+    if getattr(review, "project_id", "") != binding.project_id:
+        return "cross_project"
+    if getattr(review, "candidate_id", None) != candidate_id:
+        return "stale_review"
+    if subject == "candidate" and getattr(review, "artifact_id", None) != artifact_id:
+        return "stale_review"
+    if decision == "rejected":
+        return "review_rejected"
+    if decision == "changes_requested":
+        return "review_changes_requested"
+    if decision != "approved":
+        return "review_missing"
+    return None
 
 
 def _candidate_facts(
@@ -1035,13 +1253,15 @@ def _hash_uri(root: Path, uri: str) -> tuple[str | None, str]:
     lowered = uri.lower()
     if lowered.startswith(("http://", "https://", "s3://", "ftp://")):
         return None, "remote_source"
-    path = path_from_file_uri(uri)
-    if path.is_symlink():
-        return None, "symlink"
+    try:
+        path = confine_file_uri(root, uri, label="artifact")
+    except MediaError as exc:
+        text = str(exc)
+        if "symlink" in text:
+            return None, "symlink"
+        return None, "traversal"
     if not path.is_file():
         return None, "missing_artifact"
-    if not _contained(root, path):
-        return None, "traversal"
     return sha256_file(path), "reused"
 
 
@@ -1118,11 +1338,26 @@ def _evidence_fingerprint(document: CampaignProductionRun) -> str:
         "narration_enabled": document.narration_enabled,
         "sources": [
             {
-                "candidates": [item.candidate_id for item in source.candidates],
+                "candidates": [
+                    {
+                        "advanced_artifact_id": item.advanced_artifact_id,
+                        "candidate_id": item.candidate_id,
+                        "hero_artifact_id": item.hero_artifact_id,
+                        "hero_review_id": item.hero_review_id,
+                        "preview_artifact_id": item.preview_artifact_id,
+                        "review_decision": item.review_decision,
+                        "review_id": item.review_id,
+                    }
+                    for item in source.candidates
+                ],
+                "delivery_files_sha256": source.delivery_files_sha256,
                 "delivery_id": source.delivery_id,
                 "delivery_manifest_sha256": source.delivery_manifest_sha256,
                 "narration_artifact_id": source.narration_artifact_id,
                 "narration_audio_sha256": source.narration_audio_sha256,
+                "narration_model": document.model_id if source.narration_artifact_id else None,
+                "narration_revision": document.model_revision if source.narration_artifact_id else None,
+                "narration_voice": document.voice_id if source.narration_artifact_id else None,
                 "qa_set_id": source.qa_set_id,
                 "qa_set_sha256": source.qa_set_sha256,
                 "reason_code": source.reason_code,
@@ -1133,6 +1368,7 @@ def _evidence_fingerprint(document: CampaignProductionRun) -> str:
                         "artifact_id": stage.artifact_id,
                         "artifact_sha256": stage.artifact_sha256,
                         "cache_hit": stage.cache_hit,
+                        "job_id": stage.job_id,
                         "reason_code": stage.reason_code,
                         "stage": stage.stage,
                         "status": stage.status,
@@ -1153,6 +1389,57 @@ def _digest(body: object) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _evidence_current(database: Database, root: Path, document: CampaignProductionRun) -> bool:
+    try:
+        bound = [_bind_one(database, item.source_id) for item in document.sources]
+        _reject_mixed(bound)
+        for source, item in zip(document.sources, bound, strict=True):
+            _verify_source(database, root, document, source, item)
+    except CampaignError:
+        return False
+    return document.status == "succeeded"
+
+
+def _source_current(
+    database: Database,
+    root: Path,
+    document: CampaignProductionRun,
+    source: CampaignSourceRun,
+    bound: _Bound,
+) -> bool:
+    try:
+        _verify_source(database, root, document, source, bound)
+    except CampaignError:
+        return False
+    return True
+
+
+def _invalidate_stale(database: Database, root: Path, campaign_id: str) -> None:
+    base = root / "campaigns" / "runs"
+    if not base.is_dir() or base.is_symlink():
+        return
+    for manifest in sorted(base.glob("*/manifest.json")):
+        if _symlink_between(root, manifest):
+            continue
+        try:
+            document = CampaignProductionRun.model_validate_json(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError):
+            continue
+        if document.campaign_id != campaign_id or document.status != "succeeded":
+            continue
+        if not _evidence_current(database, root, document):
+            _invalidate_run(root, document)
+
+
+def _invalidate_run(root: Path, document: CampaignProductionRun) -> None:
+    updated = document.model_copy(update={"status": "blocked", "reason_code": "evidence_changed"})
+    text = updated.model_dump_json() + "\n"
+    final = _final_manifest(root, document.campaign_run_id)
+    if final.is_symlink():
+        return
+    _write_contained(root, final, text)
+
+
 def _publish(
     database: Database,
     root: Path,
@@ -1160,69 +1447,210 @@ def _publish(
     created_by: str,
     *,
     replace_job: bool,
+    promotion_hook: PromotionHook | None = None,
 ) -> None:
-    _write(root, document)
+    _step(promotion_hook, "cancellation")
+    text = document.model_dump_json() + "\n"
+    _step(promotion_hook, "manifest_validation")
+    CampaignProductionRun.model_validate_json(text)
+    staging = root / "campaigns" / f".partial-{document.campaign_run_id}" / "manifest.json"
+    final = _final_manifest(root, document.campaign_run_id)
+    previous = final.read_bytes() if final.is_file() and not _symlink_between(root, final) else None
+    _step(promotion_hook, "staging_write")
+    _write_contained(root, staging, text)
+    _step(promotion_hook, "manifest_validation")
+    CampaignProductionRun.model_validate_json(staging.read_text(encoding="utf-8"))
     if document.project_id == "unresolved":
+        _step(promotion_hook, "final_rename")
+        _replace_contained(root, staging, final)
+        _step(promotion_hook, "sidecar_write")
         return
-    now = document.completed_at or document.created_at
     source_ids = [item.source_asset_id for item in document.sources if item.source_asset_id]
     if not source_ids:
+        _discard_contained(root, staging)
         return
+    committed = False
+    inserted = False
+    snapshot: JobRecord | None = None
+    try:
+        with database.transaction() as connection:
+            _step(promotion_hook, "database_insert")
+            existing = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
+            _store_campaign_job(
+                connection,
+                document,
+                created_by,
+                source_ids,
+                existing=existing,
+                replace_job=replace_job,
+            )
+            if existing is None or not replace_job:
+                inserted = existing is None
+            else:
+                snapshot = existing
+            _step(promotion_hook, "artifact_insert")
+            _step(promotion_hook, "database_commit")
+        committed = True
+        _step(promotion_hook, "final_rename")
+        _replace_contained(root, staging, final)
+        _step(promotion_hook, "sidecar_write")
+    except Exception as exc:
+        _discard_contained(root, staging)
+        if committed:
+            _restore_promotion(database, root, document, final, previous, snapshot, inserted)
+        if isinstance(exc, CampaignError):
+            raise
+        raise CampaignError("campaign promotion failed", code="promotion_failed") from exc
+
+
+def _store_campaign_job(
+    connection: sqlite3.Connection,
+    document: CampaignProductionRun,
+    created_by: str,
+    source_ids: list[str],
+    *,
+    existing: JobRecord | None,
+    replace_job: bool,
+) -> None:
+    now = document.completed_at or document.created_at
     status = _job_status(document.status)
     error = document.reason_code if status is JobStatus.FAILED else None
-    with database.transaction() as connection:
-        existing = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
-        if existing is not None and replace_job:
-            update_job(
-                connection,
-                existing.model_copy(
-                    update={
-                        "status": status,
-                        "updated_at": now,
-                        "error_message": error,
-                        "payload": {
-                            "campaign_run_id": document.campaign_run_id,
-                            "fingerprint": document.fingerprint,
-                        },
-                    }
-                ),
-            )
-            return
-        if existing is not None:
-            return
-        job_id = str(uuid4())
-        provenance = ArtifactProvenance(
-            created_at=now,
-            created_by=created_by,
-            tool="clipforge-campaign",
-            tool_version="0.1.0",
-            source_asset_ids=source_ids,
-            job_id=job_id,
-            inputs_sha256=document.fingerprint,
-        )
-        insert_job(
+    payload = {"campaign_run_id": document.campaign_run_id, "fingerprint": document.fingerprint}
+    if existing is not None and replace_job:
+        update_job(
             connection,
-            JobRecord(
-                job_id=job_id,
-                project_id=document.project_id,
-                kind="campaign_production",
-                status=status,
-                created_at=document.created_at,
-                updated_at=now,
-                error_message=error,
-                payload={"campaign_run_id": document.campaign_run_id, "fingerprint": document.fingerprint},
+            existing.model_copy(
+                update={"status": status, "updated_at": now, "error_message": error, "payload": payload}
             ),
         )
-        insert_artifact(
-            connection,
-            artifact_id=document.campaign_run_id,
-            project_id=document.project_id,
+        return
+    if existing is not None:
+        return
+    job_id = str(uuid4())
+    provenance = ArtifactProvenance(
+        created_at=now,
+        created_by=created_by,
+        tool="clipforge-campaign",
+        tool_version="0.1.0",
+        source_asset_ids=source_ids,
+        job_id=job_id,
+        inputs_sha256=document.fingerprint,
+    )
+    insert_job(
+        connection,
+        JobRecord(
             job_id=job_id,
-            source_asset_id=source_ids[0],
-            kind=KIND,
-            uri=(root / "campaigns" / "runs" / document.campaign_run_id / "manifest.json").resolve().as_uri(),
-            provenance=provenance,
+            project_id=document.project_id,
+            kind="campaign_production",
+            status=status,
+            created_at=document.created_at,
+            updated_at=now,
+            error_message=error,
+            payload=payload,
+        ),
+    )
+    final = Path("campaigns") / "runs" / document.campaign_run_id / "manifest.json"
+    insert_artifact(
+        connection,
+        artifact_id=document.campaign_run_id,
+        project_id=document.project_id,
+        job_id=job_id,
+        source_asset_id=source_ids[0],
+        kind=KIND,
+        uri=final.as_posix(),
+        provenance=provenance,
+    )
+
+
+def _restore_promotion(
+    database: Database,
+    root: Path,
+    document: CampaignProductionRun,
+    final: Path,
+    previous: bytes | None,
+    snapshot: JobRecord | None,
+    inserted: bool,
+) -> None:
+    if previous is None:
+        _discard_contained(root, final)
+    else:
+        _write_contained(root, final, previous.decode("utf-8"))
+    with database.transaction() as connection:
+        if snapshot is not None:
+            update_job(connection, snapshot)
+            return
+        if not inserted:
+            return
+        connection.execute(
+            "DELETE FROM artifacts WHERE artifact_id = ? AND project_id = ?",
+            (document.campaign_run_id, document.project_id),
         )
+        failed = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
+        if failed is None:
+            return
+        update_job(
+            connection,
+            failed.model_copy(
+                update={
+                    "status": JobStatus.FAILED,
+                    "updated_at": datetime.now(UTC),
+                    "error_message": "promotion_failed",
+                }
+            ),
+        )
+
+
+def _step(hook: PromotionHook | None, name: str) -> None:
+    if hook is not None:
+        hook(name)
+
+
+def _final_manifest(root: Path, campaign_run_id: str) -> Path:
+    return root / "campaigns" / "runs" / campaign_run_id / "manifest.json"
+
+
+def _symlink_between(root: Path, path: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return False
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
+def _write_contained(root: Path, path: Path, text: str) -> None:
+    if _symlink_between(root, path):
+        raise CampaignError("campaign path is a symlink", code="symlink")
+    mkdir_contained(root, path.parent)
+    partial = path.with_name(f"{path.name}.partial")
+    if partial.is_symlink():
+        raise CampaignError("campaign path is a symlink", code="symlink")
+    partial.write_text(text, encoding="utf-8")
+    os.replace(partial, path)
+
+
+def _replace_contained(root: Path, source: Path, final: Path) -> None:
+    if _symlink_between(root, source) or _symlink_between(root, final):
+        raise CampaignError("campaign path is a symlink", code="symlink")
+    mkdir_contained(root, final.parent)
+    os.replace(source, final)
+    parent = source.parent
+    if parent.is_dir() and not parent.is_symlink() and not any(parent.iterdir()):
+        parent.rmdir()
+
+
+def _discard_contained(root: Path, path: Path) -> None:
+    if _symlink_between(root, path):
+        return
+    if path.is_file():
+        path.unlink()
+    parent = path.parent
+    if parent != root and parent.is_dir() and not parent.is_symlink() and not any(parent.iterdir()):
+        parent.rmdir()
 
 
 def _job_status(status: RunStatus) -> JobStatus:
@@ -1250,21 +1678,11 @@ def _find_campaign_job(
     return matches[-1]
 
 
-def _write(root: Path, document: CampaignProductionRun) -> Path:
-    directory = root / "campaigns" / "runs" / document.campaign_run_id
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "manifest.json"
-    if path.is_symlink():
-        raise CampaignError("campaign manifest is a symlink", code="symlink")
-    path.write_text(document.model_dump_json() + "\n", encoding="utf-8")
-    return path
-
-
 def _read(root: Path, campaign_run_id: str) -> CampaignProductionRun:
     if "/" in campaign_run_id or "\\" in campaign_run_id or ".." in campaign_run_id:
         raise CampaignError("campaign run id is not safe", code="malformed_id")
     path = root / "campaigns" / "runs" / campaign_run_id / "manifest.json"
-    if path.is_symlink() or not path.is_file():
+    if _symlink_between(root, path) or not path.is_file():
         raise CampaignError("campaign run is missing", code="missing_run")
     try:
         return CampaignProductionRun.model_validate_json(path.read_text(encoding="utf-8"))
@@ -1303,63 +1721,73 @@ def _verify_source(
         raise CampaignError("campaign source no longer matches the run", code=code)
     if source.delivery_id is None or source.delivery_manifest_sha256 is None:
         raise CampaignError("campaign delivery evidence is missing", code="delivery_missing")
-    manifest = root / "deliveries" / source.delivery_id / "manifest.json"
-    if manifest.is_symlink():
-        raise CampaignError("delivery manifest is a symlink", code="symlink")
-    package = _package(database, root, bound.binding)
-    if package is None:
-        raise CampaignError("delivery manifest is missing", code="delivery_missing")
-    if not source.candidates or source.candidates[0].review_id != package.approval_review_id:
-        raise CampaignError("review binding changed", code="stale_review")
-    decision, approved = _review_state(database, bound.binding, package)
-    if not approved or decision != source.candidates[0].review_decision:
-        raise CampaignError("review binding changed", code="stale_review")
+    package, package_reason = _package(database, root, bound.binding)
+    if package_reason or package is None:
+        raise CampaignError("delivery package is not intact", code=package_reason or "delivery_missing")
     align = next(item for item in source.stages if item.stage == "align")
     if document.alignment_provider == "whisperx" and package.alignment_sha256 != align.artifact_sha256:
         raise CampaignError("alignment hash changed", code="alignment_changed")
     if package.qa_set_sha256 != source.qa_set_sha256:
         raise CampaignError("qa hash changed", code="qa_changed")
     if source.narration_artifact_id and source.narration_audio_sha256:
-        _verify_narration(root, source.narration_artifact_id, source.narration_audio_sha256)
+        _verify_narration(
+            database,
+            root,
+            bound.binding,
+            source.narration_artifact_id,
+            source.narration_audio_sha256,
+        )
+    if package.manifest_sha256 != source.delivery_manifest_sha256:
+        raise CampaignError("delivery bytes changed", code="delivery_changed")
+    if package.files_sha256 != source.delivery_files_sha256:
+        raise CampaignError("delivery bytes changed", code="delivery_changed")
+    reviews = _reviews(database, root, bound.binding, package)
+    if not reviews.ok or not source.candidates:
+        raise CampaignError("review binding changed", code=reviews.reason)
+    recorded = source.candidates[0]
+    if recorded.review_id != reviews.review_id or recorded.review_decision != reviews.decision:
+        raise CampaignError("review binding changed", code="stale_review")
+    same_hero = recorded.hero_review_id == reviews.hero_review_id
+    same_preview = recorded.preview_artifact_id == reviews.preview_artifact_id
+    if not same_hero or not same_preview:
+        raise CampaignError("review binding changed", code="stale_review")
     for stage in source.stages:
-        if stage.artifact_id is None or stage.artifact_sha256 is None or stage.stage == "align":
-            continue
-        if stage.stage == "delivery":
-            continue
-        if stage.stage == "source_verify":
+        skipped = stage.stage in {"align", "delivery", "source_verify"}
+        if stage.artifact_id is None or stage.artifact_sha256 is None or skipped:
             continue
         try:
             with database.connect() as connection:
                 row = get_artifact(connection, stage.artifact_id)
-        except StorageError:
-            continue
+        except StorageError as exc:
+            raise CampaignError("campaign artifact row is missing", code="artifact_missing") from exc
+        if row.project_id != bound.binding.project_id or row.source_asset_id != bound.binding.source_asset_id:
+            raise CampaignError("campaign artifact belongs to another source", code="cross_source")
+        producer = _producer_problem(database, row.job_id, bound.binding.project_id)
+        if producer and stage.job_id is not None:
+            raise CampaignError("campaign producer is not succeeded", code=producer)
         digest, reason = _hash_uri(root, row.uri)
         if digest is None:
             raise CampaignError("campaign artifact is not a local file", code=reason)
         if digest != stage.artifact_sha256:
             raise CampaignError("campaign artifact hash changed", code=_change_code(stage.stage))
-    if not manifest.is_file():
-        raise CampaignError("delivery manifest is missing", code="delivery_missing")
-    if sha256_file(manifest) != source.delivery_manifest_sha256:
-        raise CampaignError("delivery bytes changed", code="delivery_changed")
 
 
-def _verify_narration(root: Path, artifact_id: str, expected: str) -> None:
-    sidecar = root / "voice" / "audio" / f"{artifact_id}.json"
-    wav = root / "voice" / "audio" / f"{artifact_id}.wav"
-    if sidecar.is_symlink() or wav.is_symlink():
-        raise CampaignError("narration artifact is a symlink", code="symlink")
-    if not sidecar.is_file() or not wav.is_file():
-        raise CampaignError("narration artifact is missing", code="narration_missing")
-    if wav.stat().st_size == 0:
-        raise CampaignError("narration audio is empty", code="zero_byte_audio")
+def _verify_narration(
+    database: Database,
+    root: Path,
+    binding: SourceBinding,
+    artifact_id: str,
+    expected: str,
+) -> None:
     try:
-        payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise CampaignError("narration artifact is missing", code="narration_missing") from exc
-    if not isinstance(payload, dict) or payload.get("audio_sha256") != expected:
-        raise CampaignError("narration hash changed", code="narration_changed")
-    if sha256_file(wav) != expected:
+        with database.connect() as connection:
+            row = get_artifact(connection, artifact_id)
+    except StorageError as exc:
+        raise CampaignError("narration artifact row is missing", code="artifact_missing") from exc
+    classified = _classify_narration(database, root, binding, row)
+    if not isinstance(classified, NarrationAudioArtifact):
+        raise CampaignError("narration artifact is not current", code=classified)
+    if classified.audio_sha256 != expected or classified.artifact_id != artifact_id:
         raise CampaignError("narration hash changed", code="narration_changed")
 
 
