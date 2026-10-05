@@ -13,6 +13,12 @@ from clipforge.campaign.acquisition import (
     board_envato,
     board_policy,
 )
+from clipforge.campaign.aggregate import (
+    board_production,
+    board_production_delivery,
+    board_production_source,
+    board_productions,
+)
 from clipforge.campaign.operator import (
     board_campaign,
     board_campaigns,
@@ -93,6 +99,20 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     _send(self, 200, (_STATIC / "styles.css").read_bytes(), _STATIC_FILES["styles.css"])
                 elif path == "/api/campaigns":
                     _send_json(self, board_campaigns())
+                elif path.startswith("/api/campaign-productions/") and path.endswith("/delivery"):
+                    run_id = path.removeprefix("/api/campaign-productions/").removesuffix("/delivery")
+                    _reject_id(run_id)
+                    _send_json(self, board_production_delivery(work_root, run_id))
+                elif path.startswith("/api/campaign-productions/") and "/source/" in path:
+                    rest = path.removeprefix("/api/campaign-productions/")
+                    run_id, source_id = rest.split("/source/", 1)
+                    _reject_id(run_id)
+                    _reject_id(source_id)
+                    _send_json(self, board_production_source(work_root, run_id, source_id))
+                elif path.startswith("/api/campaign-productions/"):
+                    run_id = path.removeprefix("/api/campaign-productions/")
+                    _reject_id(run_id)
+                    _send_json(self, board_production(work_root, run_id))
                 elif path.startswith("/api/campaign-runs/"):
                     _send_run(self, work_root, path.removeprefix("/api/campaign-runs/"))
                 elif path.startswith("/api/acquisitions/"):
@@ -115,6 +135,10 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/envato")
                     _reject_id(campaign_id)
                     _send_json(self, board_envato(work_root, campaign_id))
+                elif path.startswith("/api/campaigns/") and path.endswith("/productions"):
+                    campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/productions")
+                    _reject_id(campaign_id)
+                    _send_json(self, board_productions(work_root, campaign_id))
                 elif path.startswith("/api/campaigns/") and path.endswith("/policy"):
                     campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/policy")
                     _reject_id(campaign_id)

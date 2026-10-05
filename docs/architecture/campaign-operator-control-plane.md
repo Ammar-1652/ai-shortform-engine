@@ -41,6 +41,13 @@ clipforge campaign operator acquire list CAMPAIGN_ID
 clipforge campaign operator acquire show ACQUISITION_ID
 clipforge campaign operator acquire verify ACQUISITION_ID
 clipforge campaign operator acquire resume ACQUISITION_ID
+clipforge campaign operator produce SELECTION_ID
+clipforge campaign operator production-plan SELECTION_ID
+clipforge campaign operator production-show RUN_ID
+clipforge campaign operator production-list CAMPAIGN_ID
+clipforge campaign operator production-verify RUN_ID
+clipforge campaign operator production-resume RUN_ID
+clipforge campaign operator production-report RUN_ID
 clipforge campaign operator serve --host 127.0.0.1 --port 8772
 ```
 
