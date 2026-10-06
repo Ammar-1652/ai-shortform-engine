@@ -483,6 +483,29 @@ def test_production_cadence_succeeds_and_a_longer_gap_fails() -> None:
         )
 
 
+def test_ntsc_frame_clock_tolerance_covers_nearest_pts_without_hiding_long_gaps() -> None:
+    from clipforge.hero.reframe import frame_period_tolerance_us
+
+    assert frame_period_tolerance_us(30_000, 1_001) == 33_367
+    stamps = (0, 500_500, 1_001_000, 1_501_500)
+    samples = [_sample(index, stamp, 0.4, width=0.1) for index, stamp in enumerate(stamps)]
+    with pytest.raises(ReframeError, match="face_track_gap_too_long"):
+        _plan(samples=samples, time_map=_time_map(1_501_501), gap_tolerance_us=0)
+    accepted = _plan(
+        samples=samples,
+        time_map=_time_map(1_501_501),
+        gap_tolerance_us=frame_period_tolerance_us(30_000, 1_001),
+    )
+    assert accepted.evidence is not None
+    assert accepted.evidence.gap_tolerance_us == 33_367
+    with pytest.raises(ReframeError, match="face_track_gap_too_long"):
+        _plan(
+            samples=[_sample(0, 0, 0.4, width=0.1), _sample(1, 1_000_001, 0.4, width=0.1)],
+            time_map=_time_map(1_500_000),
+            gap_tolerance_us=frame_period_tolerance_us(30_000, 1_001),
+        )
+
+
 def test_duplicate_skipped_and_unaligned_frames_fail() -> None:
     document = _plan()
     assert document.trajectory is not None
@@ -536,3 +559,4 @@ def test_explicit_face_follow_does_not_report_contain(tmp_path: Path) -> None:
     assert facts.applied != "contain"
     assert facts.blocker == "visual_analysis_missing"
     assert not (tmp_path / "reframe.json").exists()
+

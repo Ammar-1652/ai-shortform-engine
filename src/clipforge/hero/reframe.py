@@ -37,6 +37,13 @@ class ReframeError(MediaError):
         self.code = code
 
 
+def frame_period_tolerance_us(numerator: int, denominator: int) -> int:
+    """Return one decoded-frame period, rounded up in microseconds."""
+    if numerator <= 0 or denominator <= 0:
+        raise ReframeError("face_track_gap_tolerance_unavailable")
+    return max(1, (denominator * 1_000_000 + numerator - 1) // numerator)
+
+
 def frame_count_for_duration(duration_us: int) -> int:
     """How many 30/1 frames start strictly before ``duration_us``."""
     if duration_us <= 0:
@@ -467,3 +474,4 @@ def assert_unlinked(path: Path, root: Path) -> None:
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
+

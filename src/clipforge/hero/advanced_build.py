@@ -8,7 +8,7 @@ from pathlib import Path
 
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
-from clipforge.hero.reframe import ReframeError, build_face_follow
+from clipforge.hero.reframe import ReframeError, build_face_follow, frame_period_tolerance_us
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
@@ -28,7 +28,7 @@ from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
-from clipforge.storage import Database
+from clipforge.storage import Database, get_source_manifest
 from clipforge.transcription.io import publish_json
 
 _NAMESPACE = uuid.UUID("6f1d5e2a-9c4b-4f1a-8d3e-1a2b3c4d5e6f")
@@ -347,6 +347,25 @@ def _windows(
     ], None
 
 
+def _face_follow_gap_tolerance_us(database: Database, source_asset_id: str) -> int:
+    """Allow the nearest decoded frame's one-frame PTS quantization error."""
+    try:
+        with database.connect() as connection:
+            manifest = get_source_manifest(connection, source_asset_id)
+    except StorageError as exc:
+        raise MediaError("face_track_gap_tolerance_unavailable") from exc
+    video = next(
+        (item for item in manifest.probe.video_streams if item.index == manifest.video_stream_index),
+        None,
+    )
+    if video is None:
+        raise MediaError("face_track_gap_tolerance_unavailable")
+    rate = video.avg_frame_rate or video.r_frame_rate
+    if rate is None:
+        raise MediaError("face_track_gap_tolerance_unavailable")
+    return frame_period_tolerance_us(rate.numerator, rate.denominator)
+
+
 def _face_follow_windows(
     visual: VisualAnalysisDocument,
     candidate_id: str,
@@ -390,6 +409,7 @@ def _face_follow_windows(
             tool_version=tool_version,
             profile_fingerprint=profile.fingerprint(),
             face_sample_interval_us=visual.face_sample_interval_us,
+            gap_tolerance_us=_face_follow_gap_tolerance_us(database, source_asset_id),
         )
     except ReframeError as exc:
         raise MediaError(exc.code) from exc
@@ -530,3 +550,4 @@ def _sfx(
             )
         )
     return events
+

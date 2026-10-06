@@ -18,7 +18,7 @@ from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvan
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.probe import probe_hero
-from clipforge.hero.reframe import frame_count_for_duration, windows_follow_trajectory
+from clipforge.hero.reframe import frame_count_for_duration, frame_period_tolerance_us, windows_follow_trajectory
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
 from clipforge.media.hashing import sha256_file
@@ -60,6 +60,7 @@ from clipforge.storage import (
     ArtifactRow,
     Database,
     find_artifact,
+    get_source_manifest,
     insert_artifact,
     insert_job,
     list_jobs,
@@ -827,6 +828,20 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
         except StorageError:
             succeeded = False
     try:
+        with database.connect() as connection:
+            manifest = get_source_manifest(connection, plan.source_asset_id)
+        video = next(
+            (item for item in manifest.probe.video_streams if item.index == manifest.video_stream_index),
+            None,
+        )
+        if video is None:
+            raise MediaError("face_track_gap_tolerance_unavailable")
+        rate = video.avg_frame_rate or video.r_frame_rate
+        if rate is None:
+            raise MediaError("face_track_gap_tolerance_unavailable")
+        expected_gap_tolerance = frame_period_tolerance_us(rate.numerator, rate.denominator)
+        if stored.gap_tolerance_us != expected_gap_tolerance:
+            raise MediaError("visual_analysis_stale")
         rebuilt = build_face_follow(
             samples=list(context.visual.face_detection_samples),
             source_width=context.visual.proxy_width,
@@ -846,7 +861,7 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
             tool_version=stored.tool_version,
             profile_fingerprint=stored.profile_fingerprint,
             face_sample_interval_us=stored.face_sample_interval_us,
-            gap_tolerance_us=stored.gap_tolerance_us,
+            gap_tolerance_us=expected_gap_tolerance,
         )
     except ReframeError as exc:
         raise MediaError(exc.code) from exc
@@ -1489,3 +1504,4 @@ def require_advanced_binding(
 
 def hero_kind() -> str:
     return KIND_HERO
+
