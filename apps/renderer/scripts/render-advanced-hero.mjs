@@ -59,10 +59,13 @@ for (const item of batch.items) {
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
-  if (input.reframing_strategy !== "contain") {
+  if (input.reframing_strategy !== "contain" && input.reframing_strategy !== "face_follow") {
     throw new Error(
       `advanced render does not support reframing strategy ${input.reframing_strategy}`,
     );
+  }
+  if (input.reframing_strategy === "face_follow") {
+    assertFaceFollow(input);
   }
   for (const event of input.sfx ?? []) {
     if (event && event.role && event.role !== "sfx") {
@@ -95,6 +98,65 @@ for (const item of batch.items) {
   }
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
     throw new Error("hero render batch h264Crf must be an integer from 0 to 51");
+  }
+}
+
+function assertFaceFollow(input) {
+  const sha = /^[0-9a-f]{64}$/;
+  for (const key of ["trajectory_sha256", "time_map_sha256", "source_sha256", "profile_fingerprint"]) {
+    if (typeof input[key] !== "string" || !sha.test(input[key])) {
+      throw new Error(`face_follow ${key} is missing`);
+    }
+  }
+  if (!Number.isInteger(input.output_duration_us) || input.output_duration_us < 1) {
+    throw new Error("face_follow output duration is missing");
+  }
+  if (!Number.isInteger(input.duration_in_frames) || input.duration_in_frames < 1) {
+    throw new Error("face_follow duration_in_frames is missing");
+  }
+  const windows = input.windows;
+  if (!Array.isArray(windows) || windows.length !== input.duration_in_frames) {
+    throw new Error("face_follow trajectory is missing");
+  }
+  let frameWidth = null;
+  let frameHeight = null;
+  let cursor = 0;
+  windows.forEach((item, index) => {
+    if (!item || typeof item !== "object") {
+      throw new Error("face_follow window is missing");
+    }
+    if (item.output_start_us !== cursor || item.output_end_us <= item.output_start_us) {
+      throw new Error("face_follow frame index drifted");
+    }
+    const strategy = item.strategy_id && item.strategy_id.strategy_id;
+    if (strategy !== "face_follow") {
+      throw new Error("face_follow strategy id does not match");
+    }
+    if (frameWidth === null) {
+      frameWidth = item.frame_width;
+      frameHeight = item.frame_height;
+    }
+    if (item.frame_width !== frameWidth || item.frame_height !== frameHeight) {
+      throw new Error("face_follow frame dimensions changed");
+    }
+    if (
+      item.source_x < 0 ||
+      item.source_y < 0 ||
+      item.source_width < 1 ||
+      item.source_height < 1 ||
+      item.source_x + item.source_width > item.frame_width ||
+      item.source_y + item.source_height > item.frame_height
+    ) {
+      throw new Error("face_follow_crop_out_of_bounds");
+    }
+    const expectedStart = Math.floor((index * 1_000_000) / 30);
+    if (item.output_start_us !== expectedStart) {
+      throw new Error("face_follow sample is not on a 30/1 frame start");
+    }
+    cursor = item.output_end_us;
+  });
+  if (windows[0].output_start_us !== 0 || cursor !== input.output_duration_us) {
+    throw new Error("face_follow final endpoint does not match the duration");
   }
 }
 

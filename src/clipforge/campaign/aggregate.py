@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from clipforge.campaign.acquisition import latest_successful_result
 from clipforge.campaign.antoine import policy_sha256
 from clipforge.campaign.production import (
+    bind_campaign_source,
+    reframe_facts,
     resume_campaign,
     run_campaign,
     verify_campaign_run,
@@ -216,6 +218,8 @@ def production_report(work_root: Path, run_id: str) -> str:
                     f"alignment {source.alignment_status}",
                     f"narration {source.narration_status}",
                     f"cache {source.cache_status}",
+                    f"reframe {source.reframe_applied}",
+                    f"reframe_blocker {source.reframe_blocker}",
                 ]
             )
         )
@@ -374,14 +378,28 @@ def _source(
                 reason_code=pipeline.reason_code,
             )
         )
+    reframed = reframe_facts(bind_campaign_source(database, pipeline.source_id), pipeline, root)
+    stage_reason = reframed.blocker if reframed.blocker != "none" else reframed.applied
+    stages.append(
+        CampaignProductionStageFact(
+            stage="reframe",
+            status=reframed.status,
+            cache_hit=reframed.cache_hit,
+            reason_code=stage_reason[:80],
+        )
+    )
     failure = None if pipeline.status == "succeeded" else pipeline.reason_code
+    source_status = pipeline.status
+    if pipeline.status == "succeeded" and reframed.status == "blocked":
+        failure = reframed.blocker
+        source_status = "blocked"
     return CampaignProductionSource(
         source_id=pipeline.source_id,
         source_sha256=pipeline.source_sha256,
         byte_size=_size(database, pipeline.source_id),
         acquisition_id=None if acquired is None else acquired.acquisition_id,
         acquisition_sha256=None if acquired is None else acquired.source_sha256,
-        status=pipeline.status,
+        status=source_status,
         cache_status=pipeline.cache_status,
         failure_code=failure,
         candidate_id=None if candidate is None else candidate.candidate_id,
@@ -402,6 +420,14 @@ def _source(
         delivery_relative=delivery_relative,
         final_media_sha256=video_sha,
         stages=stages,
+        reframe_requested=reframed.requested,
+        reframe_applied=reframed.applied,
+        reframe_plan_id=reframed.plan_id,
+        reframe_trajectory_sha256=reframed.trajectory_sha256,
+        reframe_evidence_sha256=reframed.evidence_sha256,
+        reframe_status=reframed.status,
+        reframe_cache_hit=reframed.cache_hit,
+        reframe_blocker=reframed.blocker,
     )
 
 
@@ -719,6 +745,14 @@ def _source_card(source: CampaignProductionSource) -> dict[str, object]:
         "delivery_relative": source.delivery_relative,
         "delivery_manifest_sha256": source.delivery_manifest_sha256,
         "final_media_sha256": source.final_media_sha256,
+        "reframe_requested": source.reframe_requested,
+        "reframe_applied": source.reframe_applied,
+        "reframe_plan_id": source.reframe_plan_id,
+        "reframe_trajectory_sha256": source.reframe_trajectory_sha256,
+        "reframe_evidence_sha256": source.reframe_evidence_sha256,
+        "reframe_status": source.reframe_status,
+        "reframe_cache_hit": source.reframe_cache_hit,
+        "reframe_blocker": source.reframe_blocker,
         "source_sha256": source.source_sha256,
         "byte_size": source.byte_size,
         "candidate_review_path": _review_path("review/candidates", source.candidate_id),

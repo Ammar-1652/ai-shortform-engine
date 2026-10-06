@@ -6,8 +6,13 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from clipforge.errors import MediaError
+from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
+from clipforge.hero.reframe import (
+    ReframeError,
+    build_face_follow,
+    frame_period_tolerance_us,
+)
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
@@ -24,8 +29,11 @@ from clipforge.schemas.advanced import (
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
-from clipforge.storage import Database
+from clipforge.storage import Database, get_source_manifest
+from clipforge.transcription.io import publish_json
 
 _NAMESPACE = uuid.UUID("6f1d5e2a-9c4b-4f1a-8d3e-1a2b3c4d5e6f")
 _SAFE = 48
@@ -74,7 +82,20 @@ def build_advanced_plan(
         raise MediaError("advanced plan has more B-roll events than the profile allows")
     if len(sfx_asset_ids) > profile.max_sfx_events:
         raise MediaError("advanced plan has more SFX events than the profile allows")
-    windows = _windows(profile, visual, duration_us, candidate_id)
+    windows, reframe = _windows(
+        profile,
+        visual,
+        duration_us,
+        candidate_id,
+        hero_plan.edit_plan.time_map,
+        hero_plan.edit_plan.time_map_sha256,
+        source_sha256,
+        source_asset_id,
+        visual_sha256,
+        database,
+        actor,
+        tool_version,
+    )
     emphasis = _emphasis(alignment, candidate_id)
     typography = _typography(alignment, emphasis, candidate_id)
     diagrams = _diagrams(emphasis, duration_us, candidate_id)
@@ -101,13 +122,15 @@ def build_advanced_plan(
         profile,
     )
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
-    config = {
+    config: dict[str, object] = {
         "manual_window": manual,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
     }
+    if reframe is not None and reframe.trajectory_sha256:
+        config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
-    return AdvancedHeroPlanDocument(
+    document = AdvancedHeroPlanDocument(
         plan_id=plan_id,
         project_id=project_id,
         source_asset_id=source_asset_id,
@@ -148,6 +171,11 @@ def build_advanced_plan(
             source_asset_ids=[source_asset_id],
         ),
     )
+    if reframe is not None:
+        destination = workspace.reframe_plan_file(candidate_id)
+        workspace.prepare_advanced_file(destination)
+        publish_json(destination, reframe, work_root, workspace.partial_for(destination))
+    return document
 
 
 def _require_forced(alignment: ForcedAlignmentDocument) -> None:
@@ -264,10 +292,32 @@ def _windows(
     visual: VisualAnalysisDocument,
     duration_us: int,
     candidate_id: str,
-) -> list[ReframingWindow]:
+    time_map: TimeMapDocument,
+    time_map_sha256: str,
+    source_sha256: str,
+    source_asset_id: str,
+    visual_sha256: str,
+    database: Database,
+    actor: str,
+    tool_version: str,
+) -> tuple[list[ReframingWindow], ReframePlanDocument | None]:
     strategy = profile.reframing.strategy_id
     width = visual.proxy_width
     height = visual.proxy_height
+    if strategy == "face_follow":
+        return _face_follow_windows(
+            visual,
+            candidate_id,
+            time_map,
+            time_map_sha256,
+            source_sha256,
+            source_asset_id,
+            visual_sha256,
+            database,
+            profile,
+            actor,
+            tool_version,
+        )
     if strategy == "contain":
         box = (0, 0, width, height)
     elif strategy == "center_crop":
@@ -275,7 +325,7 @@ def _windows(
     elif strategy == "manual_window":
         if profile.manual_window is None:
             raise MediaError("manual_window strategy requires a reframing window")
-        return [profile.manual_window]
+        return [profile.manual_window], None
     else:
         boxes = _face_boxes(visual, width, height)
         if strategy == "multi_face_safe_window" and len(boxes) < 2:
@@ -298,7 +348,99 @@ def _windows(
             frame_width=width,
             frame_height=height,
         )
-    ]
+    ], None
+
+
+def _face_follow_gap_tolerance_us(database: Database, source_asset_id: str) -> int:
+    """Allow the nearest decoded frame's one-frame PTS quantization error."""
+    try:
+        with database.connect() as connection:
+            manifest = get_source_manifest(connection, source_asset_id)
+    except StorageError as exc:
+        raise MediaError("face_track_gap_tolerance_unavailable") from exc
+    video = next(
+        (item for item in manifest.probe.video_streams if item.index == manifest.video_stream_index),
+        None,
+    )
+    if video is None:
+        raise MediaError("face_track_gap_tolerance_unavailable")
+    rate = video.avg_frame_rate or video.r_frame_rate
+    if rate is None:
+        raise MediaError("face_track_gap_tolerance_unavailable")
+    return frame_period_tolerance_us(rate.numerator, rate.denominator)
+
+
+def _face_follow_windows(
+    visual: VisualAnalysisDocument,
+    candidate_id: str,
+    time_map: TimeMapDocument,
+    time_map_sha256: str,
+    source_sha256: str,
+    source_asset_id: str,
+    visual_sha256: str,
+    database: Database,
+    profile: AdvancedHeroProfile,
+    actor: str,
+    tool_version: str,
+) -> tuple[list[ReframingWindow], ReframePlanDocument]:
+    from clipforge.storage.repository import get_job
+
+    job_id = visual.provenance.job_id or ""
+    succeeded = False
+    if job_id:
+        try:
+            with database.connect() as connection:
+                succeeded = get_job(connection, job_id).status.value == "succeeded"
+        except StorageError:
+            succeeded = False
+    try:
+        document = build_face_follow(
+            samples=list(visual.face_detection_samples),
+            source_width=visual.proxy_width,
+            source_height=visual.proxy_height,
+            time_map=time_map,
+            time_map_sha256=time_map_sha256,
+            source_sha256=source_sha256,
+            analysis_source_sha256=visual.source_sha256,
+            analysis_present=bool(visual.face_detection_samples),
+            producer_succeeded=succeeded,
+            visual_analysis_id=visual.analysis_id,
+            visual_analysis_sha256=visual_sha256,
+            producer_job_id=job_id,
+            plan_id=stable_id("reframe", candidate_id),
+            source_asset_id=source_asset_id,
+            created_by=actor,
+            tool_version=tool_version,
+            profile_fingerprint=profile.fingerprint(),
+            face_sample_interval_us=visual.face_sample_interval_us,
+            gap_tolerance_us=_face_follow_gap_tolerance_us(database, source_asset_id),
+        )
+    except ReframeError as exc:
+        raise MediaError(exc.code) from exc
+    if document.trajectory is None:
+        raise MediaError("visual_analysis_missing")
+    from clipforge.hero.reframe import window_end_us
+
+    windows: list[ReframingWindow] = []
+    samples = document.trajectory.samples
+    duration_us = time_map.to_time_map().total_output_duration()
+    for index, sample in enumerate(samples):
+        end = window_end_us(document, index, duration_us)
+        windows.append(
+            ReframingWindow(
+                window_id=stable_id("window", candidate_id, "face_follow", str(index)),
+                strategy_id=profile.reframing,
+                output_start_us=sample.output_us,
+                output_end_us=end,
+                source_x=sample.crop_x,
+                source_y=sample.crop_y,
+                source_width=sample.crop_width,
+                source_height=sample.crop_height,
+                frame_width=sample.frame_width,
+                frame_height=sample.frame_height,
+            )
+        )
+    return windows, document
 
 
 def _face_boxes(visual: VisualAnalysisDocument, width: int, height: int) -> list[tuple[int, int, int, int]]:

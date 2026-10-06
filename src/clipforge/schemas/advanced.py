@@ -38,6 +38,7 @@ class ReframingStrategy(Versioned):
         "visual_safe_window",
         "multi_face_safe_window",
         "saliency_window",
+        "face_follow",
     ]
 
 
@@ -224,6 +225,10 @@ class AdvancedHeroRenderInput(Versioned):
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     windows: list[ReframingWindow] = Field(default_factory=list)
     asset_names: dict[str, str] = Field(default_factory=dict)
+    trajectory_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    time_map_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    output_duration_us: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def local_names_only(self) -> Self:

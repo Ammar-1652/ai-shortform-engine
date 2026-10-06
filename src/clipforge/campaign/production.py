@@ -41,9 +41,10 @@ from clipforge.language.registry import (
 )
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
-from clipforge.media.workspace import mkdir_contained, reject_symlink_chain
+from clipforge.media.workspace import SourceWorkspace, mkdir_contained, reject_symlink_chain
 from clipforge.publish.service import explain_package
 from clipforge.review.service import effective_review
+from clipforge.schemas.advanced import AdvancedHeroPlanDocument
 from clipforge.schemas.campaign import CampaignSource
 from clipforge.schemas.campaign_run import (
     STAGES,
@@ -59,6 +60,7 @@ from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.voice import NarrationAudioArtifact
 from clipforge.storage import (
     Database,
@@ -282,7 +284,12 @@ def resume_campaign(
     sources: list[CampaignSourceRun] = []
     changed = False
     for source, item in zip(current.sources, bound, strict=True):
-        if source.status == "succeeded" and _source_current(database, root, current, source, item):
+        blocker = reframe_blocker(item, source, root)
+        if (
+            source.status == "succeeded"
+            and _source_current(database, root, current, source, item)
+            and blocker is None
+        ):
             sources.append(source)
             continue
         changed = True
@@ -1585,6 +1592,104 @@ def _campaign_job_current(database: Database, document: CampaignProductionRun) -
     with database.connect() as connection:
         job = _find_campaign_job(connection, document.project_id, document.campaign_run_id)
     return job is not None and job.status is JobStatus.SUCCEEDED
+
+
+@dataclass(frozen=True, slots=True)
+class ReframeFacts:
+    """Reframing recorded on one campaign source. Paths are absent."""
+
+    requested: str = "contain"
+    applied: str = "contain"
+    plan_id: str = "none"
+    trajectory_sha256: str = "none"
+    evidence_sha256: str = "none"
+    status: str = "succeeded"
+    cache_hit: bool = False
+    blocker: str = "none"
+
+
+def reframe_facts(bound: _Bound, source: CampaignSourceRun, root: Path) -> ReframeFacts:
+    """Read the stored crop plan. Contain stays eligible without face evidence."""
+    blocker = reframe_blocker(bound, source, root)
+    candidate_id = source.candidates[0].candidate_id if source.candidates else None
+    if bound.binding is None or candidate_id is None:
+        return ReframeFacts(
+            cache_hit=False, status="succeeded" if blocker is None else "blocked", blocker=blocker or "none"
+        )
+    workspace = SourceWorkspace(root, bound.binding.project_id, bound.binding.source_asset_id)
+    path = workspace.advanced_plan_file(candidate_id)
+    if path.is_symlink() or not path.is_file():
+        return ReframeFacts()
+    try:
+        plan = AdvancedHeroPlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return ReframeFacts(status="blocked", blocker="visual_analysis_missing")
+    if plan.reframing_strategy != "face_follow":
+        hit = source.status == "succeeded" and source.cache_status == "hit"
+        return ReframeFacts(cache_hit=hit)
+    side = workspace.reframe_plan_file(candidate_id)
+    if blocker is not None or side.is_symlink() or not side.is_file():
+        return ReframeFacts(
+            requested="face_follow",
+            applied="none",
+            status="blocked",
+            blocker=blocker or "visual_analysis_missing",
+        )
+    try:
+        document = ReframePlanDocument.model_validate_json(side.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return ReframeFacts(
+            requested="face_follow", applied="none", status="blocked", blocker="visual_analysis_missing"
+        )
+    hit = source.status == "succeeded" and source.cache_status == "hit"
+    return ReframeFacts(
+        requested=document.requested_strategy,
+        applied=document.applied_strategy,
+        plan_id=document.plan_id,
+        trajectory_sha256=document.trajectory_sha256 or "none",
+        evidence_sha256=document.plan_fingerprint,
+        status="succeeded",
+        cache_hit=hit,
+        blocker="none",
+    )
+
+
+def reframe_blocker(bound: _Bound, source: CampaignSourceRun, root: Path) -> str | None:
+    """Return a blocker when an explicit face_follow plan is no longer current."""
+    candidate_id = source.candidates[0].candidate_id if source.candidates else None
+    if bound.binding is None or candidate_id is None:
+        return None
+    workspace = SourceWorkspace(root, bound.binding.project_id, bound.binding.source_asset_id)
+    path = workspace.advanced_plan_file(candidate_id)
+    if path.is_symlink() or not path.is_file():
+        return None
+    try:
+        plan = AdvancedHeroPlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return None
+    if plan.reframing_strategy != "face_follow":
+        return None
+    side = workspace.reframe_plan_file(candidate_id)
+    if side.is_symlink():
+        return "unsafe_path"
+    if not side.is_file():
+        return "visual_analysis_missing"
+    try:
+        document = ReframePlanDocument.model_validate_json(side.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return "visual_analysis_missing"
+    if (
+        document.source_sha256 != plan.source_sha256
+        or document.visual_analysis_sha256 != plan.visual_analysis_sha256
+    ):
+        return "visual_analysis_stale"
+    if document.applied_strategy != "face_follow" or document.trajectory is None:
+        return document.fallback_reason or "face_follow_requires_one_track"
+    if document.trajectory.digest() != document.trajectory_sha256:
+        return "visual_analysis_stale"
+    if document.time_map_sha256 != plan.time_map_sha256:
+        return "time_map_stale"
+    return None
 
 
 def _source_current(

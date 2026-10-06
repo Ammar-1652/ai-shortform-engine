@@ -233,9 +233,51 @@ def _remote(inputs: TechnicalInputs) -> QACheck:
 
 def _reframing(inputs: TechnicalInputs) -> QACheck:
     strategy = inputs.document.reframing_strategy
-    if strategy != "contain":
+    if strategy == "contain":
+        if any(plan.reframing_strategy != "contain" for plan in inputs.plans):
+            return _check("reframing", False, "reframing strategy contain was not applied")
+        return _check("reframing", True, "reframing strategy contain")
+    if strategy != "face_follow":
         return _check("reframing", False, f"reframing strategy {strategy} is not supported")
-    return _check("reframing", True, "reframing strategy contain")
+    from pydantic import ValidationError
+
+    from clipforge.hero.reframe import facts_line, windows_follow_trajectory
+    from clipforge.schemas.reframe import ReframePlanDocument
+
+    lines: list[str] = []
+    for plan in inputs.plans:
+        if plan.reframing_strategy != "face_follow":
+            return _check(
+                "reframing",
+                False,
+                "requested=face_follow applied=none fallback=not_eligible "
+                "blocker=face_follow_requires_one_track",
+            )
+        path = inputs.workspace.reframe_plan_file(plan.candidate_id)
+        if path.is_symlink():
+            return _check("reframing", False, "requested=face_follow applied=none blocker=unsafe_path")
+        if not path.is_file():
+            return _check(
+                "reframing", False, "requested=face_follow applied=none blocker=visual_analysis_missing"
+            )
+        try:
+            document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError):
+            return _check(
+                "reframing", False, "requested=face_follow applied=none blocker=visual_analysis_missing"
+            )
+        if (
+            document.source_sha256 != inputs.source_sha256
+            or document.visual_analysis_sha256 != inputs.visual_sha256
+        ):
+            return _check("reframing", False, f"{facts_line(document, blocker='visual_analysis_stale')}")
+        if document.time_map_sha256 != plan.time_map_sha256:
+            return _check("reframing", False, f"{facts_line(document, blocker='time_map_stale')}")
+        followed = windows_follow_trajectory(document, list(plan.windows), inputs.duration_us)
+        if document.applied_strategy != "face_follow" or not followed:
+            return _check("reframing", False, f"{facts_line(document, blocker='visual_analysis_stale')}")
+        lines.append(facts_line(document))
+    return _check("reframing", True, " ".join(lines))
 
 
 def _assets(inputs: TechnicalInputs) -> QACheck:

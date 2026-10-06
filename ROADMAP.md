@@ -172,9 +172,15 @@ Optional read-only discovery of normalized Whop campaign and source metadata. Th
 
 ## Round 28 — Final review and delivery gate
 
-Status: in progress on `round-28-final-review-delivery-gate`, started from `ea8c933c821279fdf049c104f819a81ea255a31d`.
+Status: merged on main as `02ab8b4596da84bb777b52fe4bd4d806fbca6efd`. See `docs/operations/round-28-validation.md`.
 
 A human final decision is required before local delivery. Hero approval and a passing QA set do not authorize that package. Whop MCP and external platform publishing stay deferred. See `docs/adr/0064-final-review-and-delivery-gate.md`.
+
+## Round 29 — Deterministic face-follow reframing
+
+Status: in progress on `round-29-dynamic-reframing-quality`, started from `02ab8b4596da84bb777b52fe4bd4d806fbca6efd`.
+
+`contain` stays the default. `face_follow` is an explicit crop from stored face-track geometry and the candidate TimeMap. The face cadence follows the 500_000 us analyzer interval. It does not identify a person and does not infer a speaker. Whop MCP and external publishing stay deferred. See `docs/adr/0065-deterministic-face-follow-reframing.md` and `docs/operations/round-29-validation.md`.
 
 ## Later
 

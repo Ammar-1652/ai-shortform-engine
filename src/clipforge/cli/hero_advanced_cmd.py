@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
+from clipforge.schemas.advanced import AdvancedHeroProfile, ReframingStrategy
 from clipforge.storage import Database
 
 advanced_app = typer.Typer(
@@ -46,10 +47,12 @@ def advanced_plan(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     broll: Annotated[list[str] | None, typer.Option("--broll")] = None,
     sfx: Annotated[list[str] | None, typer.Option("--sfx")] = None,
+    reframing: Annotated[str, typer.Option("--reframing", help="contain or face_follow.")] = "contain",
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
     from clipforge.hero.advanced_service import plan_advanced_candidate
 
+    profile = _profile(reframing)
     try:
         plan = plan_advanced_candidate(
             database=Database(resolve_db_path(db)),
@@ -58,11 +61,14 @@ def advanced_plan(
             work_root=resolve_work_dir(work_dir),
             broll_asset_ids=broll,
             sfx_asset_ids=sfx,
+            profile=profile,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
     typer.echo(f"plan_id: {plan.plan_id}")
     typer.echo(f"reframing: {plan.reframing_strategy}")
+    typer.echo(f"applied: {plan.reframing_strategy}")
+    typer.echo("blocker: none")
 
 
 @advanced_app.command("render")
@@ -88,6 +94,15 @@ def advanced_render(
         _fail(exc)
     typer.echo(f"status: {result.status}")
     typer.echo(f"advanced_set_id: {result.advanced_set_id}")
+    typer.echo(f"cache_hit: {str(result.cache_hit).lower()}")
+    if result.manifest_path is not None and result.manifest_path.is_file():
+        from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument
+
+        document = AdvancedHeroDraftSetDocument.model_validate_json(
+            result.manifest_path.read_text(encoding="utf-8")
+        )
+        typer.echo(f"applied: {document.reframing_strategy}")
+        typer.echo("blocker: none")
     if result.status == "noop":
         raise typer.Exit(1)
 
@@ -142,3 +157,82 @@ def advanced_verify(
     except ClipforgeError as exc:
         _fail(exc)
     typer.echo("PASS advanced_hero")
+
+
+def _profile(name: str) -> AdvancedHeroProfile | None:
+    if name == "contain":
+        return None
+    if name == "face_follow":
+        return AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="face_follow"))
+    if name == "center_crop":
+        return AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="center_crop"))
+    if name == "manual_window":
+        raise ClipforgeError("manual_window strategy requires a reframing window")
+    if name in {"visual_safe_window", "multi_face_safe_window", "saliency_window"}:
+        raise ClipforgeError(f"reframing strategy {name} is not supported")
+    raise ClipforgeError(f"unknown reframing strategy {name}")
+
+
+reframe_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect a face-follow plan. These commands do not write.",
+)
+advanced_app.add_typer(reframe_app, name="reframe")
+
+
+@reframe_app.command("doctor")
+def reframe_doctor() -> None:
+    """Report the reframing contract. Does not write."""
+    typer.echo("PASS reframing default: contain")
+    typer.echo("PASS reframing opt-in: face_follow")
+    typer.echo("PASS identity: not_claimed")
+    typer.echo("PASS speaker: not_claimed")
+    typer.echo("PASS recognition: not_used")
+    typer.echo("PASS whop: deferred")
+    typer.echo("PASS publishing: deferred")
+
+
+@reframe_app.command("show")
+def reframe_show(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show the stored reframing plan. Does not write."""
+    from clipforge.hero.reframe_inspect import format_reframe_show
+
+    try:
+        typer.echo(
+            format_reframe_show(
+                Database(resolve_db_path(db)),
+                source_asset_id,
+                candidate_id,
+                resolve_work_dir(work_dir),
+            )
+        )
+    except ClipforgeError as exc:
+        _fail(exc)
+
+
+@reframe_app.command("verify")
+def reframe_verify(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Recompute the trajectory and compare it. Does not write."""
+    from clipforge.hero.reframe_inspect import verify_reframe
+
+    try:
+        typer.echo(
+            verify_reframe(
+                Database(resolve_db_path(db)),
+                source_asset_id,
+                candidate_id,
+                resolve_work_dir(work_dir),
+            )
+        )
+    except ClipforgeError as exc:
+        _fail(exc)

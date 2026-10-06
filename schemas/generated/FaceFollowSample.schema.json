@@ -1,0 +1,105 @@
+{
+  "additionalProperties": false,
+  "description": "One output sample and the source crop that contains the tracked face.",
+  "properties": {
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "crop_height": {
+      "minimum": 1,
+      "title": "Crop Height",
+      "type": "integer"
+    },
+    "crop_width": {
+      "minimum": 1,
+      "title": "Crop Width",
+      "type": "integer"
+    },
+    "crop_x": {
+      "minimum": 0,
+      "title": "Crop X",
+      "type": "integer"
+    },
+    "crop_y": {
+      "minimum": 0,
+      "title": "Crop Y",
+      "type": "integer"
+    },
+    "face_height": {
+      "minimum": 1,
+      "title": "Face Height",
+      "type": "integer"
+    },
+    "face_width": {
+      "minimum": 1,
+      "title": "Face Width",
+      "type": "integer"
+    },
+    "face_x": {
+      "minimum": 0,
+      "title": "Face X",
+      "type": "integer"
+    },
+    "face_y": {
+      "minimum": 0,
+      "title": "Face Y",
+      "type": "integer"
+    },
+    "frame_height": {
+      "minimum": 1,
+      "title": "Frame Height",
+      "type": "integer"
+    },
+    "frame_width": {
+      "minimum": 1,
+      "title": "Frame Width",
+      "type": "integer"
+    },
+    "output_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Us",
+      "type": "integer"
+    },
+    "sample_index": {
+      "minimum": 0,
+      "title": "Sample Index",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "sample_index",
+    "output_us",
+    "source_us",
+    "crop_x",
+    "crop_y",
+    "crop_width",
+    "crop_height",
+    "face_x",
+    "face_y",
+    "face_width",
+    "face_height",
+    "confidence",
+    "frame_width",
+    "frame_height"
+  ],
+  "title": "FaceFollowSample",
+  "type": "object"
+}

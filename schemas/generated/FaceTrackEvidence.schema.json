@@ -1,0 +1,63 @@
+{
+  "additionalProperties": false,
+  "description": "Coverage summary for one track. It does not name a person.",
+  "properties": {
+    "coverage_permille": {
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Coverage Permille",
+      "type": "integer"
+    },
+    "face_sample_interval_us": {
+      "minimum": 1,
+      "title": "Face Sample Interval Us",
+      "type": "integer"
+    },
+    "gap_tolerance_us": {
+      "minimum": 0,
+      "title": "Gap Tolerance Us",
+      "type": "integer"
+    },
+    "max_gap_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Max Gap Us",
+      "type": "integer"
+    },
+    "mean_confidence_permille": {
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Mean Confidence Permille",
+      "type": "integer"
+    },
+    "sample_count": {
+      "minimum": 1,
+      "title": "Sample Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "track_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Track Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "track_id",
+    "sample_count",
+    "mean_confidence_permille",
+    "coverage_permille",
+    "max_gap_us",
+    "face_sample_interval_us",
+    "gap_tolerance_us"
+  ],
+  "title": "FaceTrackEvidence",
+  "type": "object"
+}

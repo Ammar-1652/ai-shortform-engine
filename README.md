@@ -40,7 +40,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
 - `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
 - `clipforge hero review open SOURCE_ID` serves a loopback page for the current Hero drafts. `doctor`, `list`, `show`, and `verify` only read. `decide` appends a decision bound to that Hero artifact, plan, and alignment. Approval does not publish or encode a new file.
-- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Local B-roll, typography, diagrams, SFX, and semantic emphasis are supported. Music and Envato are not included. The picture uses contain framing. Rendering does not upload.
+- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Local B-roll, typography, diagrams, SFX, and semantic emphasis are supported. Music and Envato are not included. The picture uses contain framing unless `--reframing face_follow` is set. `face_follow` crops from stored face-track geometry through the candidate TimeMap. It does not identify a person or infer a speaker. A missing or ineligible track fails closed. `hero advanced reframe doctor`, `show`, and `verify` only read. Rendering does not upload.
 - `clipforge qa run SOURCE_ID` writes a `qa_set_json` artifact for the current advanced Hero draft. `list`, `show`, and `verify` only read. `qa gate` succeeds only when technical and campaign QA both pass and still match the current artifact.
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
@@ -58,7 +58,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 ## What does not work yet
 
 - Full-source WhisperX transcription
-- Active-speaker detection, face recognition, and dynamic reframing
+- Active-speaker detection and face recognition. `face_follow` uses detection geometry only and does not claim either of those.
 - Music. Local B-roll and SFX are supported. Music is prohibited.
 - External platform publishing. The adapter interface and dry-run path exist. Upload is `not_configured` until an operator sets `CLIPFORGE_PLATFORM_LIVE_SMOKE=1` and a real adapter. There is no TikTok, Instagram, or YouTube client. Credentials are not stored in SQLite or artifacts.
 - A review UI on any address other than loopback

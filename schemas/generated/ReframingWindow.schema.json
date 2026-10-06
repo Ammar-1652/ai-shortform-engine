@@ -17,7 +17,8 @@
             "manual_window",
             "visual_safe_window",
             "multi_face_safe_window",
-            "saliency_window"
+            "saliency_window",
+            "face_follow"
           ],
           "title": "Strategy Id",
           "type": "string"

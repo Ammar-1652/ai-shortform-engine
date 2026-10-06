@@ -288,6 +288,46 @@
       "default": null,
       "title": "Qa Set Id"
     },
+    "reframe_applied": {
+      "default": "contain",
+      "title": "Reframe Applied",
+      "type": "string"
+    },
+    "reframe_blocker": {
+      "default": "none",
+      "title": "Reframe Blocker",
+      "type": "string"
+    },
+    "reframe_cache_hit": {
+      "default": false,
+      "title": "Reframe Cache Hit",
+      "type": "boolean"
+    },
+    "reframe_evidence_sha256": {
+      "default": "none",
+      "title": "Reframe Evidence Sha256",
+      "type": "string"
+    },
+    "reframe_plan_id": {
+      "default": "none",
+      "title": "Reframe Plan Id",
+      "type": "string"
+    },
+    "reframe_requested": {
+      "default": "contain",
+      "title": "Reframe Requested",
+      "type": "string"
+    },
+    "reframe_status": {
+      "default": "succeeded",
+      "title": "Reframe Status",
+      "type": "string"
+    },
+    "reframe_trajectory_sha256": {
+      "default": "none",
+      "title": "Reframe Trajectory Sha256",
+      "type": "string"
+    },
     "review_decision": {
       "anyOf": [
         {

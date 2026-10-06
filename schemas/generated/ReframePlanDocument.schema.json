@@ -1,0 +1,466 @@
+{
+  "$defs": {
+    "FaceFollowSample": {
+      "additionalProperties": false,
+      "description": "One output sample and the source crop that contains the tracked face.",
+      "properties": {
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "crop_height": {
+          "minimum": 1,
+          "title": "Crop Height",
+          "type": "integer"
+        },
+        "crop_width": {
+          "minimum": 1,
+          "title": "Crop Width",
+          "type": "integer"
+        },
+        "crop_x": {
+          "minimum": 0,
+          "title": "Crop X",
+          "type": "integer"
+        },
+        "crop_y": {
+          "minimum": 0,
+          "title": "Crop Y",
+          "type": "integer"
+        },
+        "face_height": {
+          "minimum": 1,
+          "title": "Face Height",
+          "type": "integer"
+        },
+        "face_width": {
+          "minimum": 1,
+          "title": "Face Width",
+          "type": "integer"
+        },
+        "face_x": {
+          "minimum": 0,
+          "title": "Face X",
+          "type": "integer"
+        },
+        "face_y": {
+          "minimum": 0,
+          "title": "Face Y",
+          "type": "integer"
+        },
+        "frame_height": {
+          "minimum": 1,
+          "title": "Frame Height",
+          "type": "integer"
+        },
+        "frame_width": {
+          "minimum": 1,
+          "title": "Frame Width",
+          "type": "integer"
+        },
+        "output_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Us",
+          "type": "integer"
+        },
+        "sample_index": {
+          "minimum": 0,
+          "title": "Sample Index",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_index",
+        "output_us",
+        "source_us",
+        "crop_x",
+        "crop_y",
+        "crop_width",
+        "crop_height",
+        "face_x",
+        "face_y",
+        "face_width",
+        "face_height",
+        "confidence",
+        "frame_width",
+        "frame_height"
+      ],
+      "title": "FaceFollowSample",
+      "type": "object"
+    },
+    "FaceFollowTrajectory": {
+      "additionalProperties": false,
+      "description": "Deterministic crop path. Samples are monotonic in output time.",
+      "properties": {
+        "headroom_permille": {
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Headroom Permille",
+          "type": "integer"
+        },
+        "max_step_px": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Max Step Px",
+          "type": "integer"
+        },
+        "output_height": {
+          "minimum": 1,
+          "title": "Output Height",
+          "type": "integer"
+        },
+        "output_width": {
+          "minimum": 1,
+          "title": "Output Width",
+          "type": "integer"
+        },
+        "samples": {
+          "items": {
+            "$ref": "#/$defs/FaceFollowSample"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "smoothing_divisor": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Smoothing Divisor",
+          "type": "integer"
+        },
+        "source_height": {
+          "minimum": 1,
+          "title": "Source Height",
+          "type": "integer"
+        },
+        "source_width": {
+          "minimum": 1,
+          "title": "Source Width",
+          "type": "integer"
+        },
+        "track_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Track Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track_id",
+        "samples",
+        "smoothing_divisor",
+        "max_step_px",
+        "headroom_permille",
+        "source_width",
+        "source_height",
+        "output_width",
+        "output_height"
+      ],
+      "title": "FaceFollowTrajectory",
+      "type": "object"
+    },
+    "FaceTrackEvidence": {
+      "additionalProperties": false,
+      "description": "Coverage summary for one track. It does not name a person.",
+      "properties": {
+        "coverage_permille": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Coverage Permille",
+          "type": "integer"
+        },
+        "face_sample_interval_us": {
+          "minimum": 1,
+          "title": "Face Sample Interval Us",
+          "type": "integer"
+        },
+        "gap_tolerance_us": {
+          "minimum": 0,
+          "title": "Gap Tolerance Us",
+          "type": "integer"
+        },
+        "max_gap_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Max Gap Us",
+          "type": "integer"
+        },
+        "mean_confidence_permille": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Mean Confidence Permille",
+          "type": "integer"
+        },
+        "sample_count": {
+          "minimum": 1,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "track_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Track Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track_id",
+        "sample_count",
+        "mean_confidence_permille",
+        "coverage_permille",
+        "max_gap_us",
+        "face_sample_interval_us",
+        "gap_tolerance_us"
+      ],
+      "title": "FaceTrackEvidence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The crop plan bound to one visual-analysis artifact.",
+  "properties": {
+    "applied_strategy": {
+      "enum": [
+        "contain",
+        "face_follow"
+      ],
+      "title": "Applied Strategy",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Created By",
+      "type": "string"
+    },
+    "evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FaceTrackEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "face_sample_interval_us": {
+      "minimum": 1,
+      "title": "Face Sample Interval Us",
+      "type": "integer"
+    },
+    "face_track_id": {
+      "default": "",
+      "title": "Face Track Id",
+      "type": "string"
+    },
+    "fallback_reason": {
+      "default": "",
+      "title": "Fallback Reason",
+      "type": "string"
+    },
+    "fps_denominator": {
+      "minimum": 1,
+      "title": "Fps Denominator",
+      "type": "integer"
+    },
+    "fps_numerator": {
+      "minimum": 1,
+      "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "gap_tolerance_us": {
+      "minimum": 0,
+      "title": "Gap Tolerance Us",
+      "type": "integer"
+    },
+    "headroom_permille": {
+      "maximum": 400,
+      "minimum": 0,
+      "title": "Headroom Permille",
+      "type": "integer"
+    },
+    "max_step_px": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Step Px",
+      "type": "integer"
+    },
+    "output_height": {
+      "minimum": 1,
+      "title": "Output Height",
+      "type": "integer"
+    },
+    "output_width": {
+      "minimum": 1,
+      "title": "Output Width",
+      "type": "integer"
+    },
+    "plan_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plan Fingerprint",
+      "type": "string"
+    },
+    "plan_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "producer_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Producer Job Id",
+      "type": "string"
+    },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "requested_strategy": {
+      "enum": [
+        "contain",
+        "face_follow"
+      ],
+      "title": "Requested Strategy",
+      "type": "string"
+    },
+    "safe_margin_px": {
+      "minimum": 0,
+      "title": "Safe Margin Px",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "smoothing_divisor": {
+      "maximum": 16,
+      "minimum": 1,
+      "title": "Smoothing Divisor",
+      "type": "integer"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_height": {
+      "minimum": 1,
+      "title": "Source Height",
+      "type": "integer"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "source_width": {
+      "minimum": 1,
+      "title": "Source Width",
+      "type": "integer"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "tool_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Tool Version",
+      "type": "string"
+    },
+    "trajectory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FaceFollowTrajectory"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "trajectory_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Trajectory Sha256",
+      "type": "string"
+    },
+    "visual_analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Visual Analysis Id",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "source_asset_id",
+    "source_sha256",
+    "visual_analysis_id",
+    "visual_analysis_sha256",
+    "producer_job_id",
+    "time_map_sha256",
+    "profile_fingerprint",
+    "face_sample_interval_us",
+    "gap_tolerance_us",
+    "smoothing_divisor",
+    "max_step_px",
+    "headroom_permille",
+    "source_width",
+    "source_height",
+    "output_width",
+    "output_height",
+    "fps_numerator",
+    "fps_denominator",
+    "requested_strategy",
+    "applied_strategy",
+    "safe_margin_px",
+    "created_by",
+    "tool_version",
+    "plan_fingerprint"
+  ],
+  "title": "ReframePlanDocument",
+  "type": "object"
+}
