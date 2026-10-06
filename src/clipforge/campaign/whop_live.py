@@ -25,6 +25,7 @@ from clipforge.campaign.whop import (
 )
 from clipforge.campaign.whop_filter import filter_campaigns, request_fingerprint, source_block_reason
 from clipforge.campaign.whop_mcp import (
+    PUBLIC_MCP_URL,
     configured_connector,
     configured_connector_url,
     configured_url,
@@ -33,7 +34,7 @@ from clipforge.campaign.whop_mcp import (
     reject_untrusted_document,
     session_handle,
 )
-from clipforge.campaign.whop_provider import build_live_provider
+from clipforge.campaign.whop_provider import OfficialGrokProvider, build_live_provider
 from clipforge.campaign.whop_tools import tool_map_sha256
 from clipforge.media.workspace import mkdir_contained
 from clipforge.schemas.whop import WhopCampaignSnapshot, WhopImportAttempt
@@ -153,6 +154,9 @@ def whop_capabilities() -> WhopProviderCapability:
         ):
             authenticated = "available"
             mode = "browser_export"
+        elif kind == "official-grok" and official_endpoint(configured_url()):
+            authenticated = "available"
+            mode = "live_connector"
         else:
             status = "provider_unavailable"
             public_provider = "unavailable"
@@ -231,6 +235,8 @@ def import_discovered(
         raise CampaignError("whop provider response was empty", code="empty_discovery")
     snapshot = normalize_whop_payload(payload, operator_id=operator_id)
     tool_name = getattr(provider, "tool_name", None)
+    evidence_origin = _as_origin(str(getattr(provider, "evidence_origin", "")))
+    live_claim = _accepted_claim(provider, evidence_origin)
     return _store_discovery(
         work_root,
         snapshot,
@@ -238,13 +244,15 @@ def import_discovered(
         provider_id=str(getattr(provider, "provider_id", "whop")),
         provider_version=str(getattr(provider, "provider_version", "1")),
         live_status=_as_live_status(str(getattr(provider, "live_status", ""))),
-        evidence_origin=_as_origin(str(getattr(provider, "evidence_origin", ""))),
+        evidence_origin=evidence_origin,
         mode=str(getattr(provider, "mode", "live_connector")),
         tool_name=tool_name if isinstance(tool_name, str) else None,
         operator_id=operator_id,
         request=request,
         force=force,
         promotion_hook=promotion_hook,
+        map_sha=_accepted_map_sha(provider),
+        live_claim=live_claim,
     )
 
 
@@ -265,7 +273,9 @@ def discover_live(
         operator_id=operator_id,
         request=request,
     )
-    if attempt.live_claim != "not_claimed":
+    if attempt.live_claim == "claimed" and attempt.evidence_origin != "authenticated_connector":
+        raise CampaignError("whop live claim is not allowed", code="forged_status")
+    if attempt.live_claim not in {"not_claimed", "claimed"}:
         raise CampaignError("whop live claim is not allowed", code="forged_status")
     if attempt.reason_code == "no_matching_campaigns":
         raise CampaignError("whop discovery matched nothing", code="no_matching_campaigns")
@@ -589,6 +599,8 @@ def _store_discovery(
     request: WhopLiveDiscoveryRequest | None,
     force: bool,
     promotion_hook: Callable[[str], None] | None,
+    map_sha: str | None = None,
+    live_claim: Literal["not_claimed", "claimed"] = "not_claimed",
 ) -> WhopDiscoveryAttempt:
     now = datetime.now(UTC)
     active_request = request or WhopLiveDiscoveryRequest(
@@ -601,7 +613,8 @@ def _store_discovery(
         created_at=snapshot.exported_at,
     )
     decisions = filter_campaigns(snapshot, active_request, now=now) if snapshot.campaigns else []
-    map_sha = tool_map_sha256()
+    if map_sha is None:
+        map_sha = tool_map_sha256()
     response = _canonical(snapshot)
     response_sha = hashlib.sha256(response).hexdigest()
     request_sha = request_fingerprint(active_request)
@@ -627,6 +640,8 @@ def _store_discovery(
         source_declarations=declarations,
         acquisition_policy=acquisition_policy,
         tool_map_sha256=map_sha,
+        evidence_origin=evidence_origin,
+        live_claim=live_claim,
     )
     live = live_status
     try:
@@ -684,6 +699,7 @@ def _store_discovery(
         policy_fingerprint=policy,
         identity_sha256=identity,
         tool_map_sha256=map_sha,
+        live_claim=live_claim,
         discovery_request=active_request,
         tool_name=tool_name,
         import_id=attempt_import.import_id,
@@ -865,6 +881,60 @@ def _declaration_sha(snapshot: WhopCampaignSnapshot) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _accepted_claim(provider: _Provider, evidence_origin: str) -> Literal["not_claimed", "claimed"]:
+    """Allow a live claim only after the official endpoint call completed."""
+    claim = getattr(provider, "live_claim", "not_claimed")
+    if claim == "not_claimed":
+        return "not_claimed"
+    official = (
+        isinstance(provider, OfficialGrokProvider)
+        and claim == "claimed"
+        and getattr(provider, "official_call_completed", False) is True
+        and evidence_origin == "authenticated_connector"
+        and getattr(provider, "live_status", "") == "authenticated_discovery"
+        and getattr(provider, "url", "") == PUBLIC_MCP_URL
+        and getattr(provider, "opener", "missing") is None
+        and getattr(provider, "allow_loopback", False) is False
+        and getattr(provider, "allow_fixture", False) is False
+    )
+    if official:
+        return "claimed"
+    raise CampaignError("whop live claim is not allowed", code="forged_status")
+
+
+def _accepted_map_sha(provider: _Provider) -> str:
+    """Use the packaged hash, or the current operator map when the provider names it."""
+    packaged = tool_map_sha256()
+    supplied = getattr(provider, "tool_map_sha256", None)
+    if not isinstance(supplied, str):
+        return packaged
+    if len(supplied) != 64 or set(supplied) - set("0123456789abcdef"):
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    if supplied == packaged:
+        return supplied
+    from clipforge.campaign.whop_tools import load_verified_tool_map
+
+    try:
+        rows, current = load_verified_tool_map()
+    except CampaignError as exc:
+        raise CampaignError("whop tool map could not be read", code="invalid_document") from exc
+    if rows and supplied == current:
+        return supplied
+    raise CampaignError("whop discovery changed", code="stale_discovery")
+
+
+def _map_sha_still_valid(digest: str) -> bool:
+    if digest == tool_map_sha256():
+        return True
+    from clipforge.campaign.whop_tools import load_verified_tool_map
+
+    try:
+        rows, current = load_verified_tool_map()
+    except CampaignError:
+        return False
+    return bool(rows) and current == digest
+
+
 def _identity(**parts: str) -> str:
     raw = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
@@ -928,7 +998,7 @@ def _revalidate(root: Path, attempt: WhopDiscoveryAttempt, *, allow_cancelled: b
         raise CampaignError("whop discovery changed", code="stale_discovery")
     if _policy_fingerprint(list(attempt.campaign_ids)) != attempt.policy_fingerprint:
         raise CampaignError("whop policy changed", code="stale_policy")
-    if attempt.tool_map_sha256 != tool_map_sha256():
+    if not _map_sha_still_valid(attempt.tool_map_sha256):
         raise CampaignError("whop discovery changed", code="stale_discovery")
     recomputed = _identity(
         project_id=attempt.project_id,
@@ -944,6 +1014,8 @@ def _revalidate(root: Path, attempt: WhopDiscoveryAttempt, *, allow_cancelled: b
         source_declarations=_declaration_sha(snapshot),
         acquisition_policy=_acquisition_policy(attempt.discovery_request),
         tool_map_sha256=attempt.tool_map_sha256,
+        evidence_origin=attempt.evidence_origin,
+        live_claim=attempt.live_claim,
     )
     if recomputed != attempt.identity_sha256:
         raise CampaignError("whop discovery changed", code="stale_discovery")

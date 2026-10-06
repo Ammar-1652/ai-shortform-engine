@@ -98,8 +98,8 @@
       })
       .then(function (payload) {
         text(board, "whop_states not_configured provider_unavailable auth_required");
-        text(board, "public_discovery authenticated_discovery test_double");
-        text(board, "live_claim not_claimed");
+        text(board, "public_discovery authenticated_discovery test_double authenticated_connector");
+        text(board, "live_claim not_claimed claimed");
         text(board, "whop_provider " + payload.live_status + " " + payload.provider_version);
         text(board, "live_smoke " + payload.live_smoke);
         text(board, "public_provider " + payload.public_provider);

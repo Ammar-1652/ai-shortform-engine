@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import importlib.resources
 import json
-from datetime import datetime
+import os
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from clipforge.campaign.providers import CampaignError
@@ -25,6 +27,7 @@ _MUTATING = frozenset(
         "pay",
         "purchase",
         "checkout",
+        "payment",
     }
 )
 _ROW_FIELDS = (
@@ -223,6 +226,250 @@ def _known_arguments(request: WhopLiveDiscoveryRequest | None) -> dict[str, obje
     if request.media_format is not None:
         known["media_format"] = request.media_format
     return known
+
+
+_SAFE_ARGUMENTS = frozenset({"query", "language", "status", "category", "platform", "media_format"})
+_SECRET_ARGUMENTS = frozenset(
+    {"password", "token", "cookie", "authorization", "api_key", "secret", "session", "session_id"}
+)
+_UPLOAD_ARGUMENTS = frozenset({"file", "upload", "attachment", "filename", "content", "bytes"})
+_UNSAFE_TEXT = ("bearer ", "token=", "cookie=", "password=", "api_key", "authorization:", "file:")
+_OFFICIAL_ENDPOINT = "https://mcp.whop.com/mcp"
+
+
+def verified_tool_map_path() -> Path:
+    raw = os.environ.get("CLIPFORGE_WHOP_STATE_DIR", "").strip()
+    base = Path(raw).expanduser() if raw else Path.home() / ".config" / "clipforge"
+    return base / "whop" / "tool-map.json"
+
+
+def load_verified_tool_map() -> tuple[list[dict[str, Any]], str]:
+    """Load the operator-local map. A missing file has no verified tools."""
+    path = verified_tool_map_path()
+    _reject_map_symlink(path)
+    if not path.is_file():
+        return [], tool_map_sha256()
+    if (path.stat().st_mode & 0o077) != 0:
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    if path.parent.is_dir() and (path.parent.stat().st_mode & 0o077) != 0:
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CampaignError("whop tool map could not be read", code="invalid_document") from exc
+    if not isinstance(payload, dict):
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    if payload.get("endpoint") != _OFFICIAL_ENDPOINT or payload.get("read_only_verification") != "passed":
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    if _unsafe_text(json.dumps(payload)):
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    rows = payload.get("mappings")
+    verified = payload.get("official_names_verified")
+    if not isinstance(rows, list) or verified is not True:
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    parsed = [_validate_mapping(item) for item in rows if isinstance(item, dict)]
+    if len(parsed) != len(rows) or not parsed:
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    return parsed, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def mappings_from_tools_list(
+    tools: list[dict[str, Any]],
+    *,
+    provider_version: str,
+    protocol_version: str,
+) -> list[dict[str, Any]]:
+    """Keep exact read-only campaign tools. A name substring is not evidence."""
+    stamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    chosen: list[dict[str, Any]] = []
+    for tool in tools:
+        accepted = _accepted_tool(tool, provider_version, protocol_version, stamp)
+        if accepted is not None:
+            chosen.append(accepted)
+    return [_validate_mapping(item) for item in chosen]
+
+
+def public_descriptions(tools: list[dict[str, Any]]) -> dict[str, str]:
+    """Keep short public descriptions. Secret-like text is omitted."""
+    found: dict[str, str] = {}
+    for tool in tools:
+        name = tool.get("name")
+        text = tool.get("description")
+        if not isinstance(name, str) or not isinstance(text, str) or _unsafe_text(text):
+            continue
+        compact = " ".join(text.split())
+        if compact:
+            found[name] = compact[:240]
+    return found
+
+
+def write_verified_tool_map(
+    mappings: list[dict[str, Any]],
+    *,
+    server_name: str,
+    provider_version: str,
+    protocol_version: str,
+    descriptions: dict[str, str] | None = None,
+) -> str:
+    """Write the operator-local map. An empty selection is not stored."""
+    path = verified_tool_map_path()
+    _reject_map_symlink(path)
+    if not mappings:
+        if path.is_file():
+            path.unlink()
+        raise CampaignError("unsupported_tool", code="unsupported_tool")
+    if _unsafe_text(server_name) or _unsafe_text(provider_version) or _unsafe_text(protocol_version):
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(path.parent, 0o700)
+    safe_descriptions = {
+        name: text
+        for name, text in (descriptions or {}).items()
+        if isinstance(name, str) and isinstance(text, str) and text and not _unsafe_text(text)
+    }
+    payload = {
+        "schema_version": "1.0.0",
+        "tool_map_version": "1",
+        "official_names_verified": True,
+        "read_only_verification": "passed",
+        "endpoint": _OFFICIAL_ENDPOINT,
+        "server_name": server_name,
+        "provider_version": provider_version,
+        "protocol_version": protocol_version,
+        "descriptions": safe_descriptions,
+        "mappings": mappings,
+    }
+    encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+    partial = path.with_suffix(".json.partial")
+    if partial.is_symlink():
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
+    descriptor = os.open(partial, os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    try:
+        os.write(descriptor, encoded)
+    finally:
+        os.close(descriptor)
+    os.chmod(partial, 0o600)
+    os.replace(partial, path)
+    os.chmod(path, 0o600)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def remove_verified_tool_map() -> None:
+    """Remove the operator-local map. A symlink is unlinked and its target is kept."""
+    path = verified_tool_map_path()
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    parent = path.parent
+    if parent.is_symlink() or not parent.is_dir():
+        return
+    if any(parent.iterdir()):
+        return
+    parent.rmdir()
+
+
+def show_verified_tool_map() -> str:
+    """Print tool names and hashes. The filesystem path is not included."""
+    path = verified_tool_map_path()
+    if path.is_symlink() or not path.is_file():
+        return "tool_map: missing\nofficial_names_verified: false\nlive_claim: not_claimed"
+    rows, digest = load_verified_tool_map()
+    lines = [
+        "tool_map: configured",
+        f"endpoint: {_OFFICIAL_ENDPOINT}",
+        f"tool_map_sha256: {digest}",
+        "read_only_verification: passed",
+        "live_claim: not_claimed",
+        "credentials: not stored",
+    ]
+    for row in rows:
+        lines.append(f"tool: {row['tool_name']} {row['input_schema_sha256']}")
+    return "\n".join(lines)
+
+
+def _accepted_tool(
+    tool: dict[str, Any],
+    provider_version: str,
+    protocol_version: str,
+    stamp: str,
+) -> dict[str, Any] | None:
+    name = tool.get("name")
+    if not isinstance(name, str) or not name or _mutating_token(name) or _unsafe_text(name):
+        return None
+    description = tool.get("description")
+    if isinstance(description, str) and _unsafe_text(description):
+        return None
+    annotations = tool.get("annotations")
+    if not isinstance(annotations, dict) or annotations.get("readOnlyHint") is not True:
+        return None
+    if annotations.get("destructiveHint") is True:
+        return None
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        return None
+    if not _campaign_output(tool.get("outputSchema")):
+        return None
+    properties = schema.get("properties") or {}
+    required = schema.get("required") or []
+    if not isinstance(properties, dict) or not properties or not isinstance(required, list):
+        return None
+    names = {str(item) for item in properties}
+    if names - _SAFE_ARGUMENTS or names & _SECRET_ARGUMENTS or names & _UPLOAD_ARGUMENTS:
+        return None
+    if {str(item) for item in required} - _SAFE_ARGUMENTS:
+        return None
+    for spec in properties.values():
+        if _uploads_bytes(spec):
+            return None
+    return {
+        "tool_name": name,
+        "provider_id": "whop",
+        "provider_version": provider_version,
+        "protocol_version": protocol_version,
+        "read_only": True,
+        "destructive": False,
+        "input_schema_sha256": schema_sha256(schema),
+        "output_schema_sha256": schema_sha256(CAMPAIGN_OUTPUT_SCHEMA),
+        "output_model": "campaign_catalogue",
+        "verification_origin": "tools_list",
+        "verification_timestamp": stamp,
+        "tool_map_version": "1",
+    }
+
+
+def _campaign_output(schema: object) -> bool:
+    """True when the declared output is a campaign catalogue. The tool name is ignored."""
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        return False
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return False
+    campaigns = properties.get("campaigns")
+    return isinstance(campaigns, dict) and campaigns.get("type") == "array"
+
+
+def _uploads_bytes(spec: object) -> bool:
+    if not isinstance(spec, dict):
+        return False
+    if spec.get("contentMediaType"):
+        return True
+    return spec.get("format") in {"binary", "byte", "password"}
+
+
+def _unsafe_text(value: str) -> bool:
+    lowered = value.lower()
+    if any(token in lowered for token in _UNSAFE_TEXT):
+        return True
+    return value.startswith("/") or ":\\" in value
+
+
+def _reject_map_symlink(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise CampaignError("whop tool map could not be read", code="invalid_document")
+        if current.parent == current:
+            return
+        current = current.parent
 
 
 def _mutating_token(name: str) -> bool:

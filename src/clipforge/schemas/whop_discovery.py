@@ -180,7 +180,7 @@ class WhopDiscoveryAttempt(Versioned):
     provider_version: str = Field(min_length=1, max_length=40)
     live_status: LiveStatus
     evidence_origin: Literal["test_double", "public_connector", "authenticated_connector"]
-    live_claim: Literal["not_claimed"] = "not_claimed"
+    live_claim: Literal["not_claimed", "claimed"] = "not_claimed"
     request_sha256: str = Field(pattern=_SHA)
     filter_fingerprint: str = Field(pattern=_SHA)
     response_sha256: str = Field(pattern=_SHA)
@@ -210,6 +210,10 @@ class WhopDiscoveryAttempt(Versioned):
     def body_is_public(self) -> Self:
         if self.filter_fingerprint != self.request_sha256:
             raise ValueError("whop filter fingerprint does not match the request")
+        if self.live_claim == "claimed" and (
+            self.evidence_origin != "authenticated_connector" or self.live_status != "authenticated_discovery"
+        ):
+            raise ValueError("whop live claim is not allowed")
         _reject_leaks(self.model_dump_json(), label="whop discovery")
         return self
 

@@ -366,8 +366,11 @@
       "title": "Import Id"
     },
     "live_claim": {
-      "const": "not_claimed",
       "default": "not_claimed",
+      "enum": [
+        "not_claimed",
+        "claimed"
+      ],
       "title": "Live Claim",
       "type": "string"
     },

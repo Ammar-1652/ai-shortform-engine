@@ -1,6 +1,6 @@
 # Whop live operator discovery
 
-Whop discovery is optional and read-only. The default result is `not_configured`. Credentials stay outside Clipforge. See [ADR 0062](../adr/0062-whop-live-operator-discovery.md) and [provider boundaries](provider-boundaries.md).
+Whop discovery is optional and read-only. The default result is `not_configured`. Credentials stay outside Clipforge. See [ADR 0062](../adr/0062-whop-live-operator-discovery.md), [ADR 0063](../adr/0063-whop-grok-connector-onboarding.md), and [provider boundaries](provider-boundaries.md).
 
 SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. No migration was added.
 
@@ -34,7 +34,7 @@ CLIPFORGE_WHOP_CONNECTOR=public
 clipforge campaign operator whop discover --live --project PROJECT_ID --operator OPERATOR_ID --work-dir WORK_ROOT
 ```
 
-`clipforge campaign operator whop auth doctor` and `auth status` only read local metadata. `auth login` and `auth refresh` prepare `~/.config/clipforge/whop-profile` with owner-only permissions and ask the installed `grok mcp doctor whop` command whether a connector exists. They do not read cookies, do not type a password, and do not open Chrome unless an official connector supplies a verified authorization flow. `auth logout` removes only that dedicated profile after a terminal confirmation. The production URL is exactly `https://mcp.whop.com/mcp`. `CLIPFORGE_WHOP_URL` may repeat that URL. Any other host, including another HTTPS host, is `provider_unavailable`. Loopback HTTP is accepted only when a test constructs the adapter with `allow_loopback`. A URL with a username, a password, a query string, or a fragment is rejected. None of these variables is written into a manifest. The adapter does not follow a redirect to another host.
+`clipforge campaign operator whop auth doctor` and `auth status` read the local Grok install. They may run `grok plugin list` and `grok mcp list`. They do not open Chrome, do not open a socket, and do not run `grok mcp doctor whop`. `auth login` installs `whopio/plugins#dist/grok/whop` when it is missing, then runs `mcps` and `whop-connect` only if this Grok build lists those commands. If it does not, login exits `auth_required` and tells the operator to open Grok, run `/mcps`, authorize Whop, and run `/whop-connect`. It does not return `connector_unavailable` before that attempt, and it does not invent a browser URL. `auth refresh` reuses the same profile and repeats login when `grok mcp doctor whop` reports an expired connector. `auth logout` removes only the dedicated profile and the operator tool map after confirmation. The production URL is exactly `https://mcp.whop.com/mcp`. `CLIPFORGE_WHOP_URL` may repeat that URL. Any other host, including another HTTPS host, is `provider_unavailable`. Loopback HTTP is accepted only when a test constructs the adapter with `allow_loopback`. A URL with a username, a password, a query string, or a fragment is rejected. None of these variables is written into a manifest. The adapter does not follow a redirect to another host.
 
 Private campaigns use a connector that already completed Whop's browser sign-in. Clipforge does not automate that page and does not keep the session.
 
@@ -47,6 +47,24 @@ clipforge campaign operator whop discover --live --connector authenticated --pro
 ```
 
 The handle is a one-time nonce for that process. It is not a cookie or a bearer token, and Clipforge does not write it. A fresh process can call the connector. An in-memory Python registry is not that boundary. A second use of the nonce is `stale_session`. If the connector is down, the command exits non-zero with `provider_unavailable` and writes nothing.
+
+The one-time operator sequence is:
+
+```text
+grok plugin install whopio/plugins#dist/grok/whop
+```
+
+In Grok, run `/mcps`, select Whop, authorize it, then run `/whop-connect`. Then:
+
+```text
+grok mcp doctor whop
+clipforge campaign operator whop auth status
+clipforge campaign operator whop tools refresh
+CLIPFORGE_WHOP_LIVE_SMOKE=1 CLIPFORGE_WHOP_CONNECTOR=official-grok \
+  clipforge campaign operator whop discover --live --project PROJECT_ID --operator OPERATOR_ID
+```
+
+`official-grok` calls `https://mcp.whop.com/mcp` after doctor reports the connector ready and `tools refresh` has stored a verified map outside the repository at `~/.config/clipforge/whop/tool-map.json`. `authenticated` remains the loopback test double. `live_claim` stays `not_claimed` until that official call succeeds. A fixture, a local JSON file, or a loopback handoff cannot set `claimed`.
 
 When no authorized connector is running, the operator exports a sanitized snapshot and imports it. That path is `authenticated_operator_snapshot`, `credentials_stored: not_stored`, and `live_transport: not_claimed`. It is not a live Clipforge MCP pass.
 
@@ -75,7 +93,7 @@ clipforge campaign operator whop import --file SANITIZED_SNAPSHOT.json --project
 | --- | --- | --- |
 | `whop_live` | `not_configured` | `provider_unavailable` when no connector is named; `not_configured` when a connector is only configured |
 | `public_provider` | `not_configured` | `available` for `CONNECTOR=public`, otherwise `unavailable` |
-| `authenticated_connector` | `not_configured` | `available` only when the handle is set |
+| `authenticated_connector` | `not_configured` | `available` for a loopback handle, or for `CONNECTOR=official-grok` on the official URL. That means the connector is selected, not that a call succeeded |
 | `live_smoke` | `not_executed` | `not_executed` |
 | Mutating Whop operations | `disabled` | `disabled` |
 | Credentials | `not_stored` | `not_stored` |
@@ -86,7 +104,7 @@ Public catalogue fields are `title`, `campaign_url`, `status`, `category`, and `
 
 ## MCP and browser boundary
 
-The public adapter posts `initialize`, records the negotiated protocol version, posts `notifications/initialized`, and sends `MCP-Protocol-Version` on later requests. It then posts `tools/list` and one `tools/call` for an exact name in `docs/operations/assets/whop/tool-map.json`. That file currently has no official mapping. Fixture names such as `list_public_campaigns` are test doubles. A prefix, a substring, or a mutating token does not qualify. A tool without read-only evidence is rejected. If `tools/list` has no mapped Content Rewards tool, the result is `unsupported_tool` and nothing is stored. Headers are `Content-Type`, `Accept`, and `User-Agent`. `Authorization` is not set. `Mcp-Session-Id` stays on the client for that process and is not stored. JSON and `text/event-stream` bodies are accepted, and the SSE event must match the JSON-RPC id. HTTP 202 with an empty body accepts a notification. HTTP 401 is `auth_required`. HTTP 404 on a live session is `stale_session` and initialization runs once. Oversized bodies, timeouts, and malformed JSON-RPC are errors and are not retried. Secret keys and secret-like text reject the document. A payload field named `live_status` or `provider_version` is `forged_status`.
+The public adapter posts `initialize`, records the negotiated protocol version, posts `notifications/initialized`, and sends `MCP-Protocol-Version` on later requests. It then posts `tools/list` and one `tools/call` for an exact name. The packaged map at `src/clipforge/campaign/data/whop-tool-map.json` has no official mapping. `whop tools refresh` may write a verified map outside git after a live `tools/list`. Fixture names such as `list_public_campaigns` are test doubles. A prefix, a substring, or a mutating token does not qualify. A tool without read-only evidence is rejected. If `tools/list` has no mapped Content Rewards tool, the result is `unsupported_tool` and nothing is stored. Headers are `Content-Type`, `Accept`, and `User-Agent`. `Authorization` is not set. `Mcp-Session-Id` stays on the client for that process and is not stored. JSON and `text/event-stream` bodies are accepted, and the SSE event must match the JSON-RPC id. HTTP 202 with an empty body accepts a notification. HTTP 401 is `auth_required`. HTTP 404 on a live session is `stale_session` and initialization runs once. Oversized bodies, timeouts, and malformed JSON-RPC are errors and are not retried. Secret keys and secret-like text reject the document. A payload field named `live_status` or `provider_version` is `forged_status`.
 
 The authenticated boundary is the loopback connector, not a registry inside the Clipforge process. The connector returns sanitized campaign JSON. Clipforge does not launch a browser, does not read a profile, and does not keep a password. Normal CI does not set the live switch. The opt-in smoke skips with `whop_live: not_configured` and `live_smoke: not_executed` unless an authorized connector is actually running. A skip is not a live pass. A loopback fixture is not a live pass.
 
@@ -200,7 +218,7 @@ English WhisperX alignment stays `verified_live` for the known checkpoint. Arabi
 - Doctor, `discover` without `--live`, and normal CI do not open a socket.
 - `discover --live` can open the public MCP socket or call a loopback connector from a clean process. A fixture result stays `live_claim: not_claimed`.
 - The opt-in smoke skips with `whop_live: not_configured` and `live_smoke: not_executed` when no authorized connector is running. That skip is not a live pass.
-- Official Whop tool names stay unverified until `tools/list` on `https://mcp.whop.com/mcp` returns them. The checked-in tool map is empty.
+- Official Whop tool names stay unverified until `tools/list` on `https://mcp.whop.com/mcp` returns them. The checked-in tool map is empty. A verified map outside the repository is not a live claim by itself. `live_claim: claimed` requires one successful read-only `tools/call` on that endpoint.
 - A Whop page URL is not a media file. Direct downloads that are unavailable need manual acquisition. Acquired file hashes stay separate from declared hashes.
 - Snapshot import rows stay `whop_live: not_configured`.
 - Campaign metadata is not an `AssetLicenseRecord`.

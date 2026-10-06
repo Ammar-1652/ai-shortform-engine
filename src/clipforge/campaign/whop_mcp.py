@@ -35,6 +35,7 @@ _MUTATING_TOKENS = frozenset(
         "pay",
         "purchase",
         "checkout",
+        "payment",
     }
 )
 _SECRET_KEYS = frozenset(

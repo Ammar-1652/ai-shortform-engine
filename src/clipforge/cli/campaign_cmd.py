@@ -79,8 +79,11 @@ from clipforge.campaign.whop_auth import doctor_text as whop_auth_doctor
 from clipforge.campaign.whop_auth import login as whop_auth_login
 from clipforge.campaign.whop_auth import logout as whop_auth_logout
 from clipforge.campaign.whop_auth import refresh as whop_auth_refresh
+from clipforge.campaign.whop_auth import refresh_tools as whop_tools_refresh
 from clipforge.campaign.whop_auth import status_text as whop_auth_status
+from clipforge.campaign.whop_auth import verify_tools as whop_tools_verify
 from clipforge.campaign.whop_live import discover_live, discover_whop, select_whop_campaign, whop_capabilities
+from clipforge.campaign.whop_tools import show_verified_tool_map as whop_tools_show
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
@@ -101,6 +104,11 @@ auth_app = typer.Typer(
     help="Operator Whop sign-in. Clipforge does not store credentials.",
 )
 whop_app.add_typer(auth_app, name="auth")
+tools_app = typer.Typer(
+    no_args_is_help=True,
+    help="Verified Whop tool map. Credentials are not stored.",
+)
+whop_app.add_typer(tools_app, name="tools")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -317,6 +325,33 @@ def whop_auth_logout_command() -> None:
         _fail(exc)
 
 
+@tools_app.command("verify")
+def whop_tools_verify_command() -> None:
+    """Re-read the local tool map. This does not open a socket."""
+    try:
+        typer.echo(whop_tools_verify())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@tools_app.command("refresh")
+def whop_tools_refresh_command() -> None:
+    """Record official read-only tools after the connector is ready."""
+    try:
+        typer.echo(whop_tools_refresh())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@tools_app.command("show")
+def whop_tools_show_command() -> None:
+    """Show verified tool names and hashes. The path is omitted."""
+    try:
+        typer.echo(whop_tools_show())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
 @whop_app.command("doctor")
 def whop_doctor_command() -> None:
     """Report Whop intake. Live account access stays unconfigured."""
@@ -340,7 +375,7 @@ def whop_discover_command(
         str | None,
         typer.Option(
             "--connector",
-            help="public or authenticated. The authenticated path uses a loopback connector.",
+            help="public, authenticated, or official-grok. authenticated is a loopback test double.",
         ),
     ] = None,
 ) -> None:

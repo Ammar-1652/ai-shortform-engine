@@ -112,6 +112,34 @@ class PublicWhopMcpProvider:
         return document
 
 
+class OfficialGrokProvider(PublicWhopMcpProvider):
+    """Official Grok connector. A loopback opener cannot become a live claim."""
+
+    provider_id = "whop"
+    provider_version = "official"
+    live_status = "not_configured"
+    evidence_origin = "test_double"
+    mode = "live_connector"
+    live_claim = "not_claimed"
+    official_call_completed = False
+    tool_map_sha256: str | None = None
+
+    def discover(self) -> dict[str, Any]:
+        document = super().discover()
+        official = (
+            self.url == PUBLIC_MCP_URL
+            and self.opener is None
+            and not self.allow_loopback
+            and not self.allow_fixture
+        )
+        if official:
+            self.evidence_origin = "authenticated_connector"
+            self.live_status = "authenticated_discovery"
+            self.live_claim = "claimed"
+            self.official_call_completed = True
+        return document
+
+
 class AuthenticatedBrowserProvider:
     """Normalized metadata from a connector session. Login stays outside Clipforge."""
 
@@ -161,4 +189,21 @@ def build_live_provider(kind: str | None = None) -> PublicWhopMcpProvider | Auth
         return PublicWhopMcpProvider(PUBLIC_MCP_URL)
     if selected == "authenticated":
         return AuthenticatedBridgeProvider.from_environment()
+    if selected == "official-grok":
+        from clipforge.campaign.whop_auth import _AUTH_REQUIRED, _doctor_state
+        from clipforge.campaign.whop_tools import load_verified_tool_map
+
+        if not official_endpoint(configured_url()):
+            raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
+        if _doctor_state() != "authenticated":
+            raise CampaignError(_AUTH_REQUIRED, code="auth_required")
+        try:
+            rows, digest = load_verified_tool_map()
+        except CampaignError as exc:
+            raise CampaignError("unsupported_tool", code="unsupported_tool") from exc
+        if not rows:
+            raise CampaignError("unsupported_tool", code="unsupported_tool")
+        provider = OfficialGrokProvider(PUBLIC_MCP_URL, tool_map=rows, allow_fixture=False)
+        provider.tool_map_sha256 = digest
+        return provider
     raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
