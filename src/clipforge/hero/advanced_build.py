@@ -8,7 +8,11 @@ from pathlib import Path
 
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
-from clipforge.hero.reframe import ReframeError, build_face_follow, frame_period_tolerance_us
+from clipforge.hero.reframe import (
+    ReframeError,
+    build_face_follow,
+    frame_period_tolerance_us,
+)
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,

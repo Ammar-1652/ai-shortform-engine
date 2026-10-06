@@ -18,7 +18,11 @@ from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvan
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.probe import probe_hero
-from clipforge.hero.reframe import frame_count_for_duration, frame_period_tolerance_us, windows_follow_trajectory
+from clipforge.hero.reframe import (
+    frame_count_for_duration,
+    frame_period_tolerance_us,
+    windows_follow_trajectory,
+)
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
 from clipforge.media.hashing import sha256_file
