@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from clipforge.errors import ClipforgeError, MediaError, StorageError
@@ -75,7 +75,13 @@ class DeliveryFacts:
     qa_set_id: str
     qa_set_sha256: str
     approval_review_id: str
+    final_review_id: str
+    hero_plan_id: str
+    hero_plan_sha256: str
     profile_fingerprint: str
+    policy_fingerprint: str
+    rights_fingerprint: str
+    delivery_manifest_sha256: str
     video_sha256: str
     video_size: int
     output_duration_us: int
@@ -112,6 +118,7 @@ def preflight_delivery(
     include_narration: bool = False,
     narration_artifact_id: str | None = None,
     probe: bool = True,
+    require_final: bool = True,
 ) -> DeliveryFacts:
     """Fail closed before a delivery job exists. ``probe`` is the ffprobe step."""
     if destination != "local":
@@ -170,6 +177,7 @@ def preflight_delivery(
         raise PublishError("visual analysis hash changed", category="artifact_changed")
     _require_current(database, source.project_id, source_asset_id, KIND_HERO, document.hero_artifact_id)
     plan = _plan(root, workspace, draft, document)
+    _reject_plan_text(plan)
     alignment_id, alignment_sha, cues = _alignment(root, workspace, draft)
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
@@ -188,6 +196,7 @@ def preflight_delivery(
         narration_artifact_id=narration_artifact_id,
         probe=probe,
     )
+    _require_candidate_approval(database, source.project_id, source_asset_id, candidate_id, reviews)
     artifact = _advanced_artifact(database, root, source.project_id, source_asset_id, manifest_sha)
     approval_id = _approval(
         reviews,
@@ -205,7 +214,12 @@ def preflight_delivery(
         draft.advanced_plan_sha256,
     )
     narration_path, narration_doc = narration
-    return DeliveryFacts(
+    rights_fingerprint = hashlib.sha256(license_record.status.value.encode("utf-8")).hexdigest()
+    policy_fingerprint = hashlib.sha256(f"{profile.fingerprint()}:{qa_sha}".encode()).hexdigest()
+    delivery_sha = _existing_delivery_sha(database, root, source.project_id, source_asset_id)
+    from clipforge.review.final_gate import evidence_for_facts, require_final_approval
+
+    draft_facts = DeliveryFacts(
         project_id=source.project_id,
         source_asset_id=source_asset_id,
         source_sha256=manifest.content_sha256,
@@ -226,7 +240,13 @@ def preflight_delivery(
         qa_set_id=qa_set_id,
         qa_set_sha256=qa_sha,
         approval_review_id=approval_id,
+        final_review_id="",
+        hero_plan_id=draft.hero_plan_id,
+        hero_plan_sha256=draft.hero_plan_sha256,
         profile_fingerprint=profile.fingerprint(),
+        policy_fingerprint=policy_fingerprint,
+        rights_fingerprint=rights_fingerprint,
+        delivery_manifest_sha256=delivery_sha,
         video_sha256=draft.preview_sha256,
         video_size=draft.preview_size_bytes,
         output_duration_us=draft.output_duration_us,
@@ -252,6 +272,13 @@ def preflight_delivery(
         narration_path=narration_path,
         workspace=workspace,
     )
+    evidence = evidence_for_facts(draft_facts)
+    final_id = ""
+    if require_final:
+        final_id = require_final_approval(database, root, draft_facts, reviews, evidence)
+    if not final_id:
+        return draft_facts
+    return replace(draft_facts, final_review_id=final_id)
 
 
 def cache_fingerprint(facts: DeliveryFacts) -> str:
@@ -263,6 +290,7 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "advanced_set_sha256": facts.advanced_set_sha256,
         "alignment_sha256": facts.alignment_sha256 or "",
         "approval_review_id": facts.approval_review_id,
+        "final_review_id": facts.final_review_id,
         "candidate_id": facts.candidate_id,
         "candidate_set_id": facts.candidate_set_id,
         "candidate_set_sha256": facts.candidate_set_sha256,
@@ -530,6 +558,17 @@ def _alignment(
     return draft.alignment_id, draft.alignment_sha256, cues
 
 
+def _reject_plan_text(plan: AdvancedHeroPlanDocument) -> None:
+    parts = [event.text for event in plan.typography]
+    parts.extend(event.text for event in plan.emphasis)
+    parts.extend(str(event.payload.kind) for event in plan.diagrams)
+    blob = "\n".join(parts)
+    lowered = blob.lower()
+    tokens = ("/home/", "/tmp/", "/users/", "https://", "http://", "file:", "..", "\\")
+    if any(token in lowered or token in blob for token in tokens):
+        raise PublishError("plan text contains an unsafe path", category="unsafe_path")
+
+
 def _hero_plan(root: Path, workspace: SourceWorkspace, draft: AdvancedHeroDraftOutput) -> None:
     path = workspace.hero_plan_file(draft.candidate_id)
     try:
@@ -554,6 +593,8 @@ def _video(root: Path, manifest: Path, draft: AdvancedHeroDraftOutput) -> Path:
         raise PublishError("advanced Hero MP4 is a symlink", category="unsafe_path")
     if not path.is_file():
         raise PublishError("advanced Hero MP4 is missing", category="artifact_missing")
+    if path.stat().st_size == 0:
+        raise PublishError("advanced Hero MP4 is empty", category="corrupt_media")
     if sha256_file(path) != draft.preview_sha256 or path.stat().st_size != draft.preview_size_bytes:
         raise PublishError("advanced Hero MP4 hash does not match the manifest", category="artifact_changed")
     return path
@@ -708,6 +749,39 @@ def _approval(
     if effective.decision != "approved":
         raise PublishError("review decision is not approved", category="approval_missing")
     return effective.review_id
+
+
+def _require_candidate_approval(
+    database: Database,
+    project_id: str,
+    source_asset_id: str,
+    candidate_id: str,
+    reviews: Sequence[ReviewDecision],
+) -> None:
+    from clipforge.preview.constants import KIND_PREVIEW
+
+    with database.connect() as connection:
+        row = find_artifact(connection, project_id, source_asset_id, KIND_PREVIEW)
+    if row is None:
+        raise PublishError("candidate approval is missing", category="missing_candidate_approval")
+    effective = effective_review(list(reviews), row.artifact_id, candidate_id, subject_kind="candidate")
+    if effective is None or effective.decision != "approved":
+        raise PublishError("candidate approval is missing", category="missing_candidate_approval")
+
+
+def _existing_delivery_sha(database: Database, root: Path, project_id: str, source_asset_id: str) -> str:
+    with database.connect() as connection:
+        row = find_artifact(connection, project_id, source_asset_id, "publish_package_json")
+    if row is None:
+        return ""
+    path = path_from_file_uri(row.uri)
+    if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+        raise PublishError("delivery package is missing", category="stale_delivery")
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise PublishError("delivery package is outside the work root", category="unsafe_path") from exc
+    return sha256_file(path)
 
 
 def _qa(

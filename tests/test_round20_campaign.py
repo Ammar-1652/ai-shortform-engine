@@ -673,6 +673,37 @@ def _insert_source(
     )
     publish_id = f"publish-{slug}"
     _point(connection, project_id, job_id, asset_id, publish_id, "publish_package_json", manifest)
+    from clipforge.review.final_gate import write_final_review
+
+    write_final_review(
+        connection,
+        work,
+        project_id=project_id,
+        artifact_id=advanced_id,
+        candidate_id=candidate_id,
+        review_id=f"final-{slug}",
+        evidence={
+            "advanced_artifact_id": advanced_id,
+            "advanced_manifest_sha256": sha256_file(advanced),
+            "advanced_plan_id": f"plan-{delivery_id}",
+            "advanced_plan_sha256": "e" * 64,
+            "alignment_id": alignment_id,
+            "alignment_sha256": alignment_sha,
+            "candidate_id": candidate_id,
+            "delivery_manifest_sha256": sha256_file(manifest),
+            "hero_plan_id": "",
+            "hero_plan_sha256": "",
+            "policy_fingerprint": "f" * 64,
+            "profile_fingerprint": "f" * 64,
+            "project_id": project_id,
+            "qa_set_id": f"qa-doc-{delivery_id}",
+            "qa_set_sha256": sha256_file(qa),
+            "qa_status": "pass",
+            "rights_fingerprint": "owned",
+            "source_asset_id": asset_id,
+            "source_sha256": digest,
+        },
+    )
     narration_id = None
     wav = None
     if narrate:

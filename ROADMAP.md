@@ -166,10 +166,16 @@ Record which languages have a real aligner or narrator. Full-source alignment ru
 
 ## Round 27 — Whop live operator discovery
 
-Status: in progress on `round-27-whop-live-operator`, started from `06848987ccf1090e96e8120941fc9a3b1a61eab0`.
+Status: merged on main as `ea8c933c821279fdf049c104f819a81ea255a31d`. See `docs/operations/round-27-validation.md`.
 
-Optional read-only discovery of normalized Whop campaign and source metadata. The default is `not_configured`. Credentials stay outside Clipforge. Publishing stays deferred. See `docs/adr/0062-whop-live-operator-discovery.md`.
+Optional read-only discovery of normalized Whop campaign and source metadata. The default is `not_configured`. Credentials stay outside Clipforge. A live Whop claim was not made. Publishing stays deferred. See `docs/adr/0062-whop-live-operator-discovery.md` and `docs/adr/0063-whop-grok-connector-onboarding.md`.
+
+## Round 28 — Final review and delivery gate
+
+Status: in progress on `round-28-final-review-delivery-gate`, started from `ea8c933c821279fdf049c104f819a81ea255a31d`.
+
+A human final decision is required before local delivery. Hero approval and a passing QA set do not authorize that package. Whop MCP and external platform publishing stay deferred. See `docs/adr/0064-final-review-and-delivery-gate.md`.
 
 ## Later
 
-External platform publishing is planned and not implemented. A Whop account session stays closed unless a later opt-in connector opens one. Arabic and Japanese alignment stay unclaimed until a real provider runs.
+External platform publishing is planned and not implemented. Whop MCP stays deferred. Arabic and Japanese alignment stay unclaimed until a real provider runs.

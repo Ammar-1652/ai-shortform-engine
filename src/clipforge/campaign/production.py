@@ -955,7 +955,20 @@ def _package(database: Database, root: Path, binding: SourceBinding) -> tuple[_P
         return built, reason
     if producer:
         return built, producer
-    return built, None
+    from clipforge.review.final_gate import package_blocker
+
+    advanced_id = built.advanced_artifact_id or ""
+    blocked = package_blocker(
+        database,
+        root,
+        project_id=binding.project_id,
+        candidate_id=built.candidate_id,
+        advanced_artifact_id=advanced_id,
+        qa_set_sha256=built.qa_set_sha256,
+        source_sha256=binding.source_sha256,
+        delivery_manifest_sha256=built.manifest_sha256,
+    )
+    return built, blocked
 
 
 def _files_sha256(document: object) -> str:
@@ -1258,7 +1271,9 @@ def _effective_hero_review(
     named = [
         item
         for item in typed
-        if item.candidate_id == candidate_id and item.artifact_id in {hero_artifact_id, advanced_artifact_id}
+        if item.candidate_id == candidate_id
+        and item.artifact_id in {hero_artifact_id, advanced_artifact_id}
+        and item.subject_kind != "final"
     ]
     if any(item.subject_kind != "hero" for item in named):
         return None, "review_subject"
