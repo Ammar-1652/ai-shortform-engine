@@ -18,7 +18,7 @@ pnpm --dir apps/renderer typecheck
 pnpm --dir apps/renderer test
 ```
 
-Local results on this branch: ruff, format, mypy, schema check, and doctor passed. Doctor reports SQLite schema version 6. Schema export wrote 193 files. Pytest: 536 passed, 1 skipped, 488 seconds. Renderer lint, typecheck, and 27 tests passed. Normal CI does not set `CLIPFORGE_WHOP_LIVE_SMOKE`. No live Whop session was opened.
+Local results on this branch: ruff, format, mypy, schema check, and doctor passed. Doctor reports SQLite schema version 6. Schema export wrote 193 files. The Whop tests were run twice: 23 passed and 1 skipped each time. The skip is the opt-in live smoke. Full pytest: 552 passed, 2 skipped, 445 seconds. Renderer lint, typecheck, and 27 tests passed. Normal CI does not set `CLIPFORGE_WHOP_LIVE_SMOKE`. The skipped smoke is not a live pass. No official Whop session was opened while these checks ran.
 
 CI uses the Round 21 workflow: `verify-python`, then `verify-renderer-browser`, on `[self-hosted, linux, x64, clipforge]`. Feature-branch pushes do not start that workflow.
 
@@ -26,15 +26,19 @@ CI uses the Round 21 workflow: `verify-python`, then `verify-renderer-browser`, 
 
 | Command | Flag unset | `CLIPFORGE_WHOP_LIVE_SMOKE=1` |
 | --- | --- | --- |
-| `whop doctor` | `whop_live: not_configured` | `whop_live: provider_unavailable` and `session: not opened` |
-| `whop capabilities` | mode `not_configured` | `provider_unavailable`; mode `live_connector` only when `CLIPFORGE_WHOP_CONNECTOR` is set |
-| `whop discover` | `not_configured`, no sidecar | `provider_unavailable`, no sidecar |
+| `whop doctor` | `whop_live: not_configured` and `live_smoke: not_executed` | `provider_unavailable` when no connector is named; `public_provider: available` when `CONNECTOR=public`, still `live_smoke: not_executed` |
+| `whop discover` | `not_configured`, no sidecar, exit zero | `--live` without the switch exits non-zero with `not_configured`; `--live` without a connector exits non-zero with `provider_unavailable` |
+| `whop discover --live` with `CONNECTOR=public` | not used | calls the MCP adapter and writes a discovery with `live_claim: not_claimed` |
 
 `public_headers()` sends `Content-Type`, `Accept`, and `User-Agent`. It does not send `Authorization`. Mutating operations stay `disabled`. Credentials stay `not_stored`. Publishing stays `deferred`.
 
 Snapshot import of the older studio fixture still cache-hits, reports `whop_live: not_configured`, and selects `src-one` because that source is `allowed`. `source_may_proceed("allowed")` remains true.
 
-`FakeWhopProvider` normalizes `camp-city` as `public_discovery` and does not open a socket. `discover_whop` on that double writes nothing. `import_discovered` then writes the sidecar. `FakeBrowserExportProvider` records `authenticated_discovery` after dropping a cookie key. `UnavailableWhopProvider` raises `provider_unavailable` before a sidecar. `MalformedWhopProvider` is rejected for bearer text, cookie text, API-key text, password text, an absolute path, a `file:` URI, traversal, a backslash, a remote media URL in a title, and an HTML payload.
+`FakeWhopProvider` normalizes `camp-city` as `public_discovery` with `evidence_origin: test_double` and `live_claim: not_claimed`. It does not open a socket. `FakeBrowserExportProvider` records `authenticated_discovery` only as a test double. A cookie key is `secret_rejected` and writes nothing. `UnavailableWhopProvider` raises `provider_unavailable` before a sidecar. `MalformedWhopProvider` is rejected for bearer text, cookie text, API-key text, password text, an absolute path, a `file:` URI, traversal, a backslash, a remote media URL in a title, and an HTML payload. A payload field named `live_status` or `provider_version` is `forged_status`.
+
+The public adapter is exercised against a loopback MCP server. That server records `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` for `list_public_campaigns` only. `create_campaign` and `list_public_campaigns_and_checkout` are not called. JSON and SSE responses both normalize. Malformed JSON-RPC, an oversized body, a timeout, and a lost session fail before a sidecar. The session id `mcp-session` is absent from the stored files. The same response in `project-1` and `project-2` produces different discovery ids and import ids. A project-1 import cannot be selected as project-2. A changed catalogue is a new discovery. A changed policy is a new discovery, and the old row fails `verify` with `stale_policy`.
+
+Selection rejects an inactive campaign, a prohibited category, a query miss, a language miss, a stale export, an unavailable source, a format miss, an oversized source, a duration outside the bounds, missing rights, and a missing content hash. `selected: true` does not override a failed filter. A source without `content_sha256` is not given a metadata digest. Promotion failure at each stage deletes the new files. A previous manifest and snapshot stay byte-for-byte. `resume` after `cancel` does not call the provider again.
 
 ## Filter examples
 
@@ -88,4 +92,4 @@ Rejected before a discovery sidecar: bearer text, cookie text, API-key text, pas
 
 ## Limits
 
-No live Whop MCP session was opened. Doctor and `discover` do not connect. The smoke flag without a connector reports `provider_unavailable`. Fake `public_discovery` and `authenticated_discovery` are test doubles. Clipforge does not automate Whop sign-in, does not download campaign media, and does not mutate the Whop account. Snapshot rows stay `not_configured`. Publishing stays deferred. Round 28 is not started.
+No official Whop MCP session was opened. The loopback server is a test double of the public adapter. Doctor does not connect. `discover` without `--live` does not connect. The opt-in smoke was skipped. Clipforge does not automate Whop sign-in, does not download campaign media, and does not mutate the Whop account. Snapshot rows stay `not_configured`. Publishing stays deferred. Round 28 is not started.

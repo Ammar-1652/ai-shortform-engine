@@ -32,6 +32,9 @@ class WhopProviderCapability(Versioned):
     mutating_operations: Literal["disabled"] = "disabled"
     credentials: Literal["not_stored"] = "not_stored"
     publishing: Literal["deferred"] = "deferred"
+    live_smoke: Literal["not_executed"] = "not_executed"
+    public_provider: Literal["not_configured", "available", "unavailable"] = "not_configured"
+    authenticated_connector: Literal["not_configured", "available", "unavailable"] = "not_configured"
 
     @field_validator("provider_id", "provider_version")
     @classmethod
@@ -132,11 +135,22 @@ class WhopFilterDecision(Versioned):
     campaign_id: EntityId
     included: bool
     reason_code: str = Field(min_length=1, max_length=80)
+    included_source_ids: list[EntityId] = Field(default_factory=list)
 
     @field_validator("reason_code")
     @classmethod
     def reason_is_plain(cls, value: str) -> str:
         return _plain(value, label="whop filter")
+
+    @model_validator(mode="after")
+    def inclusion_matches_sources(self) -> Self:
+        if self.included and not self.included_source_ids:
+            raise ValueError("an included whop campaign names no source")
+        if not self.included and self.included_source_ids:
+            raise ValueError("an excluded whop campaign names a source")
+        if self.included_source_ids != sorted(set(self.included_source_ids)):
+            raise ValueError("whop filter sources must be unique and sorted")
+        return self
 
 
 class WhopDiscoveryAttempt(Versioned):
@@ -148,11 +162,16 @@ class WhopDiscoveryAttempt(Versioned):
     provider_id: str = Field(min_length=1, max_length=40)
     provider_version: str = Field(min_length=1, max_length=40)
     live_status: LiveStatus
+    evidence_origin: Literal["test_double", "public_connector", "authenticated_connector"]
+    live_claim: Literal["not_claimed"] = "not_claimed"
     request_sha256: str = Field(pattern=_SHA)
+    filter_fingerprint: str = Field(pattern=_SHA)
     response_sha256: str = Field(pattern=_SHA)
     catalogue_fingerprint: str = Field(pattern=_SHA)
     policy_fingerprint: str = Field(pattern=_SHA)
     identity_sha256: str = Field(pattern=_SHA)
+    discovery_request: WhopLiveDiscoveryRequest
+    tool_name: str | None = Field(default=None, max_length=80)
     import_id: EntityId | None = None
     campaign_ids: list[EntityId]
     decisions: list[WhopFilterDecision]
@@ -162,13 +181,17 @@ class WhopDiscoveryAttempt(Versioned):
     created_at: AwareDatetime
     publishing: Literal["deferred"] = "deferred"
 
-    @field_validator("provider_id", "provider_version", "reason_code")
+    @field_validator("provider_id", "provider_version", "reason_code", "tool_name")
     @classmethod
-    def labels_are_plain(cls, value: str) -> str:
+    def labels_are_plain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return _plain(value, label="whop discovery")
 
     @model_validator(mode="after")
     def body_is_public(self) -> Self:
+        if self.filter_fingerprint != self.request_sha256:
+            raise ValueError("whop filter fingerprint does not match the request")
         _reject_leaks(self.model_dump_json(), label="whop discovery")
         return self
 
@@ -179,9 +202,11 @@ class WhopSelectionEvidence(Versioned):
     evidence_id: EntityId
     campaign_id: EntityId
     import_id: EntityId
+    discovery_id: EntityId
     project_id: EntityId
     catalogue_fingerprint: str = Field(pattern=_SHA)
     policy_fingerprint: str = Field(pattern=_SHA)
+    filter_fingerprint: str = Field(pattern=_SHA)
     source_ids: list[EntityId] = Field(min_length=1)
     source_hashes: list[str]
     language: str = Field(min_length=2, max_length=16)
@@ -191,6 +216,7 @@ class WhopSelectionEvidence(Versioned):
     created_at: AwareDatetime
     publishing: Literal["deferred"] = "deferred"
     whop_live: Literal["not_configured"] = "not_configured"
+    live_claim: Literal["not_claimed"] = "not_claimed"
 
     @field_validator("language")
     @classmethod

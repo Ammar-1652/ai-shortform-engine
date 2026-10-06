@@ -74,15 +74,19 @@ from clipforge.campaign.whop import (
     verify_whop_import,
     whop_doctor,
 )
-from clipforge.campaign.whop_live import discover_whop, select_whop_campaign, whop_capabilities
+from clipforge.campaign.whop_live import discover_live, discover_whop, select_whop_campaign, whop_capabilities
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
+from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 from clipforge.storage import Database
 
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
 operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
 acquire_app = typer.Typer(no_args_is_help=True, help="Acquire selected sources into the work root.")
-whop_app = typer.Typer(no_args_is_help=True, help="Import a local Whop snapshot. No account session.")
+whop_app = typer.Typer(
+    no_args_is_help=True,
+    help="Import a local Whop snapshot or discover through an enabled connector.",
+)
 campaign_app.add_typer(operator_app, name="operator")
 operator_app.add_typer(acquire_app, name="acquire")
 operator_app.add_typer(whop_app, name="whop")
@@ -275,13 +279,42 @@ def whop_capabilities_command() -> None:
 
 
 @whop_app.command("discover")
-def whop_discover_command() -> None:
-    """Read provider state. This command does not write a sidecar."""
+def whop_discover_command(
+    project_id: Annotated[str | None, typer.Option("--project")] = None,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator-1",
+    request_path: Annotated[Path | None, typer.Option("--request")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+) -> None:
+    """Report discovery. --live reads an enabled connector and stores no credentials."""
+    if not live:
+        try:
+            payload = discover_whop()
+        except (ClipforgeError, OSError, ValueError) as exc:
+            _fail(exc)
+        typer.echo(json.dumps(payload, sort_keys=True))
+        return
+    if project_id is None:
+        _fail(CampaignError("whop project is required", code="missing_project"))
+    request = None
+    if request_path is not None:
+        try:
+            request = WhopLiveDiscoveryRequest.model_validate_json(request_path.read_text(encoding="utf-8"))
+        except (ClipforgeError, OSError, ValueError) as exc:
+            _fail(exc)
     try:
-        payload = discover_whop()
+        attempt = discover_live(
+            resolve_work_dir(work_dir),
+            project_id=project_id,
+            operator_id=operator_id,
+            request=request,
+        )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
-    typer.echo(json.dumps(payload, sort_keys=True))
+    typer.echo(attempt.discovery_id)
+    typer.echo(f"evidence_origin: {attempt.evidence_origin}")
+    typer.echo(f"live_claim: {attempt.live_claim}")
+    typer.echo(f"whop_live: {attempt.live_status}")
 
 
 @whop_app.command("select")

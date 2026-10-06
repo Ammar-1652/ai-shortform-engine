@@ -39,17 +39,37 @@ class FakeWhopSnapshotConnector:
 
 
 def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | None = None) -> str:
-    """Report live Whop as not configured unless an approved connector returns bytes.
-
-    The built-in connector returns nothing. A smoke flag does not scrape Whop and
-    does not read cookies.
-    """
+    """Report connector configuration. This does not open a socket or a browser."""
     del connector
+    from clipforge.campaign.whop_mcp import (
+        configured_connector,
+        configured_url,
+        live_smoke_enabled,
+        session_handle,
+        url_is_allowed,
+    )
+
     live = "not_configured"
-    if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE", "").strip() == "1":
-        live = "provider_unavailable"
+    public = "not_configured"
+    authenticated = "not_configured"
+    session = "not opened"
+    if live_smoke_enabled():
+        kind = configured_connector()
+        if kind == "public" and url_is_allowed(configured_url()):
+            public = "available"
+        elif kind == "authenticated" and session_handle() is not None:
+            authenticated = "available"
+            session = "handle_only"
+        else:
+            live = "provider_unavailable"
+            public = "unavailable"
+            authenticated = "unavailable"
     lines = [
         f"whop_live: {live}",
+        "live_smoke: not_executed",
+        f"public_provider: {public}",
+        f"authenticated_connector: {authenticated}",
+        f"session: {session}",
         "credentials: not stored",
         "cookies: not stored",
         "mutating: disabled",
@@ -57,8 +77,6 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
         "endpoint: mcp.whop.com",
         "docs_endpoint: docs.whop.com",
     ]
-    if live == "provider_unavailable":
-        lines.append("session: not opened")
     return "\n".join(lines)
 
 
@@ -71,6 +89,21 @@ def import_whop_snapshot(
     promotion_hook: Callable[[str], None] | None = None,
 ) -> WhopImportAttempt:
     """Validate, then append one sidecar. An invalid payload writes nothing."""
+    root = work_root.resolve()
+    attempt, raw, write = plan_whop_import(root, payload, project_id=project_id, force=force)
+    if write:
+        _publish(root, attempt, raw, promotion_hook)
+    return attempt
+
+
+def plan_whop_import(
+    work_root: Path,
+    payload: bytes,
+    *,
+    project_id: str,
+    force: bool = False,
+) -> tuple[WhopImportAttempt, bytes, bool]:
+    """Validate a snapshot and report whether a new sidecar must be written."""
     snapshot = parse_whop_bytes(payload)
     raw = _canonical(snapshot)
     digest = hashlib.sha256(raw).hexdigest()
@@ -78,11 +111,11 @@ def import_whop_snapshot(
     if not force:
         cached = _cached(root, project_id, digest)
         if cached is not None:
-            return cached
+            return cached, raw, False
     now = datetime.now(UTC)
     selectable, status, reason = _selectable(snapshot)
     attempt = WhopImportAttempt(
-        import_id=_import_id(digest, force),
+        import_id=_import_id(digest, project_id, force),
         project_id=project_id,
         snapshot_sha256=digest,
         policy_fingerprint=_policy_fingerprint([item.campaign_id for item in snapshot.campaigns]),
@@ -93,8 +126,7 @@ def import_whop_snapshot(
         reason_code=reason,
         created_at=now,
     )
-    _publish(root, attempt, raw, promotion_hook)
-    return attempt
+    return attempt, raw, True
 
 
 def import_from_connector(
@@ -327,10 +359,11 @@ def _policy_blocks(attempt: WhopImportAttempt, source_id: str) -> bool:
     return False
 
 
-def _import_id(digest: str, force: bool) -> str:
+def _import_id(digest: str, project_id: str, force: bool) -> str:
+    mixed = hashlib.sha256(f"{project_id}:{digest}".encode()).hexdigest()
     if force:
-        return f"whop-{digest[:12]}-{uuid4().hex[:8]}"
-    return f"whop-{digest[:20]}"
+        return f"whop-{mixed[:12]}-{uuid4().hex[:8]}"
+    return f"whop-{mixed[:20]}"
 
 
 def _cached(root: Path, project_id: str, digest: str) -> WhopImportAttempt | None:

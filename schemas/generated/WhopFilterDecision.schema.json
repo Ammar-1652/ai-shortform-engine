@@ -12,6 +12,15 @@
       "title": "Included",
       "type": "boolean"
     },
+    "included_source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Included Source Ids",
+      "type": "array"
+    },
     "reason_code": {
       "maxLength": 80,
       "minLength": 1,

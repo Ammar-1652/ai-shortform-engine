@@ -18,6 +18,12 @@
       "title": "Created At",
       "type": "string"
     },
+    "discovery_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Discovery Id",
+      "type": "string"
+    },
     "evidence_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Evidence Fingerprint",
@@ -27,6 +33,11 @@
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Evidence Id",
+      "type": "string"
+    },
+    "filter_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Filter Fingerprint",
       "type": "string"
     },
     "import_id": {
@@ -39,6 +50,12 @@
       "maxLength": 16,
       "minLength": 2,
       "title": "Language",
+      "type": "string"
+    },
+    "live_claim": {
+      "const": "not_claimed",
+      "default": "not_claimed",
+      "title": "Live Claim",
       "type": "string"
     },
     "narration_request": {
@@ -106,9 +123,11 @@
     "evidence_id",
     "campaign_id",
     "import_id",
+    "discovery_id",
     "project_id",
     "catalogue_fingerprint",
     "policy_fingerprint",
+    "filter_fingerprint",
     "source_ids",
     "source_hashes",
     "language",

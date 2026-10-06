@@ -44,6 +44,7 @@ def test_default_whop_stays_unconfigured(tmp_path: Path, monkeypatch: pytest.Mon
     work.mkdir()
     before = _tree(work)
     assert "whop_live: not_configured" in whop_doctor()
+    assert "live_smoke: not_executed" in whop_doctor()
     assert "credentials: not stored" in whop_doctor()
     discovered = discover_whop()
     assert discovered["whop_live"] == "not_configured"
@@ -82,6 +83,8 @@ def test_fake_providers_filter_cache_and_fail_closed(tmp_path: Path, monkeypatch
     assert not (work / "campaigns").exists()
     first = import_discovered(work, provider, project_id="project-1")
     assert first.live_status == "public_discovery"
+    assert first.evidence_origin == "test_double"
+    assert first.live_claim == "not_claimed"
     assert first.cache_status == "miss"
     assert any(item.included and item.campaign_id == "camp-city" for item in first.decisions)
     again = import_discovered(work, provider, project_id="project-1")
@@ -166,12 +169,19 @@ def test_fake_providers_filter_cache_and_fail_closed(tmp_path: Path, monkeypatch
     ):
         with pytest.raises(CampaignError):
             import_discovered(work, MalformedWhopProvider(payload), project_id="project-1")
-    exported_payload = _sample_with_title("Exported rewards")
-    exported_payload["cookie"] = "session=secret"
-    export = FakeBrowserExportProvider(exported_payload)
-    exported = import_discovered(work, export, project_id="project-1")
+    exported = import_discovered(
+        work,
+        FakeBrowserExportProvider(_sample_with_title("Exported rewards")),
+        project_id="project-1",
+    )
     assert exported.live_status == "authenticated_discovery"
-    assert "cookie" not in exported.model_dump_json().lower()
+    assert exported.evidence_origin == "test_double"
+    assert exported.live_claim == "not_claimed"
+    poisoned = _sample_with_title("Cookie rewards")
+    poisoned["cookie"] = "session=secret"
+    with pytest.raises(CampaignError) as secret:
+        import_discovered(work, FakeBrowserExportProvider(poisoned), project_id="project-1")
+    assert secret.value.code == "secret_rejected"
     with pytest.raises(CampaignError) as stopped:
         import_discovered(
             work,

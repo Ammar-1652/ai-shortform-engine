@@ -14,6 +14,15 @@
           "title": "Included",
           "type": "boolean"
         },
+        "included_source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Included Source Ids",
+          "type": "array"
+        },
         "reason_code": {
           "maxLength": 80,
           "minLength": 1,
@@ -33,6 +42,193 @@
         "reason_code"
       ],
       "title": "WhopFilterDecision",
+      "type": "object"
+    },
+    "WhopLiveDiscoveryRequest": {
+      "additionalProperties": false,
+      "description": "A read-only discovery query. It does not carry an account secret.",
+      "properties": {
+        "allowed_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Categories",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "max_age_hours": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Age Hours"
+        },
+        "max_duration_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Duration Us"
+        },
+        "max_size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Size Bytes"
+        },
+        "media_format": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Format"
+        },
+        "min_duration_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Duration Us"
+        },
+        "prohibited_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prohibited Categories",
+          "type": "array"
+        },
+        "provider_id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_version": {
+          "default": "0",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "request_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "require_policy": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Policy"
+        },
+        "require_rights": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Rights"
+        },
+        "require_status": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Status"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "provider_id",
+        "created_at"
+      ],
+      "title": "WhopLiveDiscoveryRequest",
       "type": "object"
     }
   },
@@ -80,6 +276,23 @@
       "title": "Discovery Id",
       "type": "string"
     },
+    "discovery_request": {
+      "$ref": "#/$defs/WhopLiveDiscoveryRequest"
+    },
+    "evidence_origin": {
+      "enum": [
+        "test_double",
+        "public_connector",
+        "authenticated_connector"
+      ],
+      "title": "Evidence Origin",
+      "type": "string"
+    },
+    "filter_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Filter Fingerprint",
+      "type": "string"
+    },
     "identity_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Identity Sha256",
@@ -98,6 +311,12 @@
       ],
       "default": null,
       "title": "Import Id"
+    },
+    "live_claim": {
+      "const": "not_claimed",
+      "default": "not_claimed",
+      "title": "Live Claim",
+      "type": "string"
     },
     "live_status": {
       "enum": [
@@ -179,6 +398,19 @@
       ],
       "title": "Status",
       "type": "string"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
     }
   },
   "required": [
@@ -188,11 +420,14 @@
     "provider_id",
     "provider_version",
     "live_status",
+    "evidence_origin",
     "request_sha256",
+    "filter_fingerprint",
     "response_sha256",
     "catalogue_fingerprint",
     "policy_fingerprint",
     "identity_sha256",
+    "discovery_request",
     "campaign_ids",
     "decisions",
     "status",

@@ -9,10 +9,26 @@
       "title": "Account Fields",
       "type": "array"
     },
+    "authenticated_connector": {
+      "default": "not_configured",
+      "enum": [
+        "not_configured",
+        "available",
+        "unavailable"
+      ],
+      "title": "Authenticated Connector",
+      "type": "string"
+    },
     "credentials": {
       "const": "not_stored",
       "default": "not_stored",
       "title": "Credentials",
+      "type": "string"
+    },
+    "live_smoke": {
+      "const": "not_executed",
+      "default": "not_executed",
+      "title": "Live Smoke",
       "type": "string"
     },
     "live_status": {
@@ -59,6 +75,16 @@
       },
       "title": "Public Fields",
       "type": "array"
+    },
+    "public_provider": {
+      "default": "not_configured",
+      "enum": [
+        "not_configured",
+        "available",
+        "unavailable"
+      ],
+      "title": "Public Provider",
+      "type": "string"
     },
     "publishing": {
       "const": "deferred",

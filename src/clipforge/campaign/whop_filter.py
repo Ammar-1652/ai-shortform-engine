@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from clipforge.schemas.whop import WhopCampaignRecord, WhopCampaignSnapshot
+from clipforge.schemas.whop import WhopCampaignRecord, WhopCampaignSnapshot, WhopCampaignSourceRecord
 from clipforge.schemas.whop_discovery import WhopFilterDecision, WhopLiveDiscoveryRequest
 
 
@@ -18,18 +18,52 @@ def filter_campaigns(
     moment = now or datetime.now(UTC)
     decisions: list[WhopFilterDecision] = []
     for campaign in snapshot.campaigns:
-        reason = _reason(campaign, request, snapshot.exported_at, moment)
+        reason, source_ids = _decision(campaign, request, snapshot.exported_at, moment)
         decisions.append(
             WhopFilterDecision(
                 campaign_id=campaign.campaign_id,
                 included=reason is None,
                 reason_code=reason or "included",
+                included_source_ids=source_ids,
             )
         )
     return decisions
 
 
-def _reason(
+def campaign_block_reason(
+    campaign: WhopCampaignRecord,
+    request: WhopLiveDiscoveryRequest,
+    exported_at: datetime,
+    now: datetime,
+) -> str | None:
+    """Return a campaign-level exclusion. Source checks are separate."""
+    return _campaign_reason(campaign, request, exported_at, now)
+
+
+def source_block_reason(
+    source: WhopCampaignSourceRecord,
+    request: WhopLiveDiscoveryRequest,
+) -> str | None:
+    """Return why one source fails the request. A selected flag is not a pass."""
+    return _one_source(source, request)
+
+
+def _decision(
+    campaign: WhopCampaignRecord,
+    request: WhopLiveDiscoveryRequest,
+    exported_at: datetime,
+    now: datetime,
+) -> tuple[str | None, list[str]]:
+    reason = _campaign_reason(campaign, request, exported_at, now)
+    if reason is not None:
+        return reason, []
+    source_reason, source_ids = _passing_sources(campaign, request)
+    if source_reason is not None:
+        return source_reason, []
+    return None, source_ids
+
+
+def _campaign_reason(
     campaign: WhopCampaignRecord,
     request: WhopLiveDiscoveryRequest,
     exported_at: datetime,
@@ -51,56 +85,62 @@ def _reason(
         return "search_mismatch"
     if request.max_age_hours is not None and exported_at < now - timedelta(hours=request.max_age_hours):
         return "stale_campaign"
-    source_reason = _source_reason(campaign, request)
-    if source_reason is not None:
-        return source_reason
     return None
 
 
-def _source_reason(campaign: WhopCampaignRecord, request: WhopLiveDiscoveryRequest) -> str | None:
+def _passing_sources(
+    campaign: WhopCampaignRecord,
+    request: WhopLiveDiscoveryRequest,
+) -> tuple[str | None, list[str]]:
     if not campaign.sources:
-        return "missing_source"
-    saw_allowed = False
+        return "missing_source", []
+    passed: list[str] = []
     first = "rights_not_allowed"
     for source in campaign.sources:
-        if source.availability == "missing":
-            first = "missing_source"
+        reason = _one_source(source, request)
+        if reason is None:
+            passed.append(source.source_id)
             continue
-        if request.media_format is not None and source.media_format not in {None, request.media_format}:
-            first = "format_mismatch"
-            continue
-        if (
-            request.max_size_bytes is not None
-            and source.size_bytes is not None
-            and source.size_bytes > request.max_size_bytes
-        ):
-            first = "source_too_large"
-            continue
-        if (
-            source.duration_us is not None
-            and request.min_duration_us is not None
-            and source.duration_us < request.min_duration_us
-        ):
-            first = "duration_out_of_range"
-            continue
-        if (
-            source.duration_us is not None
-            and request.max_duration_us is not None
-            and source.duration_us > request.max_duration_us
-        ):
-            first = "duration_out_of_range"
-            continue
-        required = request.require_rights or "allowed"
-        if source.rights_state != required or source.policy_state != "allowed":
-            first = "rights_not_allowed" if source.rights_state != required else "policy_blocked"
-            continue
-        if source.availability not in {"available", "unknown"}:
-            first = "source_unavailable"
-            continue
-        saw_allowed = True
-    if saw_allowed:
-        return None
-    return first
+        if not passed:
+            first = reason
+    if passed:
+        return None, sorted(set(passed))
+    return first, []
+
+
+def _one_source(source: WhopCampaignSourceRecord, request: WhopLiveDiscoveryRequest) -> str | None:
+    if source.availability == "missing":
+        return "missing_source"
+    if request.media_format is not None and source.media_format not in {None, request.media_format}:
+        return "format_mismatch"
+    if (
+        request.max_size_bytes is not None
+        and source.size_bytes is not None
+        and source.size_bytes > request.max_size_bytes
+    ):
+        return "source_too_large"
+    if (
+        source.duration_us is not None
+        and request.min_duration_us is not None
+        and source.duration_us < request.min_duration_us
+    ):
+        return "duration_out_of_range"
+    if (
+        source.duration_us is not None
+        and request.max_duration_us is not None
+        and source.duration_us > request.max_duration_us
+    ):
+        return "duration_out_of_range"
+    required = request.require_rights or "allowed"
+    if source.rights_state != required or source.policy_state != "allowed":
+        if source.rights_state != required:
+            return "rights_not_allowed"
+        return "policy_blocked"
+    if source.availability not in {"available", "unknown"}:
+        return "source_unavailable"
+    if source.content_sha256 is None:
+        return "missing_content_hash"
+    return None
 
 
 def _category(campaign: WhopCampaignRecord) -> str:

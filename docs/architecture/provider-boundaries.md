@@ -6,7 +6,7 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. No migra
 
 ## Whop
 
-Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor reports `whop_live: not_configured`. `CLIPFORGE_WHOP_LIVE_SMOKE=1` reports `provider_unavailable` and `session: not opened`. It does not open a socket. Live discovery is specified in [whop-live-discovery.md](whop-live-discovery.md) and [ADR 0062](../adr/0062-whop-live-operator-discovery.md).
+Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor does not open a socket. With no live switch it reports `whop_live: not_configured` and `live_smoke: not_executed`. A configured public or authenticated connector is reported as available and still not executed. A live switch without a connector is `provider_unavailable`. `discover --live` is the command that may connect. See [whop-live-discovery.md](whop-live-discovery.md) and [ADR 0062](../adr/0062-whop-live-operator-discovery.md).
 
 Accepted records:
 

@@ -98,6 +98,8 @@
       })
       .then(function (payload) {
         text(board, "whop_provider " + payload.live_status + " " + payload.provider_version);
+        text(board, "live_smoke " + payload.live_smoke);
+        text(board, "public_provider " + payload.public_provider);
         text(board, "whop_mutating " + payload.mutating_operations);
       });
   }
