@@ -185,15 +185,40 @@
       "title": "Alignment Id",
       "type": "string"
     },
+    "alignment_recipe": {
+      "default": "hero-align-v1",
+      "title": "Alignment Recipe",
+      "type": "string"
+    },
+    "alignment_scope": {
+      "default": "selected_clip",
+      "title": "Alignment Scope",
+      "type": "string"
+    },
+    "alignment_status": {
+      "default": "unspecified",
+      "title": "Alignment Status",
+      "type": "string"
+    },
     "asr_audio_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Asr Audio Sha256",
+      "type": "string"
+    },
+    "binding_sha256": {
+      "default": "",
+      "title": "Binding Sha256",
       "type": "string"
     },
     "candidate_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Candidate Id",
+      "type": "string"
+    },
+    "checkpoint_sha256": {
+      "default": "",
+      "title": "Checkpoint Sha256",
       "type": "string"
     },
     "config_sha256": {
@@ -209,10 +234,30 @@
       "title": "Device",
       "type": "string"
     },
+    "locale": {
+      "default": "en-US",
+      "title": "Locale",
+      "type": "string"
+    },
+    "model_license": {
+      "default": "",
+      "title": "Model License",
+      "type": "string"
+    },
     "model_name": {
       "maxLength": 80,
       "minLength": 1,
       "title": "Model Name",
+      "type": "string"
+    },
+    "model_revision": {
+      "default": "",
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "normalized_language": {
+      "default": "en",
+      "title": "Normalized Language",
       "type": "string"
     },
     "project_id": {
@@ -267,6 +312,11 @@
     "transcript_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "unavailable_reason": {
+      "default": "none",
+      "title": "Unavailable Reason",
       "type": "string"
     },
     "whisperx_version": {

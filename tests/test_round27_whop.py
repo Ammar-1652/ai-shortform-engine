@@ -58,7 +58,7 @@ def test_default_whop_stays_unconfigured(tmp_path: Path, monkeypatch: pytest.Mon
     assert "authorization" not in {key.lower() for key in public_headers()}
     assert capability_for("en-US").alignment_evidence == "verified_live"
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("ja") == "alignment_not_claimed"
+    assert alignment_claim("ja") == "whisperx"
 
 
 def test_snapshot_import_remains_compatible(tmp_path: Path) -> None:

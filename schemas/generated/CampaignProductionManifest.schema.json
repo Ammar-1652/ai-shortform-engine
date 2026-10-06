@@ -96,6 +96,41 @@
           "default": null,
           "title": "Advanced Artifact Id"
         },
+        "alignment_artifact_id": {
+          "default": "none",
+          "title": "Alignment Artifact Id",
+          "type": "string"
+        },
+        "alignment_blocker": {
+          "default": "none",
+          "title": "Alignment Blocker",
+          "type": "string"
+        },
+        "alignment_cache_status": {
+          "default": "miss",
+          "title": "Alignment Cache Status",
+          "type": "string"
+        },
+        "alignment_checkpoint_sha256": {
+          "default": "none",
+          "title": "Alignment Checkpoint Sha256",
+          "type": "string"
+        },
+        "alignment_model_id": {
+          "default": "none",
+          "title": "Alignment Model Id",
+          "type": "string"
+        },
+        "alignment_model_revision": {
+          "default": "none",
+          "title": "Alignment Model Revision",
+          "type": "string"
+        },
+        "alignment_provider": {
+          "default": "none",
+          "title": "Alignment Provider",
+          "type": "string"
+        },
         "alignment_status": {
           "maxLength": 40,
           "minLength": 1,
@@ -337,6 +372,11 @@
           "title": "Reframe Trajectory Sha256",
           "type": "string"
         },
+        "requested_locale": {
+          "default": "en-US",
+          "title": "Requested Locale",
+          "type": "string"
+        },
         "review_decision": {
           "anyOf": [
             {
@@ -396,6 +436,11 @@
             "cancelled"
           ],
           "title": "Status",
+          "type": "string"
+        },
+        "transcript_language": {
+          "default": "en-US",
+          "title": "Transcript Language",
           "type": "string"
         }
       },

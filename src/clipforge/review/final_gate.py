@@ -319,12 +319,32 @@ def final_board(
         "trajectory_sha256": facts.trajectory_sha256,
         "time_map_sha256": facts.time_map_sha256,
         "reframe_blocker": facts.reframe_blocker,
+        **_language_card(),
         "effective_decision": effective,
         "blockers": [] if code == "approved" else [code],
         "history": history_rows(reviews, facts.candidate_id, facts.advanced_artifact_id),
         "publishing": "deferred",
         "whop": "deferred",
         "automated": False,
+    }
+
+
+def _language_card() -> dict[str, str]:
+    """Relative alignment facts for the loopback card. Paths stay off the payload."""
+    from clipforge.language.providers import provider_for
+
+    record = provider_for("en-US")
+    return {
+        "requested_locale": record.locale,
+        "normalized_language": record.normalized_language,
+        "alignment_status": record.live_status,
+        "alignment_provider": record.provider_name,
+        "alignment_model": record.model_id,
+        "alignment_revision": record.model_revision,
+        "alignment_checkpoint": record.checkpoint_sha256,
+        "narration_status": "narration_not_requested",
+        "alignment_blocker": record.unavailable_reason,
+        "alignment_cache": "stored",
     }
 
 

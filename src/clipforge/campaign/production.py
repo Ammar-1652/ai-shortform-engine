@@ -25,9 +25,6 @@ from clipforge.campaign.providers import CampaignError
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import confine_file_uri, confine_work_path
 from clipforge.language.registry import (
-    ENGLISH_ALIGNMENT_CHECKPOINT,
-    ENGLISH_ALIGNMENT_MODEL,
-    ENGLISH_ALIGNMENT_REVISION,
     ENGLISH_NARRATION_ENGINE,
     ENGLISH_NARRATION_LICENSE,
     ENGLISH_NARRATION_MODEL,
@@ -170,6 +167,9 @@ def plan_campaign(
     chosen = _choose(campaign_id, source_ids)
     capability = capability_for(language)
     claim = alignment_claim(language)
+    from clipforge.language.providers import provider_for
+
+    record = provider_for(language)
     live_voice = narration_enabled and capability.narration_evidence == "verified_live"
     now = datetime.now(UTC)
     fingerprint = _selection_fingerprint(
@@ -184,6 +184,7 @@ def plan_campaign(
             item.rights_state,
             narration_enabled and item.source_id == _NARRATION_SOURCE,
             claim,
+            capability.reason_code,
         )
         for item in chosen
     ]
@@ -207,11 +208,13 @@ def plan_campaign(
         model_id=ENGLISH_NARRATION_MODEL if live_voice else None,
         model_revision=ENGLISH_NARRATION_REVISION if live_voice else None,
         model_license=ENGLISH_NARRATION_LICENSE if live_voice else None,
-        alignment_provider="whisperx" if claim == "whisperx" else "none",
+        alignment_provider="whisperx" if record.provider_name == "whisperx" else "none",
         alignment_language=capability.language,
-        alignment_model=ENGLISH_ALIGNMENT_MODEL if claim == "whisperx" else None,
-        alignment_revision=ENGLISH_ALIGNMENT_REVISION if claim == "whisperx" else None,
-        alignment_checkpoint_sha256=ENGLISH_ALIGNMENT_CHECKPOINT if claim == "whisperx" else None,
+        alignment_model=record.model_id if record.provider_name == "whisperx" else None,
+        alignment_revision=record.model_revision if record.live_status == "verified_live" else None,
+        alignment_checkpoint_sha256=(
+            record.checkpoint_sha256 if record.live_status == "verified_live" else None
+        ),
         fingerprint=fingerprint,
         sources=sources,
         status=status,
@@ -232,6 +235,7 @@ def run_campaign(
     narration_probe: NarrationProbe | None = None,
     promotion_hook: PromotionHook | None = None,
     invalidation_hook: PromotionHook | None = None,
+    source_locales: dict[str, str] | None = None,
 ) -> CampaignProductionRun:
     """Execute or reuse one campaign. A failed source does not erase the others."""
     planned = plan_campaign(
@@ -252,7 +256,7 @@ def run_campaign(
             planned_source,
             item,
             narration_enabled=narration_enabled and planned_source.source_id == _NARRATION_SOURCE,
-            language=language,
+            language=(source_locales or {}).get(planned_source.source_id, language),
             narration_probe=narration_probe,
         )
         for planned_source, item in zip(planned.sources, bound, strict=True)
@@ -300,7 +304,7 @@ def resume_campaign(
                 source,
                 item,
                 narration_enabled=current.narration_enabled and source.source_id == _NARRATION_SOURCE,
-                language=current.language,
+                language=source.requested_locale or current.language,
                 narration_probe=narration_probe,
             )
         )
@@ -335,6 +339,7 @@ def verify_campaign_run(database: Database, work_root: Path, campaign_run_id: st
         if not alignment_identity_matches(
             revision=document.alignment_revision,
             checkpoint=document.alignment_checkpoint_sha256,
+            language=document.alignment_language,
         ):
             raise CampaignError("alignment model revision changed", code="model_revision_changed")
     bound = [_bind_one(database, item.source_id) for item in document.sources]
@@ -380,7 +385,13 @@ def _choose(campaign_id: str, source_ids: list[str] | None) -> list[CampaignSour
     return chosen
 
 
-def _empty_source(source_id: str, rights_state: str, narration: bool, claim: str) -> CampaignSourceRun:
+def _empty_source(
+    source_id: str,
+    rights_state: str,
+    narration: bool,
+    claim: str,
+    align_blocker: str,
+) -> CampaignSourceRun:
     blocked = not source_may_proceed(rights_state)
     stages: list[CampaignStageRecord] = []
     for stage in STAGES:
@@ -391,7 +402,7 @@ def _empty_source(source_id: str, rights_state: str, narration: bool, claim: str
         elif stage == "narration" and not narration:
             reason = "narration_not_requested"
         elif stage == "align" and claim != "whisperx":
-            reason = "alignment_not_claimed"
+            reason = align_blocker if align_blocker not in {"", "none"} else "alignment_not_claimed"
         stages.append(CampaignStageRecord(stage=stage, status=status, cache_hit=False, reason_code=reason))
     return CampaignSourceRun(
         source_id=source_id,
@@ -415,11 +426,17 @@ def _execute_source(
     language: str,
     narration_probe: NarrationProbe | None,
 ) -> CampaignSourceRun:
+    from clipforge.language.providers import provider_for
+
+    record = provider_for(language)
+    if record.live_status != "verified_live":
+        blocked = _blocked_copy(planned, record.live_status, bound.expected_sha256 or planned.source_sha256)
+        return blocked.model_copy(update={"requested_locale": record.locale})
     if not source_may_proceed(planned.rights_state):
         return _blocked_copy(planned, "rights_not_allowed", bound.expected_sha256)
     if bound.binding is None:
         return _blocked_copy(planned, bound.reason or "missing_source", bound.expected_sha256)
-    return _observe(
+    observed = _observe(
         database,
         root,
         bound.binding,
@@ -427,6 +444,7 @@ def _execute_source(
         language=language,
         narration_probe=narration_probe,
     )
+    return observed.model_copy(update={"requested_locale": record.locale})
 
 
 def _blocked_copy(planned: CampaignSourceRun, reason: str, source_sha256: str) -> CampaignSourceRun:
@@ -489,6 +507,7 @@ def _observe(
             narration_enabled=narration_enabled,
             review_ok=review_ok,
             package_reason=package_reason,
+            language=language,
         )
         for stage in STAGES
     ]
@@ -589,6 +608,7 @@ def _stage(
     narration_enabled: bool,
     review_ok: bool,
     package_reason: str | None,
+    language: str,
 ) -> CampaignStageRecord:
     if stage == "narration" and not narration_enabled:
         return CampaignStageRecord(
@@ -617,7 +637,7 @@ def _stage(
             reason_code="source_hash_matched",
         )
     if stage == "align":
-        return _alignment_stage(database, root, binding, package, claim)
+        return _alignment_stage(database, root, binding, package, claim, language)
     if stage == "ingest":
         return CampaignStageRecord(stage="ingest", status="succeeded", cache_hit=True, reason_code="reused")
     if stage == "review":
@@ -1016,6 +1036,7 @@ def _alignment_stage(
     binding: SourceBinding,
     package: _Package | None,
     claim: str,
+    language: str,
 ) -> CampaignStageRecord:
     if claim != "whisperx":
         return CampaignStageRecord(
@@ -1024,7 +1045,9 @@ def _alignment_stage(
             cache_hit=False,
             reason_code="alignment_not_claimed",
         )
-    problem, digest, job_id, alignment_id = _alignment_facts(database, root, binding, package)
+    problem, digest, job_id, alignment_id = _alignment_facts(
+        database, root, binding, package, language=language
+    )
     if problem or digest is None:
         return CampaignStageRecord(
             stage="align",
@@ -1051,6 +1074,8 @@ def _alignment_facts(
     root: Path,
     binding: SourceBinding,
     package: _Package | None,
+    *,
+    language: str | None = None,
 ) -> tuple[str | None, str | None, str | None, str | None]:
     """Return problem, file sha256, producer job id, and alignment id."""
     if package is None or not package.alignment_sha256 or not package.alignment_id:
@@ -1079,7 +1104,20 @@ def _alignment_facts(
         return "cross_project", digest, None, parsed.alignment_id
     if parsed.source_asset_id != binding.source_asset_id:
         return "cross_source", digest, None, parsed.alignment_id
-    if parsed.model_name != ENGLISH_ALIGNMENT_MODEL or parsed.whisperx_version != ENGLISH_ALIGNMENT_REVISION:
+    from clipforge.language.providers import normalized_language, provider_for
+
+    stored_locale = parsed.locale or "en-US"
+    if language:
+        requested = normalized_language(language)
+        stored = normalized_language(stored_locale)
+        if requested and stored and requested != stored:
+            return "stale_alignment", digest, None, parsed.alignment_id
+    record = provider_for(language or stored_locale)
+    if record.live_status != "verified_live" or parsed.model_name != record.model_id:
+        return "model_revision_changed", digest, None, parsed.alignment_id
+    if parsed.whisperx_version != record.provider_version:
+        return "model_revision_changed", digest, None, parsed.alignment_id
+    if parsed.checkpoint_sha256 and parsed.checkpoint_sha256 != record.checkpoint_sha256:
         return "model_revision_changed", digest, None, parsed.alignment_id
     transcript = _artifact_row(database, binding, "transcript_json")
     if transcript is None:
@@ -2064,12 +2102,22 @@ def _verify_source(
         raise CampaignError("delivery package is not intact", code=package_reason or "delivery_missing")
     align = next(item for item in source.stages if item.stage == "align")
     if document.alignment_provider == "whisperx":
-        problem, digest, _job_id, alignment_id = _alignment_facts(database, root, bound.binding, package)
+        problem, digest, _job_id, alignment_id = _alignment_facts(
+            database,
+            root,
+            bound.binding,
+            package,
+            language=document.alignment_language,
+        )
         if problem:
             raise CampaignError("alignment evidence is not current", code=problem)
         if digest != align.artifact_sha256 or alignment_id != align.artifact_id:
             raise CampaignError("alignment hash changed", code="alignment_changed")
-        if document.alignment_checkpoint_sha256 != ENGLISH_ALIGNMENT_CHECKPOINT:
+        if not alignment_identity_matches(
+            revision=document.alignment_revision or "",
+            checkpoint=document.alignment_checkpoint_sha256 or "",
+            language=document.alignment_language,
+        ):
             raise CampaignError("alignment checkpoint changed", code="model_revision_changed")
     if package.qa_set_sha256 != source.qa_set_sha256:
         raise CampaignError("qa hash changed", code="qa_changed")

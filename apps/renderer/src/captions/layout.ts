@@ -23,7 +23,8 @@ export function layoutCaption(text: string, language: string, maxChars = 12): Ca
     throw new Error("caption text is not html");
   }
   const direction: CaptionDirection = language === "ar" || language.startsWith("ar-") ? "rtl" : "ltr";
-  const lines = language === "ja" || language.startsWith("ja-") ? wrapCjk(text, maxChars) : [text];
+  const cjk = language === "ja" || language.startsWith("ja-");
+  const lines = cjk ? wrapCjk(text, maxChars) : wrapWords(text, maxChars);
   return {
     text,
     direction,
@@ -35,6 +36,35 @@ export function layoutCaption(text: string, language: string, maxChars = 12): Ca
       bottom: FRAME_HEIGHT - SAFE_MARGIN,
     },
   };
+}
+
+export function wrapWords(text: string, width: number): string[] {
+  if (width < 1) {
+    throw new Error("caption width must be positive");
+  }
+  const words = text.split(" ");
+  if (words.some((word) => word.length === 0)) {
+    throw new Error("caption text is empty");
+  }
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+      continue;
+    }
+    const joined = `${current} ${word}`;
+    if (joined.length > width) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = joined;
+    }
+  }
+  if (current.length > 0) {
+    lines.push(current);
+  }
+  return lines;
 }
 
 export function wrapCjk(text: string, width: number): string[] {

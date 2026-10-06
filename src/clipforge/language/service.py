@@ -189,8 +189,12 @@ def align_language(
     """Align one source. Unsupported languages and missing runtimes fail before a job."""
     _reject_language(language)
     chosen = provider if provider is not None else WhisperXFullSourceAligner()
-    if chosen.provider_id == "whisperx" and alignment_claim(language) != "whisperx":
-        raise LanguageError("alignment is not claimed for this language", code="alignment_not_claimed")
+    if chosen.provider_id == "whisperx":
+        from clipforge.language.providers import provider_for
+
+        record = provider_for(language)
+        if record.live_status != "verified_live":
+            raise LanguageError(record.unavailable_reason, code=record.live_status)
     chosen.prepare()
     if not words or duration_us <= 0:
         raise LanguageError("alignment has no words", code="missing_alignment")
@@ -291,6 +295,7 @@ def bind_verified_alignment(document: MultilingualAlignmentDocument) -> dict[str
     if document.provider_id != "whisperx" or not alignment_identity_matches(
         revision=document.model_revision,
         checkpoint=document.checkpoint_sha256,
+        language=document.language,
     ):
         raise LanguageError(
             "alignment checkpoint is not the verified English runtime",
@@ -356,29 +361,34 @@ def narrate_language(
     duration_us: int,
     audio_sha256: str,
     force: bool = False,
+    source_sha256: str = "",
+    transcript_sha256: str = "",
 ) -> MultilingualNarrationDocument:
     """Record narration capability. A fake provider cannot become verified live."""
     assert_narration_request(language, True)
+    if not provider_id or provider_id == "none":
+        raise LanguageError("narration provider is missing", code="provider_unavailable")
+    if license_name.strip().lower() in {"", "unknown"}:
+        raise LanguageError("narration license is unknown", code="model_license_unknown")
     if commercial_use == "allowed" and model_id.lower().startswith("k2-fsa/"):
         raise LanguageError("k2-fsa models are not commercially permitted", code="license_not_permitted")
     if commercial_use != "allowed":
         raise LanguageError("narration license is not permitted", code="license_not_permitted")
     script_sha = hashlib.sha256(script_text.encode("utf-8")).hexdigest()
-    identity = hashlib.sha256(
-        json.dumps(
-            {
-                "engine_id": engine_id,
-                "language": language,
-                "model_id": model_id,
-                "model_revision": model_revision,
-                "provider_id": provider_id,
-                "script_sha256": script_sha,
-                "voice_id": voice_id,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
+    from clipforge.language.providers import narration_cache_key
+
+    identity = narration_cache_key(
+        engine_id=engine_id,
+        language=language,
+        license_name=license_name,
+        model_id=model_id,
+        model_revision=model_revision,
+        provider_id=provider_id,
+        script_sha256=script_sha,
+        source_sha256=source_sha256,
+        transcript_sha256=transcript_sha256,
+        voice_id=voice_id,
+    )
     root = work_root.resolve()
     if not force:
         cached = _narration_hit(root, database, identity, script_sha)
@@ -557,14 +567,10 @@ def _reject_language(language: str) -> None:
 
 
 def _alignment_status(provider: FullSourceAligner, language: str) -> str:
+    """Even spans are not a live alignment. ``verified_live`` requires a real provider run."""
+    del language
     if provider.provider_id == "fake" or not provider.live_execution:
         return "available_not_smoked"
-    if (
-        provider.provider_id == "whisperx"
-        and language.startswith("en")
-        and alignment_identity_matches(revision=provider.model_revision, checkpoint=provider.checkpoint_sha256)
-    ):
-        return "verified_live"
     return "alignment_not_claimed"
 
 

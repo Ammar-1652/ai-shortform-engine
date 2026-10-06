@@ -441,6 +441,11 @@
       "title": "Reason Code",
       "type": "string"
     },
+    "requested_locale": {
+      "default": "",
+      "title": "Requested Locale",
+      "type": "string"
+    },
     "rights_state": {
       "maxLength": 40,
       "minLength": 1,

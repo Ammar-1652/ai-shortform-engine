@@ -153,7 +153,7 @@ def test_language_claims_and_unicode_round_trip() -> None:
     assert arabic.caption_policy == "rtl_logical_order"
     assert arabic.reason_code == "alignment_not_claimed"
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("ja") == "alignment_not_claimed"
+    assert alignment_claim("ja") == "whisperx"
     assert japanese.caption_policy == "character_wrap"
     assert japanese.narration_reason == "unsupported_language"
     assert capability_for("en-GB").narration_reason == "locale_not_smoked"
@@ -177,8 +177,9 @@ def test_language_claims_and_unicode_round_trip() -> None:
     backend = production_alignment_backend("en", allow_model_download=False)
     assert backend.allow_model_download is False
     assert not isinstance(backend, FakeForcedAlignment)
-    with pytest.raises(MediaError, match="alignment_not_claimed"):
-        production_alignment_backend("ja")
+    japanese = production_alignment_backend("ja")
+    assert japanese.model_name.endswith("japanese")
+    assert japanese.language_code == "ja"
     with pytest.raises(MediaError, match="unsupported_language"):
         production_alignment_backend("zh-CN")
     arabic_plan = plan_campaign(language="ar", narration_enabled=True)

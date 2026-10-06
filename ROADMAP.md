@@ -178,10 +178,16 @@ A human final decision is required before local delivery. Hero approval and a pa
 
 ## Round 29 — Deterministic face-follow reframing
 
-Status: in progress on `round-29-dynamic-reframing-quality`, started from `02ab8b4596da84bb777b52fe4bd4d806fbca6efd`.
+Status: merged on main as `4d9254f52891284a702334e20b762a50ae9b0d2a`. See `docs/operations/round-29-validation.md`.
 
-`contain` stays the default. `face_follow` is an explicit crop from stored face-track geometry and the candidate TimeMap. The face cadence follows the 500_000 us analyzer interval. It does not identify a person and does not infer a speaker. Whop MCP and external publishing stay deferred. See `docs/adr/0065-deterministic-face-follow-reframing.md` and `docs/operations/round-29-validation.md`.
+`contain` stays the default. `face_follow` is an explicit crop from stored face-track geometry and the candidate TimeMap. The face cadence follows the 500_000 us analyzer interval. The extra gap tolerance is one decoded-frame period of the selected source's rational frame rate. It does not identify a person and does not infer a speaker. Whop MCP and external publishing stay deferred. See `docs/adr/0065-deterministic-face-follow-reframing.md`.
+
+## Round 30 — Multilingual alignment and caption production
+
+Status: in progress on `round-30-multilingual-alignment-production`, started from `4d9254f52891284a702334e20b762a50ae9b0d2a`.
+
+English `en-US` and `en-GB` alignment stay the smoked WhisperX checkpoint. Japanese and French are `verified_live` for their hashed Apache-2.0 wav2vec2 checkpoints. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. `zh-CN` stays `unsupported_language`. Nothing falls back to English alignment or translates the transcript. KittenTTS narration stays `en-US` only. Whop MCP and external publishing stay deferred. See `docs/adr/0066-multilingual-alignment-production.md` and `docs/operations/round-30-validation.md`.
 
 ## Later
 
-External platform publishing is planned and not implemented. Whop MCP stays deferred. Arabic and Japanese alignment stay unclaimed until a real provider runs.
+External platform publishing is planned and not implemented. Whop MCP stays deferred. Arabic alignment stays unclaimed until a real provider runs. Spanish and German stay `model_missing` until a live smoke records their checkpoint hashes.

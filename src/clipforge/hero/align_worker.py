@@ -15,6 +15,14 @@ def main() -> int:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_DATASETS_OFFLINE"] = "1"
+    language_code = request.get("language_code")
+    model_name = request.get("model_name")
+    if not isinstance(language_code, str) or not isinstance(model_name, str):
+        raise RuntimeError("alignment request is missing a language or a model")
+    if language_code != "en" and model_name == "WAV2VEC2_ASR_BASE_960H":
+        raise RuntimeError("refusing to fall back to the English alignment model")
+    if model_name.startswith("VOXPOPULI_") or model_name.lower().startswith("k2-fsa/"):
+        raise RuntimeError("alignment model license is not permitted")
     import whisperx  # type: ignore[import-not-found]
 
     audio = whisperx.load_audio(request["audio_path"])
@@ -25,7 +33,11 @@ def main() -> int:
     text = "".join(str(item["text"]) for item in words).strip()
     duration_s = (end - start) / 1_000_000
     segments = [{"text": text, "start": 0.0, "end": duration_s}]
-    model, metadata = whisperx.load_align_model(language_code="en", device="cpu")
+    model, metadata = whisperx.load_align_model(
+        language_code=language_code,
+        device="cpu",
+        model_name=model_name,
+    )
     aligned = whisperx.align(segments, model, metadata, clip, "cpu", return_char_alignments=False)
     returned = []
     for segment in aligned.get("segments", []):
@@ -43,7 +55,8 @@ def main() -> int:
         "torch": importlib.metadata.version("torch"),
         "torchaudio": importlib.metadata.version("torchaudio"),
         "device": "cpu",
-        "model": "WAV2VEC2_ASR_BASE_960H",
+        "model": model_name,
+        "language_code": language_code,
     }
     sys.stdout.write(json.dumps(payload))
     return 0

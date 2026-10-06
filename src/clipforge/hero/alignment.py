@@ -27,6 +27,7 @@ from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.media import Transcript, TranscriptWord
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import TimelineSegment
 from clipforge.timeline.framerate import FrameRate
 
 
@@ -83,9 +84,29 @@ class WhisperXAlignment:
     device: str = "cpu"
     needs_staged_audio: bool = True
 
-    def __init__(self, *, allow_model_download: bool = False, audio_path: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        allow_model_download: bool = False,
+        audio_path: str | None = None,
+        language_code: str = "en",
+        model_name: str | None = None,
+        locale: str = "en-US",
+        model_revision: str = "3.4.5",
+        checkpoint_sha256: str = "",
+        model_license: str = "Apache-2.0",
+        audio_is_source_clock: bool = False,
+    ) -> None:
         self.allow_model_download = allow_model_download
         self.audio_path = audio_path
+        self.language_code = language_code
+        self.locale = locale
+        self.model_revision = model_revision
+        self.checkpoint_sha256 = checkpoint_sha256
+        self.model_license = model_license
+        self.audio_is_source_clock = audio_is_source_clock
+        if model_name:
+            self.model_name = model_name
         self.whisperx_version = _whisperx_version()
 
     def align_words(
@@ -100,12 +121,24 @@ class WhisperXAlignment:
                 "WhisperX clip alignment needs the staged candidate audio path. "
                 "Provisional timings were not used."
             )
+        if self.audio_is_source_clock:
+            return align_span_with_whisperx(
+                self.audio_path,
+                words,
+                source_start_us=source_start_us,
+                source_end_us=source_end_us,
+                allow_model_download=self.allow_model_download,
+                language_code=self.language_code,
+                model_name=self.model_name,
+            )
         return align_trimmed_with_whisperx(
             self.audio_path,
             words,
             source_start_us=source_start_us,
             source_end_us=source_end_us,
             allow_model_download=self.allow_model_download,
+            language_code=self.language_code,
+            model_name=self.model_name,
         )
 
 
@@ -117,24 +150,41 @@ def production_alignment_backend(
     """Pick the live aligner for one language. A missing model is not a pass.
 
     Unit tests inject ``FakeForcedAlignment`` themselves. A production campaign
-    does not.
+    does not. A non-English request never falls back to the English checkpoint.
     """
-    from clipforge.language.registry import alignment_claim
+    from clipforge.language.providers import license_is_allowed, provider_for
 
-    normalized = "en-US" if language in {None, "", "en"} else language
-    try:
-        claim = alignment_claim(normalized)
-    except ValueError as exc:
-        raise MediaError("unsupported_language") from exc
-    if claim != "whisperx":
-        raise MediaError("alignment_not_claimed")
-    return WhisperXAlignment(allow_model_download=allow_model_download)
+    requested = "en-US" if language in {None, ""} else language
+    record = provider_for(requested)
+    if record.live_status == "unsupported_language":
+        raise MediaError("unsupported_language")
+    if not license_is_allowed(record.model_license, record.model_id):
+        raise MediaError("model_license_unknown")
+    download_missing = allow_model_download and record.live_status == "model_missing"
+    if record.live_status != "verified_live" and not download_missing:
+        raise MediaError(record.live_status)
+    return WhisperXAlignment(
+        allow_model_download=allow_model_download,
+        language_code=record.normalized_language,
+        model_name=record.model_id,
+        locale=record.locale,
+        model_revision=record.model_revision,
+        checkpoint_sha256=record.checkpoint_sha256,
+        model_license=record.model_license,
+    )
 
 
 def alignment_config_sha256(*, model_name: str, whisperx_version: str, device: str) -> str:
     payload = {"device": device, "model_name": model_name, "whisperx_version": whisperx_version}
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def alignment_binding_sha256(**parts: str) -> str:
+    """Identity of one alignment. A changed component is a cache miss."""
+    from clipforge.language.providers import alignment_cache_key
+
+    return alignment_cache_key(**parts)
 
 
 def build_alignment(
@@ -157,20 +207,13 @@ def build_alignment(
             f"candidate {candidate.candidate_id} has no transcript word ids. "
             "Hero alignment does not invent words from segment text."
         )
-    if len(candidate.time_map.segments) != 1:
-        raise MediaError(
-            f"candidate {candidate.candidate_id} has {len(candidate.time_map.segments)} TimeMap segments. "
-            "Hero alignment v1 aligns one segment and does not invent a join."
-        )
+    if not candidate.time_map.segments:
+        raise MediaError(f"candidate {candidate.candidate_id} has no TimeMap segments")
     ordered = _evidence_words(transcript, bundle)
-    segment = candidate.time_map.segments[0]
+    _reject_transcript_language(transcript, backend)
     time_map = candidate.time_map.to_time_map()
     frame_count = time_map.output_frame_count(FrameRate(30, 1))
-    bounds = backend.align_words(
-        ordered,
-        source_start_us=segment.source_start_us,
-        source_end_us=segment.source_end_us,
-    )
+    bounds = _align_groups(ordered, candidate.time_map.segments, backend)
     if len(bounds) != len(ordered):
         raise MediaError("forced alignment did not return one interval per evidence word")
     aligned: list[AlignedWord] = []
@@ -179,7 +222,7 @@ def build_alignment(
     for word, (start, end) in zip(ordered, bounds, strict=True):
         if end <= start:
             raise MediaError(f"aligned word {word.word_id} has no positive duration")
-        if start < segment.source_start_us or end > segment.source_end_us:
+        if _owner_segment(candidate.time_map.segments, start, end) is None:
             raise MediaError(f"aligned word {word.word_id} leaves the candidate TimeMap")
         output_start = time_map.source_to_output(start)
         output_end = time_map.source_to_output(end)
@@ -237,6 +280,16 @@ def build_alignment(
             device=backend.device,
         ),
         words=aligned,
+        locale=str(getattr(backend, "locale", "en-US")),
+        normalized_language=str(getattr(backend, "language_code", "en")),
+        model_revision=str(getattr(backend, "model_revision", "")),
+        checkpoint_sha256=str(getattr(backend, "checkpoint_sha256", "")),
+        model_license=str(getattr(backend, "model_license", "")),
+        alignment_status=_stored_alignment_status(backend),
+        alignment_scope="selected_clip",
+        alignment_recipe="hero-align-v1",
+        binding_sha256=_binding_for(backend, candidate, transcript_sha256, asr_audio_sha256),
+        unavailable_reason="none",
         provenance=ArtifactProvenance(
             created_at=stamp,
             created_by=created_by,
@@ -249,6 +302,124 @@ def build_alignment(
                 device=backend.device,
             ),
         ),
+    )
+
+
+def _align_groups(
+    words: list[TranscriptWord],
+    segments: list[TimelineSegment],
+    backend: ForcedAlignmentBackend,
+) -> list[tuple[int, int]]:
+    """Align each TimeMap segment on its own source interval. One segment stays one call."""
+    if len(segments) == 1:
+        segment = segments[0]
+        return backend.align_words(
+            words,
+            source_start_us=segment.source_start_us,
+            source_end_us=segment.source_end_us,
+        )
+    grouped = _partition_words(words, segments)
+    bounds: list[tuple[int, int]] = []
+    for segment, group in grouped:
+        bounds.extend(
+            backend.align_words(
+                group,
+                source_start_us=segment.source_start_us,
+                source_end_us=segment.source_end_us,
+            )
+        )
+    return bounds
+
+
+def _partition_words(
+    words: list[TranscriptWord],
+    segments: list[TimelineSegment],
+) -> list[tuple[TimelineSegment, list[TranscriptWord]]]:
+    """Keep evidence order. Do not sort by source time."""
+    indexes: list[int] = []
+    for word in words:
+        found = None
+        for index, segment in enumerate(segments):
+            if segment.source_start_us <= word.start_us < segment.source_end_us:
+                found = index
+                break
+        if found is None:
+            raise MediaError(f"transcript word {word.word_id} is outside the candidate TimeMap")
+        indexes.append(found)
+    if indexes != sorted(indexes):
+        raise MediaError("evidence words are not in TimeMap output order")
+    groups: list[tuple[TimelineSegment, list[TranscriptWord]]] = []
+    cursor = 0
+    while cursor < len(words):
+        index = indexes[cursor]
+        group = [words[cursor]]
+        cursor += 1
+        while cursor < len(words) and indexes[cursor] == index:
+            group.append(words[cursor])
+            cursor += 1
+        groups.append((segments[index], group))
+    return groups
+
+
+def _owner_segment(segments: list[TimelineSegment], start: int, end: int) -> TimelineSegment | None:
+    for segment in segments:
+        if start >= segment.source_start_us and end <= segment.source_end_us:
+            return segment
+    return None
+
+
+def _reject_transcript_language(transcript: Transcript, backend: ForcedAlignmentBackend) -> None:
+    detected = transcript.detected_language
+    if not detected:
+        return
+    from clipforge.language.providers import normalized_language
+
+    requested = str(getattr(backend, "language_code", "en"))
+    found = normalized_language(detected)
+    if found and found != requested:
+        raise MediaError("transcript_language_mismatch")
+
+
+def _stored_alignment_status(backend: ForcedAlignmentBackend) -> str:
+    if backend.model_name == FAKE_MODEL_NAME:
+        return "available_not_smoked"
+    from clipforge.language.providers import provider_for
+
+    record = provider_for(str(getattr(backend, "locale", "en-US")))
+    checkpoint = str(getattr(backend, "checkpoint_sha256", ""))
+    if (
+        record.live_status == "verified_live"
+        and backend.model_name == record.model_id
+        and checkpoint == record.checkpoint_sha256
+    ):
+        return "verified_live"
+    if record.live_status == "verified_live":
+        return "available_not_smoked"
+    return record.live_status
+
+
+def _binding_for(
+    backend: ForcedAlignmentBackend,
+    candidate: CandidateClip,
+    transcript_sha256: str,
+    asr_audio_sha256: str,
+) -> str:
+    provider = "fake" if backend.model_name == FAKE_MODEL_NAME else "whisperx"
+    return alignment_binding_sha256(
+        asr_audio_sha256=asr_audio_sha256,
+        alignment_recipe="hero-align-v1",
+        candidate_id=candidate.candidate_id,
+        checkpoint_sha256=str(getattr(backend, "checkpoint_sha256", "")),
+        locale=str(getattr(backend, "locale", "en-US")),
+        model_id=backend.model_name,
+        model_revision=str(getattr(backend, "model_revision", "")),
+        normalized_language=str(getattr(backend, "language_code", "en")),
+        provider_name=provider,
+        provider_version=backend.whisperx_version,
+        source_asset_id=candidate.source_asset_id,
+        time_map_sha256=_time_map_sha(candidate),
+        transcript_language=str(getattr(backend, "language_code", "en")),
+        transcript_sha256=transcript_sha256,
     )
 
 
@@ -278,6 +449,8 @@ def align_trimmed_with_whisperx(
     source_start_us: int,
     source_end_us: int,
     allow_model_download: bool,
+    language_code: str = "en",
+    model_name: str = "WAV2VEC2_ASR_BASE_960H",
 ) -> list[tuple[int, int]]:
     """Align one already-trimmed ASR span. Returned times are on the source clock."""
     span = source_end_us - source_start_us
@@ -287,6 +460,8 @@ def align_trimmed_with_whisperx(
         source_start_us=0,
         source_end_us=span,
         allow_model_download=allow_model_download,
+        language_code=language_code,
+        model_name=model_name,
     )
     return [(source_start_us + start, source_start_us + end) for start, end in relative]
 
@@ -298,10 +473,13 @@ def align_span_with_whisperx(
     source_start_us: int,
     source_end_us: int,
     allow_model_download: bool,
+    language_code: str = "en",
+    model_name: str = "WAV2VEC2_ASR_BASE_960H",
 ) -> list[tuple[int, int]]:
     """Run WhisperX on one candidate span. The full source is not transcribed."""
     import os
 
+    _reject_alignment_model(language_code, model_name)
     if not allow_model_download:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -315,8 +493,10 @@ def align_span_with_whisperx(
             source_start_us=source_start_us,
             source_end_us=source_end_us,
             allow_model_download=allow_model_download,
+            language_code=language_code,
+            model_name=model_name,
         )
-    if not allow_model_download:
+    if not allow_model_download and language_code == "en":
         _require_cached_punkt()
     audio = whisperx.load_audio(audio_path)
     start_sample = (source_start_us * 16) // 1000
@@ -331,12 +511,17 @@ def align_span_with_whisperx(
     segments = [{"text": text, "start": 0.0, "end": duration_s}]
     try:
         with _block_model_downloads(allow_model_download):
-            model, metadata = _load_align_model(whisperx, allow_model_download=allow_model_download)
+            model, metadata = _load_align_model(
+                whisperx,
+                allow_model_download=allow_model_download,
+                language_code=language_code,
+                model_name=model_name,
+            )
     except MediaError:
         raise
     except Exception as exc:
         raise MediaError(
-            "WhisperX could not load the English alignment model. "
+            "WhisperX could not load the alignment model. "
             "Run hero doctor and install the model locally, or use --allow-model-download explicitly."
         ) from exc
     aligned = whisperx.align(segments, model, metadata, clip, "cpu", return_char_alignments=False)
@@ -355,26 +540,33 @@ def align_span_with_whisperx(
             start_us = round(float(start) * 1_000_000)
             end_us = round(float(end) * 1_000_000)
             returned.append((token, start_us, end_us))
-    if len(returned) != len(words):
-        raise MediaError(
-            "WhisperX word count does not match the transcript evidence. "
-            "Hero alignment does not invent or drop words."
-        )
-    bounds: list[tuple[int, int]] = []
-    for expected, (token, start, end) in zip(words, returned, strict=True):
-        if token.strip() != expected.text.strip():
-            raise MediaError(
-                f"WhisperX text {token!r} does not match transcript word {expected.text!r}. "
-                "The transcript text was not rewritten."
-            )
-        bounds.append((source_start_us + start, source_start_us + end))
-    return bounds
+    return _collapse_alignment_tokens(words, returned, source_offset=source_start_us)
 
 
-def _load_align_model(whisperx: Any, *, allow_model_download: bool) -> tuple[object, object]:
-    """Load the English aligner. Cache-only builds must not fetch weights."""
+def _reject_alignment_model(language_code: str, model_name: str) -> None:
+    """Refuse an English checkpoint for another language and refuse non-commercial weights."""
+    from clipforge.language.providers import license_is_allowed
+
+    if language_code != "en" and model_name == "WAV2VEC2_ASR_BASE_960H":
+        raise MediaError("alignment_not_claimed")
+    if not license_is_allowed("Apache-2.0", model_name):
+        raise MediaError("model_license_unknown")
+
+
+def _load_align_model(
+    whisperx: Any,
+    *,
+    allow_model_download: bool,
+    language_code: str,
+    model_name: str,
+) -> tuple[object, object]:
+    """Load the requested aligner. Cache-only builds must not fetch weights."""
     loader: Callable[..., Any] = whisperx.load_align_model
-    kwargs: dict[str, object] = {"language_code": "en", "device": "cpu"}
+    kwargs: dict[str, object] = {
+        "language_code": language_code,
+        "device": "cpu",
+        "model_name": model_name,
+    }
     if _declares_model_cache_only(loader):
         kwargs["model_cache_only"] = not allow_model_download
     loaded = loader(**kwargs)
@@ -463,6 +655,8 @@ def _align_with_side_python(
     source_start_us: int,
     source_end_us: int,
     allow_model_download: bool,
+    language_code: str,
+    model_name: str,
 ) -> list[tuple[int, int]]:
     """Run the optional alignment interpreter. The result is still production WhisperX."""
     import subprocess
@@ -487,6 +681,8 @@ def _align_with_side_python(
         "source_start_us": source_start_us,
         "source_end_us": source_end_us,
         "allow_model_download": allow_model_download,
+        "language_code": language_code,
+        "model_name": model_name,
         "words": [{"text": word.text} for word in words],
     }
     completed = subprocess.run(
@@ -521,21 +717,50 @@ def _align_with_side_python(
         if not isinstance(start, int) or not isinstance(end, int):
             raise MediaError("WhisperX returned a word without text or times.")
         pairs.append((token, start, end))
-    if len(pairs) != len(words):
-        raise MediaError(
-            "WhisperX word count does not match the transcript evidence. "
-            "Hero alignment does not invent or drop words."
-        )
+    return _collapse_alignment_tokens(words, pairs, source_offset=source_start_us)
+
+
+def _collapse_alignment_tokens(
+    words: list[TranscriptWord],
+    returned: list[tuple[str, int, int]],
+    *,
+    source_offset: int,
+) -> list[tuple[int, int]]:
+    """Group aligner pieces back onto transcript words. Stored text is not rewritten."""
+    cursor = 0
     bounds: list[tuple[int, int]] = []
-    for expected, (token, start, end) in zip(words, pairs, strict=True):
-        if token.strip() != expected.text.strip():
+    for expected in words:
+        target = expected.text.strip()
+        if not target:
+            raise MediaError(f"transcript word {expected.word_id} is empty")
+        collected = ""
+        start: int | None = None
+        end: int | None = None
+        while cursor < len(returned) and collected != target:
+            token, token_start, token_end = returned[cursor]
+            piece = token.strip()
+            cursor += 1
+            if not piece:
+                continue
+            if token_end <= token_start:
+                raise MediaError("WhisperX returned a word with no positive duration.")
+            if not target.startswith(collected + piece):
+                raise MediaError(
+                    f"WhisperX text {token!r} does not match transcript word {expected.text!r}. "
+                    "The transcript text was not rewritten."
+                )
+            if start is None:
+                start = token_start
+            collected += piece
+            end = token_end
+        if collected != target or start is None or end is None or end <= start:
             raise MediaError(
-                f"WhisperX text {token!r} does not match transcript word {expected.text!r}. "
-                "The transcript text was not rewritten."
+                "WhisperX word count does not match the transcript evidence. "
+                "Hero alignment does not invent or drop words."
             )
-        if end <= start:
-            raise MediaError("WhisperX returned a word with no positive duration.")
-        bounds.append((source_start_us + start, source_start_us + end))
+        bounds.append((source_offset + start, source_offset + end))
+    if cursor != len(returned):
+        raise MediaError("WhisperX returned extra tokens. Hero alignment does not invent or drop words.")
     return bounds
 
 

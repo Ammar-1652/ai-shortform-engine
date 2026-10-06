@@ -43,7 +43,11 @@
         "not_configured",
         "unsupported_language",
         "alignment_not_claimed",
-        "locale_not_smoked"
+        "locale_not_smoked",
+        "provider_unavailable",
+        "model_missing",
+        "model_license_unknown",
+        "stale_alignment"
       ],
       "title": "Status",
       "type": "string"

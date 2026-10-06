@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass
 
 from clipforge.language.matrix import require_language
+from clipforge.language.providers import provider_for
 
 ENGLISH_ALIGNMENT_MODEL = "WAV2VEC2_ASR_BASE_960H"
 ENGLISH_ALIGNMENT_REVISION = "3.4.5"
@@ -47,8 +48,10 @@ def capability_registry() -> tuple[LanguageCapabilityEntry, ...]:
     rows: list[LanguageCapabilityEntry] = []
     for profile in ("en-US", "en-GB", "fr-FR", "es-ES", "de-DE", "ar", "ja"):
         language = require_language(profile)
+        record = provider_for(language.language)
         english = language.language.startswith("en")
         narrated = language.language == "en-US"
+        verified = record.live_status == "verified_live"
         if narrated:
             narration_reason = "none"
         elif english:
@@ -61,6 +64,7 @@ def capability_registry() -> tuple[LanguageCapabilityEntry, ...]:
             caption_policy = "character_wrap"
         else:
             caption_policy = "ltr_wrap"
+        claimed_model = record.model_id if record.model_id != "none" else None
         rows.append(
             LanguageCapabilityEntry(
                 language=language.language,
@@ -68,17 +72,17 @@ def capability_registry() -> tuple[LanguageCapabilityEntry, ...]:
                 caption_policy=caption_policy,
                 transcription="faster_whisper" if english else "none",
                 transcription_evidence="verified_live" if english else "unavailable",
-                alignment="whisperx" if english else "none",
-                alignment_evidence="verified_live" if english else "unavailable",
-                alignment_model=ENGLISH_ALIGNMENT_MODEL if english else None,
-                alignment_revision=ENGLISH_ALIGNMENT_REVISION if english else None,
-                alignment_checkpoint_sha256=ENGLISH_ALIGNMENT_CHECKPOINT if english else None,
+                alignment=record.provider_name if record.provider_name != "none" else "none",
+                alignment_evidence="verified_live" if verified else record.live_status,
+                alignment_model=claimed_model,
+                alignment_revision=record.model_revision if claimed_model else None,
+                alignment_checkpoint_sha256=record.checkpoint_sha256 or None,
                 narration_engines=(ENGLISH_NARRATION_ENGINE,) if narrated else (),
                 narration_evidence="verified_live" if narrated else "unavailable",
                 narration_model=ENGLISH_NARRATION_MODEL if narrated else None,
                 narration_revision=ENGLISH_NARRATION_REVISION if narrated else None,
                 license_status="allowed" if narrated else "not_applicable",
-                reason_code="none" if english else "alignment_not_claimed",
+                reason_code="none" if verified else record.live_status,
                 narration_reason=narration_reason,
             )
         )
@@ -102,9 +106,12 @@ def alignment_claim(language: str) -> str:
     return "alignment_not_claimed"
 
 
-def alignment_identity_matches(*, revision: str, checkpoint: str) -> bool:
-    """True only for the English checkpoint this install has already run."""
-    return revision == ENGLISH_ALIGNMENT_REVISION and checkpoint == ENGLISH_ALIGNMENT_CHECKPOINT
+def alignment_identity_matches(*, revision: str, checkpoint: str, language: str = "en-US") -> bool:
+    """True only when this locale's smoked checkpoint matches the stored identity."""
+    record = provider_for(language)
+    if record.live_status != "verified_live" or not record.checkpoint_sha256:
+        return False
+    return revision == record.model_revision and checkpoint == record.checkpoint_sha256
 
 
 def language_capability_fingerprint() -> str:

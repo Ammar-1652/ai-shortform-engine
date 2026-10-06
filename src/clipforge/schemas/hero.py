@@ -93,6 +93,16 @@ class ForcedAlignmentDocument(Versioned):
     config_sha256: str = Field(pattern=_SHA)
     words: list[AlignedWord] = Field(min_length=1)
     provenance: ArtifactProvenance
+    locale: str = "en-US"
+    normalized_language: str = "en"
+    model_revision: str = ""
+    checkpoint_sha256: str = ""
+    model_license: str = ""
+    alignment_status: str = "unspecified"
+    alignment_scope: str = "selected_clip"
+    alignment_recipe: str = "hero-align-v1"
+    binding_sha256: str = ""
+    unavailable_reason: str = "none"
 
     @model_validator(mode="after")
     def words_are_monotonic(self) -> Self:
@@ -109,6 +119,12 @@ class ForcedAlignmentDocument(Versioned):
             if word.source_start_us < previous_end:
                 raise ValueError("aligned words overlap or go backwards in source time")
             previous_end = word.source_end_us
+        if self.alignment_status == "verified_live" and self.model_name == "fake-forced-align-v1":
+            raise ValueError("a fake alignment cannot be verified live")
+        if self.checkpoint_sha256 and len(self.checkpoint_sha256) != 64:
+            raise ValueError("alignment checkpoint must be a sha256 hex digest")
+        if self.binding_sha256 and len(self.binding_sha256) != 64:
+            raise ValueError("alignment binding must be a sha256 hex digest")
         return self
 
 

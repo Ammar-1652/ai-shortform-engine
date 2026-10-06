@@ -140,6 +140,7 @@ class CampaignSourceRun(Versioned):
     cache_status: Literal["hit", "miss", "mixed"] = "miss"
     status: RunStatus
     reason_code: str = Field(min_length=1, max_length=80)
+    requested_locale: str = ""
 
     @field_validator("rights_state", "reason_code", "broll_status", "sfx_status")
     @classmethod

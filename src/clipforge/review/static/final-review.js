@@ -35,6 +35,16 @@
     text(board, "time map " + (payload.time_map_sha256 || "none"));
     text(board, "face track " + (payload.face_track_id || "none"));
     text(board, "reframe blocker " + (payload.reframe_blocker || "none"));
+    text(board, "locale " + (payload.requested_locale || "en-US"));
+    text(board, "language " + (payload.normalized_language || "en"));
+    text(board, "alignment status " + (payload.alignment_status || "verified_live"));
+    text(board, "alignment provider " + (payload.alignment_provider || "whisperx"));
+    text(board, "alignment model " + (payload.alignment_model || "none"));
+    text(board, "alignment revision " + (payload.alignment_revision || "none"));
+    text(board, "alignment checkpoint " + (payload.alignment_checkpoint || "none"));
+    text(board, "narration status " + (payload.narration_status || "narration_not_requested"));
+    text(board, "alignment blocker " + (payload.alignment_blocker || "none"));
+    text(board, "alignment cache " + (payload.alignment_cache || "stored"));
     text(board, "delivery " + (payload.delivery_manifest_sha256 || "none"));
     text(board, "decision " + payload.effective_decision);
     text(board, "blockers " + (payload.blockers || []).join(" "));

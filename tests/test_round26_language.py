@@ -57,8 +57,8 @@ def test_capability_matrix_stays_truthful() -> None:
     assert "full_source_runtime: not_configured" in text
     assert "en-US alignment: whisperx evidence: verified_live" in text
     assert "ar alignment: alignment_not_claimed" in text
-    assert "ja alignment: alignment_not_claimed" in text
-    assert "fr-FR alignment: alignment_not_claimed" in text
+    assert "ja alignment: whisperx evidence: verified_live" in text
+    assert "fr-FR alignment: whisperx evidence: verified_live" in text
     assert "zh-CN: unsupported_language" in text
     assert capability_for("en-GB").narration_reason == "locale_not_smoked"
     assert alignment_claim("ar") == "alignment_not_claimed"
@@ -118,7 +118,7 @@ def test_alignment_failures_happen_before_a_job(tmp_path: Path) -> None:
     assert unsupported.value.code == "unsupported_language"
     with pytest.raises(LanguageError) as french:
         _align(work, database, language="fr-FR", provider=WhisperXFullSourceAligner())
-    assert french.value.code == "alignment_not_claimed"
+    assert french.value.code == "not_configured"
     with pytest.raises(LanguageError) as runtime:
         _align(work, database, language="en-US", provider=WhisperXFullSourceAligner())
     assert runtime.value.code == "not_configured"

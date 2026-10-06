@@ -4,7 +4,7 @@
 
 ## What face_follow is
 
-The trajectory is a deterministic crop for each output frame. Output time is mapped through the candidate `TimeMap`. Word spans are not a second clock. The plan stores `time_map_sha256` and rejects a mismatched digest. Face samples use the visual analyzer's cadence. The production cadence is 500_000 us. A gap fails only when it is longer than that cadence plus the stored tolerance. The crop keeps one face box inside a 9:16 window, with a fixed headroom inset, integer smoothing, and a maximum step of 12 pixels per frame. Frame count uses the same 30/1 half-open rule as `TimeMap.output_frame_count`. The frame that starts at the exact output endpoint is excluded.
+The trajectory is a deterministic crop for each output frame. Output time is mapped through the candidate `TimeMap`. Word spans are not a second clock. The plan stores `time_map_sha256` and rejects a mismatched digest. Face samples use the visual analyzer's cadence. The production cadence is 500_000 us. A gap fails only when it is longer than that cadence plus one decoded-frame period of the selected source's rational frame rate. The crop keeps one face box inside a 9:16 window, with a fixed headroom inset, integer smoothing, and a maximum step of 12 pixels per frame. Frame count uses the same 30/1 half-open rule as `TimeMap.output_frame_count`. The frame that starts at the exact output endpoint is excluded.
 
 A face box is not an identity. The track id is geometry inside one analysis. `face_follow` does not run face recognition, does not name a person, and does not infer that the visible face is the speaker. `speaker_attribution` stays `unknown`.
 

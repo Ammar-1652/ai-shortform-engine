@@ -34,6 +34,10 @@ CapabilityStatus = Literal[
     "unsupported_language",
     "alignment_not_claimed",
     "locale_not_smoked",
+    "provider_unavailable",
+    "model_missing",
+    "model_license_unknown",
+    "stale_alignment",
 ]
 TimingQuality = Literal["forced", "approximate", "unavailable"]
 
@@ -166,8 +170,16 @@ class MultilingualAlignmentDocument(Versioned):
     def words_are_ordered(self) -> Self:
         if self.word_count != len(self.words):
             raise ValueError("word count does not match the aligned words")
-        if self.alignment_status == "verified_live" and self.provider_id == "fake":
-            raise ValueError("a fake alignment cannot be verified live")
+        if self.alignment_status == "verified_live":
+            from clipforge.language.registry import alignment_identity_matches
+
+            smoked = alignment_identity_matches(
+                revision=self.model_revision,
+                checkpoint=self.checkpoint_sha256,
+                language=self.language,
+            )
+            if self.provider_id == "fake" or not smoked:
+                raise ValueError("a fake alignment cannot be verified live")
         previous_source = -1
         previous_output = -1
         for word in self.words:
