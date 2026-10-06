@@ -1,0 +1,75 @@
+/** Language-aware caption lines. Text stays a string. Markup is refused. */
+
+export type CaptionDirection = "ltr" | "rtl";
+
+export type CaptionLayout = {
+  readonly text: string;
+  readonly direction: CaptionDirection;
+  readonly lines: readonly string[];
+  readonly safe: { readonly left: number; readonly right: number; readonly top: number; readonly bottom: number };
+};
+
+const SAFE_MARGIN = 64;
+const FRAME_WIDTH = 1080;
+const FRAME_HEIGHT = 1920;
+const FORBIDDEN_START = new Set(["。", "、", "！", "？", "」", "）", "』"]);
+const FORBIDDEN_END = new Set(["（", "「", "『"]);
+
+export function layoutCaption(text: string, language: string, maxChars = 12): CaptionLayout {
+  if (!text || text.trim() !== text) {
+    throw new Error("caption text is empty");
+  }
+  if (text.includes("<") || text.includes(">")) {
+    throw new Error("caption text is not html");
+  }
+  const direction: CaptionDirection = language === "ar" || language.startsWith("ar-") ? "rtl" : "ltr";
+  const lines = language === "ja" || language.startsWith("ja-") ? wrapCjk(text, maxChars) : [text];
+  return {
+    text,
+    direction,
+    lines,
+    safe: {
+      left: SAFE_MARGIN,
+      right: FRAME_WIDTH - SAFE_MARGIN,
+      top: SAFE_MARGIN,
+      bottom: FRAME_HEIGHT - SAFE_MARGIN,
+    },
+  };
+}
+
+export function wrapCjk(text: string, width: number): string[] {
+  if (width < 1) {
+    throw new Error("caption width must be positive");
+  }
+  const lines: string[] = [];
+  let current = "";
+  for (const character of text) {
+    if (current.length >= width && !FORBIDDEN_START.has(character)) {
+      let carry = "";
+      if (current.length > 0 && FORBIDDEN_END.has(current[current.length - 1] ?? "")) {
+        carry = current[current.length - 1] ?? "";
+        current = current.slice(0, -1);
+      }
+      if (current.length > 0) {
+        lines.push(current);
+      }
+      current = carry + character;
+    } else {
+      current += character;
+    }
+  }
+  if (current.length > 0) {
+    lines.push(current);
+  }
+  return lines;
+}
+
+export function plateInsideSafeArea(layout: CaptionLayout): boolean {
+  return (
+    layout.safe.left >= SAFE_MARGIN &&
+    layout.safe.right <= FRAME_WIDTH - SAFE_MARGIN &&
+    layout.safe.top >= SAFE_MARGIN &&
+    layout.safe.bottom <= FRAME_HEIGHT - SAFE_MARGIN &&
+    layout.lines.every((line) => line.length > 0)
+  );
+}

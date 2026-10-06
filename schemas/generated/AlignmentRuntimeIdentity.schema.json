@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "The runtime that produced one alignment. Paths and credentials are absent.",
+  "properties": {
+    "device": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Device",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "runtime_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Runtime Version",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider_version",
+    "runtime_version",
+    "device",
+    "sample_rate"
+  ],
+  "title": "AlignmentRuntimeIdentity",
+  "type": "object"
+}

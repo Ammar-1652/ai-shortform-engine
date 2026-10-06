@@ -157,6 +157,15 @@ from clipforge.schemas.media import (
     TranscriptSegment,
     TranscriptWord,
 )
+from clipforge.schemas.multilingual import (
+    AlignmentProfile,
+    AlignmentRuntimeIdentity,
+    LanguageCapabilityCacheRecord,
+    MultilingualAlignedWord,
+    MultilingualAlignmentDocument,
+    MultilingualNarrationDocument,
+    NarrationCapability,
+)
 from clipforge.schemas.preview import (
     CandidateRoughPreview,
     RoughCaptionCue,
@@ -372,6 +381,13 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TranslatedTranscript,
     LanguageAlignmentDocument,
     LanguageCaptionProfile,
+    AlignmentProfile,
+    AlignmentRuntimeIdentity,
+    MultilingualAlignedWord,
+    MultilingualAlignmentDocument,
+    NarrationCapability,
+    MultilingualNarrationDocument,
+    LanguageCapabilityCacheRecord,
     AssetSearchHit,
     AssetDownloadRequest,
     EnvatoAssetRequest,

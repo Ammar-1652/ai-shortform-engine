@@ -309,6 +309,22 @@
       });
   }
 
+  function loadLanguages() {
+    fetch("/api/languages")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var rows = payload.languages || [];
+        text(board, "languages " + rows.length);
+        for (var index = 0; index < rows.length; index += 1) {
+          var row = rows[index];
+          text(board, "language " + row.language + " " + row.alignment_status + " " + row.narration_status);
+          text(board, "checkpoint " + row.checkpoint_sha256);
+        }
+      });
+  }
+
   fetch("/api/campaigns")
     .then(function (response) {
       return response.json();
@@ -318,6 +334,7 @@
       text(board, "publishing " + payload.publishing);
       text(board, "whop_live " + payload.whop_live);
       text(board, "envato " + payload.envato);
+      loadLanguages();
       var names = payload.campaigns || [];
       for (var index = 0; index < names.length; index += 1) {
         fetch("/api/campaigns/" + names[index])

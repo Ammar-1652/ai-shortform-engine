@@ -1,0 +1,174 @@
+{
+  "additionalProperties": false,
+  "description": "One narration result. It does not approve a candidate or a Hero.",
+  "properties": {
+    "audio_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Audio Sha256",
+      "type": "string"
+    },
+    "cache_status": {
+      "default": "miss",
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Cache Status",
+      "type": "string"
+    },
+    "channels": {
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "commercial_use": {
+      "enum": [
+        "allowed",
+        "prohibited",
+        "unknown"
+      ],
+      "title": "Commercial Use",
+      "type": "string"
+    },
+    "duration_us": {
+      "exclusiveMinimum": 0,
+      "title": "Duration Us",
+      "type": "integer"
+    },
+    "engine_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Engine Id",
+      "type": "string"
+    },
+    "identity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Identity Sha256",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "license_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "License Name",
+      "type": "string"
+    },
+    "model_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_revision": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "narration_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Narration Id",
+      "type": "string"
+    },
+    "producer_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Producer Job Id",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "relative_path": {
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "script_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Script Sha256",
+      "type": "string"
+    },
+    "service_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Service Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "verified_live",
+        "available_not_smoked",
+        "not_configured",
+        "unsupported_language",
+        "alignment_not_claimed",
+        "locale_not_smoked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "voice_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Voice Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "narration_id",
+    "project_id",
+    "source_asset_id",
+    "language",
+    "provider_id",
+    "service_version",
+    "engine_id",
+    "model_id",
+    "model_revision",
+    "voice_id",
+    "license_name",
+    "commercial_use",
+    "script_sha256",
+    "audio_sha256",
+    "sample_rate",
+    "channels",
+    "duration_us",
+    "producer_job_id",
+    "status",
+    "relative_path",
+    "identity_sha256"
+  ],
+  "title": "MultilingualNarrationDocument",
+  "type": "object"
+}

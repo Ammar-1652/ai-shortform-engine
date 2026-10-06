@@ -31,6 +31,12 @@ from clipforge.campaign.operator import (
 from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop import board_whop_campaign, board_whop_import
 from clipforge.errors import ClipforgeError
+from clipforge.language.service import (
+    board_languages,
+    board_production_language,
+    board_source_alignments,
+    board_source_narration,
+)
 from clipforge.storage import Database
 
 LOOPBACK_HOST = "127.0.0.1"
@@ -99,8 +105,22 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     _send(self, 200, (_STATIC / "app.js").read_bytes(), _STATIC_FILES["app.js"])
                 elif path == "/styles.css":
                     _send(self, 200, (_STATIC / "styles.css").read_bytes(), _STATIC_FILES["styles.css"])
+                elif path == "/api/languages":
+                    _send_json(self, board_languages())
                 elif path == "/api/campaigns":
                     _send_json(self, board_campaigns(work_root))
+                elif path.startswith("/api/sources/") and path.endswith("/alignments"):
+                    source_id = path.removeprefix("/api/sources/").removesuffix("/alignments")
+                    _reject_id(source_id)
+                    _send_json(self, board_source_alignments(work_root, source_id))
+                elif path.startswith("/api/sources/") and path.endswith("/narration"):
+                    source_id = path.removeprefix("/api/sources/").removesuffix("/narration")
+                    _reject_id(source_id)
+                    _send_json(self, board_source_narration(work_root, source_id))
+                elif path.startswith("/api/campaign-productions/") and path.endswith("/language"):
+                    run_id = path.removeprefix("/api/campaign-productions/").removesuffix("/language")
+                    _reject_id(run_id)
+                    _send_json(self, _production_language(work_root, run_id))
                 elif path.startswith("/api/campaign-productions/") and path.endswith("/delivery"):
                     run_id = path.removeprefix("/api/campaign-productions/").removesuffix("/delivery")
                     _reject_id(run_id)
@@ -198,6 +218,30 @@ def _send_run(handler: BaseHTTPRequestHandler, work_root: Path, rest: str) -> No
         return
     _reject_id(rest)
     _send_json(handler, board_run(work_root, rest))
+
+
+def _production_language(work_root: Path, run_id: str) -> dict[str, object]:
+    document = board_production(work_root, run_id)
+    language = document.get("language")
+    if not isinstance(language, str):
+        raise CampaignError("production language is missing", code="missing_language")
+    source_sha = _sha_field(document.get("sources"), "final_media_sha256")
+    narration = document.get("narration_enabled") is True
+    return board_production_language(
+        language,
+        narration_enabled=narration,
+        source_sha256=source_sha,
+        transcript_sha256=None,
+    )
+
+
+def _sha_field(sources: object, key: str) -> str | None:
+    if not isinstance(sources, list) or not sources or not isinstance(sources[0], dict):
+        return None
+    value = sources[0].get(key)
+    if isinstance(value, str) and len(value) == 64:
+        return value
+    return None
 
 
 def _reject_id(value: str) -> None:

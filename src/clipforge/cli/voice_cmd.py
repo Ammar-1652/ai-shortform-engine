@@ -50,6 +50,14 @@ def voice_doctor(
         _fail(exc)
 
 
+@voice_app.command("languages")
+def voice_languages() -> None:
+    """List narration languages. This command does not write."""
+    from clipforge.language.service import languages_text
+
+    typer.echo(languages_text())
+
+
 @voice_app.command("capabilities")
 def voice_capabilities(
     provider: Annotated[str, typer.Option("--provider")] = "voicestudio",

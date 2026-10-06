@@ -28,7 +28,7 @@ from clipforge.campaign.production import (
     verify_campaign_run,
 )
 from clipforge.campaign.providers import CampaignError
-from clipforge.language.registry import LanguageCapabilityEntry, capability_for
+from clipforge.language.registry import LanguageCapabilityEntry, capability_for, language_capability_fingerprint
 from clipforge.schemas.assets import AssetDownloadRequest
 from clipforge.schemas.campaign_operator import (
     CampaignImportSnapshot,
@@ -212,6 +212,9 @@ def select_sources(
         language=capability.language,
         narration_enabled=narration_enabled,
         narration_policy="optional_english" if narration_enabled else "disabled",
+        alignment_requirement="optional",
+        narration_request="requested" if narration_enabled else "not_requested",
+        language_capability_fingerprint=language_capability_fingerprint(),
         operator_id=operator_id,
         created_at=now,
         catalogue_fingerprint=catalogue_fingerprint(campaign_id),

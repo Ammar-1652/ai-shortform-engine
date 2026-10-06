@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "Why an alignment or narration was reused.",
+  "properties": {
+    "cache_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Cache Id",
+      "type": "string"
+    },
+    "identity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Identity Sha256",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "alignment",
+        "narration"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "subject_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Subject Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "cache_id",
+    "subject_id",
+    "kind",
+    "identity_sha256",
+    "source_sha256",
+    "status"
+  ],
+  "title": "LanguageCapabilityCacheRecord",
+  "type": "object"
+}

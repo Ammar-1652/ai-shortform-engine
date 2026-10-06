@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "Which aligner a language may use. Unverified is not a live claim.",
+  "properties": {
+    "checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "model_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_revision": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "verified_live",
+        "available_not_smoked",
+        "not_configured",
+        "unsupported_language",
+        "alignment_not_claimed",
+        "locale_not_smoked"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "language",
+    "provider_id",
+    "model_id",
+    "model_revision",
+    "checkpoint_sha256",
+    "status"
+  ],
+  "title": "AlignmentProfile",
+  "type": "object"
+}

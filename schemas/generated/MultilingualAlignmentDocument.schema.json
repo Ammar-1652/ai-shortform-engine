@@ -1,0 +1,283 @@
+{
+  "$defs": {
+    "MultilingualAlignedWord": {
+      "additionalProperties": false,
+      "description": "One aligned word. The Unicode text is the transcript text.",
+      "properties": {
+        "output_end_frame_exclusive": {
+          "minimum": 0,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Asset Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "text": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "transcript_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Transcript Id",
+          "type": "string"
+        },
+        "word_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Word Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word_id",
+        "text",
+        "source_start_us",
+        "source_end_us",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive",
+        "source_asset_id",
+        "transcript_id"
+      ],
+      "title": "MultilingualAlignedWord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One full-source alignment. It does not replace selected-clip Hero alignment.",
+  "properties": {
+    "alignment_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Alignment Id",
+      "type": "string"
+    },
+    "alignment_status": {
+      "enum": [
+        "verified_live",
+        "available_not_smoked",
+        "not_configured",
+        "unsupported_language",
+        "alignment_not_claimed",
+        "locale_not_smoked"
+      ],
+      "title": "Alignment Status",
+      "type": "string"
+    },
+    "artifact_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Artifact Sha256",
+      "type": "string"
+    },
+    "cache_status": {
+      "default": "miss",
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Cache Status",
+      "type": "string"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "device": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Device",
+      "type": "string"
+    },
+    "identity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Identity Sha256",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "language_capability_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Language Capability Fingerprint",
+      "type": "string"
+    },
+    "language_tag": {
+      "maxLength": 16,
+      "minLength": 2,
+      "title": "Language Tag",
+      "type": "string"
+    },
+    "model_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_revision": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "producer_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Producer Job Id",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "relative_path": {
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "runtime_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Runtime Version",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "timing_quality": {
+      "enum": [
+        "forced",
+        "approximate",
+        "unavailable"
+      ],
+      "title": "Timing Quality",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "word_count": {
+      "minimum": 1,
+      "title": "Word Count",
+      "type": "integer"
+    },
+    "words": {
+      "items": {
+        "$ref": "#/$defs/MultilingualAlignedWord"
+      },
+      "minItems": 1,
+      "title": "Words",
+      "type": "array"
+    }
+  },
+  "required": [
+    "alignment_id",
+    "source_asset_id",
+    "source_sha256",
+    "transcript_id",
+    "transcript_sha256",
+    "language",
+    "language_tag",
+    "provider_id",
+    "provider_version",
+    "model_id",
+    "model_revision",
+    "checkpoint_sha256",
+    "runtime_version",
+    "device",
+    "sample_rate",
+    "word_count",
+    "alignment_status",
+    "timing_quality",
+    "artifact_sha256",
+    "producer_job_id",
+    "project_id",
+    "relative_path",
+    "language_capability_fingerprint",
+    "identity_sha256",
+    "words"
+  ],
+  "title": "MultilingualAlignmentDocument",
+  "type": "object"
+}
