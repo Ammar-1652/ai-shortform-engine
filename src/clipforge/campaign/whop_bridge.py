@@ -97,6 +97,24 @@ class AuthenticatedBridgeProvider:
         return _campaigns_from_envelope(self, parsed_body)
 
 
+def _reject_late_reuse(
+    server: ThreadingHTTPServer,
+    condition: threading.Condition,
+    state: dict[str, bool],
+) -> None:
+    """Give one overlapping reuse a 410, then stop listening."""
+
+    def drain() -> None:
+        with condition:
+            deadline = time.monotonic() + 1.0
+            while not state["rejected_reuse"] and time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                condition.wait(timeout=max(0.0, remaining))
+        server.shutdown()
+
+    threading.Thread(target=drain, daemon=True).start()
+
+
 def serve_catalogue(
     bind: str,
     port: int,
@@ -130,8 +148,8 @@ def serve_catalogue(
             raise CampaignError("whop provider response contained a secret", code="secret_rejected")
     except CampaignError as exc:
         raise SystemExit(2) from exc
-    state = {"used": False, "inflight": False}
-    lock = threading.Lock()
+    state = {"used": False, "inflight": False, "rejected_reuse": False}
+    condition = threading.Condition()
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -171,7 +189,7 @@ def serve_catalogue(
                 return
             presented = self.headers.get("X-Clipforge-Nonce", "")
             now = time.time()
-            with lock:
+            with condition:
                 if now > expires_at:
                     self._send(410, b"{}")
                     return
@@ -180,6 +198,8 @@ def serve_catalogue(
                     return
                 if state["used"] or state["inflight"]:
                     self._send(410, b"{}")
+                    state["rejected_reuse"] = True
+                    condition.notify_all()
                     return
                 state["inflight"] = True
             try:
@@ -200,10 +220,11 @@ def serve_catalogue(
                 encoded = json.dumps(envelope).encode("utf-8")
                 self._send(200, encoded)
             finally:
-                with lock:
+                with condition:
                     state["inflight"] = False
                     state["used"] = True
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    condition.notify_all()
+            _reject_late_reuse(self.server, condition, state)
 
         def do_GET(self) -> None:
             self._send(405, b"{}")
