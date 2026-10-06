@@ -26,6 +26,14 @@
     text(board, "codecs " + payload.video_codec + " " + payload.audio_codec);
     text(board, "captions " + payload.caption_count);
     text(board, "qa " + payload.qa_set_id + " " + payload.qa_status);
+    text(
+      board,
+      "reframing " + (payload.reframing_requested || "contain")
+        + " applied " + (payload.reframing_applied || payload.reframing_strategy || "contain")
+    );
+    text(board, "trajectory " + (payload.trajectory_sha256 || "none"));
+    text(board, "face track " + (payload.face_track_id || "none"));
+    text(board, "reframe blocker " + (payload.reframe_blocker || "none"));
     text(board, "delivery " + (payload.delivery_manifest_sha256 || "none"));
     text(board, "decision " + payload.effective_decision);
     text(board, "blockers " + (payload.blockers || []).join(" "));

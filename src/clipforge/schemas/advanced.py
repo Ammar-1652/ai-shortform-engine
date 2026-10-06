@@ -38,6 +38,7 @@ class ReframingStrategy(Versioned):
         "visual_safe_window",
         "multi_face_safe_window",
         "saliency_window",
+        "face_follow",
     ]
 
 

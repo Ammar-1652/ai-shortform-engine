@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "description": "Hashes that bind a reframe plan to its inputs. Paths are absent.",
+  "properties": {
+    "plan_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plan Fingerprint",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "trajectory_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Trajectory Sha256",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_sha256",
+    "visual_analysis_sha256",
+    "trajectory_sha256",
+    "plan_fingerprint"
+  ],
+  "title": "ReframeEvidenceDigest",
+  "type": "object"
+}

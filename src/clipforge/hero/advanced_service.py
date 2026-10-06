@@ -207,7 +207,7 @@ def render_advanced_drafts(
             )
         for candidate_id, plan in chosen:
             context = _context(database, source_asset_id, candidate_id, root)
-            _require_plan_binding(plan, context)
+            _require_plan_binding(database, plan, context)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
         narration: tuple[str, Path] | None = None
         if narration_artifact_id is not None:
@@ -398,7 +398,7 @@ def _render_run(
         render_input = AdvancedHeroRenderInput(
             candidate_id=candidate_id,
             advanced_set_id=advanced_set_id,
-            duration_in_frames=max(1, plan.windows[0].output_end_us * 30 // 1_000_000) if plan.windows else 30,
+            duration_in_frames=max(1, _output_end_us(plan) * 30 // 1_000_000),
             reframing_strategy=plan.reframing_strategy,
             reframing_config_sha256=plan.reframing_config_sha256,
             profile_fingerprint=profile.fingerprint(),
@@ -442,7 +442,7 @@ def _render_run(
     _cleanup_dir(staging, root)
     outputs: list[AdvancedHeroDraftOutput] = []
     for rank, candidate_id, plan, render_input, output in prepared:
-        probed = probe_hero(output, expected_duration_us=plan.windows[0].output_end_us if plan.windows else 1)
+        probed = probe_hero(output, expected_duration_us=_output_end_us(plan))
         sample_rate = _sample_rate(output)
         if sample_rate != profile.audio_sample_rate:
             raise MediaError(
@@ -466,7 +466,7 @@ def _render_run(
                 preview_relative_path=f"candidates/{candidate_id}/advanced.mp4",
                 preview_sha256=sha256_file(output),
                 preview_size_bytes=output.stat().st_size,
-                output_duration_us=plan.windows[0].output_end_us if plan.windows else probed.duration_us,
+                output_duration_us=_output_end_us(plan),
                 detected_video_codec=probed.video_codec,
                 detected_pixel_format=probed.pixel_format,
                 detected_audio_codec=probed.audio_codec,
@@ -492,7 +492,7 @@ def _render_run(
         visual_analysis_sha256=hero.document.visual_analysis_sha256,
         profile=profile,
         profile_fingerprint=profile.fingerprint(),
-        reframing_strategy=profile.reframing.strategy_id,
+        reframing_strategy=_applied_strategy(chosen, profile),
         reframing_config_sha256=outputs[0].advanced_plan_sha256,
         advanced_input_sha256=identity,
         drafts=outputs,
@@ -661,7 +661,15 @@ def _cache_ready(
             return False
         if sha256_file(video) != draft.preview_sha256 or video.stat().st_size != draft.preview_size_bytes:
             return False
-    for _candidate_id, plan in chosen:
+    for candidate_id, plan in chosen:
+        plan_path = workspace.advanced_plan_file(candidate_id)
+        matched = next((item for item in document.drafts if item.candidate_id == candidate_id), None)
+        if matched is None or not plan_path.is_file() or plan_path.is_symlink():
+            return False
+        if sha256_file(plan_path) != matched.advanced_plan_sha256:
+            return False
+        if plan.reframing_strategy == "face_follow" and not _reframe_sidecar_current(workspace, plan):
+            return False
         for binding in plan.assets:
             try:
                 path = _asset_path(workspace, binding.asset_id, root)
@@ -713,11 +721,61 @@ def _sample_rate(path: Path) -> int:
     raise MediaError(f"{path.name} has no audio stream")
 
 
-def _require_plan_binding(plan: AdvancedHeroPlanDocument, context: _Context) -> None:
+def _output_end_us(plan: AdvancedHeroPlanDocument) -> int:
+    if not plan.windows:
+        return 1
+    return max(window.output_end_us for window in plan.windows)
+
+
+def _applied_strategy(
+    chosen: list[tuple[str, AdvancedHeroPlanDocument]],
+    profile: AdvancedHeroProfile,
+) -> str:
+    if not chosen:
+        return profile.reframing.strategy_id
+    strategy = chosen[0][1].reframing_strategy
+    if any(plan.reframing_strategy != strategy for _candidate_id, plan in chosen):
+        raise MediaError("advanced render refuses mixed reframing strategies")
+    return strategy
+
+
+def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> bool:
+    from clipforge.schemas.reframe import ReframePlanDocument
+
+    path = workspace.reframe_plan_file(plan.candidate_id)
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return False
+    if document.applied_strategy != "face_follow" or document.trajectory is None:
+        return False
+    if (
+        document.source_sha256 != plan.source_sha256
+        or document.visual_analysis_sha256 != plan.visual_analysis_sha256
+    ):
+        return False
+    samples = document.trajectory.samples
+    if len(samples) != len(plan.windows):
+        return False
+    for sample, window in zip(samples, plan.windows, strict=True):
+        if window.output_start_us != sample.output_us or window.source_x != sample.crop_x:
+            return False
+        if window.source_y != sample.crop_y or window.source_width != sample.crop_width:
+            return False
+        if window.source_height != sample.crop_height:
+            return False
+    return document.trajectory_sha256 == document.trajectory.digest()
+
+
+def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
     """Fail closed when the stored plan no longer matches the current producers."""
-    if plan.reframing_strategy != "contain":
+    if plan.reframing_strategy not in {"contain", "face_follow"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
+    if plan.reframing_strategy == "face_follow":
+        _require_face_follow(database, plan, context)
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),
@@ -744,6 +802,58 @@ def _require_plan_binding(plan: AdvancedHeroPlanDocument, context: _Context) -> 
         end = max(window.output_end_us for window in plan.windows)
         if end != context.duration_us:
             raise MediaError("advanced plan is stale: TimeMap duration changed after planning")
+
+
+def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
+    from clipforge.hero.reframe import ReframeError, assert_unlinked, build_face_follow
+    from clipforge.storage.repository import get_job
+
+    if not _reframe_sidecar_current(context.workspace, plan):
+        raise MediaError("visual_analysis_stale")
+    job_id = context.visual.provenance.job_id or ""
+    succeeded = False
+    if job_id:
+        try:
+            with database.connect() as connection:
+                succeeded = get_job(connection, job_id).status.value == "succeeded"
+        except StorageError:
+            succeeded = False
+    try:
+        rebuilt = build_face_follow(
+            samples=list(context.visual.face_detection_samples),
+            source_width=context.visual.proxy_width,
+            source_height=context.visual.proxy_height,
+            duration_us=context.duration_us,
+            source_sha256=context.source_sha256,
+            analysis_source_sha256=context.visual.source_sha256,
+            analysis_present=bool(context.visual.face_detection_samples),
+            producer_succeeded=succeeded,
+            visual_analysis_id=context.visual.analysis_id,
+            visual_analysis_sha256=context.visual_sha256,
+            producer_job_id=job_id,
+            words=list(context.alignment.words),
+            plan_id=plan.plan_id,
+            source_asset_id=plan.source_asset_id,
+            created_by="clipforge",
+            tool_version="recompute",
+        )
+    except ReframeError as exc:
+        raise MediaError(exc.code) from exc
+    if rebuilt.trajectory_sha256 != _sidecar_trajectory(context.workspace, plan):
+        raise MediaError("visual_analysis_stale")
+    side = context.workspace.reframe_plan_file(plan.candidate_id)
+    try:
+        assert_unlinked(side, context.workspace.root)
+    except ReframeError as exc:
+        raise MediaError(exc.code) from exc
+
+
+def _sidecar_trajectory(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
+    from clipforge.schemas.reframe import ReframePlanDocument
+
+    path = workspace.reframe_plan_file(plan.candidate_id)
+    document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    return document.trajectory_sha256
 
 
 def _require_plan_assets(
@@ -986,14 +1096,43 @@ def format_advanced_show(database: Database, source_asset_id: str, candidate_id:
     draft = next((item for item in document.drafts if item.candidate_id == candidate_id), None)
     if draft is None:
         raise MediaError(f"unknown candidate {candidate_id}")
+    workspace = SourceWorkspace(work_root.resolve(), document.project_id, document.source_asset_id)
     return "\n".join(
         [
             f"candidate_id: {draft.candidate_id}",
             f"reframing: {document.reframing_strategy}",
+            f"applied: {_show_applied(workspace, candidate_id, document.reframing_strategy)}",
+            f"blocker: {_show_blocker(workspace, candidate_id, document.reframing_strategy)}",
             f"advanced_plan_sha256: {draft.advanced_plan_sha256}",
             f"dimensions: {draft.width}x{draft.height}",
         ]
     )
+
+
+def _show_applied(workspace: SourceWorkspace, candidate_id: str, strategy: str) -> str:
+    if strategy != "face_follow":
+        return strategy
+    path = workspace.reframe_plan_file(candidate_id)
+    if path.is_symlink() or not path.is_file():
+        return "contain"
+    try:
+        from clipforge.schemas.reframe import ReframePlanDocument
+
+        document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return "contain"
+    return document.applied_strategy
+
+
+def _show_blocker(workspace: SourceWorkspace, candidate_id: str, strategy: str) -> str:
+    if strategy != "face_follow":
+        return "none"
+    path = workspace.reframe_plan_file(candidate_id)
+    if path.is_symlink():
+        return "unsafe_path"
+    if not path.is_file():
+        return "visual_analysis_missing"
+    return "none"
 
 
 def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -> None:

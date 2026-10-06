@@ -221,6 +221,7 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         )
         assert first["controls"] is True
         assert first["autoplay"] is False
+        assert "reframing contain" in first["text"]
         assert "broll-1" in first["text"]
         assert "sfx-1" in first["text"]
         assert "owned" in first["text"]

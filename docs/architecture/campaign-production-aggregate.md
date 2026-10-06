@@ -27,6 +27,8 @@ A selected source must still match its bound hash or have a verified acquisition
 
 For each selected source the existing runner verifies acquisition or the bound file, media preparation, transcript, visual analysis, candidate mining, rough preview, candidate review, alignment, Hero plan and render, Advanced Hero, QA, narration when requested, and local delivery. `produce` does not call those tools itself. It records the runner's stage list, review ids, QA set id, delivery id, and hashes.
 
+The aggregate also records a `reframe` stage for each source: requested strategy, applied strategy, plan id, trajectory hash, evidence digest, status, cache hit, and blocker. `contain` needs no face evidence. A stale `face_follow` plan blocks that source only. Resume reruns a source whose reframing evidence is missing or stale and leaves a current source in place.
+
 A source is not marked succeeded by the aggregate when the runner status is missing, blocked, stale, cancelled, or failed. Candidate approval must be the current decision for the preview artifact. A newer rejection or `changes_requested` decision overrides an older approval. The same rule applies to the Hero review. No command in this round approves a review.
 
 Narration that was not requested is `narration_not_requested` and does not block the run. Requested narration must be the verified English KittenTTS identity with a succeeded producer, matching script, model, revision, voice, and audio hash. A cache hit does not call VoiceStudio. `en-GB` narration stays `locale_not_smoked`. Arabic and Japanese narration stay `unsupported_language`. `zh-CN` is rejected before a pipeline job. English alignment is claimed only as `whisperx` when the runner recorded that from the verified alignment artifact.

@@ -6,7 +6,7 @@ Round 10 adds a separate advanced Hero artifact. It does not rewrite `hero_draft
 
 `advanced-hero-v1` is 1080×1920, 30/1, H.264, AAC, `yuv420p` (or the encoder's `yuvj420p`). Music is disallowed. B-roll and SFX must be rights-cleared local files. The maximum counts and gain limits live on the profile.
 
-Reframing strategies are `contain`, `center_crop`, `manual_window`, `visual_safe_window`, `multi_face_safe_window`, and `saliency_window`. A face box is geometry. The largest face is not treated as the speaker. A strategy with too little evidence fails closed.
+Reframing strategies include `contain` and the opt-in `face_follow`. `contain` is the default. `face_follow` builds a deterministic crop from stored face-track geometry. See [dynamic reframing](dynamic-reframing.md). A face box is geometry. It is not an identity and it is not the speaker. A strategy with too little evidence fails closed. The older `center_crop`, `manual_window`, `visual_safe_window`, `multi_face_safe_window`, and `saliency_window` names still fail closed when the render path does not support them.
 
 ## Plan and render
 
@@ -16,7 +16,7 @@ Before a render job is inserted, every stored plan is checked against the curren
 
 Asset paths are checked lexically before `Path.resolve()`. A symlink at the file or at a parent directory is rejected, including a symlink whose target has the expected hash. Absolute paths, `..`, backslashes, and file URIs outside the work root are rejected. The same check covers cache validation, staging, rendering, and media serving.
 
-The production composition uses `contain` and the neutral-dark background `#111111`. It does not fall back to cover. Other reframing strategies fail before the job. B-roll keeps its output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB and plays on the declared interval. Music is rejected.
+The production composition uses `contain` and the neutral-dark background `#111111` unless the stored plan is `face_follow`. `face_follow` places the stored crop and does not use `objectFit: cover`. Other unsupported strategies fail before the job. B-roll keeps its output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB and plays on the declared interval. Music is rejected.
 
 ## Review
 

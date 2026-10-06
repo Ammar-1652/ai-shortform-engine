@@ -16,7 +16,7 @@ The evaluator registry maps known policy ids to Python functions. A policy file 
 
 ## QA set
 
-`clipforge qa run SOURCE_ID` evaluates the current `advanced_hero_draft_set_json`. It does not fall back to a rough preview and it does not render. Technical checks cover the artifact row, provenance, producer hashes, manifest, media files, ffprobe, intervals, reframing, remote URLs, and asset rights. Campaign checks are one check per resolved policy.
+`clipforge qa run SOURCE_ID` evaluates the current `advanced_hero_draft_set_json`. It does not fall back to a rough preview and it does not render. Technical checks cover the artifact row, provenance, producer hashes, manifest, media files, ffprobe, intervals, reframing, remote URLs, and asset rights. The reframing check records `contain` unchanged. For `face_follow` it records the requested strategy, applied strategy, fallback, track id, trajectory hash, crop size, safe area, movement, coverage, confidence, and blocker. A stale trajectory fails the check. Campaign checks are one check per resolved policy.
 
 The `qa_set_json` artifact stores a `QASetDocument`. Aggregate status is the worst of the technical and campaign results. A pass cannot hide a failed or incomplete check. The sidecar `qa-set.recipe.json` becomes current only after the manifest and the artifact row are written. A sidecar failure deletes the new artifact row and leaves the previous sidecar in place.
 

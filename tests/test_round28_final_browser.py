@@ -75,6 +75,8 @@ def test_local_browser_saves_a_final_decision(tmp_path: Path, monkeypatch: pytes
         assert first["autoplay"] is False
         assert "Café" in str(first["text"])
         assert "説明" in str(first["text"])
+        assert "reframing contain" in str(first["text"])
+        assert "reframe blocker" in str(first["text"])
         assert "approved" in str(first["text"])
         saved = page.evaluate(
             """

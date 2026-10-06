@@ -197,6 +197,13 @@ from clipforge.schemas.publish import (
     PublishTarget,
 )
 from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument
+from clipforge.schemas.reframe import (
+    FaceFollowSample,
+    FaceFollowTrajectory,
+    FaceTrackEvidence,
+    ReframeEvidenceDigest,
+    ReframePlanDocument,
+)
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 from clipforge.schemas.vision import (
@@ -288,6 +295,11 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AdvancedHeroProfile,
     ReframingStrategy,
     ReframingWindow,
+    FaceFollowSample,
+    FaceFollowTrajectory,
+    FaceTrackEvidence,
+    ReframePlanDocument,
+    ReframeEvidenceDigest,
     TypographyEvent,
     DiagramPayload,
     DiagramEvent,

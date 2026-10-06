@@ -163,6 +163,9 @@ class SourceWorkspace:
     def advanced_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "plan.json")
 
+    def reframe_plan_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "reframe.json")
+
     def qa_root(self) -> Path:
         return _join(self.source_root, "qa")
 

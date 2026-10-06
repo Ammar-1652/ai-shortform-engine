@@ -1,5 +1,6 @@
 import { AbsoluteFill, Audio, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
 
+import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
 
 type Interval = { output_start_us?: number; output_end_us?: number };
@@ -48,6 +49,7 @@ export type AdvancedHeroInput = {
   sfx?: SfxEvent[];
   emphasis?: EmphasisEvent[];
   asset_names?: Record<string, string>;
+  windows?: CropWindow[];
 };
 
 const FPS = 30;
@@ -78,10 +80,9 @@ function span(interval: Interval | undefined): { from: number; duration: number 
  */
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
-  if (input.reframing_strategy !== "contain") {
-    throw new Error(
-      `advanced render does not support reframing strategy ${String(input.reframing_strategy)}`,
-    );
+  const strategy = input.reframing_strategy ?? "contain";
+  if (strategy !== "contain" && strategy !== "face_follow") {
+    throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
   const typography = input.typography ?? [];
@@ -94,14 +95,26 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const speech = input.speech_name ?? "asr.flac";
   const picture = input.base_video_name ?? "analysis.mp4";
   const contained = { width: "100%", height: "100%", objectFit: "contain" as const };
+  const followed = strategy === "face_follow" ? placedVideo(windowAt(frame, input.windows ?? [])) : null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
-      <OffthreadVideo
-        src={staticFile(picture)}
-        durationInFrames={input.duration_in_frames}
-        muted
-        style={contained}
-      />
+      {followed === null ? (
+        <OffthreadVideo
+          src={staticFile(picture)}
+          durationInFrames={input.duration_in_frames}
+          muted
+          style={contained}
+        />
+      ) : (
+        <AbsoluteFill style={{ overflow: "hidden" }}>
+          <OffthreadVideo
+            src={staticFile(picture)}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{ position: "absolute", ...followed }}
+          />
+        </AbsoluteFill>
+      )}
       <Audio src={staticFile(speech)} durationInFrames={input.duration_in_frames} />
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
         <Audio src={staticFile(names.narration)} />

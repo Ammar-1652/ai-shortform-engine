@@ -106,6 +106,13 @@ class DeliveryFacts:
     video_path: Path
     narration_path: Path | None
     workspace: SourceWorkspace
+    reframing_strategy: str = "contain"
+    reframe_requested: str = "contain"
+    reframe_applied: str = "contain"
+    reframe_fallback: str = ""
+    face_track_id: str = ""
+    trajectory_sha256: str = ""
+    reframe_blocker: str = ""
 
 
 def preflight_delivery(
@@ -178,9 +185,11 @@ def preflight_delivery(
     _require_current(database, source.project_id, source_asset_id, KIND_HERO, document.hero_artifact_id)
     plan = _plan(root, workspace, draft, document)
     _reject_plan_text(plan)
+    reframe = _reframe_binding(workspace, plan, visual_sha, manifest.content_sha256)
     alignment_id, alignment_sha, cues = _alignment(root, workspace, draft)
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
+    _reject_render_strategy(video.parent / "render-input.json", plan, reframe)
     if probe:
         try:
             probe_hero(video, expected_duration_us=draft.output_duration_us)
@@ -271,6 +280,13 @@ def preflight_delivery(
         video_path=video,
         narration_path=narration_path,
         workspace=workspace,
+        reframing_strategy=reframe.applied,
+        reframe_requested=reframe.requested,
+        reframe_applied=reframe.applied,
+        reframe_fallback=reframe.fallback,
+        face_track_id=reframe.track_id,
+        trajectory_sha256=reframe.trajectory_sha256,
+        reframe_blocker=reframe.blocker,
     )
     evidence = evidence_for_facts(draft_facts)
     final_id = ""
@@ -300,12 +316,100 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "profile_fingerprint": facts.profile_fingerprint,
         "qa_set_id": facts.qa_set_id,
         "qa_set_sha256": facts.qa_set_sha256,
+        "reframing_strategy": facts.reframing_strategy,
         "source_sha256": facts.source_sha256,
+        "trajectory_sha256": facts.trajectory_sha256,
         "video_sha256": facts.video_sha256,
         "video_size_bytes": facts.video_size,
     }
     raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class _ReframeBinding:
+    requested: str
+    applied: str
+    fallback: str
+    track_id: str
+    trajectory_sha256: str
+    blocker: str
+
+
+def _reframe_binding(
+    workspace: SourceWorkspace,
+    plan: AdvancedHeroPlanDocument,
+    visual_sha256: str,
+    source_sha256: str,
+) -> _ReframeBinding:
+    """Contain needs no face evidence. face_follow must match the stored trajectory."""
+    if plan.reframing_strategy == "contain":
+        return _ReframeBinding("contain", "contain", "", "", "", "")
+    if plan.reframing_strategy != "face_follow":
+        raise PublishError(
+            f"reframing strategy {plan.reframing_strategy} is not supported",
+            category="artifact_changed",
+        )
+    from clipforge.schemas.reframe import ReframePlanDocument
+
+    path = workspace.reframe_plan_file(plan.candidate_id)
+    if path.is_symlink():
+        raise PublishError("visual analysis path is a symlink", category="unsafe_path")
+    if not path.is_file():
+        raise PublishError("face_follow plan is missing", category="visual_analysis_missing")
+    try:
+        document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise PublishError("face_follow plan could not be read", category="visual_analysis_missing") from exc
+    if document.requested_strategy == "face_follow" and document.applied_strategy != "face_follow":
+        reason = document.fallback_reason or "face_follow_requires_one_track"
+        raise PublishError(reason, category=reason)
+    if document.source_sha256 != source_sha256 or document.visual_analysis_sha256 != visual_sha256:
+        raise PublishError("visual analysis hash changed", category="visual_analysis_stale")
+    if document.trajectory is None or document.trajectory.digest() != document.trajectory_sha256:
+        raise PublishError("trajectory hash does not match", category="visual_analysis_stale")
+    for sample, window in zip(document.trajectory.samples, plan.windows, strict=False):
+        same = (
+            window.output_start_us == sample.output_us
+            and window.source_x == sample.crop_x
+            and window.source_y == sample.crop_y
+            and window.source_width == sample.crop_width
+            and window.source_height == sample.crop_height
+        )
+        if not same:
+            raise PublishError("rendered crop does not match the trajectory", category="visual_analysis_stale")
+    if len(document.trajectory.samples) != len(plan.windows):
+        raise PublishError("rendered crop does not match the trajectory", category="visual_analysis_stale")
+    return _ReframeBinding(
+        document.requested_strategy,
+        document.applied_strategy,
+        document.fallback_reason,
+        document.face_track_id,
+        document.trajectory_sha256,
+        "",
+    )
+
+
+def _reject_render_strategy(path: Path, plan: AdvancedHeroPlanDocument, reframe: _ReframeBinding) -> None:
+    if path.is_symlink():
+        raise PublishError("advanced render input is a symlink", category="unsafe_path")
+    if not path.is_file():
+        if reframe.applied == "face_follow":
+            raise PublishError("advanced render input is missing", category="artifact_changed")
+        return
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PublishError("advanced render input could not be read", category="artifact_changed") from exc
+    if not isinstance(payload, dict):
+        raise PublishError("advanced render input could not be read", category="artifact_changed")
+    applied = payload.get("reframing_strategy")
+    if applied != plan.reframing_strategy or applied != reframe.applied:
+        raise PublishError("render used a different reframing strategy", category="stale_final_review")
+    if reframe.applied == "face_follow":
+        windows = payload.get("windows")
+        if not isinstance(windows, list) or len(windows) != len(plan.windows):
+            raise PublishError("render trajectory does not match the plan", category="visual_analysis_stale")
 
 
 def _source_file(root: Path, uri: str) -> Path:

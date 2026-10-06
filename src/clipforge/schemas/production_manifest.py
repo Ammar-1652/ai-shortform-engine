@@ -69,6 +69,14 @@ class CampaignProductionSource(Versioned):
     delivery_relative: str | None = None
     final_media_sha256: str | None = Field(default=None, pattern=_SHA)
     stages: list[CampaignProductionStageFact]
+    reframe_requested: str = "contain"
+    reframe_applied: str = "contain"
+    reframe_plan_id: str = "none"
+    reframe_trajectory_sha256: str = "none"
+    reframe_evidence_sha256: str = "none"
+    reframe_status: str = "succeeded"
+    reframe_cache_hit: bool = False
+    reframe_blocker: str = "none"
 
     @field_validator(
         "failure_code",
@@ -77,6 +85,13 @@ class CampaignProductionSource(Versioned):
         "alignment_status",
         "narration_status",
         "delivery_relative",
+        "reframe_requested",
+        "reframe_applied",
+        "reframe_plan_id",
+        "reframe_trajectory_sha256",
+        "reframe_evidence_sha256",
+        "reframe_status",
+        "reframe_blocker",
     )
     @classmethod
     def facts_are_plain(cls, value: str | None) -> str | None:

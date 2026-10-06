@@ -60,8 +60,10 @@ def evidence_for_facts(facts: DeliveryFacts) -> dict[str, str]:
         "qa_set_sha256": facts.qa_set_sha256,
         "qa_status": "pass",
         "rights_fingerprint": facts.rights_fingerprint,
+        "reframing_strategy": facts.reframing_strategy,
         "source_asset_id": facts.source_asset_id,
         "source_sha256": facts.source_sha256,
+        "trajectory_sha256": facts.trajectory_sha256,
     }
 
 
@@ -308,6 +310,13 @@ def final_board(
         "profile_fingerprint": facts.profile_fingerprint,
         "policy_fingerprint": facts.policy_fingerprint,
         "rights_fingerprint": facts.rights_fingerprint,
+        "reframing_strategy": facts.reframing_strategy,
+        "reframing_requested": facts.reframe_requested,
+        "reframing_applied": facts.reframe_applied,
+        "reframing_fallback": facts.reframe_fallback,
+        "face_track_id": facts.face_track_id,
+        "trajectory_sha256": facts.trajectory_sha256,
+        "reframe_blocker": facts.reframe_blocker,
         "effective_decision": effective,
         "blockers": [] if code == "approved" else [code],
         "history": history_rows(reviews, facts.candidate_id, facts.advanced_artifact_id),

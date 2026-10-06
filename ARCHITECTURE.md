@@ -93,7 +93,7 @@ Owns history that later rounds can learn from. Round 1 stores the rows and does 
 
 The following are not stubbed as successful commands:
 
-- Full-source WhisperX, dynamic reframing, B-roll, music, and sound effects
+- Full-source WhisperX and music. `face_follow` is an opt-in crop from stored face geometry. B-roll and local SFX already exist. Face recognition and speaker attribution do not.
 - Envato direct download and a claimed live Whop account session. Snapshot import, normalized discovery, the Grok onboarding helper, and manual registration exist. The default Whop status is `not_configured`. A loopback connector is not a live Whop pass. `live_claim` stays `not_claimed` until an official read-only call succeeds. Clipforge does not fetch provider media or store account credentials.
 - Remotion Player and publishing UI
 - Publishing APIs. Local delivery export does not upload.
