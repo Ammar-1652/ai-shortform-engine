@@ -1,0 +1,84 @@
+{
+  "additionalProperties": false,
+  "description": "What the connector may do. Mutating Whop operations stay disabled.",
+  "properties": {
+    "account_fields": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Account Fields",
+      "type": "array"
+    },
+    "credentials": {
+      "const": "not_stored",
+      "default": "not_stored",
+      "title": "Credentials",
+      "type": "string"
+    },
+    "live_status": {
+      "enum": [
+        "public_discovery",
+        "authenticated_discovery",
+        "not_configured",
+        "provider_unavailable"
+      ],
+      "title": "Live Status",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "snapshot",
+        "browser_export",
+        "live_connector",
+        "not_configured"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "mutating_operations": {
+      "const": "disabled",
+      "default": "disabled",
+      "title": "Mutating Operations",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "public_fields": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Public Fields",
+      "type": "array"
+    },
+    "publishing": {
+      "const": "deferred",
+      "default": "deferred",
+      "title": "Publishing",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider_id",
+    "provider_version",
+    "mode",
+    "live_status"
+  ],
+  "title": "WhopProviderCapability",
+  "type": "object"
+}

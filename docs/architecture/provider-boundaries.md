@@ -6,7 +6,7 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. No migra
 
 ## Whop
 
-Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL, or bytes from a connector. The built-in connector returns nothing, so doctor reports `whop_live: not_configured`. `CLIPFORGE_WHOP_LIVE_SMOKE=1` does not start a crawl.
+Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor reports `whop_live: not_configured`. `CLIPFORGE_WHOP_LIVE_SMOKE=1` reports `provider_unavailable` and `session: not opened`. It does not open a socket. Live discovery is specified in [whop-live-discovery.md](whop-live-discovery.md) and [ADR 0062](../adr/0062-whop-live-operator-discovery.md).
 
 Accepted records:
 
@@ -48,7 +48,11 @@ A cache hit returns the same asset id and does not copy again. Changed bytes are
 The board stays on `127.0.0.1` and accepts GET only.
 
 ```text
+GET /api/whop/capabilities
+GET /api/whop/discoveries
+GET /api/whop/discoveries/<id>
 GET /api/campaigns/<campaign_id>/whop
+GET /api/campaigns/<campaign_id>/filter-results
 GET /api/whop-imports/<import_id>
 GET /api/campaigns/<campaign_id>/envato
 GET /api/envato-assets/<asset_id>
@@ -61,10 +65,13 @@ Pages show provenance, import status, the snapshot fingerprint, policy, deferred
 
 ```text
 clipforge campaign operator whop doctor
+clipforge campaign operator whop capabilities
+clipforge campaign operator whop discover
 clipforge campaign operator whop import --file SNAPSHOT.json --project PROJECT_ID
 clipforge campaign operator whop list
 clipforge campaign operator whop show CAMPAIGN_ID
 clipforge campaign operator whop verify IMPORT_ID
+clipforge campaign operator whop select CAMPAIGN_ID --import IMPORT_ID --project PROJECT_ID --source SOURCE_ID
 clipforge assets envato request
 clipforge assets envato requests
 clipforge assets envato register
@@ -73,15 +80,15 @@ clipforge assets envato verify ASSET_ID
 clipforge assets envato list
 ```
 
-`doctor`, `list`, `show`, `requests`, and `verify` do not write. `register --cancel` and `envato resume` cover an interrupted registration.
+`doctor`, `capabilities`, `discover`, `list`, `show`, `requests`, and `verify` do not write. `register --cancel` and `envato resume` cover an interrupted registration. Whop `select` writes selection evidence for an already allowed source and does not contact Whop.
 
 ## Limits
 
 - No TikTok, Instagram, YouTube, or Whop publishing.
-- No server-side Whop scrape and no stored browser cookies.
+- No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or discover.
 - No automatic Envato download.
 - English WhisperX alignment is verified only when a real alignment artifact exists.
 - Arabic and Japanese alignment stay `alignment_not_claimed`.
 - KittenTTS stays English-only. en-GB narration stays `locale_not_smoked`.
-- A fake provider result is not live evidence.
+- A fake provider result is not live evidence. Whop discovery stays `not_configured` until a real session exists.
 - Live provider checks are opt-in: `CLIPFORGE_WHOP_LIVE_SMOKE=1` and `CLIPFORGE_ENVATO_MCP_LIVE_SMOKE=1`.

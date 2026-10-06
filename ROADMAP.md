@@ -160,10 +160,16 @@ Import a validated Whop snapshot without credentials. Register a manually downlo
 
 ## Round 26 — Multilingual alignment and narration
 
-Status: in progress on `round-26-multilingual-alignment-narration`, started from `5ce59f0fecaf5851edf71c0cca67275b680c76cb`.
+Status: merged on main as `06848987ccf1090e96e8120941fc9a3b1a61eab0`. See `docs/operations/round-26-validation.md`.
 
-Record which languages have a real aligner or narrator. Full-source alignment runs only when that provider is available. Arabic and Japanese captions keep their characters and direction. A fake provider is not a live claim. Live Whop crawling stays a later provider round. See `docs/adr/0061-multilingual-alignment-and-narration.md`.
+Record which languages have a real aligner or narrator. Full-source alignment runs only when that provider is available. Arabic and Japanese captions keep their characters and direction. A fake provider is not a live claim. See `docs/adr/0061-multilingual-alignment-and-narration.md`.
+
+## Round 27 — Whop live operator discovery
+
+Status: in progress on `round-27-whop-live-operator`, started from `06848987ccf1090e96e8120941fc9a3b1a61eab0`.
+
+Optional read-only discovery of normalized Whop campaign and source metadata. The default is `not_configured`. Credentials stay outside Clipforge. Publishing stays deferred. See `docs/adr/0062-whop-live-operator-discovery.md`.
 
 ## Later
 
-External platform publishing is planned and not implemented. Live Whop crawling is a separate provider round and is not implemented. Arabic and Japanese alignment stay unclaimed until a real provider runs.
+External platform publishing is planned and not implemented. A Whop account session stays closed unless a later opt-in connector opens one. Arabic and Japanese alignment stay unclaimed until a real provider runs.

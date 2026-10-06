@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "WhopFilterDecision": {
+      "additionalProperties": false,
+      "description": "Why one campaign was kept or excluded. The reason is a code, not a secret.",
+      "properties": {
+        "campaign_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "included": {
+          "title": "Included",
+          "type": "boolean"
+        },
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "campaign_id",
+        "included",
+        "reason_code"
+      ],
+      "title": "WhopFilterDecision",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One append-only discovery. A later response gets a new id.",
+  "properties": {
+    "cache_status": {
+      "default": "miss",
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Cache Status",
+      "type": "string"
+    },
+    "campaign_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Campaign Ids",
+      "type": "array"
+    },
+    "catalogue_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Catalogue Fingerprint",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/WhopFilterDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "discovery_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Discovery Id",
+      "type": "string"
+    },
+    "identity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Identity Sha256",
+      "type": "string"
+    },
+    "import_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Import Id"
+    },
+    "live_status": {
+      "enum": [
+        "public_discovery",
+        "authenticated_discovery",
+        "not_configured",
+        "provider_unavailable"
+      ],
+      "title": "Live Status",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "snapshot",
+        "browser_export",
+        "live_connector",
+        "not_configured"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "publishing": {
+      "const": "deferred",
+      "default": "deferred",
+      "title": "Publishing",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    },
+    "response_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Response Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "discovery_id",
+    "project_id",
+    "mode",
+    "provider_id",
+    "provider_version",
+    "live_status",
+    "request_sha256",
+    "response_sha256",
+    "catalogue_fingerprint",
+    "policy_fingerprint",
+    "identity_sha256",
+    "campaign_ids",
+    "decisions",
+    "status",
+    "reason_code",
+    "created_at"
+  ],
+  "title": "WhopDiscoveryAttempt",
+  "type": "object"
+}

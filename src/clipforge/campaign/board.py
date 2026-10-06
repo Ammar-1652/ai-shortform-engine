@@ -30,6 +30,12 @@ from clipforge.campaign.operator import (
 )
 from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop import board_whop_campaign, board_whop_import
+from clipforge.campaign.whop_live import (
+    board_capabilities,
+    board_discoveries,
+    board_discovery,
+    board_filter_results,
+)
 from clipforge.errors import ClipforgeError
 from clipforge.language.service import (
     board_languages,
@@ -105,6 +111,14 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     _send(self, 200, (_STATIC / "app.js").read_bytes(), _STATIC_FILES["app.js"])
                 elif path == "/styles.css":
                     _send(self, 200, (_STATIC / "styles.css").read_bytes(), _STATIC_FILES["styles.css"])
+                elif path == "/api/whop/capabilities":
+                    _send_json(self, board_capabilities())
+                elif path == "/api/whop/discoveries":
+                    _send_json(self, board_discoveries(work_root))
+                elif path.startswith("/api/whop/discoveries/"):
+                    discovery_id = path.removeprefix("/api/whop/discoveries/")
+                    _reject_id(discovery_id)
+                    _send_json(self, board_discovery(work_root, discovery_id))
                 elif path == "/api/languages":
                     _send_json(self, board_languages())
                 elif path == "/api/campaigns":
@@ -167,6 +181,10 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     payload = board_envato(work_root, campaign_id)
                     payload.update(envato_campaign_board(work_root, campaign_id, database))
                     _send_json(self, payload)
+                elif path.startswith("/api/campaigns/") and path.endswith("/filter-results"):
+                    campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/filter-results")
+                    _reject_id(campaign_id)
+                    _send_json(self, board_filter_results(work_root, campaign_id))
                 elif path.startswith("/api/campaigns/") and path.endswith("/whop"):
                     campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/whop")
                     _reject_id(campaign_id)

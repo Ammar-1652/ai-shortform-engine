@@ -224,6 +224,14 @@ from clipforge.schemas.whop import (
     WhopCampaignSourceRecord,
     WhopImportAttempt,
 )
+from clipforge.schemas.whop_discovery import (
+    WhopCampaignCatalogue,
+    WhopDiscoveryAttempt,
+    WhopFilterDecision,
+    WhopLiveDiscoveryRequest,
+    WhopProviderCapability,
+    WhopSelectionEvidence,
+)
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     Project,
@@ -359,6 +367,12 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     WhopCampaignRecord,
     WhopCampaignSnapshot,
     WhopImportAttempt,
+    WhopProviderCapability,
+    WhopLiveDiscoveryRequest,
+    WhopCampaignCatalogue,
+    WhopFilterDecision,
+    WhopDiscoveryAttempt,
+    WhopSelectionEvidence,
     MediaConstraints,
     ProbeFacts,
     CampaignAcquisitionRequest,

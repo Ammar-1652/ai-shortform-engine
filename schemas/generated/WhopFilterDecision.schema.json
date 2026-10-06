@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "description": "Why one campaign was kept or excluded. The reason is a code, not a secret.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "included": {
+      "title": "Included",
+      "type": "boolean"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "included",
+    "reason_code"
+  ],
+  "title": "WhopFilterDecision",
+  "type": "object"
+}

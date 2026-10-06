@@ -43,11 +43,26 @@ class WhopCampaignSourceRecord(Versioned):
     rights_state: str = Field(min_length=1, max_length=80)
     policy_state: str = Field(min_length=1, max_length=80)
     selected: bool
+    source_url: str | None = Field(default=None, max_length=300)
+    content_sha256: str | None = Field(default=None, pattern=_SHA)
+    size_bytes: int | None = Field(default=None, ge=0)
+    duration_us: int | None = Field(default=None, ge=0)
+    media_format: str | None = Field(default=None, max_length=40)
+    availability: str = Field(default="unknown", min_length=1, max_length=40)
 
-    @field_validator("display_name", "rights_state", "policy_state")
+    @field_validator("display_name", "rights_state", "policy_state", "media_format", "availability")
     @classmethod
-    def labels_are_plain(cls, value: str) -> str:
+    def labels_are_plain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return _plain(value, label="whop source")
+
+    @field_validator("source_url")
+    @classmethod
+    def source_url_is_https(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _plain(value, label="whop source url", allow_https=True)
 
 
 class WhopCampaignRecord(Versioned):
@@ -57,11 +72,25 @@ class WhopCampaignRecord(Versioned):
     title: str = Field(min_length=1, max_length=200)
     policy_state: str = Field(min_length=1, max_length=80)
     sources: list[WhopCampaignSourceRecord] = Field(min_length=1)
+    campaign_url: str | None = Field(default=None, max_length=300)
+    status: str = Field(default="unknown", min_length=1, max_length=40)
+    category: str | None = Field(default=None, max_length=80)
+    payout_text: str | None = Field(default=None, max_length=200)
+    language: str | None = Field(default=None, max_length=16)
 
-    @field_validator("title", "policy_state")
+    @field_validator("title", "policy_state", "status", "category", "payout_text", "language")
     @classmethod
-    def campaign_text_is_plain(cls, value: str) -> str:
+    def campaign_text_is_plain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return _plain(value, label="whop campaign")
+
+    @field_validator("campaign_url")
+    @classmethod
+    def campaign_url_is_https(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _plain(value, label="whop campaign url", allow_https=True)
 
     @model_validator(mode="after")
     def sources_are_unique(self) -> Self:

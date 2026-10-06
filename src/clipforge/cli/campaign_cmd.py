@@ -74,6 +74,7 @@ from clipforge.campaign.whop import (
     verify_whop_import,
     whop_doctor,
 )
+from clipforge.campaign.whop_live import discover_whop, select_whop_campaign, whop_capabilities
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.storage import Database
@@ -265,6 +266,48 @@ def campaign_verify(
 def whop_doctor_command() -> None:
     """Report Whop intake. Live account access stays unconfigured."""
     typer.echo(whop_doctor())
+
+
+@whop_app.command("capabilities")
+def whop_capabilities_command() -> None:
+    """Show the connector boundary. This command does not write."""
+    typer.echo(whop_capabilities().model_dump_json())
+
+
+@whop_app.command("discover")
+def whop_discover_command() -> None:
+    """Read provider state. This command does not write a sidecar."""
+    try:
+        payload = discover_whop()
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(json.dumps(payload, sort_keys=True))
+
+
+@whop_app.command("select")
+def whop_select_command(
+    campaign_id: str,
+    import_id: Annotated[str, typer.Option("--import")],
+    project_id: Annotated[str, typer.Option("--project")],
+    source_id: Annotated[list[str], typer.Option("--source")],
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator-1",
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Select allowed sources from one import. This does not contact Whop."""
+    try:
+        evidence = select_whop_campaign(
+            resolve_work_dir(work_dir),
+            campaign_id=campaign_id,
+            import_id=import_id,
+            project_id=project_id,
+            source_ids=source_id,
+            operator_id=operator_id,
+            language=language,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(evidence.evidence_id)
 
 
 @whop_app.command("import")

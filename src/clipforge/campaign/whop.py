@@ -45,15 +45,20 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
     does not read cookies.
     """
     del connector
+    live = "not_configured"
+    if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE", "").strip() == "1":
+        live = "provider_unavailable"
     lines = [
-        "whop_live: not_configured",
+        f"whop_live: {live}",
         "credentials: not stored",
         "cookies: not stored",
+        "mutating: disabled",
         "publishing: deferred",
-        "scrape: disabled",
+        "endpoint: mcp.whop.com",
+        "docs_endpoint: docs.whop.com",
     ]
-    if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE", "").strip() == "1":
-        lines.append("live_smoke: opt_in_without_connector")
+    if live == "provider_unavailable":
+        lines.append("session: not opened")
     return "\n".join(lines)
 
 
@@ -186,6 +191,7 @@ def board_whop_campaign(work_root: Path, campaign_id: str) -> dict[str, object]:
                 "policy_state": source.policy_state,
                 "selected": source.selected,
                 "selectable": source.source_id in attempt.selectable_source_ids,
+                "availability": source.availability,
             }
         )
     payload = {
@@ -198,6 +204,9 @@ def board_whop_campaign(work_root: Path, campaign_id: str) -> dict[str, object]:
         "snapshot_fingerprint": attempt.snapshot_sha256,
         "policy_fingerprint": attempt.policy_fingerprint,
         "policy_state": campaign.policy_state,
+        "category": campaign.category,
+        "campaign_status": campaign.status,
+        "source_count": len(campaign.sources),
         "operator_id": attempt.operator_id,
         "sources": sources,
         "credentials": "not stored",

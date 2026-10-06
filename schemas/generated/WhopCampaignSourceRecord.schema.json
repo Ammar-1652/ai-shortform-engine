@@ -2,11 +2,57 @@
   "additionalProperties": false,
   "description": "One source named by an operator-exported snapshot. The row is not a license.",
   "properties": {
+    "availability": {
+      "default": "unknown",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Availability",
+      "type": "string"
+    },
+    "content_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Sha256"
+    },
     "display_name": {
       "maxLength": 300,
       "minLength": 1,
       "title": "Display Name",
       "type": "string"
+    },
+    "duration_us": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Us"
+    },
+    "media_format": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Media Format"
     },
     "policy_state": {
       "maxLength": 80,
@@ -30,11 +76,37 @@
       "title": "Selected",
       "type": "boolean"
     },
+    "size_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Bytes"
+    },
     "source_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Source Id",
       "type": "string"
+    },
+    "source_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Url"
     }
   },
   "required": [

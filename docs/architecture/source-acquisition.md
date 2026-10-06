@@ -73,7 +73,7 @@ The page shows acquisition status, byte size, SHA-256, probe facts, the relative
 
 ## Whop
 
-`whop_live_import` uses `WhopSnapshotConnector`. The connector in this build returns no payload, so the status is `not_configured`. Local snapshots continue through `clipforge campaign operator import`. Credentials and secret-like text are rejected before a selection file is written.
+`whop_live_import` uses `WhopSnapshotConnector`. The connector in this build returns no payload, so the status is `not_configured`. Local snapshots continue through `clipforge campaign operator import`. Round 27 discovery is a separate sidecar under `campaigns/whop-discoveries/`. Credentials and secret-like text are rejected before a selection file is written.
 
 ## Privacy
 
