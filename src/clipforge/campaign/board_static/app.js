@@ -60,11 +60,68 @@
         text(card, "snapshot_fingerprint " + payload.snapshot_fingerprint);
         text(card, "whop_policy " + payload.policy_state);
         text(card, "whop_live " + payload.whop_live);
+        text(card, "whop_category " + payload.category);
+        text(card, "campaign_status " + payload.campaign_status);
+        text(card, "source_count " + payload.source_count);
+        text(card, "import_fingerprint " + payload.snapshot_fingerprint);
+        loadWhopFilter(campaignId, card);
         var sources = payload.sources || [];
         for (var index = 0; index < sources.length; index += 1) {
           var source = sources[index];
           text(card, "whop_source " + source.source_id + " " + source.display_name);
           text(card, "whop_rights " + source.rights_state + " " + source.policy_state);
+          text(card, "whop_availability " + source.availability);
+        }
+      });
+  }
+
+  function loadWhopFilter(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/filter-results")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var decisions = payload.decisions || [];
+        text(card, "filter_results " + decisions.length);
+        text(card, "selection_fingerprint " + payload.selection_fingerprint);
+        for (var index = 0; index < decisions.length; index += 1) {
+          var decision = decisions[index];
+          text(card, "filter " + decision.campaign_id + " " + decision.reason_code);
+        }
+      });
+  }
+
+  function loadWhopCapabilities() {
+    fetch("/api/whop/capabilities")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(board, "whop_states not_configured provider_unavailable auth_required");
+        text(board, "public_discovery authenticated_discovery test_double authenticated_connector");
+        text(board, "live_claim not_claimed claimed");
+        text(board, "whop_provider " + payload.live_status + " " + payload.provider_version);
+        text(board, "live_smoke " + payload.live_smoke);
+        text(board, "public_provider " + payload.public_provider);
+        text(board, "whop_mutating " + payload.mutating_operations);
+      });
+    fetch("/api/whop/discoveries")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var rows = payload.discoveries || [];
+        for (var index = 0; index < rows.length; index += 1) {
+          var row = rows[index];
+          text(
+            board,
+            "whop_discovery " +
+              row.evidence_origin +
+              " " +
+              row.live_status +
+              " live_claim " +
+              row.live_claim
+          );
         }
       });
   }
@@ -335,6 +392,7 @@
       text(board, "whop_live " + payload.whop_live);
       text(board, "envato " + payload.envato);
       loadLanguages();
+      loadWhopCapabilities();
       var names = payload.campaigns || [];
       for (var index = 0; index < names.length; index += 1) {
         fetch("/api/campaigns/" + names[index])

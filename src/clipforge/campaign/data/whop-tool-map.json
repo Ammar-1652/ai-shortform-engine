@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "tool_map_version": "1",
+  "official_names_verified": false,
+  "notes": "No official Whop tool name is recorded here. A mapping is added only after tools/list on https://mcp.whop.com/mcp returns that exact name. Fixture names belong in tests, not in this file.",
+  "mappings": []
+}

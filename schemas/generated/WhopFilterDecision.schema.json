@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "WhopSourceExclusion": {
+      "additionalProperties": false,
+      "description": "One source rejected by the stored request.",
+      "properties": {
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "reason_code"
+      ],
+      "title": "WhopSourceExclusion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Why one campaign was kept or excluded. The reason is a code, not a secret.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "excluded_sources": {
+      "items": {
+        "$ref": "#/$defs/WhopSourceExclusion"
+      },
+      "title": "Excluded Sources",
+      "type": "array"
+    },
+    "filter_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Filter Fingerprint",
+      "type": "string"
+    },
+    "included": {
+      "title": "Included",
+      "type": "boolean"
+    },
+    "included_source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Included Source Ids",
+      "type": "array"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "included",
+    "reason_code",
+    "filter_fingerprint"
+  ],
+  "title": "WhopFilterDecision",
+  "type": "object"
+}

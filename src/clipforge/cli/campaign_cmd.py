@@ -70,21 +70,45 @@ from clipforge.campaign.service import (
 from clipforge.campaign.whop import (
     import_whop_snapshot,
     list_whop_imports,
+    parse_whop_bytes,
     show_whop_campaign,
     verify_whop_import,
     whop_doctor,
 )
+from clipforge.campaign.whop_auth import doctor_text as whop_auth_doctor
+from clipforge.campaign.whop_auth import login as whop_auth_login
+from clipforge.campaign.whop_auth import logout as whop_auth_logout
+from clipforge.campaign.whop_auth import refresh as whop_auth_refresh
+from clipforge.campaign.whop_auth import refresh_tools as whop_tools_refresh
+from clipforge.campaign.whop_auth import status_text as whop_auth_status
+from clipforge.campaign.whop_auth import verify_tools as whop_tools_verify
+from clipforge.campaign.whop_live import discover_live, discover_whop, select_whop_campaign, whop_capabilities
+from clipforge.campaign.whop_tools import show_verified_tool_map as whop_tools_show
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
+from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 from clipforge.storage import Database
 
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
 operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
 acquire_app = typer.Typer(no_args_is_help=True, help="Acquire selected sources into the work root.")
-whop_app = typer.Typer(no_args_is_help=True, help="Import a local Whop snapshot. No account session.")
+whop_app = typer.Typer(
+    no_args_is_help=True,
+    help="Import a local Whop snapshot or discover through an enabled connector.",
+)
 campaign_app.add_typer(operator_app, name="operator")
 operator_app.add_typer(acquire_app, name="acquire")
 operator_app.add_typer(whop_app, name="whop")
+auth_app = typer.Typer(
+    no_args_is_help=True,
+    help="Operator Whop sign-in. Clipforge does not store credentials.",
+)
+whop_app.add_typer(auth_app, name="auth")
+tools_app = typer.Typer(
+    no_args_is_help=True,
+    help="Verified Whop tool map. Credentials are not stored.",
+)
+whop_app.add_typer(tools_app, name="tools")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -261,10 +285,156 @@ def campaign_verify(
         _fail(exc)
 
 
+@auth_app.command("doctor")
+def whop_auth_doctor_command() -> None:
+    """Report the Whop sign-in helper. This does not open a browser."""
+    typer.echo(whop_auth_doctor())
+
+
+@auth_app.command("status")
+def whop_auth_status_command() -> None:
+    """Read saved sign-in metadata. This does not open a browser."""
+    typer.echo(whop_auth_status())
+
+
+@auth_app.command("login")
+def whop_auth_login_command() -> None:
+    """Prepare the dedicated profile. Password entry stays with the operator."""
+    try:
+        typer.echo(whop_auth_login())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@auth_app.command("refresh")
+def whop_auth_refresh_command() -> None:
+    """Check the connector again. The dedicated profile stays in place."""
+    try:
+        typer.echo(whop_auth_refresh())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@auth_app.command("logout")
+def whop_auth_logout_command() -> None:
+    """Remove the dedicated profile after confirmation."""
+    confirmed = typer.confirm("Remove the dedicated Whop profile?")
+    try:
+        typer.echo(whop_auth_logout(confirmed=confirmed))
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@tools_app.command("verify")
+def whop_tools_verify_command() -> None:
+    """Re-read the local tool map. This does not open a socket."""
+    try:
+        typer.echo(whop_tools_verify())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@tools_app.command("refresh")
+def whop_tools_refresh_command() -> None:
+    """Record official read-only tools after the connector is ready."""
+    try:
+        typer.echo(whop_tools_refresh())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@tools_app.command("show")
+def whop_tools_show_command() -> None:
+    """Show verified tool names and hashes. The path is omitted."""
+    try:
+        typer.echo(whop_tools_show())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
 @whop_app.command("doctor")
 def whop_doctor_command() -> None:
     """Report Whop intake. Live account access stays unconfigured."""
     typer.echo(whop_doctor())
+
+
+@whop_app.command("capabilities")
+def whop_capabilities_command() -> None:
+    """Show the connector boundary. This command does not write."""
+    typer.echo(whop_capabilities().model_dump_json())
+
+
+@whop_app.command("discover")
+def whop_discover_command(
+    project_id: Annotated[str | None, typer.Option("--project")] = None,
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator-1",
+    request_path: Annotated[Path | None, typer.Option("--request")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    live: Annotated[bool, typer.Option("--live")] = False,
+    connector: Annotated[
+        str | None,
+        typer.Option(
+            "--connector",
+            help="public, authenticated, or official-grok. authenticated is a loopback test double.",
+        ),
+    ] = None,
+) -> None:
+    """Report discovery. --live reads an enabled connector and stores no credentials."""
+    if not live:
+        try:
+            payload = discover_whop()
+        except (ClipforgeError, OSError, ValueError) as exc:
+            _fail(exc)
+        typer.echo(json.dumps(payload, sort_keys=True))
+        return
+    if project_id is None:
+        _fail(CampaignError("whop project is required", code="missing_project"))
+    request = None
+    if request_path is not None:
+        try:
+            request = WhopLiveDiscoveryRequest.model_validate_json(request_path.read_text(encoding="utf-8"))
+        except (ClipforgeError, OSError, ValueError) as exc:
+            _fail(exc)
+    try:
+        attempt = discover_live(
+            resolve_work_dir(work_dir),
+            project_id=project_id,
+            operator_id=operator_id,
+            request=request,
+            connector=connector,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(attempt.discovery_id)
+    typer.echo(f"evidence_origin: {attempt.evidence_origin}")
+    typer.echo(f"live_claim: {attempt.live_claim}")
+    typer.echo(f"whop_live: {attempt.live_status}")
+
+
+@whop_app.command("select")
+def whop_select_command(
+    campaign_id: str,
+    import_id: Annotated[str, typer.Option("--import")],
+    project_id: Annotated[str, typer.Option("--project")],
+    source_id: Annotated[list[str], typer.Option("--source")],
+    operator_id: Annotated[str, typer.Option("--operator")] = "operator-1",
+    language: Annotated[str, typer.Option("--language")] = "en-US",
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Select allowed sources from one import. This does not contact Whop."""
+    try:
+        evidence = select_whop_campaign(
+            resolve_work_dir(work_dir),
+            campaign_id=campaign_id,
+            import_id=import_id,
+            project_id=project_id,
+            source_ids=source_id,
+            operator_id=operator_id,
+            language=language,
+        )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(evidence.evidence_id)
 
 
 @whop_app.command("import")
@@ -274,11 +444,13 @@ def whop_import_command(
     force: Annotated[bool, typer.Option("--force")] = False,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
-    """Import a local JSON or JSONL snapshot. This does not contact Whop."""
+    """Import a sanitized snapshot. Credentials are not stored and live transport is not claimed."""
     try:
+        raw = path.read_bytes()
+        snapshot = parse_whop_bytes(raw)
         attempt = import_whop_snapshot(
             resolve_work_dir(work_dir),
-            path.read_bytes(),
+            raw,
             project_id=project_id,
             force=force,
         )
@@ -286,6 +458,9 @@ def whop_import_command(
         _fail(exc)
     typer.echo(attempt.import_id)
     typer.echo(f"whop_live: {attempt.whop_live}")
+    typer.echo(f"intake_label: {snapshot.intake_label}")
+    typer.echo(f"credentials_stored: {snapshot.credentials_stored}")
+    typer.echo(f"live_transport: {snapshot.live_transport}")
     typer.echo(f"status: {attempt.status}")
 
 

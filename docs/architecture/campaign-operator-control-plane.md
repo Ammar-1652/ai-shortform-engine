@@ -81,7 +81,7 @@ The page shows campaign identity, policy rules, sources in source-id order, righ
 
 ## Whop
 
-Live account crawling is not implemented. If a session is absent, doctor reports `whop_live: not_configured`. Ordinary local selection and runs do not fail for that reason. `import` reads a local JSON object, a JSON array, or JSONL. Each row is a `CampaignImportSnapshot` with a campaign id, source ids, policy state, and selection state. `withheld` does not select. Credentials, absolute paths, and `file:` URIs are rejected. An `https` `remote_media_ref` is metadata and is not fetched or copied into the selection.
+Live account crawling is a separate discovery connector. If a session is absent, doctor reports `whop_live: not_configured`. See [whop-live-discovery.md](whop-live-discovery.md). Ordinary local selection and runs do not fail for that reason. `import` reads a local JSON object, a JSON array, or JSONL. Each row is a `CampaignImportSnapshot` with a campaign id, source ids, policy state, and selection state. `withheld` does not select. Credentials, absolute paths, and `file:` URIs are rejected. An `https` `remote_media_ref` is metadata and is not fetched or copied into the selection.
 
 ## Envato
 

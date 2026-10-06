@@ -6,7 +6,7 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. No migra
 
 ## Whop
 
-Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL, or bytes from a connector. The built-in connector returns nothing, so doctor reports `whop_live: not_configured`. `CLIPFORGE_WHOP_LIVE_SMOKE=1` does not start a crawl.
+Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor does not open a socket. With no live switch it reports `whop_live: not_configured` and `live_smoke: not_executed`. A public connector, or an authenticated loopback connector with a one-time handle, is reported as available and still not executed. A live switch without a connector is `provider_unavailable`. `discover --live` is the command that may connect. The public adapter uses only `https://mcp.whop.com/mcp`. A `127.0.0.1` connector is a sanitized test handoff, not an authenticated Whop session. Import verification recomputes selectable sources, status, and reason from the snapshot. `whop auth` keeps the browser profile outside the repository and does not read cookies. `auth login` installs the official Whop Grok plugin when it is missing, then asks the operator to run `/mcps` and `/whop-connect` in Grok when this CLI cannot start those commands. `auth doctor` does not open a socket. An in-memory registry is not account access. A sanitized operator snapshot imports as `authenticated_operator_snapshot` with `credentials_stored: not_stored` and `live_transport: not_claimed`. The packaged tool map stays empty. A verified map may be stored under the user config directory after `tools/list`, and it is not committed. `official-grok` is the production connector. `authenticated` remains a loopback test double and cannot set `live_claim: claimed`. Declared content hashes are not acquired file hashes. See [whop-live-discovery.md](whop-live-discovery.md), [ADR 0062](../adr/0062-whop-live-operator-discovery.md), and [ADR 0063](../adr/0063-whop-grok-connector-onboarding.md).
 
 Accepted records:
 
@@ -48,7 +48,11 @@ A cache hit returns the same asset id and does not copy again. Changed bytes are
 The board stays on `127.0.0.1` and accepts GET only.
 
 ```text
+GET /api/whop/capabilities
+GET /api/whop/discoveries
+GET /api/whop/discoveries/<id>
 GET /api/campaigns/<campaign_id>/whop
+GET /api/campaigns/<campaign_id>/filter-results
 GET /api/whop-imports/<import_id>
 GET /api/campaigns/<campaign_id>/envato
 GET /api/envato-assets/<asset_id>
@@ -61,10 +65,14 @@ Pages show provenance, import status, the snapshot fingerprint, policy, deferred
 
 ```text
 clipforge campaign operator whop doctor
-clipforge campaign operator whop import --file SNAPSHOT.json --project PROJECT_ID
+clipforge campaign operator whop capabilities
+clipforge campaign operator whop discover
+clipforge campaign operator whop discover --live --connector authenticated --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
+clipforge campaign operator whop import --file SANITIZED_SNAPSHOT.json --project PROJECT_ID --work-dir WORK_ROOT
 clipforge campaign operator whop list
 clipforge campaign operator whop show CAMPAIGN_ID
 clipforge campaign operator whop verify IMPORT_ID
+clipforge campaign operator whop select CAMPAIGN_ID --import IMPORT_ID --project PROJECT_ID --source SOURCE_ID
 clipforge assets envato request
 clipforge assets envato requests
 clipforge assets envato register
@@ -73,15 +81,15 @@ clipforge assets envato verify ASSET_ID
 clipforge assets envato list
 ```
 
-`doctor`, `list`, `show`, `requests`, and `verify` do not write. `register --cancel` and `envato resume` cover an interrupted registration.
+`doctor`, `capabilities`, `discover`, `list`, `show`, `requests`, and `verify` do not write. `register --cancel` and `envato resume` cover an interrupted registration. Whop `select` writes selection evidence for an already allowed source and does not contact Whop.
 
 ## Limits
 
 - No TikTok, Instagram, YouTube, or Whop publishing.
-- No server-side Whop scrape and no stored browser cookies.
+- No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or `discover` without `--live`. A loopback fixture is not a live Whop pass.
 - No automatic Envato download.
 - English WhisperX alignment is verified only when a real alignment artifact exists.
 - Arabic and Japanese alignment stay `alignment_not_claimed`.
 - KittenTTS stays English-only. en-GB narration stays `locale_not_smoked`.
-- A fake provider result is not live evidence.
+- A fake provider result is not live evidence. Whop discovery stays `not_configured` until a real session exists.
 - Live provider checks are opt-in: `CLIPFORGE_WHOP_LIVE_SMOKE=1` and `CLIPFORGE_ENVATO_MCP_LIVE_SMOKE=1`.

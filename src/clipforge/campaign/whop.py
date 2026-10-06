@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,21 +41,48 @@ class FakeWhopSnapshotConnector:
 
 
 def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | None = None) -> str:
-    """Report live Whop as not configured unless an approved connector returns bytes.
-
-    The built-in connector returns nothing. A smoke flag does not scrape Whop and
-    does not read cookies.
-    """
+    """Report connector configuration. This does not open a socket or a browser."""
     del connector
+    from clipforge.campaign.whop_mcp import (
+        configured_connector,
+        configured_connector_url,
+        configured_url,
+        live_smoke_enabled,
+        official_endpoint,
+        session_handle,
+    )
+
+    live = "not_configured"
+    public = "not_configured"
+    authenticated = "not_configured"
+    session = "not opened"
+    if live_smoke_enabled():
+        kind = configured_connector()
+        if kind == "public" and official_endpoint(configured_url()):
+            public = "available"
+        elif (
+            kind == "authenticated" and session_handle() is not None and configured_connector_url() is not None
+        ):
+            authenticated = "available"
+            session = "handle_only"
+        else:
+            live = "provider_unavailable"
+            public = "unavailable"
+            authenticated = "unavailable"
     lines = [
-        "whop_live: not_configured",
+        f"whop_live: {live}",
+        "live_smoke: not_executed",
+        f"public_provider: {public}",
+        f"authenticated_connector: {authenticated}",
+        f"session: {session}",
+        "auth_required: not_requested",
         "credentials: not stored",
         "cookies: not stored",
+        "mutating: disabled",
         "publishing: deferred",
-        "scrape: disabled",
+        "endpoint: mcp.whop.com",
+        "docs_endpoint: docs.whop.com",
     ]
-    if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE", "").strip() == "1":
-        lines.append("live_smoke: opt_in_without_connector")
     return "\n".join(lines)
 
 
@@ -66,30 +95,68 @@ def import_whop_snapshot(
     promotion_hook: Callable[[str], None] | None = None,
 ) -> WhopImportAttempt:
     """Validate, then append one sidecar. An invalid payload writes nothing."""
+    root = work_root.resolve()
+    attempt, raw, write = plan_whop_import(root, payload, project_id=project_id, force=force)
+    if write:
+        _publish(root, attempt, raw, promotion_hook)
+    return attempt
+
+
+def plan_whop_import(
+    work_root: Path,
+    payload: bytes,
+    *,
+    project_id: str,
+    force: bool = False,
+    provider_id: str = "snapshot",
+    provider_version: str = "0",
+) -> tuple[WhopImportAttempt, bytes, bool]:
+    """Validate a snapshot and report whether a new sidecar must be written."""
     snapshot = parse_whop_bytes(payload)
     raw = _canonical(snapshot)
     digest = hashlib.sha256(raw).hexdigest()
+    policy = _policy_fingerprint([item.campaign_id for item in snapshot.campaigns])
     root = work_root.resolve()
     if not force:
-        cached = _cached(root, project_id, digest)
+        cached = _cached(
+            root,
+            project_id=project_id,
+            digest=digest,
+            policy=policy,
+            provider_id=provider_id,
+            provider_version=provider_version,
+            intake_label=snapshot.intake_label,
+            operator_id=snapshot.operator_id,
+        )
         if cached is not None:
-            return cached
+            return cached, raw, False
     now = datetime.now(UTC)
     selectable, status, reason = _selectable(snapshot)
     attempt = WhopImportAttempt(
-        import_id=_import_id(digest, force),
+        import_id=_import_id(
+            project_id=project_id,
+            digest=digest,
+            policy=policy,
+            provider_id=provider_id,
+            provider_version=provider_version,
+            intake_label=snapshot.intake_label,
+            operator_id=snapshot.operator_id,
+            force=force,
+        ),
         project_id=project_id,
         snapshot_sha256=digest,
-        policy_fingerprint=_policy_fingerprint([item.campaign_id for item in snapshot.campaigns]),
+        policy_fingerprint=policy,
         operator_id=snapshot.operator_id,
+        provider_id=provider_id,
+        provider_version=provider_version,
+        intake_label=snapshot.intake_label,
         campaigns=list(snapshot.campaigns),
         selectable_source_ids=selectable,
         status=status,  # type: ignore[arg-type]
         reason_code=reason,
         created_at=now,
     )
-    _publish(root, attempt, raw, promotion_hook)
-    return attempt
+    return attempt, raw, True
 
 
 def import_from_connector(
@@ -129,18 +196,49 @@ def show_whop_campaign(work_root: Path, campaign_id: str) -> dict[str, object]:
     return board_whop_campaign(work_root, campaign_id)
 
 
-def verify_whop_import(work_root: Path, import_id: str) -> WhopImportAttempt:
-    """Re-read the sidecar. This does not write."""
+def audit_whop_import(work_root: Path, import_id: str) -> WhopImportAttempt:
+    """Recompute every derived import field from the snapshot. This does not write."""
     root = work_root.resolve()
     attempt = _load(root, import_id)
     path = root.joinpath(*_ROOT, import_id, "snapshot.json")
     if path.is_symlink() or not path.is_file():
         raise CampaignError("whop snapshot is missing", code="stale_snapshot")
-    if sha256_file(path) != attempt.snapshot_sha256:
+    snapshot = parse_whop_bytes(path.read_bytes())
+    digest = hashlib.sha256(_canonical(snapshot)).hexdigest()
+    if digest != attempt.snapshot_sha256 or sha256_file(path) != digest:
         raise CampaignError("whop snapshot changed", code="stale_snapshot")
-    current = _policy_fingerprint([item.campaign_id for item in attempt.campaigns])
-    if current != attempt.policy_fingerprint:
+    if list(attempt.campaigns) != list(snapshot.campaigns):
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    policy = _policy_fingerprint([item.campaign_id for item in snapshot.campaigns])
+    if policy != attempt.policy_fingerprint:
         raise CampaignError("whop policy changed", code="stale_policy")
+    selectable, status, reason = _selectable(snapshot)
+    if list(attempt.selectable_source_ids) != selectable:
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    if attempt.status != status or attempt.reason_code != reason:
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    if attempt.operator_id != snapshot.operator_id or attempt.intake_label != snapshot.intake_label:
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    if attempt.project_id != _project_from_identity(attempt):
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    material = _import_material(
+        project_id=attempt.project_id,
+        digest=digest,
+        policy=policy,
+        provider_id=attempt.provider_id,
+        provider_version=attempt.provider_version,
+        intake_label=attempt.intake_label,
+        operator_id=attempt.operator_id,
+    )
+    if not _import_id_matches(attempt.import_id, material):
+        raise CampaignError("whop import manifest changed", code="stale_import")
+    return attempt
+
+
+def verify_whop_import(work_root: Path, import_id: str) -> WhopImportAttempt:
+    """Re-read the sidecar and require it to be the current import. This does not write."""
+    root = work_root.resolve()
+    attempt = audit_whop_import(root, import_id)
     for campaign in attempt.campaigns:
         latest = _latest(root, campaign.campaign_id, project_id=attempt.project_id)
         if latest is None or latest.import_id != attempt.import_id:
@@ -186,6 +284,7 @@ def board_whop_campaign(work_root: Path, campaign_id: str) -> dict[str, object]:
                 "policy_state": source.policy_state,
                 "selected": source.selected,
                 "selectable": source.source_id in attempt.selectable_source_ids,
+                "availability": source.availability,
             }
         )
     payload = {
@@ -198,6 +297,9 @@ def board_whop_campaign(work_root: Path, campaign_id: str) -> dict[str, object]:
         "snapshot_fingerprint": attempt.snapshot_sha256,
         "policy_fingerprint": attempt.policy_fingerprint,
         "policy_state": campaign.policy_state,
+        "category": campaign.category,
+        "campaign_status": campaign.status,
+        "source_count": len(campaign.sources),
         "operator_id": attempt.operator_id,
         "sources": sources,
         "credentials": "not stored",
@@ -291,13 +393,15 @@ def _selectable(snapshot: WhopCampaignSnapshot) -> tuple[list[str], str, str]:
         for source in campaign.sources:
             rights_allowed = source.rights_state == "allowed"
             policy_allowed = campaign_allowed and source.policy_state == "allowed"
-            if source.selected and rights_allowed and policy_allowed:
+            if rights_allowed and policy_allowed:
                 chosen.append(source.source_id)
                 continue
-            if source.selected and not policy_allowed:
+            if not policy_allowed:
                 saw_policy = True
-            elif source.selected and not rights_allowed:
+            elif not rights_allowed:
                 saw_rights = True
+    if not snapshot.campaigns:
+        return [], "blocked", "no_matching_campaigns"
     unique = sorted(set(chosen))
     if unique:
         return unique, "ready", "ready"
@@ -318,17 +422,114 @@ def _policy_blocks(attempt: WhopImportAttempt, source_id: str) -> bool:
     return False
 
 
-def _import_id(digest: str, force: bool) -> str:
+def _import_material(
+    *,
+    project_id: str,
+    digest: str,
+    policy: str,
+    provider_id: str,
+    provider_version: str,
+    intake_label: str,
+    operator_id: str,
+) -> str:
+    raw = json.dumps(
+        {
+            "project_id": project_id,
+            "snapshot_sha256": digest,
+            "policy_fingerprint": policy,
+            "provider_id": provider_id,
+            "provider_version": provider_version,
+            "intake_label": intake_label,
+            "operator_id": operator_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _import_id_matches(import_id: str, material: str) -> bool:
+    stable = f"whop-{material[:20]}"
+    forced = f"whop-{material[:12]}-"
+    if import_id == stable:
+        return True
+    return import_id.startswith(forced) and len(import_id) == len(forced) + 8
+
+
+def _project_from_identity(attempt: WhopImportAttempt) -> str:
+    return attempt.project_id
+
+
+def _import_id(
+    *,
+    project_id: str,
+    digest: str,
+    policy: str,
+    provider_id: str,
+    provider_version: str,
+    intake_label: str,
+    operator_id: str,
+    force: bool,
+) -> str:
+    mixed = _import_material(
+        project_id=project_id,
+        digest=digest,
+        policy=policy,
+        provider_id=provider_id,
+        provider_version=provider_version,
+        intake_label=intake_label,
+        operator_id=operator_id,
+    )
     if force:
-        return f"whop-{digest[:12]}-{uuid4().hex[:8]}"
-    return f"whop-{digest[:20]}"
+        return f"whop-{mixed[:12]}-{uuid4().hex[:8]}"
+    return f"whop-{mixed[:20]}"
 
 
-def _cached(root: Path, project_id: str, digest: str) -> WhopImportAttempt | None:
+def _cached(
+    root: Path,
+    *,
+    project_id: str,
+    digest: str,
+    policy: str,
+    provider_id: str,
+    provider_version: str,
+    intake_label: str,
+    operator_id: str,
+) -> WhopImportAttempt | None:
     for attempt in list_whop_imports(root):
-        if attempt.project_id == project_id and attempt.snapshot_sha256 == digest:
+        if (
+            attempt.project_id == project_id
+            and attempt.snapshot_sha256 == digest
+            and attempt.policy_fingerprint == policy
+            and attempt.provider_id == provider_id
+            and attempt.provider_version == provider_version
+            and attempt.intake_label == intake_label
+            and attempt.operator_id == operator_id
+        ):
             return attempt
     return None
+
+
+@contextmanager
+def whop_lock(root: Path) -> Iterator[None]:
+    """Serialize Whop sidecar writes. The lock file stays under the work root."""
+    directory = root / "campaigns"
+    mkdir_contained(root, directory)
+    lock_path = directory / ".whop.lock"
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(lock_path, flags, 0o644)
+    except OSError as exc:
+        raise CampaignError("whop lock could not be opened", code="symlink") from exc
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        with suppress(OSError):
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def _publish(
@@ -337,26 +538,56 @@ def _publish(
     snapshot: bytes,
     hook: Callable[[str], None] | None,
 ) -> None:
-    directory = root.joinpath(*_ROOT, attempt.import_id)
-    mkdir_contained(root, directory)
-    snapshot_partial = directory / "snapshot.json.partial"
-    manifest_partial = directory / "manifest.json.partial"
-    snapshot_final = directory / "snapshot.json"
-    manifest_final = directory / "manifest.json"
-    try:
-        snapshot_partial.write_bytes(snapshot)
-        manifest_partial.write_text(attempt.model_dump_json() + "\n", encoding="utf-8")
-        if hook is not None:
-            hook("final_rename")
-        os.replace(snapshot_partial, snapshot_final)
-        os.replace(manifest_partial, manifest_final)
-    except Exception:
-        for path in (snapshot_partial, manifest_partial, snapshot_final, manifest_final):
-            if path.is_symlink():
-                continue
-            if path.is_file():
-                path.unlink()
-        raise
+    with whop_lock(root):
+        directory = root.joinpath(*_ROOT, attempt.import_id)
+        mkdir_contained(root, directory)
+        _reject_link(directory)
+        snapshot_partial = directory / "snapshot.json.partial"
+        manifest_partial = directory / "manifest.json.partial"
+        snapshot_final = directory / "snapshot.json"
+        manifest_final = directory / "manifest.json"
+        previous = {
+            snapshot_final: _previous_bytes(snapshot_final),
+            manifest_final: _previous_bytes(manifest_final),
+        }
+        try:
+            snapshot_partial.write_bytes(snapshot)
+            manifest_partial.write_text(attempt.model_dump_json() + "\n", encoding="utf-8")
+            if hook is not None:
+                hook("final_rename")
+            os.replace(snapshot_partial, snapshot_final)
+            os.replace(manifest_partial, manifest_final)
+        except Exception:
+            for path in (snapshot_partial, manifest_partial):
+                if path.is_file() and not path.is_symlink():
+                    path.unlink()
+            for path, older in previous.items():
+                if path.is_symlink():
+                    continue
+                if older is None:
+                    if path.is_file():
+                        path.unlink()
+                else:
+                    path.write_bytes(older)
+            raise
+
+
+def _previous_bytes(path: Path) -> bytes | None:
+    if path.is_symlink():
+        raise CampaignError("whop destination is a symlink", code="symlink_rejected")
+    if path.is_file():
+        return path.read_bytes()
+    return None
+
+
+def _reject_link(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise CampaignError("whop destination is a symlink", code="symlink_rejected")
+        if current.parent == current:
+            return
+        current = current.parent
 
 
 def _latest(root: Path, campaign_id: str, *, project_id: str | None = None) -> WhopImportAttempt | None:

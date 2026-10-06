@@ -1,0 +1,508 @@
+{
+  "$defs": {
+    "WhopFilterDecision": {
+      "additionalProperties": false,
+      "description": "Why one campaign was kept or excluded. The reason is a code, not a secret.",
+      "properties": {
+        "campaign_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "excluded_sources": {
+          "items": {
+            "$ref": "#/$defs/WhopSourceExclusion"
+          },
+          "title": "Excluded Sources",
+          "type": "array"
+        },
+        "filter_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Filter Fingerprint",
+          "type": "string"
+        },
+        "included": {
+          "title": "Included",
+          "type": "boolean"
+        },
+        "included_source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Included Source Ids",
+          "type": "array"
+        },
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "campaign_id",
+        "included",
+        "reason_code",
+        "filter_fingerprint"
+      ],
+      "title": "WhopFilterDecision",
+      "type": "object"
+    },
+    "WhopLiveDiscoveryRequest": {
+      "additionalProperties": false,
+      "description": "A read-only discovery query. It does not carry an account secret.",
+      "properties": {
+        "allowed_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Categories",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "max_age_hours": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Age Hours"
+        },
+        "max_duration_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Duration Us"
+        },
+        "max_size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Size Bytes"
+        },
+        "media_format": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Format"
+        },
+        "min_duration_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Duration Us"
+        },
+        "permit_unknown_availability": {
+          "default": false,
+          "title": "Permit Unknown Availability",
+          "type": "boolean"
+        },
+        "prohibited_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Prohibited Categories",
+          "type": "array"
+        },
+        "provider_id": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_version": {
+          "default": "0",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "request_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "require_acquisition_reference": {
+          "default": false,
+          "title": "Require Acquisition Reference",
+          "type": "boolean"
+        },
+        "require_policy": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Policy"
+        },
+        "require_rights": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Rights"
+        },
+        "require_status": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Status"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "provider_id",
+        "created_at"
+      ],
+      "title": "WhopLiveDiscoveryRequest",
+      "type": "object"
+    },
+    "WhopSourceExclusion": {
+      "additionalProperties": false,
+      "description": "One source rejected by the stored request.",
+      "properties": {
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "reason_code"
+      ],
+      "title": "WhopSourceExclusion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One append-only discovery. A later response gets a new id.",
+  "properties": {
+    "cache_status": {
+      "default": "miss",
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Cache Status",
+      "type": "string"
+    },
+    "campaign_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Campaign Ids",
+      "type": "array"
+    },
+    "catalogue_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Catalogue Fingerprint",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/WhopFilterDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "discovery_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Discovery Id",
+      "type": "string"
+    },
+    "discovery_request": {
+      "$ref": "#/$defs/WhopLiveDiscoveryRequest"
+    },
+    "evidence_origin": {
+      "enum": [
+        "test_double",
+        "public_connector",
+        "authenticated_connector"
+      ],
+      "title": "Evidence Origin",
+      "type": "string"
+    },
+    "filter_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Filter Fingerprint",
+      "type": "string"
+    },
+    "identity_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Identity Sha256",
+      "type": "string"
+    },
+    "import_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Import Id"
+    },
+    "live_claim": {
+      "default": "not_claimed",
+      "enum": [
+        "not_claimed",
+        "claimed"
+      ],
+      "title": "Live Claim",
+      "type": "string"
+    },
+    "live_status": {
+      "enum": [
+        "public_discovery",
+        "authenticated_discovery",
+        "not_configured",
+        "provider_unavailable"
+      ],
+      "title": "Live Status",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "snapshot",
+        "browser_export",
+        "live_connector",
+        "not_configured"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "operator_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "publishing": {
+      "const": "deferred",
+      "default": "deferred",
+      "title": "Publishing",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    },
+    "response_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Response Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "tool_map_sha256": {
+      "default": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Tool Map Sha256",
+      "type": "string"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
+    }
+  },
+  "required": [
+    "discovery_id",
+    "project_id",
+    "operator_id",
+    "mode",
+    "provider_id",
+    "provider_version",
+    "live_status",
+    "evidence_origin",
+    "request_sha256",
+    "filter_fingerprint",
+    "response_sha256",
+    "catalogue_fingerprint",
+    "policy_fingerprint",
+    "identity_sha256",
+    "discovery_request",
+    "campaign_ids",
+    "decisions",
+    "status",
+    "reason_code",
+    "created_at"
+  ],
+  "title": "WhopDiscoveryAttempt",
+  "type": "object"
+}

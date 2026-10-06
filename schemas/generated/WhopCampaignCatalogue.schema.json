@@ -1,0 +1,597 @@
+{
+  "$defs": {
+    "WhopCampaignRecord": {
+      "additionalProperties": false,
+      "description": "One campaign inside a snapshot. Policy text is not rights evidence.",
+      "properties": {
+        "budget_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Budget Text"
+        },
+        "business_id": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Business Id"
+        },
+        "campaign_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "campaign_type": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campaign Type"
+        },
+        "campaign_url": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Campaign Url"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "flat_fee_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Flat Fee Text"
+        },
+        "footage_references": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Footage References",
+          "type": "array"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "maximum_payout_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Payout Text"
+        },
+        "minimum_payout_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Payout Text"
+        },
+        "payout_text": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payout Text"
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "policy_evidence": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Evidence"
+        },
+        "policy_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Policy State",
+          "type": "string"
+        },
+        "prohibited_text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prohibited Text"
+        },
+        "provider_updated_at": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Updated At"
+        },
+        "required_duration_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Duration Text"
+        },
+        "required_format": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Format"
+        },
+        "required_messaging": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Messaging"
+        },
+        "requirements_text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requirements Text"
+        },
+        "reward_rate_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reward Rate Text"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/WhopCampaignSourceRecord"
+          },
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        },
+        "status": {
+          "default": "unknown",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "campaign_id",
+        "title",
+        "policy_state",
+        "sources"
+      ],
+      "title": "WhopCampaignRecord",
+      "type": "object"
+    },
+    "WhopCampaignSourceRecord": {
+      "additionalProperties": false,
+      "description": "One source named by an operator-exported snapshot. The row is not a license.",
+      "properties": {
+        "acquired_ffprobe_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquired Ffprobe Fingerprint"
+        },
+        "acquired_file_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquired File Sha256"
+        },
+        "acquired_file_size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquired File Size"
+        },
+        "acquisition_reference": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquisition Reference"
+        },
+        "acquisition_status": {
+          "default": "unknown",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Acquisition Status",
+          "type": "string"
+        },
+        "availability": {
+          "default": "unknown",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Availability",
+          "type": "string"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "declared_content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Declared Content Sha256"
+        },
+        "direct_download": {
+          "default": "unknown",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Direct Download",
+          "type": "string"
+        },
+        "display_name": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "duration_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Us"
+        },
+        "media_download_url": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Download Url"
+        },
+        "media_format": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Format"
+        },
+        "policy_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Policy State",
+          "type": "string"
+        },
+        "rights_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Rights State",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selected": {
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Url"
+        }
+      },
+      "required": [
+        "source_id",
+        "display_name",
+        "rights_state",
+        "policy_state",
+        "selected"
+      ],
+      "title": "WhopCampaignSourceRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Normalized campaigns. Membership is not a rights clearance.",
+  "properties": {
+    "campaigns": {
+      "items": {
+        "$ref": "#/$defs/WhopCampaignRecord"
+      },
+      "title": "Campaigns",
+      "type": "array"
+    },
+    "catalogue_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Catalogue Fingerprint",
+      "type": "string"
+    },
+    "catalogue_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Catalogue Id",
+      "type": "string"
+    },
+    "live_status": {
+      "enum": [
+        "public_discovery",
+        "authenticated_discovery",
+        "not_configured",
+        "provider_unavailable"
+      ],
+      "title": "Live Status",
+      "type": "string"
+    },
+    "missing_fields": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Fields",
+      "type": "array"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "catalogue_id",
+    "provider_id",
+    "provider_version",
+    "live_status",
+    "catalogue_fingerprint"
+  ],
+  "title": "WhopCampaignCatalogue",
+  "type": "object"
+}
