@@ -1508,4 +1508,3 @@ def require_advanced_binding(
 
 def hero_kind() -> str:
     return KIND_HERO
-

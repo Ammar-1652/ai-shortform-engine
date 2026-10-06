@@ -474,4 +474,3 @@ def assert_unlinked(path: Path, root: Path) -> None:
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
-

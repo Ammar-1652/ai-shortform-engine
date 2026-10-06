@@ -554,4 +554,3 @@ def _sfx(
             )
         )
     return events
-

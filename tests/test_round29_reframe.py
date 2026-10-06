@@ -559,4 +559,3 @@ def test_explicit_face_follow_does_not_report_contain(tmp_path: Path) -> None:
     assert facts.applied != "contain"
     assert facts.blocker == "visual_analysis_missing"
     assert not (tmp_path / "reframe.json").exists()
-
