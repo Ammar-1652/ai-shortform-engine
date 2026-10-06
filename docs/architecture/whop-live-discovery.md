@@ -21,7 +21,7 @@ Doctor never opens a socket. It always prints `live_smoke: not_executed`.
 | --- | --- |
 | Live switch unset | `whop_live: not_configured`, `public_provider: not_configured`, `authenticated_connector: not_configured`, `session: not opened` |
 | `CLIPFORGE_WHOP_LIVE_SMOKE=1` and `CLIPFORGE_WHOP_CONNECTOR=public` with an https URL | `whop_live: not_configured`, `public_provider: available` |
-| `CLIPFORGE_WHOP_LIVE_SMOKE=1` and `CLIPFORGE_WHOP_CONNECTOR=authenticated` with `CLIPFORGE_WHOP_SESSION_HANDLE` | `authenticated_connector: available`, `session: handle_only` |
+| `CLIPFORGE_WHOP_LIVE_SMOKE=1`, `CLIPFORGE_WHOP_CONNECTOR=authenticated`, a loopback `CLIPFORGE_WHOP_CONNECTOR_URL`, and `CLIPFORGE_WHOP_SESSION_HANDLE` | `authenticated_connector: available`, `session: handle_only`, `live_smoke: not_executed` |
 | Live switch set and no usable connector | `whop_live: provider_unavailable` |
 
 `not_configured` means the live command was not enabled. `provider_unavailable` means it was enabled and no connector can run. `public_provider: available` means the public adapter would be used by `discover --live`. It does not mean a live call already succeeded.
@@ -36,23 +36,38 @@ clipforge campaign operator whop discover --live --project PROJECT_ID --operator
 
 `CLIPFORGE_WHOP_URL` overrides the public MCP URL. The default is `https://mcp.whop.com/mcp`. Loopback HTTP is accepted for tests. A URL with a username, a password, or a query string is rejected. None of these variables is written into a manifest.
 
-Private campaigns use an already authenticated connector. The operator signs in on Whop's own page. Clipforge does not automate that page.
+Private campaigns use a connector that already completed Whop's browser sign-in. Clipforge does not automate that page and does not keep the session.
 
 ```text
 CLIPFORGE_WHOP_LIVE_SMOKE=1
 CLIPFORGE_WHOP_CONNECTOR=authenticated
-CLIPFORGE_WHOP_SESSION_HANDLE=browser-handle
+CLIPFORGE_WHOP_CONNECTOR_URL=http://127.0.0.1:PORT/discover
+CLIPFORGE_WHOP_SESSION_HANDLE=one-time-nonce
+clipforge campaign operator whop discover --live --connector authenticated --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
 ```
 
-The handle is an opaque name for a reader registered in the connector process. It is not a cookie or a bearer token. If the handle is missing or the reader is not registered, `discover --live` exits non-zero with `provider_unavailable` and writes nothing.
+The handle is a one-time nonce for that process. It is not a cookie or a bearer token, and Clipforge does not write it. A fresh process can call the connector. An in-memory Python registry is not that boundary. A second use of the nonce is `stale_session`. If the connector is down, the command exits non-zero with `provider_unavailable` and writes nothing.
 
-Offline import stays separate:
+When no authorized connector is running, the operator exports a sanitized snapshot and imports it. That path is `authenticated_operator_snapshot`, `credentials_stored: not_stored`, and `live_transport: not_claimed`. It is not a live Clipforge MCP pass.
 
 ```text
-clipforge campaign operator whop import --file SNAPSHOT.json --project PROJECT_ID
+clipforge campaign operator whop import --file SANITIZED_SNAPSHOT.json --project PROJECT_ID --work-dir WORK_ROOT
 ```
 
 `discover` without `--live` prints `not_configured`, writes nothing, and exits zero.
+
+## Operator flow
+
+1. The operator authorizes the Whop MCP connection through the official Whop browser flow. Clipforge does not collect the password.
+2. The operator verifies the connected account or business and the tools that connection exposes.
+3. The operator runs read-only discovery. Clipforge does not create, join, apply, submit, upload, purchase, or modify a campaign.
+4. Only campaign metadata and policy or source facts are exported. Cookies, tokens, and raw MCP envelopes stay outside the snapshot.
+5. Clipforge imports and fingerprints the sanitized snapshot.
+6. Clipforge applies the campaign and source filters. Missing required facts fail closed.
+7. The operator selects an allowed source. `selected: true` does not override a failed filter.
+8. Acquisition obtains only an authorized source file. A page URL is not that file. An unavailable direct download stays manual.
+9. Acquisition hashes the local file, compares it with `declared_content_sha256` when present, and records ffprobe evidence as `acquired_file_sha256`.
+10. Rendering starts only after source bytes, rights, review, QA, and acquisition checks pass. Publishing stays deferred.
 
 ## Capability matrix
 
@@ -71,9 +86,9 @@ Public catalogue fields are `title`, `campaign_url`, `status`, `category`, and `
 
 ## MCP and browser boundary
 
-The public adapter sends `initialize`, `notifications/initialized`, `tools/list`, and one `tools/call`. The tool name must be exactly one of `list_public_campaigns`, `search_public_campaigns`, `get_public_campaign`, `discover_public_campaigns`, or `read_public_campaigns`. A prefix or a mutating token does not qualify. Headers are `Content-Type`, `Accept`, and `User-Agent`. `Authorization` is not set. `Mcp-Session-Id` stays on the client for that process and is not stored. JSON and `text/event-stream` bodies are accepted. Oversized bodies, timeouts, malformed JSON-RPC, and a lost session are errors. Secret keys and secret-like text reject the document. A payload field named `live_status` or `provider_version` is `forged_status`.
+The public adapter posts `initialize`, records the negotiated protocol version, posts `notifications/initialized`, and sends `MCP-Protocol-Version` on later requests. It then posts `tools/list` and one `tools/call` for an exact name in `docs/operations/assets/whop/tool-map.json`. That file currently has no official mapping. Fixture names such as `list_public_campaigns` are test doubles. A prefix, a substring, or a mutating token does not qualify. A tool without read-only evidence is rejected. If `tools/list` has no mapped Content Rewards tool, the result is `unsupported_tool` and nothing is stored. Headers are `Content-Type`, `Accept`, and `User-Agent`. `Authorization` is not set. `Mcp-Session-Id` stays on the client for that process and is not stored. JSON and `text/event-stream` bodies are accepted, and the SSE event must match the JSON-RPC id. HTTP 202 with an empty body accepts a notification. HTTP 401 is `auth_required`. HTTP 404 on a live session is `stale_session` and initialization runs once. Oversized bodies, timeouts, and malformed JSON-RPC are errors and are not retried. Secret keys and secret-like text reject the document. A payload field named `live_status` or `provider_version` is `forged_status`.
 
-`FixtureCatalogueReader` is a test double. `AuthenticatedConnectorSession` is the boundary for a connector that already completed Whop's browser sign-in. Clipforge does not launch a browser, does not read a profile, and does not keep a password. Normal CI does not set the live switch. The opt-in smoke skips when no authenticated handle is registered. A skip is not a live pass.
+The authenticated boundary is the loopback connector, not a registry inside the Clipforge process. The connector returns sanitized campaign JSON. Clipforge does not launch a browser, does not read a profile, and does not keep a password. Normal CI does not set the live switch. The opt-in smoke skips with `whop_live: not_configured` and `live_smoke: not_executed` unless an authorized connector is actually running. A skip is not a live pass. A loopback fixture is not a live pass.
 
 ## Contracts and files
 
@@ -111,7 +126,7 @@ The filter walks the snapshot in order and returns one decision per campaign. A 
 | `rights_not_allowed` | Rights are not the required state |
 | `source_unavailable` | Availability is neither `available` nor `unknown` |
 
-The default discovery request prohibits `gambling` and requires policy and rights `allowed`. It does not require a status, so a snapshot that omits status stays `unknown` and can still pass the other checks. An explicit request replaces the prohibited list. A null language passes a language filter. A null duration or size is not invented and is not compared.
+The default discovery request prohibits `gambling` and requires policy and rights `allowed`. It does not require a status, so a snapshot that omits status stays `unknown` and can still pass the other checks. An explicit request replaces the prohibited list. When the request requires a fact, a missing value fails closed: `missing_status`, `missing_category`, `missing_language`, `source_unavailable`, `missing_format`, `missing_size`, `missing_duration`, `rights_not_allowed`, `policy_blocked`, `missing_content_hash`, or `manual_download_required`. Unknown is not treated as allowed. A null duration or size is not invented.
 
 Example outcomes for the public sample campaign `camp-city`:
 
@@ -136,15 +151,15 @@ The discovery record stores the included and excluded decisions, the policy fing
 
 `select` binds one imported campaign to the existing operator workflow. The evidence records the campaign id, Whop import id, catalogue fingerprint, policy fingerprint, selected source ids, source hashes, language, narration request, operator id, and evidence fingerprint. It does not copy media, start acquisition, start production, or change `CampaignSelectionDocument`.
 
-`content_sha256` is required before a source can be selected. A missing hash is `missing_content_hash`. Clipforge does not substitute a metadata digest. A caller-supplied hash that differs is `source_changed` and asks the operator to reload. A changed snapshot is `stale_snapshot`. A changed policy fingerprint is `stale_policy`. A caller-supplied catalogue fingerprint that differs is `stale_selection`. A discovery from another project is `project_mismatch`. The stale cases use the same reload sentence.
+A declared content hash is required before a source can be selected. A missing hash is `missing_content_hash`. Clipforge does not substitute a metadata digest and does not record the declared hash as the hash of a local file. Acquisition writes `acquired_file_sha256` only after hashing the local file, comparing it with the declaration when one exists, rejecting symlinks, and running ffprobe and a decode check. A mismatch is `hash_mismatch` and blocks rendering. A caller-supplied hash that differs is `source_changed` and asks the operator to reload. A changed snapshot is `stale_snapshot`. A changed policy fingerprint is `stale_policy`. A caller-supplied catalogue fingerprint that differs is `stale_selection`. A discovery from another project is `project_mismatch`. An old discovery cannot select a newer import. The stale cases use the same reload sentence. A Whop page URL is metadata. It is not a downloadable file. A source with no direct download needs a manual acquisition reference.
 
 ## Cache and recovery
 
-Identity is the SHA-256 of the project id, provider id, provider version, normalized request, policy fingerprint, catalogue fingerprint, and response hash. The request id and the request timestamp are not part of that hash. The same payload in another project is a different discovery and a different import id. A cache hit requires that same project and does not rewrite the manifest. `verify` reads the response file, the request file, and the current policy fingerprint.
+Identity is the SHA-256 of the project id, operator id, provider id, provider version, tool name, provider mode, request fingerprint, policy fingerprint, catalogue fingerprint, response hash, source declarations, and acquisition policy. The request id and the request timestamp are not part of that hash. The same payload in another project, for another operator, or from another tool or provider version is a different discovery. A cache hit requires that same identity and does not rewrite the manifest. `verify` reads the response file, the request file, and the current policy fingerprint.
 
 A response file whose bytes no longer match that hash is `stale_discovery`. Restoring the original bytes makes the next import a hit again. A changed catalogue is a new discovery id, and the previous manifest stays. `force` also allocates a new id. `cancel` marks the manifest `cancelled`, deletes `*.partial`, and the next import of the same payload allocates a new id.
 
-Promotion stages the new snapshot import and the discovery response, request, and manifest. Hashes are checked before the rename. A hook failure or an interrupted rename deletes every file created by that attempt, including a new import. The previous import and discovery stay byte-for-byte. `cancel` marks the manifest cancelled and leaves the response in place. `resume` copies that response into a new discovery id and does not call the provider.
+Promotion stages the new snapshot import and the discovery response, request, and manifest. Hashes are checked before the rename. A hook failure, a cancellation, or an interrupted rename restores any overwritten file and removes files this attempt created. It does not follow a symlink. The previous import and discovery stay byte-for-byte. No successful job row is inserted. `resume` copies that response into a new discovery id and does not call the provider.
 
 ## Board
 
@@ -166,8 +181,8 @@ The page shows provider status and version, campaign status, category, policy, s
 clipforge campaign operator whop doctor
 clipforge campaign operator whop capabilities
 clipforge campaign operator whop discover
-clipforge campaign operator whop discover --live --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
-clipforge campaign operator whop import --file SNAPSHOT.json --project PROJECT_ID
+clipforge campaign operator whop discover --live --connector authenticated --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
+clipforge campaign operator whop import --file SANITIZED_SNAPSHOT.json --project PROJECT_ID --work-dir WORK_ROOT
 clipforge campaign operator whop list
 clipforge campaign operator whop show CAMPAIGN_ID
 clipforge campaign operator whop verify IMPORT_ID
@@ -183,8 +198,10 @@ English WhisperX alignment stays `verified_live` for the known checkpoint. Arabi
 ## Limits
 
 - Doctor, `discover` without `--live`, and normal CI do not open a socket.
-- `discover --live` can open the public MCP socket or call a registered connector. A fixture result stays `live_claim: not_claimed`.
-- The opt-in smoke skips when no authenticated connector is registered. That skip is not a live pass.
+- `discover --live` can open the public MCP socket or call a loopback connector from a clean process. A fixture result stays `live_claim: not_claimed`.
+- The opt-in smoke skips with `whop_live: not_configured` and `live_smoke: not_executed` when no authorized connector is running. That skip is not a live pass.
+- Official Whop tool names stay unverified until `tools/list` on `https://mcp.whop.com/mcp` returns them. The checked-in tool map is empty.
+- A Whop page URL is not a media file. Direct downloads that are unavailable need manual acquisition. Acquired file hashes stay separate from declared hashes.
 - Snapshot import rows stay `whop_live: not_configured`.
 - Campaign metadata is not an `AssetLicenseRecord`.
 - Media URLs are not downloaded.

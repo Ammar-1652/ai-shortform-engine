@@ -137,6 +137,7 @@
     "WhopLiveDiscoveryRequest",
     "WhopCampaignCatalogue",
     "WhopFilterDecision",
+    "WhopSourceExclusion",
     "WhopDiscoveryAttempt",
     "WhopSelectionEvidence",
     "MediaConstraints",

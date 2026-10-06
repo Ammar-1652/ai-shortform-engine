@@ -18,7 +18,7 @@ pnpm --dir apps/renderer typecheck
 pnpm --dir apps/renderer test
 ```
 
-Local results on this branch: ruff, format, mypy, schema check, and doctor passed. Doctor reports SQLite schema version 6. Schema export wrote 193 files. The Whop tests were run twice: 23 passed and 1 skipped each time. The skip is the opt-in live smoke. Full pytest: 552 passed, 2 skipped, 445 seconds. Renderer lint, typecheck, and 27 tests passed. Normal CI does not set `CLIPFORGE_WHOP_LIVE_SMOKE`. The skipped smoke is not a live pass. No official Whop session was opened while these checks ran.
+Local results on this follow-up: ruff, format (439 files), mypy (251 files), schema check, and doctor passed. Doctor reports SQLite schema version 6. Schema export wrote 194 files. The Whop tests were run twice. Without the browser marker: 35 passed and 1 skipped. With the board smoke: 36 passed and 1 skipped. The skip is the opt-in live smoke. Full pytest: 565 passed, 2 skipped, 452 seconds. Renderer lint, typecheck, and 27 tests passed. Normal CI does not set `CLIPFORGE_WHOP_LIVE_SMOKE`. The skipped smoke is not a live pass. `https://mcp.whop.com/mcp` was not called. No official tool name was returned. The result stays unclaimed.
 
 CI uses the Round 21 workflow: `verify-python`, then `verify-renderer-browser`, on `[self-hosted, linux, x64, clipforge]`. Feature-branch pushes do not start that workflow.
 
@@ -36,9 +36,13 @@ Snapshot import of the older studio fixture still cache-hits, reports `whop_live
 
 `FakeWhopProvider` normalizes `camp-city` as `public_discovery` with `evidence_origin: test_double` and `live_claim: not_claimed`. It does not open a socket. `FakeBrowserExportProvider` records `authenticated_discovery` only as a test double. A cookie key is `secret_rejected` and writes nothing. `UnavailableWhopProvider` raises `provider_unavailable` before a sidecar. `MalformedWhopProvider` is rejected for bearer text, cookie text, API-key text, password text, an absolute path, a `file:` URI, traversal, a backslash, a remote media URL in a title, and an HTML payload. A payload field named `live_status` or `provider_version` is `forged_status`.
 
-The public adapter is exercised against a loopback MCP server. That server records `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` for `list_public_campaigns` only. `create_campaign` and `list_public_campaigns_and_checkout` are not called. JSON and SSE responses both normalize. Malformed JSON-RPC, an oversized body, a timeout, and a lost session fail before a sidecar. The session id `mcp-session` is absent from the stored files. The same response in `project-1` and `project-2` produces different discovery ids and import ids. A project-1 import cannot be selected as project-2. A changed catalogue is a new discovery. A changed policy is a new discovery, and the old row fails `verify` with `stale_policy`.
+The public adapter is exercised against a loopback MCP server. That server is a test double. It records `initialize`, `notifications/initialized`, `tools/list`, and `tools/call`. The fixture name `list_public_campaigns` is not an official Whop tool. `docs/operations/assets/whop/tool-map.json` has `official_names_verified: false` and an empty mapping list. A production provider with that empty map returns `unsupported_tool`. `create_campaign` and a name that only contains `list` are not called. Later requests send `MCP-Protocol-Version`. JSON and SSE responses both normalize, and the SSE parser matches the JSON-RPC id rather than the last event. HTTP 401 is `auth_required` and the challenge is not stored. HTTP 404 retries initialization once. Malformed JSON-RPC, an oversized body, and a timeout fail before a sidecar and are not retried. The session id `mcp-session` is absent from the stored files. The public adapter does not send `Authorization`.
 
-Selection rejects an inactive campaign, a prohibited category, a query miss, a language miss, a stale export, an unavailable source, a format miss, an oversized source, a duration outside the bounds, missing rights, and a missing content hash. `selected: true` does not override a failed filter. A source without `content_sha256` is not given a metadata digest. Promotion failure at each stage deletes the new files. A previous manifest and snapshot stay byte-for-byte. `resume` after `cancel` does not call the provider again.
+The authenticated path is a separate loopback connector process. A fresh `clipforge` process discovers through it with a one-time nonce. The nonce is not in the stored JSON. Reuse is `stale_session`. An in-memory reader registry does not satisfy `build_live_provider`. The connector envelope is sanitized campaign JSON. `live_claim` stays `not_claimed`.
+
+The same response in `project-1` and `project-2` produces different discovery ids and import ids. A project-1 import cannot be selected as project-2. Changing the operator, tool name, provider version, request, policy, or response creates a new identity. A changed policy makes the old row fail `verify` with `stale_policy`. A changed response file fails `verify` with `stale_discovery`. An old discovery cannot select a newer import.
+
+Selection rejects an inactive campaign, a prohibited category, a UGC category outside the allow list, a prohibited policy, a query miss, a language miss, a missing language, a missing status, a missing category, a stale export, an unavailable or unknown source, a missing format, size, or duration, a format miss, an oversized source, a duration outside the bounds, missing rights, a missing content hash, a missing acquisition reference, and a declared hash that disagrees with an acquired hash. `selected: true` does not override a failed filter. A source without a declared hash is not given a metadata digest. Acquisition stores `acquired_file_sha256` separately and blocks rendering on a mismatch. Promotion failure at each stage removes partial files and restores overwritten bytes. A previous manifest, snapshot, and response stay byte-for-byte. `resume` after `cancel` does not call the provider again. No job row is inserted by this path.
 
 ## Filter examples
 
@@ -58,13 +62,21 @@ The public sample `camp-city` is `included` under the default request. The same 
 | size above 10 bytes | `source_too_large` |
 | duration below 5 seconds | `duration_out_of_range` |
 | rights `unknown` | `rights_not_allowed` |
-| availability `offline` | `source_unavailable` |
+| availability `offline` or `unknown` | `source_unavailable` |
+| status `unknown` with `require_status` | `missing_status` |
+| category omitted while a category rule is set | `missing_category` |
+| language omitted while a language is required | `missing_language` |
+| format omitted while `media_format` is set | `missing_format` |
+| size omitted while `max_size_bytes` is set | `missing_size` |
+| duration omitted while a duration bound is set | `missing_duration` |
+| acquisition reference omitted when required | `manual_download_required` |
+| acquired hash differs from the declaration | `hash_mismatch` |
 
 Selecting `src-city` writes evidence and does not ask again. A mismatched catalogue fingerprint is `stale_selection`. A mismatched source hash is `source_changed`. A missing source id is `missing_source`. A changed policy fingerprint asks for a reload. All of those stale cases use the existing reload sentence.
 
 ## Cache and recovery
 
-The same provider payload is a cache hit and leaves the manifest bytes unchanged. A different catalogue is a new discovery id. Overwriting `response.json` and importing again raises `stale_discovery`. Restoring those bytes is a hit again. `cancel` makes `verify` return `cancelled`, and the next import allocates a new id. A promotion hook that raises `promotion_failed` deletes partial files and leaves the earlier manifest unchanged. A snapshot import may already exist because that write happens before the discovery rename.
+The same provider payload is a cache hit and leaves the manifest bytes unchanged. A different catalogue is a new discovery id. Overwriting `response.json` and importing again raises `stale_discovery`. Restoring those bytes is a hit again. `cancel` makes `verify` return `cancelled`, and the next import allocates a new id. A promotion hook that raises `promotion_failed` deletes partial files and restores overwritten snapshot, request, response, and manifest bytes. A failed attempt does not leave a new import or discovery behind.
 
 ## Board and read-only commands
 
@@ -92,4 +104,4 @@ Rejected before a discovery sidecar: bearer text, cookie text, API-key text, pas
 
 ## Limits
 
-No official Whop MCP session was opened. The loopback server is a test double of the public adapter. Doctor does not connect. `discover` without `--live` does not connect. The opt-in smoke was skipped. Clipforge does not automate Whop sign-in, does not download campaign media, and does not mutate the Whop account. Snapshot rows stay `not_configured`. Publishing stays deferred. Round 28 is not started.
+No official Whop MCP session was opened. `https://mcp.whop.com/mcp` was not called. `tools/list` from Whop was not captured, so no official tool name is recorded and the live result stays unclaimed. The loopback server and the loopback connector are test doubles. Doctor does not connect. `discover` without `--live` does not connect. The opt-in smoke was skipped with `whop_live: not_configured` and `live_smoke: not_executed`. That skip is not a live pass. Clipforge does not automate Whop sign-in, does not download campaign media, and does not mutate the Whop account. Snapshot rows stay `not_configured`. A page URL is not a media file. Publishing stays deferred. Round 28 is not started.

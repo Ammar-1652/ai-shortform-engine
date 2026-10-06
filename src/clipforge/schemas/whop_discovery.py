@@ -70,6 +70,8 @@ class WhopLiveDiscoveryRequest(Versioned):
     max_duration_us: int | None = Field(default=None, ge=0)
     media_format: str | None = Field(default=None, max_length=40)
     max_age_hours: int | None = Field(default=None, ge=0)
+    permit_unknown_availability: bool = False
+    require_acquisition_reference: bool = False
     created_at: AwareDatetime
 
     @field_validator(
@@ -129,6 +131,18 @@ class WhopCampaignCatalogue(Versioned):
         return self
 
 
+class WhopSourceExclusion(Versioned):
+    """One source rejected by the stored request."""
+
+    source_id: EntityId
+    reason_code: str = Field(min_length=1, max_length=80)
+
+    @field_validator("reason_code")
+    @classmethod
+    def reason_is_plain(cls, value: str) -> str:
+        return _plain(value, label="whop filter")
+
+
 class WhopFilterDecision(Versioned):
     """Why one campaign was kept or excluded. The reason is a code, not a secret."""
 
@@ -136,6 +150,8 @@ class WhopFilterDecision(Versioned):
     included: bool
     reason_code: str = Field(min_length=1, max_length=80)
     included_source_ids: list[EntityId] = Field(default_factory=list)
+    excluded_sources: list[WhopSourceExclusion] = Field(default_factory=list)
+    filter_fingerprint: str = Field(pattern=_SHA)
 
     @field_validator("reason_code")
     @classmethod
@@ -158,6 +174,7 @@ class WhopDiscoveryAttempt(Versioned):
 
     discovery_id: EntityId
     project_id: EntityId
+    operator_id: EntityId
     mode: DiscoveryMode
     provider_id: str = Field(min_length=1, max_length=40)
     provider_version: str = Field(min_length=1, max_length=40)
@@ -217,6 +234,7 @@ class WhopSelectionEvidence(Versioned):
     publishing: Literal["deferred"] = "deferred"
     whop_live: Literal["not_configured"] = "not_configured"
     live_claim: Literal["not_claimed"] = "not_claimed"
+    hash_basis: Literal["declared"] = "declared"
 
     @field_validator("language")
     @classmethod

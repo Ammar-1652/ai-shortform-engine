@@ -40,6 +40,12 @@
       "title": "Filter Fingerprint",
       "type": "string"
     },
+    "hash_basis": {
+      "const": "declared",
+      "default": "declared",
+      "title": "Hash Basis",
+      "type": "string"
+    },
     "import_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from clipforge.campaign.providers import CampaignError
+from clipforge.campaign.whop_bridge import AuthenticatedBridgeProvider
 from clipforge.campaign.whop_mcp import (
     Opener,
     WhopMcpReader,
@@ -13,10 +14,9 @@ from clipforge.campaign.whop_mcp import (
     configured_connector,
     configured_url,
     live_smoke_enabled,
-    select_discovery_tool,
-    session_handle,
     url_is_allowed,
 )
+from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool
 
 
 class AuthenticatedConnectorSession:
@@ -66,16 +66,24 @@ class PublicWhopMcpProvider:
         *,
         timeout_s: float = 20,
         opener: Opener | None = None,
+        tool_map: list[dict[str, Any]] | None = None,
+        allow_fixture: bool = False,
     ) -> None:
         self.url = url
         self.timeout_s = timeout_s
         self.opener = opener
+        self.tool_map = tool_map
+        self.allow_fixture = allow_fixture
 
     def discover(self) -> dict[str, Any]:
         reader = WhopMcpReader(self.url, timeout_s=self.timeout_s, opener=self.opener)
-        reader.initialize()
-        tool = select_discovery_tool(reader.list_tool_names())
-        result = reader.call_tool(tool, {})
+        try:
+            reader.initialize()
+            mappings = self.tool_map if self.tool_map is not None else load_tool_map()
+            tool = select_mapped_tool(reader.list_tools(), mappings, allow_fixture=self.allow_fixture)
+            result = reader.call_tool(tool, {})
+        finally:
+            reader.close()
         self.tool_name = tool
         if reader.server_version:
             self.provider_version = reader.server_version
@@ -124,22 +132,16 @@ def clear_authenticated_readers() -> None:
     _READERS.clear()
 
 
-def build_live_provider() -> PublicWhopMcpProvider | AuthenticatedBrowserProvider:
+def build_live_provider(kind: str | None = None) -> PublicWhopMcpProvider | AuthenticatedBridgeProvider:
     """Open a connector only after the live switch and an explicit connector name."""
     if not live_smoke_enabled():
         raise CampaignError("whop_live: not_configured", code="not_configured")
-    kind = configured_connector()
-    if kind == "public":
+    selected = kind or configured_connector()
+    if selected == "public":
         url = configured_url()
         if not url_is_allowed(url):
             raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
         return PublicWhopMcpProvider(url)
-    if kind == "authenticated":
-        handle = session_handle()
-        if handle is None:
-            raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
-        reader = _READERS.get(handle)
-        if reader is None:
-            raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
-        return AuthenticatedBrowserProvider(reader)
+    if selected == "authenticated":
+        return AuthenticatedBridgeProvider.from_environment()
     raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")

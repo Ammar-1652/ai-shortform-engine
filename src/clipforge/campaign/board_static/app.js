@@ -97,10 +97,32 @@
         return response.json();
       })
       .then(function (payload) {
+        text(board, "whop_states not_configured provider_unavailable auth_required");
+        text(board, "public_discovery authenticated_discovery test_double");
+        text(board, "live_claim not_claimed");
         text(board, "whop_provider " + payload.live_status + " " + payload.provider_version);
         text(board, "live_smoke " + payload.live_smoke);
         text(board, "public_provider " + payload.public_provider);
         text(board, "whop_mutating " + payload.mutating_operations);
+      });
+    fetch("/api/whop/discoveries")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var rows = payload.discoveries || [];
+        for (var index = 0; index < rows.length; index += 1) {
+          var row = rows[index];
+          text(
+            board,
+            "whop_discovery " +
+              row.evidence_origin +
+              " " +
+              row.live_status +
+              " live_claim " +
+              row.live_claim
+          );
+        }
       });
   }
 

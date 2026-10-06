@@ -10,6 +10,18 @@
           "title": "Campaign Id",
           "type": "string"
         },
+        "excluded_sources": {
+          "items": {
+            "$ref": "#/$defs/WhopSourceExclusion"
+          },
+          "title": "Excluded Sources",
+          "type": "array"
+        },
+        "filter_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Filter Fingerprint",
+          "type": "string"
+        },
         "included": {
           "title": "Included",
           "type": "boolean"
@@ -39,7 +51,8 @@
       "required": [
         "campaign_id",
         "included",
-        "reason_code"
+        "reason_code",
+        "filter_fingerprint"
       ],
       "title": "WhopFilterDecision",
       "type": "object"
@@ -138,6 +151,11 @@
           "default": null,
           "title": "Min Duration Us"
         },
+        "permit_unknown_availability": {
+          "default": false,
+          "title": "Permit Unknown Availability",
+          "type": "boolean"
+        },
         "prohibited_categories": {
           "items": {
             "type": "string"
@@ -176,6 +194,11 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Request Id",
           "type": "string"
+        },
+        "require_acquisition_reference": {
+          "default": false,
+          "title": "Require Acquisition Reference",
+          "type": "boolean"
         },
         "require_policy": {
           "anyOf": [
@@ -229,6 +252,36 @@
         "created_at"
       ],
       "title": "WhopLiveDiscoveryRequest",
+      "type": "object"
+    },
+    "WhopSourceExclusion": {
+      "additionalProperties": false,
+      "description": "One source rejected by the stored request.",
+      "properties": {
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "reason_code"
+      ],
+      "title": "WhopSourceExclusion",
       "type": "object"
     }
   },
@@ -338,6 +391,12 @@
       "title": "Mode",
       "type": "string"
     },
+    "operator_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
     "policy_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Policy Fingerprint",
@@ -416,6 +475,7 @@
   "required": [
     "discovery_id",
     "project_id",
+    "operator_id",
     "mode",
     "provider_id",
     "provider_version",

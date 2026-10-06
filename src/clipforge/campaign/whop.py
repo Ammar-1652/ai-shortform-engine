@@ -43,6 +43,7 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
     del connector
     from clipforge.campaign.whop_mcp import (
         configured_connector,
+        configured_connector_url,
         configured_url,
         live_smoke_enabled,
         session_handle,
@@ -57,7 +58,9 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
         kind = configured_connector()
         if kind == "public" and url_is_allowed(configured_url()):
             public = "available"
-        elif kind == "authenticated" and session_handle() is not None:
+        elif (
+            kind == "authenticated" and session_handle() is not None and configured_connector_url() is not None
+        ):
             authenticated = "available"
             session = "handle_only"
         else:
@@ -70,6 +73,7 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
         f"public_provider: {public}",
         f"authenticated_connector: {authenticated}",
         f"session: {session}",
+        "auth_required: not_requested",
         "credentials: not stored",
         "cookies: not stored",
         "mutating: disabled",

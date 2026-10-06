@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 
 from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop import whop_doctor
+from clipforge.campaign.whop_acquire import record_acquired_file
 from clipforge.campaign.whop_live import (
     FakeWhopProvider,
     cancel_discovery,
@@ -33,11 +34,23 @@ from clipforge.campaign.whop_provider import (
     clear_authenticated_readers,
     register_authenticated_reader,
 )
+from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool
 from clipforge.cli.main import app
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 
 runner = CliRunner()
 _CREATED = datetime(2026, 10, 6, 12, tzinfo=UTC)
+_FIXTURE_TOOL = {
+    "tool_name": "list_public_campaigns",
+    "provider_id": "whop",
+    "input_schema_sha256": "ab" * 32,
+    "output_shape": "campaign_catalogue",
+    "read_only": True,
+    "destructive": False,
+    "campaign_type": "clipping",
+    "authentication_required": False,
+    "verification": "fixture_only",
+}
 
 
 class _Server(ThreadingHTTPServer):
@@ -62,10 +75,17 @@ class _Handler(BaseHTTPRequestHandler):
                 "session": self.headers.get("Mcp-Session-Id"),
                 "tool": params.get("name") if isinstance(params.get("name"), str) else None,
                 "authorization": self.headers.get("Authorization"),
+                "protocol": self.headers.get("MCP-Protocol-Version"),
             }
         )
         mode = self.server.mode
         method = body.get("method")
+        if mode == "auth":
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Bearer realm="secret-challenge"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if mode == "oversize":
             self._send(200, b"{" + (b"x" * 1_000_002), "application/json")
             return
@@ -110,7 +130,14 @@ class _Handler(BaseHTTPRequestHandler):
                         "result": {"content": [{"type": "text", "text": json.dumps(document)}]},
                     }
                 )
-                payload = f"event: message\ndata: {encoded}\n\n".encode()
+                decoy = json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 99,
+                        "result": {"content": [{"type": "text", "text": '{"campaigns":[]}'}]},
+                    }
+                )
+                payload = f"event: message\ndata: {encoded}\n\ndata: {decoy}\n\n".encode()
                 self._send(200, payload, "text/event-stream", session="mcp-session")
                 return
             result = {"content": [{"type": "text", "text": json.dumps(document)}]}
@@ -133,10 +160,22 @@ class _Handler(BaseHTTPRequestHandler):
 
 def test_allowlist_rejects_mutating_and_prefix_tools() -> None:
     names = ["create_campaign", "list_public_campaigns_and_checkout", "list_public_campaigns"]
-    assert select_discovery_tool(names) == "list_public_campaigns"
+    assert select_discovery_tool(names, [_FIXTURE_TOOL]) == "list_public_campaigns"
     with pytest.raises(CampaignError) as rejected:
-        select_discovery_tool(["create_campaign", "join_campaign", "list_public_campaigns_and_checkout"])
+        select_discovery_tool(["create_campaign", "join_campaign"], [_FIXTURE_TOOL])
     assert rejected.value.code == "unsupported_tool"
+    with pytest.raises(CampaignError) as unverified:
+        select_discovery_tool(names, [])
+    assert unverified.value.code == "unsupported_tool"
+    assert load_tool_map() == []
+    listed = [{"name": "list_public_campaigns", "annotations": {"readOnlyHint": True}}]
+    with pytest.raises(CampaignError) as official:
+        select_mapped_tool(listed, load_tool_map(), allow_fixture=False)
+    assert official.value.code == "unsupported_tool"
+    destructive = [{"name": "list_public_campaigns", "annotations": {"destructiveHint": True}}]
+    with pytest.raises(CampaignError) as destroyed:
+        select_mapped_tool(destructive, [_FIXTURE_TOOL], allow_fixture=True)
+    assert destroyed.value.code == "unsupported_tool"
 
 
 def test_public_mcp_json_sse_and_failures(tmp_path: Path) -> None:
@@ -155,6 +194,9 @@ def test_public_mcp_json_sse_and_failures(tmp_path: Path) -> None:
         assert methods[:4] == ["initialize", "notifications/initialized", "tools/list", "tools/call"]
         assert server.events[2]["session"] == "mcp-session"
         assert server.events[3]["tool"] == "list_public_campaigns"
+        assert server.events[0]["protocol"] is None
+        assert server.events[2]["protocol"] == "2025-06-18"
+        assert server.events[3]["protocol"] == "2025-06-18"
         assert all(item["authorization"] is None for item in server.events)
         stored = " ".join(path.read_text(encoding="utf-8") for path in json_root.rglob("*.json"))
         assert "mcp-session" not in stored
@@ -249,10 +291,14 @@ def test_doctor_and_cli_do_not_claim_a_closed_connector(
                 str(work),
             ],
         )
-        assert live.exit_code == 0, live.stderr
-        assert "evidence_origin: public_connector" in live.stdout
-        assert "live_claim: not_claimed" in live.stdout
+        assert live.exit_code != 0
+        assert "unsupported_tool" in live.stderr
         assert "mcp-session" not in live.stdout
+        assert "mcp-session" not in live.stderr
+        assert not (work / "campaigns").exists()
+        protocols = [item.get("protocol") for item in server.events]
+        assert "2025-06-18" in protocols
+        assert all(item["authorization"] is None for item in server.events)
     monkeypatch.delenv("CLIPFORGE_WHOP_CONNECTOR", raising=False)
     monkeypatch.delenv("CLIPFORGE_WHOP_URL", raising=False)
     monkeypatch.delenv("CLIPFORGE_WHOP_LIVE_SMOKE", raising=False)
@@ -291,7 +337,7 @@ def test_doctor_and_cli_do_not_claim_a_closed_connector(
     assert "provider_unavailable" in unavailable.stderr
 
 
-def test_authenticated_handle_is_not_stored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_in_memory_registry_is_not_the_connector(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLIPFORGE_WHOP_LIVE_SMOKE", "1")
     monkeypatch.setenv("CLIPFORGE_WHOP_CONNECTOR", "authenticated")
     monkeypatch.setenv("CLIPFORGE_WHOP_SESSION_HANDLE", "browser-handle")
@@ -301,23 +347,12 @@ def test_authenticated_handle_is_not_stored(tmp_path: Path, monkeypatch: pytest.
             build_live_provider()
         assert missing.value.code == "provider_unavailable"
         register_authenticated_reader("browser-handle", FixtureCatalogueReader(_public()))
-        double_root = tmp_path / "double"
-        double_root.mkdir()
-        double = import_discovered(double_root, build_live_provider(), project_id="project-1")
-        assert double.evidence_origin == "test_double"
-        assert double.live_claim == "not_claimed"
+        with pytest.raises(CampaignError) as still_missing:
+            build_live_provider()
+        assert still_missing.value.code == "provider_unavailable"
         session = AuthenticatedConnectorSession("browser-handle", _public)
         assert not hasattr(session, "password")
-        register_authenticated_reader("browser-handle", session)
-        real_root = tmp_path / "real"
-        real_root.mkdir()
-        real = import_discovered(real_root, build_live_provider(), project_id="project-1")
-        assert real.evidence_origin == "authenticated_connector"
-        assert real.live_status == "authenticated_discovery"
-        assert real.live_claim == "not_claimed"
-        stored = " ".join(path.read_text(encoding="utf-8") for path in tmp_path.rglob("*.json"))
-        assert "browser-handle" not in stored
-        assert "password" not in stored.lower()
+        assert not hasattr(session, "cookie")
     finally:
         clear_authenticated_readers()
 
@@ -374,6 +409,14 @@ def test_filter_blocks_selection_even_when_selected(tmp_path: Path) -> None:
         (_source(duration_us=1), {"min_duration_us": 5_000_000}, "duration_out_of_range", "src-city"),
         (_source(rights_state="unknown"), {}, "rights_not_allowed", "src-city"),
         (_source(content_sha256=None), {}, "missing_content_hash", "src-city"),
+        (_public(status="unknown"), {"require_status": "active"}, "missing_status", "src-city"),
+        (_public(category=None), {"allowed_categories": ["clipping"]}, "missing_category", "src-city"),
+        (_public(language=None), {"language": "en-US"}, "missing_language", "src-city"),
+        (_source(availability="unknown"), {}, "source_unavailable", "src-city"),
+        (_source(media_format=None), {"media_format": "mp4"}, "missing_format", "src-city"),
+        (_source(size_bytes=None), {"max_size_bytes": 10}, "missing_size", "src-city"),
+        (_source(duration_us=None), {"min_duration_us": 1}, "missing_duration", "src-city"),
+        (_source(), {"require_acquisition_reference": True}, "manual_download_required", "src-city"),
     ]
     for index, (payload, overrides, code, source_id) in enumerate(cases):
         work = tmp_path / str(index)
@@ -442,11 +485,15 @@ def test_selected_flag_does_not_override_the_request(tmp_path: Path) -> None:
     "stage",
     [
         "stage_import",
+        "stage_import_manifest",
         "stage_discovery_response",
+        "stage_discovery_request",
         "stage_discovery_manifest",
         "final_rename",
         "promote_import",
+        "promote_import_manifest",
         "promote_discovery_response",
+        "promote_discovery_request",
         "promote_discovery_manifest",
     ],
 )
@@ -497,24 +544,446 @@ def test_cancel_then_resume_without_a_provider_call(tmp_path: Path) -> None:
     assert denied.value.code == "cancelled"
 
 
+def test_auth_challenge_is_not_stored(tmp_path: Path) -> None:
+    with _running(_public(), "auth") as server, pytest.raises(CampaignError) as challenged:
+        _provider(server).discover()
+    assert challenged.value.code == "auth_required"
+    assert "secret-challenge" not in str(challenged.value)
+
+
+def test_rollback_restores_an_existing_file(tmp_path: Path) -> None:
+    from clipforge.campaign.whop import plan_whop_import
+
+    work = tmp_path / "work"
+    work.mkdir()
+    payload = json.dumps(FakeWhopProvider().payload).encode()
+    planned, _raw, write = plan_whop_import(work, payload, project_id="project-1")
+    assert write
+    destination = work / "campaigns" / "whop" / planned.import_id
+    destination.mkdir(parents=True)
+    target = destination / "snapshot.json"
+    target.write_bytes(b"previous-bytes")
+    with pytest.raises(CampaignError) as failed:
+        import_discovered(
+            work,
+            FakeWhopProvider(),
+            project_id="project-1",
+            promotion_hook=_stop("promote_discovery_response"),
+        )
+    assert failed.value.code == "promotion_failed"
+    assert target.read_bytes() == b"previous-bytes"
+    assert not list(work.rglob("*.partial"))
+
+
+def test_symlink_destination_is_rejected(tmp_path: Path) -> None:
+    from clipforge.campaign.whop import plan_whop_import
+
+    work = tmp_path / "work"
+    work.mkdir()
+    payload = json.dumps(FakeWhopProvider().payload).encode()
+    planned, _raw, write = plan_whop_import(work, payload, project_id="project-1")
+    assert write
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(b"keep-me")
+    destination = work / "campaigns" / "whop" / planned.import_id
+    destination.mkdir(parents=True)
+    link = destination / "snapshot.json"
+    link.symlink_to(outside)
+    with pytest.raises(CampaignError) as failed:
+        import_discovered(work, FakeWhopProvider(), project_id="project-1")
+    assert failed.value.code == "symlink_rejected"
+    assert outside.read_bytes() == b"keep-me"
+    assert link.is_symlink()
+
+
+def test_clean_process_connector(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    clipforge = str(Path(sys.executable).parent / "clipforge")
+    catalogue = tmp_path / "catalogue.json"
+    catalogue.write_text(json.dumps(_public()), encoding="utf-8")
+    nonce = "bridge-nonce-1"
+    bridge = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "clipforge.campaign.whop_bridge",
+            "--bind",
+            "127.0.0.1",
+            "--port",
+            "0",
+            "--catalogue",
+            str(catalogue),
+            "--nonce",
+            nonce,
+            "--prove-session",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert bridge.stdout is not None
+    line = bridge.stdout.readline().strip()
+    assert line.startswith("port=")
+    port = line.split("=", 1)[1]
+    work = tmp_path / "work"
+    work.mkdir()
+    env = os.environ.copy()
+    env.update(
+        {
+            "CLIPFORGE_WHOP_LIVE_SMOKE": "1",
+            "CLIPFORGE_WHOP_CONNECTOR": "authenticated",
+            "CLIPFORGE_WHOP_CONNECTOR_URL": f"http://127.0.0.1:{port}/discover",
+            "CLIPFORGE_WHOP_SESSION_HANDLE": nonce,
+        }
+    )
+    try:
+        first = subprocess.run(
+            [
+                clipforge,
+                "campaign",
+                "operator",
+                "whop",
+                "discover",
+                "--live",
+                "--connector",
+                "authenticated",
+                "--project",
+                "project-1",
+                "--operator",
+                "operator-1",
+                "--work-dir",
+                str(work),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=30,
+        )
+        assert first.returncode == 0, first.stderr
+        assert "evidence_origin: authenticated_connector" in first.stdout
+        assert "live_claim: not_claimed" in first.stdout
+        assert nonce not in first.stdout
+        assert nonce not in first.stderr
+        stored = " ".join(path.read_text(encoding="utf-8") for path in work.rglob("*.json"))
+        assert nonce not in stored
+        assert "cookie" not in stored.lower()
+        second = subprocess.run(
+            [
+                clipforge,
+                "campaign",
+                "operator",
+                "whop",
+                "discover",
+                "--live",
+                "--connector",
+                "authenticated",
+                "--project",
+                "project-1",
+                "--operator",
+                "operator-1",
+                "--work-dir",
+                str(work),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=30,
+        )
+        assert second.returncode != 0
+        assert "stale_session" in second.stderr or "provider_unavailable" in second.stderr
+    finally:
+        bridge.terminate()
+        bridge.wait(timeout=5)
+
+
+def test_acquired_hash_stays_separate_from_the_declaration(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    discovered = import_discovered(work, FakeWhopProvider(), project_id="project-1")
+    evidence = select_whop_campaign(
+        work,
+        campaign_id="camp-city",
+        import_id=discovered.import_id or "",
+        project_id="project-1",
+        source_ids=["src-city"],
+        operator_id="operator-1",
+    )
+    incoming = work / "incoming"
+    incoming.mkdir()
+    (incoming / "clip.bin").write_bytes(b"different-bytes")
+    with pytest.raises(CampaignError) as mismatch:
+        record_acquired_file(work, evidence.evidence_id, "src-city", "incoming/clip.bin")
+    assert mismatch.value.code == "hash_mismatch"
+    acquired_path = work / "campaigns" / "whop-selections" / evidence.evidence_id / "acquired.json"
+    acquired = json.loads(acquired_path.read_text(encoding="utf-8"))
+    assert acquired[0]["declared_content_sha256"] == "a" * 64
+    assert acquired[0]["acquired_file_sha256"] != "a" * 64
+    assert acquired[0]["render_allowed"] is False
+    assert evidence.source_hashes == ["a" * 64]
+
+
+def test_content_rewards_fixture_selects_only_the_valid_source(tmp_path: Path) -> None:
+    payload = _public(title="Allowed clipping", campaign_type="clipping", category="clipping")
+    good = payload["campaigns"][0]
+    good["sources"][0]["acquisition_reference"] = "manual-ref"
+    inactive = json.loads(json.dumps(good))
+    inactive["campaign_id"] = "camp-paused"
+    inactive["status"] = "paused"
+    inactive["title"] = "Paused rewards"
+    gambling = json.loads(json.dumps(good))
+    gambling["campaign_id"] = "camp-gambling"
+    gambling["category"] = "gambling"
+    gambling["title"] = "Gambling rewards"
+    ugc = json.loads(json.dumps(good))
+    ugc["campaign_id"] = "camp-ugc"
+    ugc["campaign_type"] = "ugc"
+    ugc["category"] = "ugc"
+    ugc["title"] = "UGC rewards"
+    missing = json.loads(json.dumps(good))
+    missing["campaign_id"] = "camp-missing"
+    missing["title"] = "Missing footage"
+    missing["sources"][0]["availability"] = "missing"
+    missing["sources"][0]["source_id"] = "src-missing-footage"
+    huge = json.loads(json.dumps(good["sources"][0]))
+    huge["source_id"] = "src-huge"
+    huge["size_bytes"] = 201 * 1024 * 1024
+    huge["selected"] = True
+    no_hash = json.loads(json.dumps(good["sources"][0]))
+    no_hash["source_id"] = "src-no-hash"
+    no_hash["content_sha256"] = None
+    no_hash["declared_content_sha256"] = None
+    no_hash["selected"] = True
+    changed = json.loads(json.dumps(good["sources"][0]))
+    changed["source_id"] = "src-changed-hash"
+    changed["acquired_file_sha256"] = "b" * 64
+    changed["acquisition_status"] = "hash_mismatch"
+    changed["selected"] = True
+    good["sources"].extend([huge, no_hash, changed])
+    prohibited = json.loads(json.dumps(good))
+    prohibited["campaign_id"] = "camp-prohibited"
+    prohibited["title"] = "Prohibited requirements"
+    prohibited["policy_state"] = "prohibited"
+    prohibited["requirements_text"] = "must include a banned claim"
+    prohibited["prohibited_text"] = "operator policy blocks this requirement"
+    prohibited["sources"] = [json.loads(json.dumps(good["sources"][0]))]
+    prohibited["sources"][0]["source_id"] = "src-prohibited"
+    payload["campaigns"].extend([inactive, gambling, ugc, missing, prohibited])
+    work = tmp_path / "work"
+    work.mkdir()
+    discovered = import_discovered(
+        work,
+        FakeWhopProvider(payload),
+        project_id="project-1",
+        request=_request(
+            require_status="active",
+            allowed_categories=["clipping"],
+            prohibited_categories=["gambling"],
+            max_size_bytes=200 * 1024 * 1024,
+            require_acquisition_reference=True,
+        ),
+    )
+    included = [item.campaign_id for item in discovered.decisions if item.included]
+    assert included == ["camp-city"]
+    city = next(item for item in discovered.decisions if item.campaign_id == "camp-city")
+    assert city.included_source_ids == ["src-city"]
+    assert city.filter_fingerprint == discovered.filter_fingerprint
+    excluded = {item.source_id: item.reason_code for item in city.excluded_sources}
+    assert excluded["src-huge"] == "source_too_large"
+    assert excluded["src-no-hash"] == "missing_content_hash"
+    assert excluded["src-changed-hash"] == "hash_mismatch"
+    blocked_campaigns = {item.campaign_id: item.reason_code for item in discovered.decisions}
+    assert blocked_campaigns["camp-paused"] == "status_not_active"
+    assert blocked_campaigns["camp-gambling"] == "category_prohibited"
+    assert blocked_campaigns["camp-ugc"] == "category_not_allowed"
+    assert blocked_campaigns["camp-missing"] == "missing_source"
+    assert blocked_campaigns["camp-prohibited"] == "policy_blocked"
+    evidence = select_whop_campaign(
+        work,
+        campaign_id="camp-city",
+        import_id=discovered.import_id or "",
+        project_id="project-1",
+        source_ids=["src-city"],
+        operator_id="operator-1",
+    )
+    assert evidence.source_ids == ["src-city"]
+    with pytest.raises(CampaignError) as blocked:
+        select_whop_campaign(
+            work,
+            campaign_id="camp-city",
+            import_id=discovered.import_id or "",
+            project_id="project-1",
+            source_ids=["src-huge"],
+            operator_id="operator-1",
+        )
+    assert blocked.value.code == "source_too_large"
+    with pytest.raises(CampaignError) as changed_hash:
+        select_whop_campaign(
+            work,
+            campaign_id="camp-city",
+            import_id=discovered.import_id or "",
+            project_id="project-1",
+            source_ids=["src-changed-hash"],
+            operator_id="operator-1",
+        )
+    assert changed_hash.value.code == "hash_mismatch"
+
+
+def test_identity_binds_operator_tool_and_blocks_a_stale_response(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    provider = FakeWhopProvider()
+    first = import_discovered(work, provider, project_id="project-1", operator_id="operator-1")
+    other_operator = import_discovered(work, provider, project_id="project-1", operator_id="operator-2")
+    assert other_operator.identity_sha256 != first.identity_sha256
+    renamed = FakeWhopProvider()
+    renamed.tool_name = "other_tool"
+    other_tool = import_discovered(work, renamed, project_id="project-1")
+    assert other_tool.identity_sha256 != first.identity_sha256
+    versioned = FakeWhopProvider()
+    versioned.provider_version = "9"
+    other_version = import_discovered(work, versioned, project_id="project-1")
+    assert other_version.identity_sha256 != first.identity_sha256
+    filtered = import_discovered(
+        work,
+        provider,
+        project_id="project-1",
+        request=_request(require_status="active"),
+    )
+    assert filtered.identity_sha256 != first.identity_sha256
+    with pytest.raises(CampaignError) as operator_miss:
+        select_whop_campaign(
+            work,
+            campaign_id="camp-city",
+            import_id=other_operator.import_id or "",
+            project_id="project-1",
+            source_ids=["src-city"],
+            operator_id="operator-1",
+            discovery_id=other_operator.discovery_id,
+        )
+    assert operator_miss.value.code == "operator_mismatch"
+    newer = import_discovered(work, FakeWhopProvider(_public(title="Newer rewards")), project_id="project-1")
+    with pytest.raises(CampaignError) as crossed:
+        select_whop_campaign(
+            work,
+            campaign_id="camp-city",
+            import_id=newer.import_id or "",
+            project_id="project-1",
+            source_ids=["src-city"],
+            operator_id="operator-1",
+            discovery_id=first.discovery_id,
+        )
+    assert crossed.value.code == "project_mismatch"
+    response = work / "campaigns" / "whop-discoveries" / first.discovery_id / "response.json"
+    original = response.read_bytes()
+    response.write_bytes(original + b" ")
+    with pytest.raises(CampaignError) as stale:
+        verify_discovery(work, first.discovery_id)
+    assert stale.value.code == "stale_discovery"
+    response.write_bytes(original)
+    assert verify_discovery(work, first.discovery_id).discovery_id == first.discovery_id
+
+
+def test_rollback_restores_overwritten_discovery_files(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    kept = import_discovered(work, FakeWhopProvider(), project_id="project-1")
+    import_dir = work / "campaigns" / "whop" / (kept.import_id or "")
+    snapshot = import_dir / "snapshot.json"
+    import_manifest = import_dir / "manifest.json"
+    previous_snapshot = snapshot.read_bytes()
+    previous_import = import_manifest.read_bytes()
+    disc_dir = work / "campaigns" / "whop-discoveries" / kept.discovery_id
+    response = disc_dir / "response.json"
+    request = disc_dir / "request.json"
+    manifest = disc_dir / "manifest.json"
+    response.write_bytes(b"old-response")
+    request.write_bytes(b"old-request")
+    manifest.write_bytes(b"old-manifest")
+    with pytest.raises(CampaignError) as failed:
+        import_discovered(
+            work,
+            FakeWhopProvider(),
+            project_id="project-1",
+            promotion_hook=_stop("promoted"),
+        )
+    assert failed.value.code == "promotion_failed"
+    assert snapshot.read_bytes() == previous_snapshot
+    assert import_manifest.read_bytes() == previous_import
+    assert response.read_bytes() == b"old-response"
+    assert request.read_bytes() == b"old-request"
+    assert manifest.read_bytes() == b"old-manifest"
+    assert not list(work.rglob("*.partial"))
+    assert not list(work.rglob("*.sqlite*"))
+
+
+def test_operator_snapshot_import_does_not_claim_live_transport(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    payload = FakeWhopProvider().payload
+    payload["intake_label"] = "authenticated_operator_snapshot"
+    snapshot = tmp_path / "snapshot.json"
+    snapshot.write_text(json.dumps(payload), encoding="utf-8")
+    imported = runner.invoke(
+        app,
+        [
+            "campaign",
+            "operator",
+            "whop",
+            "import",
+            "--file",
+            str(snapshot),
+            "--project",
+            "project-1",
+            "--work-dir",
+            str(work),
+        ],
+    )
+    assert imported.exit_code == 0, imported.stderr
+    assert "whop_live: not_configured" in imported.stdout
+    assert "intake_label: authenticated_operator_snapshot" in imported.stdout
+    assert "credentials_stored: not_stored" in imported.stdout
+    assert "live_transport: not_claimed" in imported.stdout
+    stored = " ".join(path.read_text(encoding="utf-8") for path in work.rglob("*.json"))
+    assert "authenticated_operator_snapshot" in stored
+    assert "not_claimed" in stored
+
+
 def test_optional_live_smoke_stays_unclaimed() -> None:
     if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE") != "1":
-        pytest.skip("live smoke not executed")
-    from clipforge.campaign.whop_mcp import configured_connector, session_handle
+        pytest.skip("whop_live: not_configured; live_smoke: not_executed")
+    from clipforge.campaign.whop_mcp import configured_connector, configured_connector_url, session_handle
 
-    if configured_connector() != "authenticated" or session_handle() is None:
-        pytest.skip("provider_unavailable")
+    authorized = (
+        configured_connector() == "authenticated"
+        and session_handle() is not None
+        and configured_connector_url() is not None
+    )
+    if not authorized:
+        pytest.skip("whop_live: not_configured; live_smoke: not_executed")
     try:
         provider = build_live_provider()
         payload = provider.discover()
     except CampaignError as exc:
-        pytest.skip(exc.code)
+        pytest.skip(f"whop_live: {exc.code}; live_smoke: not_executed")
     assert isinstance(payload, dict)
-    assert provider.live_status in {"public_discovery", "authenticated_discovery"}
+    assert "campaigns" in payload
+    dumped = json.dumps(payload).lower()
+    assert "bearer " not in dumped
+    assert "cookie=" not in dumped
+    assert provider.live_status == "authenticated_discovery"
 
 
 def _provider(server: _Server) -> PublicWhopMcpProvider:
-    return PublicWhopMcpProvider(_url(server), timeout_s=2)
+    return PublicWhopMcpProvider(
+        _url(server),
+        timeout_s=2,
+        tool_map=[_FIXTURE_TOOL],
+        allow_fixture=True,
+    )
 
 
 def _url(server: _Server) -> str:

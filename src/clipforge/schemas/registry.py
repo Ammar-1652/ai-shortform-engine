@@ -231,6 +231,7 @@ from clipforge.schemas.whop_discovery import (
     WhopLiveDiscoveryRequest,
     WhopProviderCapability,
     WhopSelectionEvidence,
+    WhopSourceExclusion,
 )
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
@@ -371,6 +372,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     WhopLiveDiscoveryRequest,
     WhopCampaignCatalogue,
     WhopFilterDecision,
+    WhopSourceExclusion,
     WhopDiscoveryAttempt,
     WhopSelectionEvidence,
     MediaConstraints,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from collections.abc import Callable
@@ -19,13 +20,7 @@ _PROTOCOL = "2025-06-18"
 _MAX_BYTES = 1_000_000
 _SESSION_HEADER = "Mcp-Session-Id"
 # Exact tool names. Selection does not use a substring match.
-DISCOVERY_TOOL_ALLOWLIST: tuple[str, ...] = (
-    "list_public_campaigns",
-    "search_public_campaigns",
-    "get_public_campaign",
-    "discover_public_campaigns",
-    "read_public_campaigns",
-)
+_PROTOCOL_HEADER = "MCP-Protocol-Version"
 _MUTATING_TOKENS = frozenset(
     {
         "create",
@@ -110,6 +105,23 @@ def configured_url() -> str:
     return value or PUBLIC_MCP_URL
 
 
+def configured_connector_url() -> str | None:
+    """Return a loopback connector URL. Anything else is treated as unconfigured."""
+    value = os.environ.get("CLIPFORGE_WHOP_CONNECTOR_URL", "").strip()
+    if not value:
+        return None
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme == "http"
+        and parsed.hostname == "127.0.0.1"
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.query
+    ):
+        return value
+    return None
+
+
 def session_handle() -> str | None:
     """Return an opaque handle. A secret-like value is ignored and not logged."""
     value = os.environ.get("CLIPFORGE_WHOP_SESSION_HANDLE", "").strip()
@@ -142,15 +154,13 @@ def url_is_allowed(url: str) -> bool:
     return parsed.scheme == "http" and host in {"127.0.0.1", "localhost"}
 
 
-def select_discovery_tool(names: list[str]) -> str:
-    """Pick one exact allowlisted name. Mutating tools are never called."""
-    available = set(names)
-    for candidate in DISCOVERY_TOOL_ALLOWLIST:
-        if _mutating_token(candidate):
-            continue
-        if candidate in available:
-            return candidate
-    raise CampaignError("whop discovery tool is not allowlisted", code="unsupported_tool")
+def select_discovery_tool(names: list[str], mappings: list[dict[str, object]] | None = None) -> str:
+    """Compatibility wrapper. Production callers use select_mapped_tool and the tool map."""
+    from clipforge.campaign.whop_tools import select_mapped_tool
+
+    tools = [{"name": name} for name in names]
+    rows = mappings if mappings is not None else []
+    return select_mapped_tool(tools, rows, allow_fixture=True)
 
 
 def reject_untrusted_document(payload: dict[str, object]) -> None:
@@ -173,8 +183,10 @@ class WhopMcpReader:
         self.opener = opener
         self.server_name: str | None = None
         self.server_version: str | None = None
+        self.protocol_version: str | None = None
         self.session_id: str | None = None
         self._next_id = 1
+        self._retried_session = False
 
     def initialize(self) -> None:
         self._require_url()
@@ -194,23 +206,49 @@ class WhopMcpReader:
                 self.server_name = name
             if isinstance(version, str) and _label(version):
                 self.server_version = version
+        negotiated = result.get("protocolVersion")
+        if isinstance(negotiated, str) and _label(negotiated):
+            self.protocol_version = negotiated
+        else:
+            self.protocol_version = _PROTOCOL
         self._notify("notifications/initialized", {})
 
-    def list_tool_names(self) -> list[str]:
+    def list_tools(self) -> list[dict[str, object]]:
         listed = self._rpc("tools/list", {})
         tools = listed.get("tools") if isinstance(listed, dict) else None
+        if not isinstance(tools, list):
+            return []
+        return [item for item in tools if isinstance(item, dict)]
+
+    def list_tool_names(self) -> list[str]:
         names: list[str] = []
-        if isinstance(tools, list):
-            for item in tools:
-                name = item.get("name") if isinstance(item, dict) else None
-                if isinstance(name, str):
-                    names.append(name)
+        for item in self.list_tools():
+            name = item.get("name")
+            if isinstance(name, str):
+                names.append(name)
         return names
 
     def call_tool(self, name: str, arguments: dict[str, object]) -> dict[str, object]:
-        if name not in DISCOVERY_TOOL_ALLOWLIST or _mutating_token(name):
+        if _mutating_token(name):
             raise CampaignError("whop discovery tool is not allowlisted", code="unsupported_tool")
-        return self._rpc("tools/call", {"name": name, "arguments": arguments})
+        try:
+            return self._rpc("tools/call", {"name": name, "arguments": arguments})
+        except CampaignError as exc:
+            if exc.code != "stale_session" or self._retried_session:
+                raise
+            self._retried_session = True
+            self.close()
+            self.initialize()
+            return self._rpc("tools/call", {"name": name, "arguments": arguments})
+
+    def close(self) -> None:
+        """Drop the in-memory session. The id is not written."""
+        if self.session_id is None:
+            return
+        with contextlib.suppress(CampaignError):
+            self._exchange(self.url, method="DELETE", data=None, allow_empty=True, request_id=None)
+        self.session_id = None
+        self.protocol_version = None
 
     def _require_url(self) -> None:
         if not url_is_allowed(self.url):
@@ -235,17 +273,36 @@ class WhopMcpReader:
         return result
 
     def _post(self, body: dict[str, object], *, allow_empty: bool) -> dict[str, object]:
-        data = json.dumps(body).encode("utf-8")
+        return self._exchange(
+            self.url,
+            method="POST",
+            data=json.dumps(body).encode("utf-8"),
+            allow_empty=allow_empty,
+            request_id=body.get("id"),
+        )
+
+    def _exchange(
+        self,
+        url: str,
+        *,
+        method: str,
+        data: bytes | None,
+        allow_empty: bool,
+        request_id: object,
+    ) -> dict[str, object]:
         headers = public_headers()
+        if self.protocol_version:
+            headers[_PROTOCOL_HEADER] = self.protocol_version
         if self.session_id:
             headers[_SESSION_HEADER] = self.session_id
-        request = Request(self.url, data=data, headers=headers)
+        request = Request(url, data=data, headers=headers, method=method)
         opener = self.opener or cast(Opener, urlopen)
         try:
             with opener(request, timeout=self.timeout_s) as response:
                 content_type = _header(response.headers, "Content-Type")
                 session = _header(response.headers, _SESSION_HEADER)
                 raw = response.read(_MAX_BYTES + 1)
+                status = getattr(response, "status", None)
         except TimeoutError as exc:
             raise CampaignError("whop provider timed out", code="timeout") from exc
         except HTTPError as exc:
@@ -256,12 +313,15 @@ class WhopMcpReader:
             self.session_id = session
         if len(raw) > _MAX_BYTES:
             raise CampaignError("whop provider response was too large", code="oversized_response")
-        if allow_empty and not raw.strip():
+        if allow_empty and (not raw.strip() or status == 202):
             return {}
-        return _decode(raw, content_type or "")
+        return _decode(raw, content_type or "", request_id)
 
     def _raise_http(self, exc: HTTPError) -> NoReturn:
-        if exc.code in {400, 404} and self.session_id:
+        if exc.code == 401:
+            _header(exc.headers, "WWW-Authenticate")
+            raise CampaignError("whop_live: auth_required", code="auth_required") from exc
+        if exc.code == 404 and self.session_id:
             raise CampaignError("whop session expired", code="stale_session") from exc
         raise CampaignError("whop provider is unavailable", code="provider_unavailable") from exc
 
@@ -305,9 +365,9 @@ def _raise_rpc(payload: dict[str, object]) -> None:
     raise CampaignError("whop provider is unavailable", code="provider_unavailable")
 
 
-def _decode(raw: bytes, content_type: str) -> dict[str, object]:
+def _decode(raw: bytes, content_type: str, request_id: object) -> dict[str, object]:
     if "text/event-stream" in content_type.lower():
-        text = _sse_payload(raw)
+        text = _sse_payload(raw, request_id)
     else:
         text = raw.decode("utf-8", errors="replace")
     try:
@@ -319,7 +379,7 @@ def _decode(raw: bytes, content_type: str) -> dict[str, object]:
     return cast(dict[str, object], parsed)
 
 
-def _sse_payload(raw: bytes) -> str:
+def _sse_payload(raw: bytes, request_id: object) -> str:
     messages: list[str] = []
     for line in raw.decode("utf-8", errors="replace").splitlines():
         if not line.startswith("data:"):
@@ -329,7 +389,21 @@ def _sse_payload(raw: bytes) -> str:
             messages.append(payload)
     if not messages:
         raise CampaignError("whop provider response was malformed", code="malformed_response")
-    return messages[-1]
+    if request_id is None:
+        if len(messages) != 1:
+            raise CampaignError("whop provider response was malformed", code="malformed_response")
+        return messages[0]
+    matched: list[str] = []
+    for payload in messages:
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise CampaignError("whop provider response was malformed", code="malformed_response") from exc
+        if isinstance(parsed, dict) and parsed.get("id") == request_id:
+            matched.append(payload)
+    if len(matched) != 1:
+        raise CampaignError("whop provider response was malformed", code="malformed_response")
+    return matched[0]
 
 
 def _header(headers: object, name: str) -> str | None:

@@ -21,9 +21,10 @@ from clipforge.campaign.whop import (
     plan_whop_import,
     verify_whop_import,
 )
-from clipforge.campaign.whop_filter import filter_campaigns, source_block_reason
+from clipforge.campaign.whop_filter import filter_campaigns, request_fingerprint, source_block_reason
 from clipforge.campaign.whop_mcp import (
     configured_connector,
+    configured_connector_url,
     configured_url,
     live_smoke_enabled,
     reject_untrusted_document,
@@ -144,7 +145,9 @@ def whop_capabilities() -> WhopProviderCapability:
         if kind == "public" and url_is_allowed(configured_url()):
             public_provider = "available"
             mode = "live_connector"
-        elif kind == "authenticated" and session_handle() is not None:
+        elif (
+            kind == "authenticated" and session_handle() is not None and configured_connector_url() is not None
+        ):
             authenticated = "available"
             mode = "browser_export"
         else:
@@ -232,6 +235,7 @@ def import_discovered(
         evidence_origin=_as_origin(str(getattr(provider, "evidence_origin", ""))),
         mode=str(getattr(provider, "mode", "live_connector")),
         tool_name=tool_name if isinstance(tool_name, str) else None,
+        operator_id=operator_id,
         request=request,
         force=force,
         promotion_hook=promotion_hook,
@@ -244,9 +248,10 @@ def discover_live(
     project_id: str,
     operator_id: str,
     request: WhopLiveDiscoveryRequest | None = None,
+    connector: str | None = None,
 ) -> WhopDiscoveryAttempt:
     """Run the enabled connector. A blocked or empty result is an error after validation."""
-    provider = build_live_provider()
+    provider = build_live_provider(connector)
     attempt = import_discovered(
         work_root,
         provider,
@@ -436,9 +441,17 @@ def select_whop_campaign(
         raise CampaignError("whop campaign is not imported", code="missing_campaign")
     fresh = filter_campaigns(snapshot, discovery.discovery_request)
     decision = next((item for item in fresh if item.campaign_id == campaign_id), None)
-    if decision is None or not decision.included:
-        code = decision.reason_code if decision is not None else "policy_blocked"
-        raise CampaignError("whop campaign is excluded", code=code)
+    stored = next((item for item in discovery.decisions if item.campaign_id == campaign_id), None)
+    if stored is None or decision is None or decision.included != stored.included:
+        raise CampaignError(_RELOAD, code="stale_selection")
+    if decision.included_source_ids != stored.included_source_ids:
+        raise CampaignError(_RELOAD, code="stale_selection")
+    if decision.filter_fingerprint != discovery.filter_fingerprint:
+        raise CampaignError(_RELOAD, code="stale_selection")
+    if not decision.included:
+        raise CampaignError("whop campaign is excluded", code=decision.reason_code)
+    if discovery.operator_id != operator_id:
+        raise CampaignError("whop discovery belongs to another operator", code="operator_mismatch")
     chosen = sorted(source_ids)
     hashes: list[str] = []
     for source_id in chosen:
@@ -446,14 +459,15 @@ def select_whop_campaign(
         if source is None:
             raise CampaignError("whop source is missing", code="missing_source")
         blocked = source_block_reason(source, discovery.discovery_request)
+        declared = source.declared_content_sha256 or source.content_sha256
         if blocked is not None or source_id not in decision.included_source_ids:
             raise CampaignError("whop source is excluded", code=blocked or "policy_blocked")
-        if source.content_sha256 is None:
+        if declared is None:
             raise CampaignError("whop source has no content hash", code="missing_content_hash")
         supplied = None if expected_source_hashes is None else expected_source_hashes.get(source_id)
-        if supplied is not None and supplied != source.content_sha256:
+        if supplied is not None and supplied != declared:
             raise CampaignError(_RELOAD, code="source_changed")
-        hashes.append(source.content_sha256)
+        hashes.append(declared)
     now = datetime.now(UTC)
     body = {
         "campaign_id": campaign_id,
@@ -511,6 +525,8 @@ def board_discoveries(work_root: Path) -> dict[str, object]:
             "status": item.status,
             "provider_id": item.provider_id,
             "provider_version": item.provider_version,
+            "evidence_origin": item.evidence_origin,
+            "live_claim": item.live_claim,
             "catalogue_fingerprint": item.catalogue_fingerprint,
             "policy_fingerprint": item.policy_fingerprint,
         }
@@ -577,6 +593,7 @@ def _store_discovery(
     evidence_origin: EvidenceOrigin,
     mode: str,
     tool_name: str | None,
+    operator_id: str,
     request: WhopLiveDiscoveryRequest | None,
     force: bool,
     promotion_hook: Callable[[str], None] | None,
@@ -594,20 +611,30 @@ def _store_discovery(
     decisions = filter_campaigns(snapshot, active_request, now=now)
     response = _canonical(snapshot)
     response_sha = hashlib.sha256(response).hexdigest()
-    request_sha = _request_sha(active_request)
+    request_sha = request_fingerprint(active_request)
     catalogue = response_sha
     policy = _policy_fingerprint([item.campaign_id for item in snapshot.campaigns])
+    discovery_mode = _as_mode(mode)
+    declarations = _declaration_sha(snapshot)
+    if active_request.require_acquisition_reference:
+        acquisition_policy = "require_reference"
+    else:
+        acquisition_policy = "optional_reference"
     identity = _identity(
         project_id=project_id,
+        operator_id=operator_id,
         provider_id=provider_id,
         provider_version=provider_version,
+        provider_mode=discovery_mode,
+        tool_name=tool_name or "",
         request_sha256=request_sha,
         policy_fingerprint=policy,
         catalogue_fingerprint=catalogue,
         response_sha256=response_sha,
+        source_declarations=declarations,
+        acquisition_policy=acquisition_policy,
     )
     live = live_status
-    discovery_mode = _as_mode(mode)
     try:
         catalogue_record = WhopCampaignCatalogue(
             catalogue_id="cat-" + catalogue[:20],
@@ -643,6 +670,7 @@ def _store_discovery(
     attempt = WhopDiscoveryAttempt(
         discovery_id=discovery_id,
         project_id=project_id,
+        operator_id=operator_id,
         mode=discovery_mode,
         provider_id=provider_id,
         provider_version=provider_version,
@@ -691,6 +719,23 @@ def _campaign(item: object) -> dict[str, object]:
         "category",
         "payout_text",
         "language",
+        "campaign_type",
+        "business_id",
+        "platforms",
+        "reward_rate_text",
+        "currency",
+        "budget_text",
+        "minimum_payout_text",
+        "maximum_payout_text",
+        "flat_fee_text",
+        "footage_references",
+        "requirements_text",
+        "prohibited_text",
+        "required_messaging",
+        "required_duration_text",
+        "required_format",
+        "policy_evidence",
+        "provider_updated_at",
     }
     if set(item) - allowed:
         raise CampaignError("whop provider response was malformed", code="invalid_document")
@@ -707,6 +752,23 @@ def _campaign(item: object) -> dict[str, object]:
         "category": item.get("category"),
         "payout_text": item.get("payout_text"),
         "language": item.get("language"),
+        "campaign_type": item.get("campaign_type"),
+        "business_id": item.get("business_id"),
+        "platforms": item.get("platforms") or [],
+        "reward_rate_text": item.get("reward_rate_text"),
+        "currency": item.get("currency"),
+        "budget_text": item.get("budget_text"),
+        "minimum_payout_text": item.get("minimum_payout_text"),
+        "maximum_payout_text": item.get("maximum_payout_text"),
+        "flat_fee_text": item.get("flat_fee_text"),
+        "footage_references": item.get("footage_references") or [],
+        "requirements_text": item.get("requirements_text"),
+        "prohibited_text": item.get("prohibited_text"),
+        "required_messaging": item.get("required_messaging"),
+        "required_duration_text": item.get("required_duration_text"),
+        "required_format": item.get("required_format"),
+        "policy_evidence": item.get("policy_evidence"),
+        "provider_updated_at": item.get("provider_updated_at"),
         "sources": [_source(source) for source in sources],
     }
 
@@ -727,6 +789,14 @@ def _source(item: object) -> dict[str, object]:
         "duration_us",
         "media_format",
         "availability",
+        "media_download_url",
+        "declared_content_sha256",
+        "acquired_file_sha256",
+        "acquired_file_size",
+        "acquired_ffprobe_fingerprint",
+        "acquisition_reference",
+        "acquisition_status",
+        "direct_download",
     }
     if set(item) - allowed:
         raise CampaignError("whop provider response was malformed", code="invalid_document")
@@ -743,6 +813,14 @@ def _source(item: object) -> dict[str, object]:
         "duration_us": item.get("duration_us"),
         "media_format": item.get("media_format"),
         "availability": item.get("availability") or "unknown",
+        "media_download_url": item.get("media_download_url"),
+        "declared_content_sha256": item.get("declared_content_sha256"),
+        "acquired_file_sha256": item.get("acquired_file_sha256"),
+        "acquired_file_size": item.get("acquired_file_size"),
+        "acquired_ffprobe_fingerprint": item.get("acquired_ffprobe_fingerprint"),
+        "acquisition_reference": item.get("acquisition_reference"),
+        "acquisition_status": item.get("acquisition_status") or "unknown",
+        "direct_download": item.get("direct_download") or "unknown",
     }
 
 
@@ -763,10 +841,24 @@ def _missing_fields(snapshot: WhopCampaignSnapshot) -> list[str]:
 
 def _request_sha(request: WhopLiveDiscoveryRequest) -> str:
     """Hash the filter. The request id and timestamp are not filter facts."""
-    payload = request.model_dump(mode="json")
-    payload.pop("created_at", None)
-    payload.pop("request_id", None)
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return request_fingerprint(request)
+
+
+def _declaration_sha(snapshot: WhopCampaignSnapshot) -> str:
+    """Hash declared source facts. A page URL is not a file hash."""
+    rows = [
+        {
+            "campaign_id": campaign.campaign_id,
+            "source_id": source.source_id,
+            "declared_content_sha256": source.declared_content_sha256,
+            "acquisition_reference": source.acquisition_reference,
+            "acquisition_status": source.acquisition_status,
+            "direct_download": source.direct_download,
+        }
+        for campaign in snapshot.campaigns
+        for source in campaign.sources
+    ]
+    raw = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -836,7 +928,6 @@ def _promote_pair(
     import_dir = root.joinpath("campaigns", "whop", imported.import_id)
     disc_dir = root.joinpath(*_ROOT, attempt.discovery_id)
     partials: list[Path] = []
-    new_finals: list[Path] = []
     new_dirs: list[Path] = []
 
     def fire(name: str) -> None:
@@ -845,6 +936,7 @@ def _promote_pair(
 
     def stage(directory: Path, name: str, data: bytes, hook_name: str) -> Path:
         fire(hook_name)
+        _reject_symlink(directory)
         if not directory.exists():
             mkdir_contained(root, directory)
             new_dirs.append(directory)
@@ -853,10 +945,14 @@ def _promote_pair(
         partials.append(partial)
         return partial
 
+    restores: list[tuple[Path, bytes | None]] = []
+
     def promote(partial: Path, final: Path, hook_name: str) -> None:
         fire(hook_name)
+        _reject_symlink(final)
+        previous = final.read_bytes() if final.is_file() and not final.is_symlink() else None
         os.replace(partial, final)
-        new_finals.append(final)
+        restores.append((final, previous))
 
     try:
         fire("staging_write")
@@ -885,22 +981,45 @@ def _promote_pair(
         promote(response_partial, disc_dir / "response.json", "promote_discovery_response")
         promote(request_partial, disc_dir / "request.json", "promote_discovery_request")
         promote(manifest_partial, disc_dir / "manifest.json", "promote_discovery_manifest")
+        fire("promoted")
     except Exception as exc:
-        _rollback(partials, new_finals, new_dirs)
+        _rollback(partials, restores, new_dirs)
         if isinstance(exc, CampaignError):
             raise
         raise CampaignError("whop discovery promotion failed", code="promotion_failed") from exc
 
 
-def _rollback(partials: list[Path], new_finals: list[Path], new_dirs: list[Path]) -> None:
-    for path in [*partials, *new_finals]:
+def _rollback(
+    partials: list[Path],
+    restores: list[tuple[Path, bytes | None]],
+    new_dirs: list[Path],
+) -> None:
+    for path in partials:
         if path.is_file() and not path.is_symlink():
             path.unlink()
+    for path, previous in reversed(restores):
+        if path.is_symlink():
+            continue
+        if previous is None:
+            if path.is_file():
+                path.unlink()
+        else:
+            path.write_bytes(previous)
     for directory in reversed(new_dirs):
         if directory.is_symlink() or not directory.is_dir():
             continue
         if not any(directory.iterdir()):
             directory.rmdir()
+
+
+def _reject_symlink(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise CampaignError("whop destination is a symlink", code="symlink_rejected")
+        if current.parent == current:
+            return
+        current = current.parent
 
 
 def _load_discovery(root: Path, discovery_id: str) -> WhopDiscoveryAttempt:

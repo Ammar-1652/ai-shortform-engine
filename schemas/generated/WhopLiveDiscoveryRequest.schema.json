@@ -92,6 +92,11 @@
       "default": null,
       "title": "Min Duration Us"
     },
+    "permit_unknown_availability": {
+      "default": false,
+      "title": "Permit Unknown Availability",
+      "type": "boolean"
+    },
     "prohibited_categories": {
       "items": {
         "type": "string"
@@ -130,6 +135,11 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Request Id",
       "type": "string"
+    },
+    "require_acquisition_reference": {
+      "default": false,
+      "title": "Require Acquisition Reference",
+      "type": "boolean"
     },
     "require_policy": {
       "anyOf": [

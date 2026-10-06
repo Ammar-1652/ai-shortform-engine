@@ -70,6 +70,7 @@ from clipforge.campaign.service import (
 from clipforge.campaign.whop import (
     import_whop_snapshot,
     list_whop_imports,
+    parse_whop_bytes,
     show_whop_campaign,
     verify_whop_import,
     whop_doctor,
@@ -285,6 +286,13 @@ def whop_discover_command(
     request_path: Annotated[Path | None, typer.Option("--request")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     live: Annotated[bool, typer.Option("--live")] = False,
+    connector: Annotated[
+        str | None,
+        typer.Option(
+            "--connector",
+            help="public or authenticated. The authenticated path uses a loopback connector.",
+        ),
+    ] = None,
 ) -> None:
     """Report discovery. --live reads an enabled connector and stores no credentials."""
     if not live:
@@ -308,6 +316,7 @@ def whop_discover_command(
             project_id=project_id,
             operator_id=operator_id,
             request=request,
+            connector=connector,
         )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
@@ -350,11 +359,13 @@ def whop_import_command(
     force: Annotated[bool, typer.Option("--force")] = False,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
-    """Import a local JSON or JSONL snapshot. This does not contact Whop."""
+    """Import a sanitized snapshot. Credentials are not stored and live transport is not claimed."""
     try:
+        raw = path.read_bytes()
+        snapshot = parse_whop_bytes(raw)
         attempt = import_whop_snapshot(
             resolve_work_dir(work_dir),
-            path.read_bytes(),
+            raw,
             project_id=project_id,
             force=force,
         )
@@ -362,6 +373,9 @@ def whop_import_command(
         _fail(exc)
     typer.echo(attempt.import_id)
     typer.echo(f"whop_live: {attempt.whop_live}")
+    typer.echo(f"intake_label: {snapshot.intake_label}")
+    typer.echo(f"credentials_stored: {snapshot.credentials_stored}")
+    typer.echo(f"live_transport: {snapshot.live_transport}")
     typer.echo(f"status: {attempt.status}")
 
 

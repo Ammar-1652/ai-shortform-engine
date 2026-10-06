@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "official_names_verified": false,
+  "notes": "No official Whop tool name is recorded here. A mapping is used only after tools/list returns that exact name. Fixture names belong in tests, not in this file.",
+  "mappings": []
+}

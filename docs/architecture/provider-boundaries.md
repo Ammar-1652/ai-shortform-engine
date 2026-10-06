@@ -6,7 +6,7 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. No migra
 
 ## Whop
 
-Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor does not open a socket. With no live switch it reports `whop_live: not_configured` and `live_smoke: not_executed`. A configured public or authenticated connector is reported as available and still not executed. A live switch without a connector is `provider_unavailable`. `discover --live` is the command that may connect. See [whop-live-discovery.md](whop-live-discovery.md) and [ADR 0062](../adr/0062-whop-live-operator-discovery.md).
+Credentials, cookies, and API keys are not fields. A snapshot is local JSON or JSONL. Doctor does not open a socket. With no live switch it reports `whop_live: not_configured` and `live_smoke: not_executed`. A public connector, or an authenticated loopback connector with a one-time handle, is reported as available and still not executed. A live switch without a connector is `provider_unavailable`. `discover --live` is the command that may connect. It calls either the public MCP adapter or a `127.0.0.1` connector from a clean process. An in-memory registry is not account access. A sanitized operator snapshot imports as `authenticated_operator_snapshot` with `credentials_stored: not_stored` and `live_transport: not_claimed`. Official tool names stay in `docs/operations/assets/whop/tool-map.json`, which is empty until a real `tools/list` verifies them. Declared content hashes are not acquired file hashes. See [whop-live-discovery.md](whop-live-discovery.md) and [ADR 0062](../adr/0062-whop-live-operator-discovery.md).
 
 Accepted records:
 
@@ -67,7 +67,8 @@ Pages show provenance, import status, the snapshot fingerprint, policy, deferred
 clipforge campaign operator whop doctor
 clipforge campaign operator whop capabilities
 clipforge campaign operator whop discover
-clipforge campaign operator whop import --file SNAPSHOT.json --project PROJECT_ID
+clipforge campaign operator whop discover --live --connector authenticated --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
+clipforge campaign operator whop import --file SANITIZED_SNAPSHOT.json --project PROJECT_ID --work-dir WORK_ROOT
 clipforge campaign operator whop list
 clipforge campaign operator whop show CAMPAIGN_ID
 clipforge campaign operator whop verify IMPORT_ID
@@ -85,7 +86,7 @@ clipforge assets envato list
 ## Limits
 
 - No TikTok, Instagram, YouTube, or Whop publishing.
-- No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or discover.
+- No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or `discover` without `--live`. A loopback fixture is not a live Whop pass.
 - No automatic Envato download.
 - English WhisperX alignment is verified only when a real alignment artifact exists.
 - Arabic and Japanese alignment stay `alignment_not_claimed`.
