@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -43,8 +44,6 @@ def test_prove_session_flag_is_rejected(tmp_path: Path) -> None:
             "clipforge.campaign.whop_bridge",
             "--catalogue",
             str(catalogue),
-            "--nonce",
-            "nonce-1",
             "--prove-session",
         ],
         check=False,
@@ -53,7 +52,7 @@ def test_prove_session_flag_is_rejected(tmp_path: Path) -> None:
         timeout=10,
     )
     assert completed.returncode != 0
-    assert "prove-session" in completed.stderr or "unrecognized" in completed.stderr
+    assert "--prove-session" not in completed.stderr
 
 
 def test_local_catalogue_cannot_claim_authenticated_discovery(tmp_path: Path) -> None:
@@ -282,6 +281,9 @@ def _start_bridge(
 ) -> tuple[subprocess.Popen[str], int]:
     catalogue = tmp_path / "catalogue.json"
     catalogue.write_text(json.dumps(_public()), encoding="utf-8")
+    reader, writer = os.pipe()
+    os.write(writer, nonce.encode("utf-8"))
+    os.close(writer)
     process = subprocess.Popen(
         [
             sys.executable,
@@ -293,15 +295,19 @@ def _start_bridge(
             "0",
             "--catalogue",
             str(catalogue),
-            "--nonce",
-            nonce,
+            "--work-dir",
+            str(tmp_path),
+            "--nonce-fd",
+            str(reader),
             "--expires-in",
             expires_in,
         ],
+        pass_fds=(reader,),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
+    os.close(reader)
     assert process.stdout is not None
     line = process.stdout.readline().strip()
     assert line.startswith("port=")
@@ -325,6 +331,7 @@ def _raw_post(
     connection.putrequest(method, path, skip_host=True)
     connection.putheader("Host", host or f"127.0.0.1:{port}")
     connection.putheader("Origin", origin or f"http://127.0.0.1:{port}")
+    connection.putheader("Content-Type", "application/json")
     connection.putheader("X-Clipforge-Nonce", nonce)
     send_body = method == "POST" and not chunked and include_length and (length is None or length == len(body))
     if chunked:

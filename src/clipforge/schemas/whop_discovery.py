@@ -226,7 +226,7 @@ class WhopSelectionEvidence(Versioned):
     policy_fingerprint: str = Field(pattern=_SHA)
     filter_fingerprint: str = Field(pattern=_SHA)
     source_ids: list[EntityId] = Field(min_length=1)
-    source_hashes: list[str]
+    source_hashes: list[str | None]
     language: str = Field(min_length=2, max_length=16)
     narration_request: Literal["not_requested", "requested"]
     operator_id: EntityId
@@ -244,8 +244,10 @@ class WhopSelectionEvidence(Versioned):
 
     @field_validator("source_hashes")
     @classmethod
-    def hashes_are_sha256(cls, values: list[str]) -> list[str]:
+    def hashes_are_sha256(cls, values: list[str | None]) -> list[str | None]:
         for value in values:
+            if value is None:
+                continue
             if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
                 raise ValueError("whop selection hash is not sha256")
         return values

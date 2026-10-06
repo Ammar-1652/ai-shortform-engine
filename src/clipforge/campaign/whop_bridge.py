@@ -7,6 +7,7 @@ and it does not accept a flag that would label the file as authenticated.
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
@@ -103,14 +104,17 @@ def serve_catalogue(
     nonce: str,
     *,
     expires_at: float,
+    work_root: Path | None = None,
 ) -> None:
     """Serve one sanitized catalogue on 127.0.0.1. The nonce is not logged."""
     if bind != "127.0.0.1":
         raise SystemExit(2)
-    if catalogue_path.is_symlink():
+    if not math.isfinite(expires_at) or expires_at > time.time() + 86_400:
         raise SystemExit(2)
     if not _nonce_ok(nonce):
         raise SystemExit(2)
+    root = work_root or catalogue_path.parent
+    _confine(root, catalogue_path)
     try:
         catalogue = json.loads(catalogue_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -147,9 +151,20 @@ def serve_catalogue(
             if _chunked(self.headers.get("Transfer-Encoding")):
                 self._send(411, b"{}")
                 return
-            length = _content_length(self.headers.get("Content-Length"))
-            if length is None:
+            content_type = self.headers.get("Content-Type", "")
+            if content_type.split(";", 1)[0].strip().lower() != "application/json":
+                self._send(415, b"{}")
+                return
+            lengths = self.headers.get_all("Content-Length") or []
+            if not lengths:
                 self._send(411, b"{}")
+                return
+            if len(lengths) != 1:
+                self._send(400, b"{}")
+                return
+            length = _content_length(lengths[0])
+            if length is None:
+                self._send(400, b"{}")
                 return
             if length > _MAX_BODY:
                 self._send(413, b"{}")
@@ -169,6 +184,14 @@ def serve_catalogue(
                 state["inflight"] = True
             try:
                 body = self.rfile.read(length)
+                if len(body) != length:
+                    self._send(400, b"{}")
+                    return
+                try:
+                    json.loads(body)
+                except json.JSONDecodeError:
+                    self._send(400, b"{}")
+                    return
                 lowered = body.decode("utf-8", errors="replace").lower()
                 if any(marker in lowered for marker in _SECRET_MARKERS):
                     self._send(422, b"{}")
@@ -307,6 +330,25 @@ def _chunked(value: str | None) -> bool:
     return "chunked" in value.lower()
 
 
+def _confine(root: Path, candidate: Path) -> None:
+    current = candidate
+    while True:
+        if current.is_symlink():
+            raise SystemExit(2)
+        if current.parent == current:
+            break
+        current = current.parent
+    if root.is_symlink():
+        raise SystemExit(2)
+    try:
+        contained = candidate.resolve()
+        base = root.resolve()
+    except OSError as exc:
+        raise SystemExit(2) from exc
+    if contained != base and base not in contained.parents:
+        raise SystemExit(2)
+
+
 def _content_length(value: str | None) -> int | None:
     if value is None or not value.strip():
         return None
@@ -342,15 +384,19 @@ def main() -> None:
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--catalogue", required=True)
-    parser.add_argument("--nonce", required=True)
+    parser.add_argument("--work-dir", required=True)
+    parser.add_argument("--nonce-fd", type=int, required=True)
     parser.add_argument("--expires-in", type=float, default=30)
     args = parser.parse_args()
+    nonce = os.read(args.nonce_fd, 200).decode("utf-8").strip()
+    os.close(args.nonce_fd)
     serve_catalogue(
         args.bind,
         args.port,
         Path(args.catalogue),
-        args.nonce,
+        nonce,
         expires_at=time.time() + args.expires_in,
+        work_root=Path(args.work_dir),
     )
 
 

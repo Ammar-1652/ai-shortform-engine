@@ -183,8 +183,6 @@ def _one_source(source: WhopCampaignSourceRecord, request: WhopLiveDiscoveryRequ
         acquired is not None and declared is not None and acquired != declared
     ):
         return "hash_mismatch"
-    if declared is None:
-        return "missing_content_hash"
     return None
 
 

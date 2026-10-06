@@ -75,6 +75,11 @@ from clipforge.campaign.whop import (
     verify_whop_import,
     whop_doctor,
 )
+from clipforge.campaign.whop_auth import doctor_text as whop_auth_doctor
+from clipforge.campaign.whop_auth import login as whop_auth_login
+from clipforge.campaign.whop_auth import logout as whop_auth_logout
+from clipforge.campaign.whop_auth import refresh as whop_auth_refresh
+from clipforge.campaign.whop_auth import status_text as whop_auth_status
 from clipforge.campaign.whop_live import discover_live, discover_whop, select_whop_campaign, whop_capabilities
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
@@ -91,6 +96,11 @@ whop_app = typer.Typer(
 campaign_app.add_typer(operator_app, name="operator")
 operator_app.add_typer(acquire_app, name="acquire")
 operator_app.add_typer(whop_app, name="whop")
+auth_app = typer.Typer(
+    no_args_is_help=True,
+    help="Operator Whop sign-in. Clipforge does not store credentials.",
+)
+whop_app.add_typer(auth_app, name="auth")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -264,6 +274,46 @@ def campaign_verify(
             )
         )
     except (ClipforgeError, OSError) as exc:
+        _fail(exc)
+
+
+@auth_app.command("doctor")
+def whop_auth_doctor_command() -> None:
+    """Report the Whop sign-in helper. This does not open a browser."""
+    typer.echo(whop_auth_doctor())
+
+
+@auth_app.command("status")
+def whop_auth_status_command() -> None:
+    """Read saved sign-in metadata. This does not open a browser."""
+    typer.echo(whop_auth_status())
+
+
+@auth_app.command("login")
+def whop_auth_login_command() -> None:
+    """Prepare the dedicated profile. Password entry stays with the operator."""
+    try:
+        typer.echo(whop_auth_login())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@auth_app.command("refresh")
+def whop_auth_refresh_command() -> None:
+    """Check the connector again. The dedicated profile stays in place."""
+    try:
+        typer.echo(whop_auth_refresh())
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@auth_app.command("logout")
+def whop_auth_logout_command() -> None:
+    """Remove the dedicated profile after confirmation."""
+    confirmed = typer.confirm("Remove the dedicated Whop profile?")
+    try:
+        typer.echo(whop_auth_logout(confirmed=confirmed))
+    except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
 
 

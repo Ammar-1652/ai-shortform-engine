@@ -17,9 +17,11 @@ from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop import (
     _canonical,
     _policy_fingerprint,
+    audit_whop_import,
     parse_whop_bytes,
     plan_whop_import,
     verify_whop_import,
+    whop_lock,
 )
 from clipforge.campaign.whop_filter import filter_campaigns, request_fingerprint, source_block_reason
 from clipforge.campaign.whop_mcp import (
@@ -33,7 +35,6 @@ from clipforge.campaign.whop_mcp import (
 )
 from clipforge.campaign.whop_provider import build_live_provider
 from clipforge.campaign.whop_tools import tool_map_sha256
-from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import mkdir_contained
 from clipforge.schemas.whop import WhopCampaignSnapshot, WhopImportAttempt
 from clipforge.schemas.whop_discovery import (
@@ -41,6 +42,7 @@ from clipforge.schemas.whop_discovery import (
     LiveStatus,
     WhopCampaignCatalogue,
     WhopDiscoveryAttempt,
+    WhopFilterDecision,
     WhopLiveDiscoveryRequest,
     WhopProviderCapability,
     WhopSelectionEvidence,
@@ -353,19 +355,22 @@ def resume_discovery(work_root: Path, discovery_id: str) -> WhopDiscoveryAttempt
             "created_at": datetime.now(UTC),
         }
     )
-    import_dir = root.joinpath("campaigns", "whop", attempt.import_id or "")
-    imported = WhopImportAttempt.model_validate_json((import_dir / "manifest.json").read_text(encoding="utf-8"))
+    if attempt.import_id is None:
+        raise CampaignError("whop import is missing", code="missing_import")
+    imported = audit_whop_import(root, attempt.import_id)
+    import_dir = root.joinpath("campaigns", "whop", attempt.import_id)
     before = (directory / "manifest.json").read_bytes()
-    _promote_pair(
-        root,
-        imported,
-        (import_dir / "snapshot.json").read_bytes(),
-        False,
-        resumed,
-        response,
-        request_bytes,
-        None,
-    )
+    with whop_lock(root):
+        _promote_pair(
+            root,
+            imported,
+            (import_dir / "snapshot.json").read_bytes(),
+            False,
+            resumed,
+            response,
+            request_bytes,
+            None,
+        )
     if (directory / "manifest.json").read_bytes() != before:
         raise CampaignError("whop discovery changed", code="stale_discovery")
     return resumed
@@ -380,7 +385,8 @@ def cancel_discovery(work_root: Path, discovery_id: str) -> WhopDiscoveryAttempt
             partial.unlink()
     cancelled = attempt.model_copy(update={"status": "cancelled", "reason_code": "cancelled"})
     path = root.joinpath(*_ROOT, discovery_id, "manifest.json")
-    path.write_text(cancelled.model_dump_json() + "\n", encoding="utf-8")
+    with whop_lock(root):
+        _replace_bytes(path, (cancelled.model_dump_json() + "\n").encode("utf-8"))
     return cancelled
 
 
@@ -428,9 +434,7 @@ def select_whop_campaign(
     fresh = filter_campaigns(snapshot, discovery.discovery_request)
     decision = next((item for item in fresh if item.campaign_id == campaign_id), None)
     stored = next((item for item in discovery.decisions if item.campaign_id == campaign_id), None)
-    if stored is None or decision is None or decision.included != stored.included:
-        raise CampaignError(_RELOAD, code="stale_selection")
-    if decision.included_source_ids != stored.included_source_ids:
+    if stored is None or decision is None or decision.model_dump(mode="json") != stored.model_dump(mode="json"):
         raise CampaignError(_RELOAD, code="stale_selection")
     if decision.filter_fingerprint != discovery.filter_fingerprint:
         raise CampaignError(_RELOAD, code="stale_selection")
@@ -438,8 +442,12 @@ def select_whop_campaign(
         raise CampaignError("whop campaign is excluded", code=decision.reason_code)
     if discovery.operator_id != operator_id:
         raise CampaignError("whop discovery belongs to another operator", code="operator_mismatch")
+    if discovery.status != "ready":
+        raise CampaignError("whop discovery is blocked", code=discovery.reason_code)
+    if attempt.status != "ready":
+        raise CampaignError("whop import is blocked", code=attempt.reason_code)
     chosen = sorted(source_ids)
-    hashes: list[str] = []
+    hashes: list[str | None] = []
     for source_id in chosen:
         source = next((item for item in campaign.sources if item.source_id == source_id), None)
         if source is None:
@@ -448,10 +456,8 @@ def select_whop_campaign(
         declared = source.declared_content_sha256 or source.content_sha256
         if blocked is not None or source_id not in decision.included_source_ids:
             raise CampaignError("whop source is excluded", code=blocked or "policy_blocked")
-        if declared is None:
-            raise CampaignError("whop source has no content hash", code="missing_content_hash")
         supplied = None if expected_source_hashes is None else expected_source_hashes.get(source_id)
-        if supplied is not None and supplied != declared:
+        if declared is not None and supplied is not None and supplied != declared:
             raise CampaignError(_RELOAD, code="source_changed")
         hashes.append(declared)
     now = datetime.now(UTC)
@@ -688,16 +694,17 @@ def _store_discovery(
         created_at=now,
     )
     request_bytes = (active_request.model_dump_json() + "\n").encode("utf-8")
-    _promote_pair(
-        root,
-        attempt_import,
-        snapshot_bytes,
-        write_import,
-        attempt,
-        response,
-        request_bytes,
-        promotion_hook,
-    )
+    with whop_lock(root):
+        _promote_pair(
+            root,
+            attempt_import,
+            snapshot_bytes,
+            write_import,
+            attempt,
+            response,
+            request_bytes,
+            promotion_hook,
+        )
     return attempt
 
 
@@ -950,35 +957,50 @@ def _revalidate(root: Path, attempt: WhopDiscoveryAttempt, *, allow_cancelled: b
     if authenticated and attempt.evidence_origin != "authenticated_connector":
         raise CampaignError("whop provider status was forged", code="forged_status")
     fresh = filter_campaigns(snapshot, stored_request) if snapshot.campaigns else []
-    stored_shape = [(item.campaign_id, item.included, item.included_source_ids) for item in attempt.decisions]
-    fresh_shape = [(item.campaign_id, item.included, item.included_source_ids) for item in fresh]
-    if stored_shape != fresh_shape:
+    if [item.model_dump(mode="json") for item in attempt.decisions] != [
+        item.model_dump(mode="json") for item in fresh
+    ]:
         raise CampaignError("whop discovery changed", code="stale_discovery")
+    if list(attempt.campaign_ids) != [item.campaign_id for item in snapshot.campaigns]:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if attempt.status != "cancelled":
+        expected_status, expected_reason = _discovery_outcome(snapshot, fresh)
+        if attempt.status != expected_status or attempt.reason_code != expected_reason:
+            raise CampaignError("whop discovery changed", code="stale_discovery")
     if attempt.import_id is None:
         raise CampaignError("whop import is missing", code="missing_import")
-    import_dir = root.joinpath("campaigns", "whop", attempt.import_id)
-    import_manifest = import_dir / "manifest.json"
-    import_snapshot = import_dir / "snapshot.json"
-    if import_manifest.is_symlink() or import_snapshot.is_symlink():
-        raise CampaignError("whop discovery changed", code="stale_discovery")
-    if not import_manifest.is_file() or not import_snapshot.is_file():
-        raise CampaignError("whop import is missing", code="missing_import")
-    try:
-        imported = WhopImportAttempt.model_validate_json(import_manifest.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError) as exc:
-        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
+    imported = audit_whop_import(root, attempt.import_id)
     if imported.import_id != attempt.import_id or imported.project_id != attempt.project_id:
         raise CampaignError("whop discovery changed", code="stale_discovery")
-    if sha256_file(import_snapshot) != imported.snapshot_sha256:
-        raise CampaignError("whop discovery changed", code="stale_discovery")
-    if sha256_file(import_snapshot) != attempt.response_sha256:
+    if imported.snapshot_sha256 != attempt.response_sha256:
         raise CampaignError("whop discovery changed", code="stale_discovery")
     if imported.policy_fingerprint != attempt.policy_fingerprint:
         raise CampaignError("whop policy changed", code="stale_policy")
     if imported.provider_id != attempt.provider_id or imported.provider_version != attempt.provider_version:
         raise CampaignError("whop discovery changed", code="stale_discovery")
+    if attempt.status == "ready" and imported.status != "ready":
+        raise CampaignError("whop import is blocked", code="stale_import")
     if not allow_cancelled and attempt.status == "cancelled":
         raise CampaignError("whop discovery was cancelled", code="cancelled")
+
+
+def _discovery_outcome(
+    snapshot: WhopCampaignSnapshot,
+    decisions: list[WhopFilterDecision],
+) -> tuple[str, str]:
+    if not snapshot.campaigns:
+        return "blocked", "no_matching_campaigns"
+    if any(item.included for item in decisions):
+        return "ready", "ready"
+    return "blocked", "policy_blocked"
+
+
+def _replace_bytes(path: Path, data: bytes) -> None:
+    if path.is_symlink():
+        raise CampaignError("whop destination is a symlink", code="symlink_rejected")
+    partial = path.with_name(path.name + ".partial")
+    partial.write_bytes(data)
+    os.replace(partial, path)
 
 
 def _acquisition_policy(request: WhopLiveDiscoveryRequest) -> str:

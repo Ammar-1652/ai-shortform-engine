@@ -103,7 +103,14 @@
     },
     "source_hashes": {
       "items": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "title": "Source Hashes",
       "type": "array"

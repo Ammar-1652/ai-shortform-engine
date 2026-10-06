@@ -17,7 +17,7 @@ from clipforge.campaign.whop_mcp import (
     live_smoke_enabled,
     official_endpoint,
 )
-from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool
+from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool, validate_tool_output
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 
 
@@ -108,9 +108,7 @@ class PublicWhopMcpProvider:
         if reader.server_version:
             self.provider_version = reader.server_version
         document = campaign_document(result)
-        campaigns = document.get("campaigns")
-        if campaigns is None or not isinstance(campaigns, list):
-            raise CampaignError("whop provider response was malformed", code="invalid_document")
+        validate_tool_output(document)
         return document
 
 

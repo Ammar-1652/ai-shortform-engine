@@ -49,6 +49,12 @@ _DOCUMENT_FIELDS = {
     "mappings",
 }
 _SHA = set("0123456789abcdef")
+CAMPAIGN_OUTPUT_SCHEMA: dict[str, Any] = {
+    "additionalProperties": False,
+    "properties": {"campaigns": {"items": {"type": "object"}, "type": "array"}},
+    "required": ["campaigns"],
+    "type": "object",
+}
 
 
 def tool_map_sha256() -> str:
@@ -70,12 +76,24 @@ def load_tool_map() -> list[dict[str, Any]]:
         raise CampaignError("whop tool map could not be read", code="invalid_document")
     if verified is True and not rows:
         raise CampaignError("whop tool map could not be read", code="invalid_document")
+    if verified is False and rows:
+        raise CampaignError("whop tool map could not be read", code="invalid_document")
     parsed: list[dict[str, Any]] = []
     for item in rows:
         if not isinstance(item, dict):
             raise CampaignError("whop tool map could not be read", code="invalid_document")
         parsed.append(_validate_mapping(item))
     return parsed
+
+
+def validate_tool_output(document: dict[str, Any]) -> None:
+    """Require the catalogue shape. The output hash is checked before the call."""
+    campaigns = document.get("campaigns")
+    if not isinstance(campaigns, list):
+        raise CampaignError("whop provider response was malformed", code="malformed_response")
+    for item in campaigns:
+        if not isinstance(item, dict) or not isinstance(item.get("campaign_id"), str):
+            raise CampaignError("whop provider response was malformed", code="malformed_response")
 
 
 def schema_sha256(schema: dict[str, Any]) -> str:
@@ -149,6 +167,8 @@ def select_mapped_tool(
         if not isinstance(observed, dict):
             raise CampaignError("schema_mismatch", code="schema_mismatch")
         if schema_sha256(observed) != mapping["input_schema_sha256"]:
+            raise CampaignError("schema_mismatch", code="schema_mismatch")
+        if schema_sha256(CAMPAIGN_OUTPUT_SCHEMA) != mapping["output_schema_sha256"]:
             raise CampaignError("schema_mismatch", code="schema_mismatch")
         return name, arguments_for_tool(matched, request)
     raise CampaignError("unsupported_tool", code="unsupported_tool")

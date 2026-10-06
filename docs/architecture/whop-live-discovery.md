@@ -34,14 +34,14 @@ CLIPFORGE_WHOP_CONNECTOR=public
 clipforge campaign operator whop discover --live --project PROJECT_ID --operator OPERATOR_ID --work-dir WORK_ROOT
 ```
 
-The production URL is exactly `https://mcp.whop.com/mcp`. `CLIPFORGE_WHOP_URL` may repeat that URL. Any other host, including another HTTPS host, is `provider_unavailable`. Loopback HTTP is accepted only when a test constructs the adapter with `allow_loopback`. A URL with a username, a password, a query string, or a fragment is rejected. None of these variables is written into a manifest. The adapter does not follow a redirect to another host.
+`clipforge campaign operator whop auth doctor` and `auth status` only read local metadata. `auth login` and `auth refresh` prepare `~/.config/clipforge/whop-profile` with owner-only permissions and ask the installed `grok mcp doctor whop` command whether a connector exists. They do not read cookies, do not type a password, and do not open Chrome unless an official connector supplies a verified authorization flow. `auth logout` removes only that dedicated profile after a terminal confirmation. The production URL is exactly `https://mcp.whop.com/mcp`. `CLIPFORGE_WHOP_URL` may repeat that URL. Any other host, including another HTTPS host, is `provider_unavailable`. Loopback HTTP is accepted only when a test constructs the adapter with `allow_loopback`. A URL with a username, a password, a query string, or a fragment is rejected. None of these variables is written into a manifest. The adapter does not follow a redirect to another host.
 
 Private campaigns use a connector that already completed Whop's browser sign-in. Clipforge does not automate that page and does not keep the session.
 
 ```text
 CLIPFORGE_WHOP_LIVE_SMOKE=1
 CLIPFORGE_WHOP_CONNECTOR=authenticated
-CLIPFORGE_WHOP_CONNECTOR_URL=http://127.0.0.1:PORT/discover
+CLIPFORGE_WHOP_CONNECTOR_URL=http://127.0.0.1:PORT/handoff
 CLIPFORGE_WHOP_SESSION_HANDLE=one-time-nonce
 clipforge campaign operator whop discover --live --connector authenticated --project PROJECT_ID --operator OPERATOR_ID --request REQUEST.json --work-dir WORK_ROOT
 ```

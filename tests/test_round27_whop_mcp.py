@@ -33,14 +33,19 @@ from clipforge.campaign.whop_provider import (
     clear_authenticated_readers,
     register_authenticated_reader,
 )
-from clipforge.campaign.whop_tools import load_tool_map, schema_sha256, select_mapped_tool
+from clipforge.campaign.whop_tools import (
+    CAMPAIGN_OUTPUT_SCHEMA,
+    load_tool_map,
+    schema_sha256,
+    select_mapped_tool,
+)
 from clipforge.cli.main import app
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 
 runner = CliRunner()
 _CREATED = datetime(2026, 10, 6, 12, tzinfo=UTC)
 _FIXTURE_SCHEMA = {"additionalProperties": False, "properties": {}, "type": "object"}
-_OUTPUT_SCHEMA = {"type": "object"}
+_OUTPUT_SCHEMA = CAMPAIGN_OUTPUT_SCHEMA
 _FIXTURE_TOOL = {
     "tool_name": "list_public_campaigns",
     "provider_id": "whop",
@@ -463,7 +468,7 @@ def test_filter_blocks_selection_even_when_selected(tmp_path: Path) -> None:
         (_source(size_bytes=50), {"max_size_bytes": 10}, "source_too_large", "src-city"),
         (_source(duration_us=1), {"min_duration_us": 5_000_000}, "duration_out_of_range", "src-city"),
         (_source(rights_state="unknown"), {}, "rights_not_allowed", "src-city"),
-        (_source(content_sha256=None), {}, "missing_content_hash", "src-city"),
+        (_source(rights_state="unknown", content_sha256=None), {}, "rights_not_allowed", "src-city"),
         (_public(status="unknown"), {"require_status": "active"}, "missing_status", "src-city"),
         (_public(category=None), {"allowed_categories": ["clipping"]}, "missing_category", "src-city"),
         (_public(language=None), {"language": "en-US"}, "missing_language", "src-city"),
@@ -671,6 +676,9 @@ def test_clean_process_connector(tmp_path: Path) -> None:
     catalogue = tmp_path / "catalogue.json"
     catalogue.write_text(json.dumps(_public()), encoding="utf-8")
     nonce = "bridge-nonce-1"
+    reader, writer = os.pipe()
+    os.write(writer, nonce.encode("utf-8"))
+    os.close(writer)
     bridge = subprocess.Popen(
         [
             sys.executable,
@@ -682,15 +690,19 @@ def test_clean_process_connector(tmp_path: Path) -> None:
             "0",
             "--catalogue",
             str(catalogue),
-            "--nonce",
-            nonce,
+            "--work-dir",
+            str(tmp_path),
+            "--nonce-fd",
+            str(reader),
             "--expires-in",
             "30",
         ],
+        pass_fds=(reader,),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
+    os.close(reader)
     assert bridge.stdout is not None
     line = bridge.stdout.readline().strip()
     assert line.startswith("port=")
@@ -851,11 +863,11 @@ def test_content_rewards_fixture_selects_only_the_valid_source(tmp_path: Path) -
     included = [item.campaign_id for item in discovered.decisions if item.included]
     assert included == ["camp-city"]
     city = next(item for item in discovered.decisions if item.campaign_id == "camp-city")
-    assert city.included_source_ids == ["src-city"]
+    assert city.included_source_ids == ["src-city", "src-no-hash"]
     assert city.filter_fingerprint == discovered.filter_fingerprint
     excluded = {item.source_id: item.reason_code for item in city.excluded_sources}
     assert excluded["src-huge"] == "source_too_large"
-    assert excluded["src-no-hash"] == "missing_content_hash"
+    assert "src-no-hash" not in excluded
     assert excluded["src-changed-hash"] == "hash_mismatch"
     blocked_campaigns = {item.campaign_id: item.reason_code for item in discovered.decisions}
     assert blocked_campaigns["camp-paused"] == "status_not_active"
