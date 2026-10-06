@@ -8,15 +8,17 @@ from typing import Any
 from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop_bridge import AuthenticatedBridgeProvider
 from clipforge.campaign.whop_mcp import (
+    PUBLIC_MCP_URL,
     Opener,
     WhopMcpReader,
     campaign_document,
     configured_connector,
     configured_url,
     live_smoke_enabled,
-    url_is_allowed,
+    official_endpoint,
 )
 from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool
+from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 
 
 class AuthenticatedConnectorSession:
@@ -68,20 +70,38 @@ class PublicWhopMcpProvider:
         opener: Opener | None = None,
         tool_map: list[dict[str, Any]] | None = None,
         allow_fixture: bool = False,
+        allow_loopback: bool = False,
     ) -> None:
         self.url = url
         self.timeout_s = timeout_s
         self.opener = opener
         self.tool_map = tool_map
         self.allow_fixture = allow_fixture
+        self.allow_loopback = allow_loopback
+        self.discovery_request: WhopLiveDiscoveryRequest | None = None
+
+    def bind_request(self, request: WhopLiveDiscoveryRequest) -> None:
+        self.discovery_request = request
 
     def discover(self) -> dict[str, Any]:
-        reader = WhopMcpReader(self.url, timeout_s=self.timeout_s, opener=self.opener)
+        reader = WhopMcpReader(
+            self.url,
+            timeout_s=self.timeout_s,
+            opener=self.opener,
+            allow_loopback=self.allow_loopback,
+        )
         try:
             reader.initialize()
             mappings = self.tool_map if self.tool_map is not None else load_tool_map()
-            tool = select_mapped_tool(reader.list_tools(), mappings, allow_fixture=self.allow_fixture)
-            result = reader.call_tool(tool, {})
+            tool, arguments = select_mapped_tool(
+                reader.list_tools(),
+                mappings,
+                allow_fixture=self.allow_fixture,
+                provider_version=reader.server_version or "",
+                protocol_version=reader.protocol_version or "",
+                request=self.discovery_request,
+            )
+            result = reader.call_tool(tool, arguments)
         finally:
             reader.close()
         self.tool_name = tool
@@ -89,8 +109,8 @@ class PublicWhopMcpProvider:
             self.provider_version = reader.server_version
         document = campaign_document(result)
         campaigns = document.get("campaigns")
-        if not isinstance(campaigns, list) or not campaigns:
-            raise CampaignError("whop discovery was empty", code="empty_discovery")
+        if campaigns is None or not isinstance(campaigns, list):
+            raise CampaignError("whop provider response was malformed", code="invalid_document")
         return document
 
 
@@ -108,7 +128,7 @@ class AuthenticatedBrowserProvider:
             self.live_status = "authenticated_discovery"
         elif isinstance(reader, FixtureCatalogueReader):
             self.evidence_origin = "test_double"
-            self.live_status = "authenticated_discovery"
+            self.live_status = "not_configured"
         else:
             raise CampaignError("whop provider status was forged", code="forged_status")
         self._reader = reader
@@ -138,10 +158,9 @@ def build_live_provider(kind: str | None = None) -> PublicWhopMcpProvider | Auth
         raise CampaignError("whop_live: not_configured", code="not_configured")
     selected = kind or configured_connector()
     if selected == "public":
-        url = configured_url()
-        if not url_is_allowed(url):
+        if not official_endpoint(configured_url()):
             raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")
-        return PublicWhopMcpProvider(url)
+        return PublicWhopMcpProvider(PUBLIC_MCP_URL)
     if selected == "authenticated":
         return AuthenticatedBridgeProvider.from_environment()
     raise CampaignError("whop_live: provider_unavailable", code="provider_unavailable")

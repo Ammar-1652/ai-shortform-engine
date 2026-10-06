@@ -108,7 +108,7 @@ class WhopCampaignCatalogue(Versioned):
     provider_id: str = Field(min_length=1, max_length=40)
     provider_version: str = Field(min_length=1, max_length=40)
     live_status: LiveStatus
-    campaigns: list[WhopCampaignRecord] = Field(min_length=1)
+    campaigns: list[WhopCampaignRecord] = Field(default_factory=list)
     catalogue_fingerprint: str = Field(pattern=_SHA)
     missing_fields: list[str] = Field(default_factory=list)
 
@@ -187,6 +187,7 @@ class WhopDiscoveryAttempt(Versioned):
     catalogue_fingerprint: str = Field(pattern=_SHA)
     policy_fingerprint: str = Field(pattern=_SHA)
     identity_sha256: str = Field(pattern=_SHA)
+    tool_map_sha256: str = Field(default="0" * 64, pattern=_SHA)
     discovery_request: WhopLiveDiscoveryRequest
     tool_name: str | None = Field(default=None, max_length=80)
     import_id: EntityId | None = None

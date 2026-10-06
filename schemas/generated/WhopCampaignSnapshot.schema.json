@@ -535,7 +535,6 @@
       "items": {
         "$ref": "#/$defs/WhopCampaignRecord"
       },
-      "minItems": 1,
       "title": "Campaigns",
       "type": "array"
     },
@@ -580,8 +579,7 @@
   },
   "required": [
     "operator_id",
-    "exported_at",
-    "campaigns"
+    "exported_at"
   ],
   "title": "WhopCampaignSnapshot",
   "type": "object"

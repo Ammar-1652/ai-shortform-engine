@@ -174,8 +174,9 @@ def test_fake_providers_filter_cache_and_fail_closed(tmp_path: Path, monkeypatch
         FakeBrowserExportProvider(_sample_with_title("Exported rewards")),
         project_id="project-1",
     )
-    assert exported.live_status == "authenticated_discovery"
+    assert exported.live_status == "not_configured"
     assert exported.evidence_origin == "test_double"
+    assert exported.live_status != "authenticated_discovery"
     assert exported.live_claim == "not_claimed"
     poisoned = _sample_with_title("Cookie rewards")
     poisoned["cookie"] = "session=secret"

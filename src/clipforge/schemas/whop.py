@@ -172,7 +172,7 @@ class WhopCampaignSnapshot(Versioned):
 
     operator_id: EntityId
     exported_at: AwareDatetime
-    campaigns: list[WhopCampaignRecord] = Field(min_length=1)
+    campaigns: list[WhopCampaignRecord] = Field(default_factory=list)
     intake_label: Literal["local_snapshot", "authenticated_operator_snapshot"] = "local_snapshot"
     credentials_stored: Literal["not_stored"] = "not_stored"
     live_transport: Literal["not_claimed"] = "not_claimed"
@@ -194,6 +194,9 @@ class WhopImportAttempt(Versioned):
     snapshot_sha256: str = Field(pattern=_SHA)
     policy_fingerprint: str = Field(pattern=_SHA)
     operator_id: EntityId
+    provider_id: str = Field(default="snapshot", min_length=1, max_length=40)
+    provider_version: str = Field(default="0", min_length=1, max_length=40)
+    intake_label: Literal["local_snapshot", "authenticated_operator_snapshot"] = "local_snapshot"
     campaigns: list[WhopCampaignRecord]
     selectable_source_ids: list[EntityId]
     status: Literal["ready", "blocked"]
@@ -202,7 +205,7 @@ class WhopImportAttempt(Versioned):
     whop_live: Literal["not_configured"] = "not_configured"
     publishing: Literal["deferred"] = "deferred"
 
-    @field_validator("reason_code")
+    @field_validator("reason_code", "provider_id", "provider_version")
     @classmethod
     def reason_is_plain(cls, value: str) -> str:
         return _plain(value, label="whop import")

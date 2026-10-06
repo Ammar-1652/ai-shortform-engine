@@ -46,8 +46,8 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
         configured_connector_url,
         configured_url,
         live_smoke_enabled,
+        official_endpoint,
         session_handle,
-        url_is_allowed,
     )
 
     live = "not_configured"
@@ -56,7 +56,7 @@ def whop_doctor(connector: WhopSnapshotConnector | FakeWhopSnapshotConnector | N
     session = "not opened"
     if live_smoke_enabled():
         kind = configured_connector()
-        if kind == "public" and url_is_allowed(configured_url()):
+        if kind == "public" and official_endpoint(configured_url()):
             public = "available"
         elif (
             kind == "authenticated" and session_handle() is not None and configured_connector_url() is not None
@@ -106,24 +106,48 @@ def plan_whop_import(
     *,
     project_id: str,
     force: bool = False,
+    provider_id: str = "snapshot",
+    provider_version: str = "0",
 ) -> tuple[WhopImportAttempt, bytes, bool]:
     """Validate a snapshot and report whether a new sidecar must be written."""
     snapshot = parse_whop_bytes(payload)
     raw = _canonical(snapshot)
     digest = hashlib.sha256(raw).hexdigest()
+    policy = _policy_fingerprint([item.campaign_id for item in snapshot.campaigns])
     root = work_root.resolve()
     if not force:
-        cached = _cached(root, project_id, digest)
+        cached = _cached(
+            root,
+            project_id=project_id,
+            digest=digest,
+            policy=policy,
+            provider_id=provider_id,
+            provider_version=provider_version,
+            intake_label=snapshot.intake_label,
+            operator_id=snapshot.operator_id,
+        )
         if cached is not None:
             return cached, raw, False
     now = datetime.now(UTC)
     selectable, status, reason = _selectable(snapshot)
     attempt = WhopImportAttempt(
-        import_id=_import_id(digest, project_id, force),
+        import_id=_import_id(
+            project_id=project_id,
+            digest=digest,
+            policy=policy,
+            provider_id=provider_id,
+            provider_version=provider_version,
+            intake_label=snapshot.intake_label,
+            operator_id=snapshot.operator_id,
+            force=force,
+        ),
         project_id=project_id,
         snapshot_sha256=digest,
-        policy_fingerprint=_policy_fingerprint([item.campaign_id for item in snapshot.campaigns]),
+        policy_fingerprint=policy,
         operator_id=snapshot.operator_id,
+        provider_id=provider_id,
+        provider_version=provider_version,
+        intake_label=snapshot.intake_label,
         campaigns=list(snapshot.campaigns),
         selectable_source_ids=selectable,
         status=status,  # type: ignore[arg-type]
@@ -343,6 +367,8 @@ def _selectable(snapshot: WhopCampaignSnapshot) -> tuple[list[str], str, str]:
                 saw_policy = True
             elif source.selected and not rights_allowed:
                 saw_rights = True
+    if not snapshot.campaigns:
+        return [], "blocked", "no_matching_campaigns"
     unique = sorted(set(chosen))
     if unique:
         return unique, "ready", "ready"
@@ -363,16 +389,57 @@ def _policy_blocks(attempt: WhopImportAttempt, source_id: str) -> bool:
     return False
 
 
-def _import_id(digest: str, project_id: str, force: bool) -> str:
-    mixed = hashlib.sha256(f"{project_id}:{digest}".encode()).hexdigest()
+def _import_id(
+    *,
+    project_id: str,
+    digest: str,
+    policy: str,
+    provider_id: str,
+    provider_version: str,
+    intake_label: str,
+    operator_id: str,
+    force: bool,
+) -> str:
+    raw = json.dumps(
+        {
+            "project_id": project_id,
+            "snapshot_sha256": digest,
+            "policy_fingerprint": policy,
+            "provider_id": provider_id,
+            "provider_version": provider_version,
+            "intake_label": intake_label,
+            "operator_id": operator_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    mixed = hashlib.sha256(raw).hexdigest()
     if force:
         return f"whop-{mixed[:12]}-{uuid4().hex[:8]}"
     return f"whop-{mixed[:20]}"
 
 
-def _cached(root: Path, project_id: str, digest: str) -> WhopImportAttempt | None:
+def _cached(
+    root: Path,
+    *,
+    project_id: str,
+    digest: str,
+    policy: str,
+    provider_id: str,
+    provider_version: str,
+    intake_label: str,
+    operator_id: str,
+) -> WhopImportAttempt | None:
     for attempt in list_whop_imports(root):
-        if attempt.project_id == project_id and attempt.snapshot_sha256 == digest:
+        if (
+            attempt.project_id == project_id
+            and attempt.snapshot_sha256 == digest
+            and attempt.policy_fingerprint == policy
+            and attempt.provider_id == provider_id
+            and attempt.provider_version == provider_version
+            and attempt.intake_label == intake_label
+            and attempt.operator_id == operator_id
+        ):
             return attempt
     return None
 

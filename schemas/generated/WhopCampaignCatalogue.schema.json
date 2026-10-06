@@ -535,7 +535,6 @@
       "items": {
         "$ref": "#/$defs/WhopCampaignRecord"
       },
-      "minItems": 1,
       "title": "Campaigns",
       "type": "array"
     },
@@ -591,7 +590,6 @@
     "provider_id",
     "provider_version",
     "live_status",
-    "campaigns",
     "catalogue_fingerprint"
   ],
   "title": "WhopCampaignCatalogue",

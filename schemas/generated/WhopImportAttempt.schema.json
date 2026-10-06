@@ -549,6 +549,15 @@
       "title": "Import Id",
       "type": "string"
     },
+    "intake_label": {
+      "default": "local_snapshot",
+      "enum": [
+        "local_snapshot",
+        "authenticated_operator_snapshot"
+      ],
+      "title": "Intake Label",
+      "type": "string"
+    },
     "operator_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -564,6 +573,20 @@
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Project Id",
+      "type": "string"
+    },
+    "provider_id": {
+      "default": "snapshot",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "default": "0",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Version",
       "type": "string"
     },
     "publishing": {

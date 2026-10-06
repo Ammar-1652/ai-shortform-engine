@@ -34,7 +34,7 @@ CLIPFORGE_WHOP_CONNECTOR=public
 clipforge campaign operator whop discover --live --project PROJECT_ID --operator OPERATOR_ID --work-dir WORK_ROOT
 ```
 
-`CLIPFORGE_WHOP_URL` overrides the public MCP URL. The default is `https://mcp.whop.com/mcp`. Loopback HTTP is accepted for tests. A URL with a username, a password, or a query string is rejected. None of these variables is written into a manifest.
+The production URL is exactly `https://mcp.whop.com/mcp`. `CLIPFORGE_WHOP_URL` may repeat that URL. Any other host, including another HTTPS host, is `provider_unavailable`. Loopback HTTP is accepted only when a test constructs the adapter with `allow_loopback`. A URL with a username, a password, a query string, or a fragment is rejected. None of these variables is written into a manifest. The adapter does not follow a redirect to another host.
 
 Private campaigns use a connector that already completed Whop's browser sign-in. Clipforge does not automate that page and does not keep the session.
 

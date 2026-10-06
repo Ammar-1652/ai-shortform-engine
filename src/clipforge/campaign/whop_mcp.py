@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from clipforge.campaign.providers import CampaignError
 from clipforge.schemas.campaign import _plain
@@ -105,6 +105,11 @@ def configured_url() -> str:
     return value or PUBLIC_MCP_URL
 
 
+def official_endpoint(url: str | None = None) -> bool:
+    """True only for the exact production MCP URL."""
+    return (url if url is not None else configured_url()) == PUBLIC_MCP_URL
+
+
 def configured_connector_url() -> str | None:
     """Return a loopback connector URL. Anything else is treated as unconfigured."""
     value = os.environ.get("CLIPFORGE_WHOP_CONNECTOR_URL", "").strip()
@@ -144,23 +149,36 @@ def public_headers() -> dict[str, str]:
     }
 
 
-def url_is_allowed(url: str) -> bool:
+def url_is_allowed(url: str, *, allow_loopback: bool = False) -> bool:
+    """Production accepts only the official endpoint. Tests may inject loopback."""
     parsed = urlsplit(url)
-    if parsed.username or parsed.password or parsed.query:
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
         return False
-    host = parsed.hostname or ""
-    if parsed.scheme == "https" and host:
+    if url == PUBLIC_MCP_URL:
         return True
-    return parsed.scheme == "http" and host in {"127.0.0.1", "localhost"}
+    return allow_loopback and parsed.scheme == "http" and parsed.hostname == "127.0.0.1"
 
 
-def select_discovery_tool(names: list[str], mappings: list[dict[str, object]] | None = None) -> str:
+def select_discovery_tool(
+    tools: list[dict[str, object]],
+    mappings: list[dict[str, object]] | None = None,
+    *,
+    provider_version: str,
+    protocol_version: str,
+    allow_fixture: bool = False,
+) -> str:
     """Compatibility wrapper. Production callers use select_mapped_tool and the tool map."""
     from clipforge.campaign.whop_tools import select_mapped_tool
 
-    tools = [{"name": name} for name in names]
     rows = mappings if mappings is not None else []
-    return select_mapped_tool(tools, rows, allow_fixture=True)
+    name, _arguments = select_mapped_tool(
+        tools,
+        rows,
+        allow_fixture=allow_fixture,
+        provider_version=provider_version,
+        protocol_version=protocol_version,
+    )
+    return name
 
 
 def reject_untrusted_document(payload: dict[str, object]) -> None:
@@ -177,10 +195,12 @@ class WhopMcpReader:
         *,
         timeout_s: float = 20,
         opener: Opener | None = None,
+        allow_loopback: bool = False,
     ) -> None:
         self.url = url or configured_url()
         self.timeout_s = timeout_s
         self.opener = opener
+        self.allow_loopback = allow_loopback
         self.server_name: str | None = None
         self.server_version: str | None = None
         self.protocol_version: str | None = None
@@ -251,8 +271,8 @@ class WhopMcpReader:
         self.protocol_version = None
 
     def _require_url(self) -> None:
-        if not url_is_allowed(self.url):
-            raise CampaignError("whop provider url is not https", code="provider_unavailable")
+        if not url_is_allowed(self.url, allow_loopback=self.allow_loopback):
+            raise CampaignError("whop provider url is not the official endpoint", code="provider_unavailable")
 
     def _notify(self, method: str, params: dict[str, object]) -> None:
         payload = self._post({"jsonrpc": "2.0", "method": method, "params": params}, allow_empty=True)
@@ -296,13 +316,15 @@ class WhopMcpReader:
         if self.session_id:
             headers[_SESSION_HEADER] = self.session_id
         request = Request(url, data=data, headers=headers, method=method)
-        opener = self.opener or cast(Opener, urlopen)
+        opener = self.opener or _safe_opener()
         try:
             with opener(request, timeout=self.timeout_s) as response:
                 content_type = _header(response.headers, "Content-Type")
                 session = _header(response.headers, _SESSION_HEADER)
                 raw = response.read(_MAX_BYTES + 1)
                 status = getattr(response, "status", None)
+        except CampaignError:
+            raise
         except TimeoutError as exc:
             raise CampaignError("whop provider timed out", code="timeout") from exc
         except HTTPError as exc:
@@ -324,6 +346,23 @@ class WhopMcpReader:
         if exc.code == 404 and self.session_id:
             raise CampaignError("whop session expired", code="stale_session") from exc
         raise CampaignError("whop provider is unavailable", code="provider_unavailable") from exc
+
+
+def _safe_opener() -> Opener:
+    class _RejectRedirect(HTTPRedirectHandler):
+        def redirect_request(
+            self,
+            req: Request,
+            fp: object,
+            code: int,
+            msg: object,
+            headers: object,
+            newurl: str,
+        ) -> Request | None:
+            del req, fp, code, msg, headers, newurl
+            raise CampaignError("whop provider redirect was rejected", code="provider_unavailable")
+
+    return cast(Opener, build_opener(_RejectRedirect).open)
 
 
 def campaign_document(result: dict[str, object]) -> dict[str, object]:

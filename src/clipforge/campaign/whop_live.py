@@ -27,11 +27,12 @@ from clipforge.campaign.whop_mcp import (
     configured_connector_url,
     configured_url,
     live_smoke_enabled,
+    official_endpoint,
     reject_untrusted_document,
     session_handle,
-    url_is_allowed,
 )
 from clipforge.campaign.whop_provider import build_live_provider
+from clipforge.campaign.whop_tools import tool_map_sha256
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import mkdir_contained
 from clipforge.schemas.whop import WhopCampaignSnapshot, WhopImportAttempt
@@ -89,7 +90,7 @@ class FakeBrowserExportProvider:
 
     provider_id = "browser_export"
     provider_version = "1"
-    live_status = "authenticated_discovery"
+    live_status = "not_configured"
     evidence_origin = "test_double"
     mode = "browser_export"
     tool_name: str | None = None
@@ -142,7 +143,7 @@ def whop_capabilities() -> WhopProviderCapability:
     authenticated: Literal["not_configured", "available", "unavailable"] = "not_configured"
     if live_smoke_enabled():
         kind = configured_connector()
-        if kind == "public" and url_is_allowed(configured_url()):
+        if kind == "public" and official_endpoint(configured_url()):
             public_provider = "available"
             mode = "live_connector"
         elif (
@@ -217,13 +218,16 @@ def import_discovered(
     promotion_hook: Callable[[str], None] | None = None,
 ) -> WhopDiscoveryAttempt:
     """Normalize a provider result and append one discovery. Invalid input writes nothing."""
+    binder = getattr(provider, "bind_request", None)
+    if callable(binder) and request is not None:
+        binder(request)
     payload = provider.discover()
     if not isinstance(payload, dict):
         raise CampaignError("whop provider response was malformed", code="invalid_document")
     reject_untrusted_document(payload)
+    if "campaigns" not in payload or payload.get("campaigns") is None:
+        raise CampaignError("whop provider response was empty", code="empty_discovery")
     snapshot = normalize_whop_payload(payload, operator_id=operator_id)
-    if not snapshot.campaigns:
-        raise CampaignError("whop discovery was empty", code="empty_discovery")
     tool_name = getattr(provider, "tool_name", None)
     return _store_discovery(
         work_root,
@@ -261,8 +265,8 @@ def discover_live(
     )
     if attempt.live_claim != "not_claimed":
         raise CampaignError("whop live claim is not allowed", code="forged_status")
-    if not attempt.campaign_ids:
-        raise CampaignError("whop discovery was empty", code="empty_discovery")
+    if attempt.reason_code == "no_matching_campaigns":
+        raise CampaignError("whop discovery matched nothing", code="no_matching_campaigns")
     if attempt.status != "ready":
         raise CampaignError("whop discovery was blocked", code=attempt.reason_code)
     return attempt
@@ -280,12 +284,12 @@ def normalize_whop_payload(payload: dict[str, Any], *, operator_id: str) -> Whop
         except CampaignError:
             raise
     campaigns = payload.get("campaigns")
-    if not isinstance(campaigns, list) or not campaigns:
+    if not isinstance(campaigns, list):
         raise CampaignError("whop provider response was malformed", code="invalid_document")
     exported = payload.get("exported_at") or datetime.now(UTC).isoformat()
     document = {
         "schema_version": "1.0.0",
-        "operator_id": payload.get("operator_id") or operator_id,
+        "operator_id": operator_id,
         "exported_at": exported,
         "campaigns": [_campaign(item) for item in campaigns],
     }
@@ -316,28 +320,7 @@ def verify_discovery(work_root: Path, discovery_id: str) -> WhopDiscoveryAttempt
     """Re-read one discovery. This does not write."""
     root = work_root.resolve()
     attempt = _load_discovery(root, discovery_id)
-    directory = root.joinpath(*_ROOT, discovery_id)
-    path = directory / "response.json"
-    if path.is_symlink() or not path.is_file():
-        raise CampaignError("whop discovery is missing", code="stale_discovery")
-    if sha256_file(path) != attempt.response_sha256:
-        raise CampaignError("whop discovery changed", code="stale_discovery")
-    request_path = directory / "request.json"
-    if request_path.is_symlink() or not request_path.is_file():
-        raise CampaignError("whop discovery request is missing", code="stale_discovery")
-    try:
-        stored_request = WhopLiveDiscoveryRequest.model_validate_json(request_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValidationError) as exc:
-        raise CampaignError("whop discovery request changed", code="stale_discovery") from exc
-    if _request_sha(stored_request) != attempt.filter_fingerprint:
-        raise CampaignError("whop discovery request changed", code="stale_discovery")
-    if _policy_fingerprint(list(attempt.campaign_ids)) != attempt.policy_fingerprint:
-        raise CampaignError("whop policy changed", code="stale_policy")
-    manifest = directory / "manifest.json"
-    if manifest.is_symlink() or not manifest.is_file():
-        raise CampaignError("whop discovery is missing", code="stale_discovery")
-    if attempt.status == "cancelled":
-        raise CampaignError("whop discovery was cancelled", code="cancelled")
+    _revalidate(root, attempt, allow_cancelled=False)
     return attempt
 
 
@@ -347,31 +330,32 @@ def resume_discovery(work_root: Path, discovery_id: str) -> WhopDiscoveryAttempt
     attempt = _load_discovery(root, discovery_id)
     if attempt.status != "cancelled":
         raise CampaignError("whop discovery is not cancelled", code="not_cancelled")
+    _revalidate(root, attempt, allow_cancelled=True)
     directory = root.joinpath(*_ROOT, discovery_id)
-    response_path = directory / "response.json"
-    request_path = directory / "request.json"
-    if response_path.is_symlink() or not response_path.is_file():
-        raise CampaignError("whop discovery is missing", code="missing_discovery")
-    if request_path.is_symlink() or not request_path.is_file():
-        raise CampaignError("whop discovery request is missing", code="missing_discovery")
-    response = response_path.read_bytes()
-    if hashlib.sha256(response).hexdigest() != attempt.response_sha256:
+    response = (directory / "response.json").read_bytes()
+    request_bytes = (directory / "request.json").read_bytes()
+    snapshot = parse_whop_bytes(response)
+    fresh = filter_campaigns(snapshot, attempt.discovery_request) if snapshot.campaigns else []
+    if [(item.included, item.included_source_ids, item.reason_code) for item in fresh] != [
+        (item.included, item.included_source_ids, item.reason_code) for item in attempt.decisions
+    ]:
         raise CampaignError("whop discovery changed", code="stale_discovery")
-    included = any(item.included for item in attempt.decisions)
+    included = any(item.included for item in fresh)
+    reason = "no_matching_campaigns" if not snapshot.campaigns else ("ready" if included else "policy_blocked")
     new_id = f"disc-{attempt.identity_sha256[:12]}-{uuid4().hex[:8]}"
     resumed = attempt.model_copy(
         update={
             "discovery_id": new_id,
+            "decisions": fresh,
             "status": "ready" if included else "blocked",
-            "reason_code": "ready" if included else "policy_blocked",
+            "reason_code": reason,
             "cache_status": "miss",
             "created_at": datetime.now(UTC),
         }
     )
     import_dir = root.joinpath("campaigns", "whop", attempt.import_id or "")
-    if attempt.import_id is None or not (import_dir / "manifest.json").is_file():
-        raise CampaignError("whop import is missing", code="missing_import")
     imported = WhopImportAttempt.model_validate_json((import_dir / "manifest.json").read_text(encoding="utf-8"))
+    before = (directory / "manifest.json").read_bytes()
     _promote_pair(
         root,
         imported,
@@ -379,9 +363,11 @@ def resume_discovery(work_root: Path, discovery_id: str) -> WhopDiscoveryAttempt
         False,
         resumed,
         response,
-        request_path.read_bytes(),
+        request_bytes,
         None,
     )
+    if (directory / "manifest.json").read_bytes() != before:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
     return resumed
 
 
@@ -608,7 +594,8 @@ def _store_discovery(
         require_rights="allowed",
         created_at=snapshot.exported_at,
     )
-    decisions = filter_campaigns(snapshot, active_request, now=now)
+    decisions = filter_campaigns(snapshot, active_request, now=now) if snapshot.campaigns else []
+    map_sha = tool_map_sha256()
     response = _canonical(snapshot)
     response_sha = hashlib.sha256(response).hexdigest()
     request_sha = request_fingerprint(active_request)
@@ -633,6 +620,7 @@ def _store_discovery(
         response_sha256=response_sha,
         source_declarations=declarations,
         acquisition_policy=acquisition_policy,
+        tool_map_sha256=map_sha,
     )
     live = live_status
     try:
@@ -654,12 +642,19 @@ def _store_discovery(
         cached = _cache_hit(root, identity, response_sha, project_id)
         if cached is not None:
             return cached
-    included = any(item.included for item in decisions)
+    if not snapshot.campaigns:
+        included = False
+        reason = "no_matching_campaigns"
+    else:
+        included = any(item.included for item in decisions)
+        reason = "ready" if included else "policy_blocked"
     attempt_import, snapshot_bytes, write_import = plan_whop_import(
         root,
         response,
         project_id=project_id,
         force=force,
+        provider_id=provider_id,
+        provider_version=provider_version,
     )
     if hashlib.sha256(snapshot_bytes).hexdigest() != attempt_import.snapshot_sha256:
         raise CampaignError("whop snapshot hash changed", code="invalid_document")
@@ -682,13 +677,14 @@ def _store_discovery(
         catalogue_fingerprint=catalogue,
         policy_fingerprint=policy,
         identity_sha256=identity,
+        tool_map_sha256=map_sha,
         discovery_request=active_request,
         tool_name=tool_name,
         import_id=attempt_import.import_id,
         campaign_ids=[item.campaign_id for item in snapshot.campaigns],
         decisions=decisions,
         status="ready" if included else "blocked",
-        reason_code="ready" if included else "policy_blocked",
+        reason_code=reason,
         created_at=now,
     )
     request_bytes = (active_request.model_dump_json() + "\n").encode("utf-8")
@@ -873,16 +869,122 @@ def _cache_hit(
     response_sha: str,
     project_id: str,
 ) -> WhopDiscoveryAttempt | None:
-    for item in list_discoveries(root):
-        if item.project_id != project_id or item.identity_sha256 != identity or item.status == "cancelled":
-            continue
-        path = root.joinpath(*_ROOT, item.discovery_id, "response.json")
-        if path.is_symlink() or not path.is_file() or sha256_file(path) != response_sha:
+    discovery_id = "disc-" + identity[:20]
+    directory = root.joinpath(*_ROOT, discovery_id)
+    manifest = directory / "manifest.json"
+    if not manifest.exists():
+        return None
+    if manifest.is_symlink() or not manifest.is_file():
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    try:
+        item = WhopDiscoveryAttempt.model_validate_json(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as exc:
+        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
+    if item.status == "cancelled" and item.identity_sha256 == identity and item.project_id == project_id:
+        return None
+    if item.project_id != project_id or item.identity_sha256 != identity:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if item.response_sha256 != response_sha:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    _revalidate(root, item, allow_cancelled=False)
+    return item.model_copy(update={"cache_status": "hit"})
+
+
+def _revalidate(root: Path, attempt: WhopDiscoveryAttempt, *, allow_cancelled: bool) -> None:
+    directory = root.joinpath(*_ROOT, attempt.discovery_id)
+    manifest = directory / "manifest.json"
+    response_path = directory / "response.json"
+    request_path = directory / "request.json"
+    for path in (manifest, response_path, request_path):
+        if path.is_symlink() or not path.is_file():
             raise CampaignError("whop discovery changed", code="stale_discovery")
-        if item.response_sha256 != response_sha:
-            raise CampaignError("whop discovery changed", code="stale_discovery")
-        return item.model_copy(update={"cache_status": "hit"})
-    return None
+    try:
+        loaded = WhopDiscoveryAttempt.model_validate_json(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as exc:
+        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
+    if loaded.model_dump(mode="json") != attempt.model_dump(mode="json"):
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if manifest.read_text(encoding="utf-8") != loaded.model_dump_json() + "\n":
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    response = response_path.read_bytes()
+    request_bytes = request_path.read_bytes()
+    if hashlib.sha256(response).hexdigest() != attempt.response_sha256:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    try:
+        stored_request = WhopLiveDiscoveryRequest.model_validate_json(request_bytes.decode("utf-8"))
+        snapshot = parse_whop_bytes(response)
+    except (UnicodeError, ValidationError) as exc:
+        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
+    if request_fingerprint(stored_request) != attempt.filter_fingerprint:
+        raise CampaignError("whop discovery request changed", code="stale_discovery")
+    if hashlib.sha256(response).hexdigest() != attempt.catalogue_fingerprint:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if _policy_fingerprint(list(attempt.campaign_ids)) != attempt.policy_fingerprint:
+        raise CampaignError("whop policy changed", code="stale_policy")
+    if attempt.tool_map_sha256 != tool_map_sha256():
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    recomputed = _identity(
+        project_id=attempt.project_id,
+        operator_id=attempt.operator_id,
+        provider_id=attempt.provider_id,
+        provider_version=attempt.provider_version,
+        provider_mode=attempt.mode,
+        tool_name=attempt.tool_name or "",
+        request_sha256=attempt.request_sha256,
+        policy_fingerprint=attempt.policy_fingerprint,
+        catalogue_fingerprint=attempt.catalogue_fingerprint,
+        response_sha256=attempt.response_sha256,
+        source_declarations=_declaration_sha(snapshot),
+        acquisition_policy=_acquisition_policy(attempt.discovery_request),
+        tool_map_sha256=attempt.tool_map_sha256,
+    )
+    if recomputed != attempt.identity_sha256:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    prefix = "disc-" + recomputed[:20]
+    resumed_prefix = "disc-" + recomputed[:12] + "-"
+    if attempt.discovery_id != prefix and not attempt.discovery_id.startswith(resumed_prefix):
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if attempt.evidence_origin not in {"test_double", "public_connector", "authenticated_connector"}:
+        raise CampaignError("whop provider status was forged", code="forged_status")
+    authenticated = attempt.live_status == "authenticated_discovery"
+    if authenticated and attempt.evidence_origin != "authenticated_connector":
+        raise CampaignError("whop provider status was forged", code="forged_status")
+    fresh = filter_campaigns(snapshot, stored_request) if snapshot.campaigns else []
+    stored_shape = [(item.campaign_id, item.included, item.included_source_ids) for item in attempt.decisions]
+    fresh_shape = [(item.campaign_id, item.included, item.included_source_ids) for item in fresh]
+    if stored_shape != fresh_shape:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if attempt.import_id is None:
+        raise CampaignError("whop import is missing", code="missing_import")
+    import_dir = root.joinpath("campaigns", "whop", attempt.import_id)
+    import_manifest = import_dir / "manifest.json"
+    import_snapshot = import_dir / "snapshot.json"
+    if import_manifest.is_symlink() or import_snapshot.is_symlink():
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if not import_manifest.is_file() or not import_snapshot.is_file():
+        raise CampaignError("whop import is missing", code="missing_import")
+    try:
+        imported = WhopImportAttempt.model_validate_json(import_manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError) as exc:
+        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
+    if imported.import_id != attempt.import_id or imported.project_id != attempt.project_id:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if sha256_file(import_snapshot) != imported.snapshot_sha256:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if sha256_file(import_snapshot) != attempt.response_sha256:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if imported.policy_fingerprint != attempt.policy_fingerprint:
+        raise CampaignError("whop policy changed", code="stale_policy")
+    if imported.provider_id != attempt.provider_id or imported.provider_version != attempt.provider_version:
+        raise CampaignError("whop discovery changed", code="stale_discovery")
+    if not allow_cancelled and attempt.status == "cancelled":
+        raise CampaignError("whop discovery was cancelled", code="cancelled")
+
+
+def _acquisition_policy(request: WhopLiveDiscoveryRequest) -> str:
+    if request.require_acquisition_reference:
+        return "require_reference"
+    return "optional_reference"
 
 
 def _discovery_for_selection(
@@ -904,7 +1006,7 @@ def _discovery_for_selection(
             if matches:
                 raise CampaignError("whop discovery belongs to another project", code="project_mismatch")
             raise CampaignError("whop discovery is missing", code="missing_discovery")
-        item = owned[-1]
+        item = max(owned, key=lambda row: (row.created_at, row.discovery_id))
     if item.project_id != project_id or item.import_id != import_id:
         raise CampaignError("whop discovery belongs to another project", code="project_mismatch")
     return verify_discovery(root, item.discovery_id)
@@ -1029,7 +1131,7 @@ def _load_discovery(root: Path, discovery_id: str) -> WhopDiscoveryAttempt:
     try:
         return WhopDiscoveryAttempt.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError) as exc:
-        raise CampaignError("whop discovery could not be read", code="invalid_document") from exc
+        raise CampaignError("whop discovery changed", code="stale_discovery") from exc
 
 
 def _reject_public(payload: dict[str, object]) -> None:

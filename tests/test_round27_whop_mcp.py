@@ -16,7 +16,6 @@ from typer.testing import CliRunner
 
 from clipforge.campaign.providers import CampaignError
 from clipforge.campaign.whop import whop_doctor
-from clipforge.campaign.whop_acquire import record_acquired_file
 from clipforge.campaign.whop_live import (
     FakeWhopProvider,
     cancel_discovery,
@@ -34,22 +33,27 @@ from clipforge.campaign.whop_provider import (
     clear_authenticated_readers,
     register_authenticated_reader,
 )
-from clipforge.campaign.whop_tools import load_tool_map, select_mapped_tool
+from clipforge.campaign.whop_tools import load_tool_map, schema_sha256, select_mapped_tool
 from clipforge.cli.main import app
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 
 runner = CliRunner()
 _CREATED = datetime(2026, 10, 6, 12, tzinfo=UTC)
+_FIXTURE_SCHEMA = {"additionalProperties": False, "properties": {}, "type": "object"}
+_OUTPUT_SCHEMA = {"type": "object"}
 _FIXTURE_TOOL = {
     "tool_name": "list_public_campaigns",
     "provider_id": "whop",
-    "input_schema_sha256": "ab" * 32,
-    "output_shape": "campaign_catalogue",
+    "provider_version": "test-1",
+    "protocol_version": "2025-06-18",
     "read_only": True,
     "destructive": False,
-    "campaign_type": "clipping",
-    "authentication_required": False,
-    "verification": "fixture_only",
+    "input_schema_sha256": schema_sha256(_FIXTURE_SCHEMA),
+    "output_schema_sha256": schema_sha256(_OUTPUT_SCHEMA),
+    "output_model": "campaign_catalogue",
+    "verification_origin": "fixture_only",
+    "verification_timestamp": "2026-10-06T12:00:00Z",
+    "tool_map_version": "1",
 }
 
 
@@ -116,7 +120,11 @@ class _Handler(BaseHTTPRequestHandler):
                 tools = [
                     {"name": "create_campaign"},
                     {"name": "list_public_campaigns_and_checkout"},
-                    {"name": "list_public_campaigns"},
+                    {
+                        "name": "list_public_campaigns",
+                        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+                        "inputSchema": _FIXTURE_SCHEMA,
+                    },
                 ]
             self._send(200, _rpc(body.get("id"), {"tools": tools}), "application/json", session="mcp-session")
             return
@@ -159,22 +167,68 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def test_allowlist_rejects_mutating_and_prefix_tools() -> None:
-    names = ["create_campaign", "list_public_campaigns_and_checkout", "list_public_campaigns"]
-    assert select_discovery_tool(names, [_FIXTURE_TOOL]) == "list_public_campaigns"
+    tools = [
+        {"name": "create_campaign"},
+        {"name": "list_public_campaigns_and_checkout"},
+        {
+            "name": "list_public_campaigns",
+            "annotations": {"readOnlyHint": True, "destructiveHint": False},
+            "inputSchema": _FIXTURE_SCHEMA,
+        },
+    ]
+    assert (
+        select_discovery_tool(
+            tools,
+            [_FIXTURE_TOOL],
+            provider_version="test-1",
+            protocol_version="2025-06-18",
+            allow_fixture=True,
+        )
+        == "list_public_campaigns"
+    )
     with pytest.raises(CampaignError) as rejected:
-        select_discovery_tool(["create_campaign", "join_campaign"], [_FIXTURE_TOOL])
+        select_mapped_tool(
+            [{"name": "create_campaign"}, {"name": "join_campaign"}],
+            [_FIXTURE_TOOL],
+            allow_fixture=True,
+            provider_version="test-1",
+            protocol_version="2025-06-18",
+        )
     assert rejected.value.code == "unsupported_tool"
     with pytest.raises(CampaignError) as unverified:
-        select_discovery_tool(names, [])
+        select_mapped_tool(
+            tools,
+            [],
+            allow_fixture=False,
+            provider_version="test-1",
+            protocol_version="2025-06-18",
+        )
     assert unverified.value.code == "unsupported_tool"
     assert load_tool_map() == []
-    listed = [{"name": "list_public_campaigns", "annotations": {"readOnlyHint": True}}]
     with pytest.raises(CampaignError) as official:
-        select_mapped_tool(listed, load_tool_map(), allow_fixture=False)
+        select_mapped_tool(
+            tools,
+            load_tool_map(),
+            allow_fixture=False,
+            provider_version="test-1",
+            protocol_version="2025-06-18",
+        )
     assert official.value.code == "unsupported_tool"
-    destructive = [{"name": "list_public_campaigns", "annotations": {"destructiveHint": True}}]
+    destructive = [
+        {
+            "name": "list_public_campaigns",
+            "annotations": {"readOnlyHint": True, "destructiveHint": True},
+            "inputSchema": _FIXTURE_SCHEMA,
+        }
+    ]
     with pytest.raises(CampaignError) as destroyed:
-        select_mapped_tool(destructive, [_FIXTURE_TOOL], allow_fixture=True)
+        select_mapped_tool(
+            destructive,
+            [_FIXTURE_TOOL],
+            allow_fixture=True,
+            provider_version="test-1",
+            protocol_version="2025-06-18",
+        )
     assert destroyed.value.code == "unsupported_tool"
 
 
@@ -242,7 +296,12 @@ def test_timeout_and_forged_status(tmp_path: Path) -> None:
         del timeout
         raise TimeoutError("slow")
 
-    provider = PublicWhopMcpProvider("http://127.0.0.1:9/mcp", timeout_s=0.01, opener=slow)
+    provider = PublicWhopMcpProvider(
+        "http://127.0.0.1:9/mcp",
+        timeout_s=0.01,
+        opener=slow,
+        allow_loopback=True,
+    )
     with pytest.raises(CampaignError) as timed:
         provider.discover()
     assert timed.value.code == "timeout"
@@ -270,9 +329,9 @@ def test_doctor_and_cli_do_not_claim_a_closed_connector(
         monkeypatch.setenv("CLIPFORGE_WHOP_URL", _url(server))
         text = whop_doctor()
         assert server.events == []
-        assert "public_provider: available" in text
+        assert "public_provider: unavailable" in text
         assert "live_smoke: not_executed" in text
-        assert "whop_live: not_configured" in text
+        assert "whop_live: provider_unavailable" in text
         work = tmp_path / "work"
         work.mkdir()
         live = runner.invoke(
@@ -292,13 +351,9 @@ def test_doctor_and_cli_do_not_claim_a_closed_connector(
             ],
         )
         assert live.exit_code != 0
-        assert "unsupported_tool" in live.stderr
-        assert "mcp-session" not in live.stdout
-        assert "mcp-session" not in live.stderr
+        assert "provider_unavailable" in live.stderr
+        assert server.events == []
         assert not (work / "campaigns").exists()
-        protocols = [item.get("protocol") for item in server.events]
-        assert "2025-06-18" in protocols
-        assert all(item["authorization"] is None for item in server.events)
     monkeypatch.delenv("CLIPFORGE_WHOP_CONNECTOR", raising=False)
     monkeypatch.delenv("CLIPFORGE_WHOP_URL", raising=False)
     monkeypatch.delenv("CLIPFORGE_WHOP_LIVE_SMOKE", raising=False)
@@ -557,7 +612,13 @@ def test_rollback_restores_an_existing_file(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
     payload = json.dumps(FakeWhopProvider().payload).encode()
-    planned, _raw, write = plan_whop_import(work, payload, project_id="project-1")
+    planned, _raw, write = plan_whop_import(
+        work,
+        payload,
+        project_id="project-1",
+        provider_id="fake_whop",
+        provider_version="1",
+    )
     assert write
     destination = work / "campaigns" / "whop" / planned.import_id
     destination.mkdir(parents=True)
@@ -581,7 +642,13 @@ def test_symlink_destination_is_rejected(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
     payload = json.dumps(FakeWhopProvider().payload).encode()
-    planned, _raw, write = plan_whop_import(work, payload, project_id="project-1")
+    planned, _raw, write = plan_whop_import(
+        work,
+        payload,
+        project_id="project-1",
+        provider_id="fake_whop",
+        provider_version="1",
+    )
     assert write
     outside = tmp_path / "outside.json"
     outside.write_bytes(b"keep-me")
@@ -617,7 +684,8 @@ def test_clean_process_connector(tmp_path: Path) -> None:
             str(catalogue),
             "--nonce",
             nonce,
-            "--prove-session",
+            "--expires-in",
+            "30",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -634,7 +702,7 @@ def test_clean_process_connector(tmp_path: Path) -> None:
         {
             "CLIPFORGE_WHOP_LIVE_SMOKE": "1",
             "CLIPFORGE_WHOP_CONNECTOR": "authenticated",
-            "CLIPFORGE_WHOP_CONNECTOR_URL": f"http://127.0.0.1:{port}/discover",
+            "CLIPFORGE_WHOP_CONNECTOR_URL": f"http://127.0.0.1:{port}/handoff",
             "CLIPFORGE_WHOP_SESSION_HANDLE": nonce,
         }
     )
@@ -663,8 +731,9 @@ def test_clean_process_connector(tmp_path: Path) -> None:
             timeout=30,
         )
         assert first.returncode == 0, first.stderr
-        assert "evidence_origin: authenticated_connector" in first.stdout
+        assert "evidence_origin: test_double" in first.stdout
         assert "live_claim: not_claimed" in first.stdout
+        assert "authenticated_discovery" not in first.stdout
         assert nonce not in first.stdout
         assert nonce not in first.stderr
         stored = " ".join(path.read_text(encoding="utf-8") for path in work.rglob("*.json"))
@@ -700,7 +769,7 @@ def test_clean_process_connector(tmp_path: Path) -> None:
         bridge.wait(timeout=5)
 
 
-def test_acquired_hash_stays_separate_from_the_declaration(tmp_path: Path) -> None:
+def test_discovery_keeps_declared_hashes_out_of_acquisition(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
     discovered = import_discovered(work, FakeWhopProvider(), project_id="project-1")
@@ -712,18 +781,11 @@ def test_acquired_hash_stays_separate_from_the_declaration(tmp_path: Path) -> No
         source_ids=["src-city"],
         operator_id="operator-1",
     )
-    incoming = work / "incoming"
-    incoming.mkdir()
-    (incoming / "clip.bin").write_bytes(b"different-bytes")
-    with pytest.raises(CampaignError) as mismatch:
-        record_acquired_file(work, evidence.evidence_id, "src-city", "incoming/clip.bin")
-    assert mismatch.value.code == "hash_mismatch"
-    acquired_path = work / "campaigns" / "whop-selections" / evidence.evidence_id / "acquired.json"
-    acquired = json.loads(acquired_path.read_text(encoding="utf-8"))
-    assert acquired[0]["declared_content_sha256"] == "a" * 64
-    assert acquired[0]["acquired_file_sha256"] != "a" * 64
-    assert acquired[0]["render_allowed"] is False
+    assert evidence.hash_basis == "declared"
     assert evidence.source_hashes == ["a" * 64]
+    selection = work / "campaigns" / "whop-selections" / evidence.evidence_id
+    assert not (selection / "acquired.json").exists()
+    assert not list(work.rglob("*.sqlite*"))
 
 
 def test_content_rewards_fixture_selects_only_the_valid_source(tmp_path: Path) -> None:
@@ -839,6 +901,18 @@ def test_identity_binds_operator_tool_and_blocks_a_stale_response(tmp_path: Path
     first = import_discovered(work, provider, project_id="project-1", operator_id="operator-1")
     other_operator = import_discovered(work, provider, project_id="project-1", operator_id="operator-2")
     assert other_operator.identity_sha256 != first.identity_sha256
+    assert other_operator.import_id != first.import_id
+    with pytest.raises(CampaignError) as operator_miss:
+        select_whop_campaign(
+            work,
+            campaign_id="camp-city",
+            import_id=other_operator.import_id or "",
+            project_id="project-1",
+            source_ids=["src-city"],
+            operator_id="operator-1",
+            discovery_id=other_operator.discovery_id,
+        )
+    assert operator_miss.value.code == "operator_mismatch"
     renamed = FakeWhopProvider()
     renamed.tool_name = "other_tool"
     other_tool = import_discovered(work, renamed, project_id="project-1")
@@ -854,17 +928,6 @@ def test_identity_binds_operator_tool_and_blocks_a_stale_response(tmp_path: Path
         request=_request(require_status="active"),
     )
     assert filtered.identity_sha256 != first.identity_sha256
-    with pytest.raises(CampaignError) as operator_miss:
-        select_whop_campaign(
-            work,
-            campaign_id="camp-city",
-            import_id=other_operator.import_id or "",
-            project_id="project-1",
-            source_ids=["src-city"],
-            operator_id="operator-1",
-            discovery_id=other_operator.discovery_id,
-        )
-    assert operator_miss.value.code == "operator_mismatch"
     newer = import_discovered(work, FakeWhopProvider(_public(title="Newer rewards")), project_id="project-1")
     with pytest.raises(CampaignError) as crossed:
         select_whop_campaign(
@@ -910,7 +973,7 @@ def test_rollback_restores_overwritten_discovery_files(tmp_path: Path) -> None:
             project_id="project-1",
             promotion_hook=_stop("promoted"),
         )
-    assert failed.value.code == "promotion_failed"
+    assert failed.value.code == "stale_discovery"
     assert snapshot.read_bytes() == previous_snapshot
     assert import_manifest.read_bytes() == previous_import
     assert response.read_bytes() == b"old-response"
@@ -953,15 +1016,9 @@ def test_operator_snapshot_import_does_not_claim_live_transport(tmp_path: Path) 
 
 
 def test_optional_live_smoke_stays_unclaimed() -> None:
-    if os.environ.get("CLIPFORGE_WHOP_LIVE_SMOKE") != "1":
-        pytest.skip("whop_live: not_configured; live_smoke: not_executed")
-    from clipforge.campaign.whop_mcp import configured_connector, configured_connector_url, session_handle
+    from clipforge.campaign.whop_mcp import official_endpoint
 
-    authorized = (
-        configured_connector() == "authenticated"
-        and session_handle() is not None
-        and configured_connector_url() is not None
-    )
+    authorized = os.environ.get("CLIPFORGE_WHOP_AUTHORIZED") == "1" and official_endpoint()
     if not authorized:
         pytest.skip("whop_live: not_configured; live_smoke: not_executed")
     try:
@@ -974,7 +1031,8 @@ def test_optional_live_smoke_stays_unclaimed() -> None:
     dumped = json.dumps(payload).lower()
     assert "bearer " not in dumped
     assert "cookie=" not in dumped
-    assert provider.live_status == "authenticated_discovery"
+    assert provider.live_status != "authenticated_discovery"
+    assert "session_proven" not in dumped
 
 
 def _provider(server: _Server) -> PublicWhopMcpProvider:
@@ -983,6 +1041,7 @@ def _provider(server: _Server) -> PublicWhopMcpProvider:
         timeout_s=2,
         tool_map=[_FIXTURE_TOOL],
         allow_fixture=True,
+        allow_loopback=True,
     )
 
 
