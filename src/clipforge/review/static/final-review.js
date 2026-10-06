@@ -32,6 +32,7 @@
         + " applied " + (payload.reframing_applied || payload.reframing_strategy || "contain")
     );
     text(board, "trajectory " + (payload.trajectory_sha256 || "none"));
+    text(board, "time map " + (payload.time_map_sha256 || "none"));
     text(board, "face track " + (payload.face_track_id || "none"));
     text(board, "reframe blocker " + (payload.reframe_blocker || "none"));
     text(board, "delivery " + (payload.delivery_manifest_sha256 || "none"));

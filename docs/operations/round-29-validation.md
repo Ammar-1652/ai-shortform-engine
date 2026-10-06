@@ -4,7 +4,7 @@ Branch `round-29-dynamic-reframing-quality`, started from `02ab8b4596da84bb777b5
 
 ## Behavior
 
-`contain` remains the default Advanced Hero strategy. `face_follow` is opt-in and uses stored face-track geometry only. It does not identify a person, infer a speaker, or run face recognition. Unsupported evidence fails closed with a named blocker.
+`contain` remains the default Advanced Hero strategy. `face_follow` is opt-in and uses stored face-track geometry and the candidate TimeMap. It does not identify a person, infer a speaker, or run face recognition. The face gap bound follows the 500_000 us analyzer cadence. Unsupported evidence fails closed with a named blocker and is not reported as `contain`.
 
 Whop MCP stays deferred. External platform publishing stays deferred. Arabic and Japanese alignment stay `alignment_not_claimed` unless a real provider runs. SQLite schema version stays 6.
 

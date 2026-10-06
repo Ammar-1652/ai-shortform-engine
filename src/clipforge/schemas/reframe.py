@@ -10,6 +10,9 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.timeline.framerate import FrameRate, frame_start_us
+
+_OUTPUT_RATE = FrameRate(30, 1)
 
 _SHA = r"^[0-9a-f]{64}$"
 
@@ -85,8 +88,11 @@ class FaceFollowTrajectory(Versioned):
         for index, sample in enumerate(self.samples):
             if sample.sample_index != index:
                 raise ValueError("face-follow sample index is not sequential")
-            if sample.output_us < previous:
-                raise ValueError("face-follow samples go backwards in output time")
+            if sample.output_us <= previous:
+                raise ValueError("face-follow samples are not strictly increasing")
+            expected = frame_start_us(index, _OUTPUT_RATE)
+            if sample.output_us != expected:
+                raise ValueError("face-follow sample is not on a 30/1 frame start")
             previous = sample.output_us
             if sample.frame_width != self.source_width or sample.frame_height != self.source_height:
                 raise ValueError("face-follow sample frame does not match the trajectory")
@@ -105,6 +111,8 @@ class FaceTrackEvidence(Versioned):
     mean_confidence_permille: int = Field(ge=0, le=1000)
     coverage_permille: int = Field(ge=0, le=1000)
     max_gap_us: Microseconds
+    face_sample_interval_us: int = Field(ge=1)
+    gap_tolerance_us: int = Field(ge=0)
 
 
 class ReframePlanDocument(Versioned):
@@ -116,6 +124,13 @@ class ReframePlanDocument(Versioned):
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
     producer_job_id: EntityId
+    time_map_sha256: str = Field(pattern=_SHA)
+    profile_fingerprint: str = Field(pattern=_SHA)
+    face_sample_interval_us: int = Field(ge=1)
+    gap_tolerance_us: int = Field(ge=0)
+    smoothing_divisor: int = Field(ge=1, le=16)
+    max_step_px: int = Field(ge=1, le=200)
+    headroom_permille: int = Field(ge=0, le=400)
     source_width: int = Field(ge=1)
     source_height: int = Field(ge=1)
     output_width: int = Field(ge=1)
@@ -136,9 +151,35 @@ class ReframePlanDocument(Versioned):
 
     @model_validator(mode="after")
     def strategy_matches_trajectory(self) -> Self:
-        if self.applied_strategy == "face_follow" and self.trajectory is None:
-            raise ValueError("face_follow requires a trajectory")
-        if self.applied_strategy == "contain" and self.trajectory is not None:
+        if self.applied_strategy == "face_follow":
+            if self.trajectory is None or self.evidence is None:
+                raise ValueError("face_follow requires a trajectory")
+            if self.trajectory_sha256 != self.trajectory.digest():
+                raise ValueError("trajectory hash does not match the trajectory")
+            if (
+                self.trajectory.source_width != self.source_width
+                or self.trajectory.source_height != self.source_height
+            ):
+                raise ValueError("trajectory source dimensions do not match the plan")
+            if (
+                self.trajectory.output_width != self.output_width
+                or self.trajectory.output_height != self.output_height
+            ):
+                raise ValueError("trajectory output dimensions do not match the plan")
+            if self.evidence.track_id != self.face_track_id:
+                raise ValueError("face track evidence does not match the plan")
+            if (
+                self.evidence.face_sample_interval_us != self.face_sample_interval_us
+                or self.evidence.gap_tolerance_us != self.gap_tolerance_us
+            ):
+                raise ValueError("face cadence evidence does not match the plan")
+            if (
+                self.trajectory.smoothing_divisor != self.smoothing_divisor
+                or self.trajectory.max_step_px != self.max_step_px
+                or self.trajectory.headroom_permille != self.headroom_permille
+            ):
+                raise ValueError("trajectory smoothing does not match the plan")
+        if self.applied_strategy == "contain" and (self.trajectory is not None or self.trajectory_sha256):
             raise ValueError("contain does not store a face trajectory")
         for label, value in (
             ("fallback reason", self.fallback_reason),
@@ -155,5 +196,6 @@ class ReframeEvidenceDigest(Versioned):
 
     source_sha256: str = Field(pattern=_SHA)
     visual_analysis_sha256: str = Field(pattern=_SHA)
+    time_map_sha256: str = Field(pattern=_SHA)
     trajectory_sha256: str = Field(pattern=_SHA)
     plan_fingerprint: str = Field(pattern=_SHA)

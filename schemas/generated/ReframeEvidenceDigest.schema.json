@@ -18,6 +18,11 @@
       "title": "Source Sha256",
       "type": "string"
     },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
     "trajectory_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Trajectory Sha256",
@@ -32,6 +37,7 @@
   "required": [
     "source_sha256",
     "visual_analysis_sha256",
+    "time_map_sha256",
     "trajectory_sha256",
     "plan_fingerprint"
   ],

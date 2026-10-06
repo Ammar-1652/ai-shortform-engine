@@ -1631,7 +1631,7 @@ def reframe_facts(bound: _Bound, source: CampaignSourceRun, root: Path) -> Refra
     if blocker is not None or side.is_symlink() or not side.is_file():
         return ReframeFacts(
             requested="face_follow",
-            applied="contain",
+            applied="none",
             status="blocked",
             blocker=blocker or "visual_analysis_missing",
         )
@@ -1639,7 +1639,7 @@ def reframe_facts(bound: _Bound, source: CampaignSourceRun, root: Path) -> Refra
         document = ReframePlanDocument.model_validate_json(side.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValidationError, ValueError):
         return ReframeFacts(
-            requested="face_follow", applied="contain", status="blocked", blocker="visual_analysis_missing"
+            requested="face_follow", applied="none", status="blocked", blocker="visual_analysis_missing"
         )
     hit = source.status == "succeeded" and source.cache_status == "hit"
     return ReframeFacts(
@@ -1687,6 +1687,8 @@ def reframe_blocker(bound: _Bound, source: CampaignSourceRun, root: Path) -> str
         return document.fallback_reason or "face_follow_requires_one_track"
     if document.trajectory.digest() != document.trajectory_sha256:
         return "visual_analysis_stale"
+    if document.time_map_sha256 != plan.time_map_sha256:
+        return "time_map_stale"
     return None
 
 

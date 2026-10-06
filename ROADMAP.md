@@ -180,7 +180,7 @@ A human final decision is required before local delivery. Hero approval and a pa
 
 Status: in progress on `round-29-dynamic-reframing-quality`, started from `02ab8b4596da84bb777b52fe4bd4d806fbca6efd`.
 
-`contain` stays the default. `face_follow` is an explicit crop from stored face-track geometry. It does not identify a person and does not infer a speaker. Whop MCP and external publishing stay deferred. See `docs/adr/0065-deterministic-face-follow-reframing.md` and `docs/operations/round-29-validation.md`.
+`contain` stays the default. `face_follow` is an explicit crop from stored face-track geometry and the candidate TimeMap. The face cadence follows the 500_000 us analyzer interval. It does not identify a person and does not infer a speaker. Whop MCP and external publishing stay deferred. See `docs/adr/0065-deterministic-face-follow-reframing.md` and `docs/operations/round-29-validation.md`.
 
 ## Later
 

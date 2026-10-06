@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from clipforge.errors import MediaError
-from clipforge.schemas.hero import AlignedWord
+from clipforge.schemas.advanced import ReframingWindow
 from clipforge.schemas.reframe import (
     FaceFollowSample,
     FaceFollowTrajectory,
@@ -15,16 +15,18 @@ from clipforge.schemas.reframe import (
     ReframeEvidenceDigest,
     ReframePlanDocument,
 )
+from clipforge.schemas.time import TimeMapDocument, digest_time_map
 from clipforge.schemas.vision import FaceDetectionSample
+from clipforge.timeline import FrameRate, SegmentSpec, TimeMap, frame_start_us
 
 _MIN_CONFIDENCE = 0.55
-_MIN_COVERAGE = 800
-_MAX_GAP_US = 400_000
+_GAP_TOLERANCE_US = 0
 _MAX_STEP_PX = 12
 _HEADROOM = 120
 _SMOOTHING = 4
 _OUTPUT_W = 1080
 _OUTPUT_H = 1920
+_RATE = FrameRate(30, 1)
 
 
 class ReframeError(MediaError):
@@ -35,12 +37,21 @@ class ReframeError(MediaError):
         self.code = code
 
 
+def frame_count_for_duration(duration_us: int) -> int:
+    """How many 30/1 frames start strictly before ``duration_us``."""
+    if duration_us <= 0:
+        return 0
+    timeline = TimeMap([SegmentSpec(segment_id="duration", source_start_us=0, source_end_us=duration_us)])
+    return timeline.output_frame_count(_RATE)
+
+
 def build_face_follow(
     *,
     samples: list[FaceDetectionSample],
     source_width: int,
     source_height: int,
-    duration_us: int,
+    time_map: TimeMapDocument,
+    time_map_sha256: str,
     source_sha256: str,
     analysis_source_sha256: str,
     analysis_present: bool,
@@ -48,11 +59,13 @@ def build_face_follow(
     visual_analysis_id: str,
     visual_analysis_sha256: str,
     producer_job_id: str,
-    words: list[AlignedWord],
     plan_id: str,
     source_asset_id: str,
     created_by: str,
     tool_version: str,
+    profile_fingerprint: str,
+    face_sample_interval_us: int,
+    gap_tolerance_us: int = _GAP_TOLERANCE_US,
 ) -> ReframePlanDocument:
     """Return a face-follow plan or raise a specific blocker. There is no contain fallback."""
     if not analysis_present:
@@ -61,24 +74,58 @@ def build_face_follow(
         raise ReframeError("visual_analysis_stale")
     if not producer_succeeded or not producer_job_id:
         raise ReframeError("visual_analysis_producer_failed")
-    chosen = _one_track(samples, duration_us, words)
-    trajectory = _trajectory(chosen, source_width, source_height, duration_us, words)
-    evidence = _evidence(chosen, duration_us)
+    if digest_time_map(time_map) != time_map_sha256:
+        raise ReframeError("time_map_stale")
+    if face_sample_interval_us < 1 or gap_tolerance_us < 0:
+        raise ReframeError("face_track_gap_too_long")
+    mapped = time_map.to_time_map()
+    duration_us = mapped.total_output_duration()
+    if duration_us < 1 or frame_count_for_duration(duration_us) < 1:
+        raise ReframeError("time_map_stale")
+    permitted = face_sample_interval_us + gap_tolerance_us
+    chosen = _one_track(samples, mapped, permitted)
+    trajectory = _trajectory(chosen, source_width, source_height, mapped)
+    evidence = _evidence(chosen, duration_us, face_sample_interval_us, gap_tolerance_us)
+    track_id = chosen[0].track_id or ""
     body = {
         "applied_strategy": "face_follow",
+        "face_sample_interval_us": face_sample_interval_us,
+        "fps_denominator": 1,
+        "fps_numerator": 30,
+        "gap_tolerance_us": gap_tolerance_us,
+        "headroom_permille": _HEADROOM,
+        "max_step_px": _MAX_STEP_PX,
+        "output_height": _OUTPUT_H,
+        "output_width": _OUTPUT_W,
+        "producer_job_id": producer_job_id,
+        "profile_fingerprint": profile_fingerprint,
+        "requested_strategy": "face_follow",
+        "smoothing_divisor": _SMOOTHING,
+        "source_height": source_height,
         "source_sha256": source_sha256,
-        "track_id": chosen[0].track_id or "",
+        "source_width": source_width,
+        "time_map_sha256": time_map_sha256,
+        "tool_version": tool_version,
+        "track_id": track_id,
         "trajectory_sha256": trajectory.digest(),
+        "visual_analysis_id": visual_analysis_id,
         "visual_analysis_sha256": visual_analysis_sha256,
     }
     fingerprint = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    document = ReframePlanDocument(
+    return ReframePlanDocument(
         plan_id=plan_id,
         source_asset_id=source_asset_id,
         source_sha256=source_sha256,
         visual_analysis_id=visual_analysis_id,
         visual_analysis_sha256=visual_analysis_sha256,
         producer_job_id=producer_job_id,
+        time_map_sha256=time_map_sha256,
+        profile_fingerprint=profile_fingerprint,
+        face_sample_interval_us=face_sample_interval_us,
+        gap_tolerance_us=gap_tolerance_us,
+        smoothing_divisor=_SMOOTHING,
+        max_step_px=_MAX_STEP_PX,
+        headroom_permille=_HEADROOM,
         source_width=source_width,
         source_height=source_height,
         output_width=_OUTPUT_W,
@@ -87,7 +134,7 @@ def build_face_follow(
         fps_denominator=1,
         requested_strategy="face_follow",
         applied_strategy="face_follow",
-        face_track_id=chosen[0].track_id or "",
+        face_track_id=track_id,
         evidence=evidence,
         trajectory=trajectory,
         trajectory_sha256=trajectory.digest(),
@@ -96,13 +143,13 @@ def build_face_follow(
         tool_version=tool_version,
         plan_fingerprint=fingerprint,
     )
-    return document
 
 
 def evidence_digest(document: ReframePlanDocument) -> ReframeEvidenceDigest:
     return ReframeEvidenceDigest(
         source_sha256=document.source_sha256,
         visual_analysis_sha256=document.visual_analysis_sha256,
+        time_map_sha256=document.time_map_sha256,
         trajectory_sha256=document.trajectory_sha256 or "0" * 64,
         plan_fingerprint=document.plan_fingerprint,
     )
@@ -110,50 +157,61 @@ def evidence_digest(document: ReframePlanDocument) -> ReframeEvidenceDigest:
 
 def _one_track(
     samples: list[FaceDetectionSample],
-    duration_us: int,
-    words: list[AlignedWord],
+    time_map: TimeMap,
+    permitted_gap_us: int,
 ) -> list[FaceDetectionSample]:
     if not samples:
         raise ReframeError("visual_analysis_missing")
-    start, end = _source_span(words, duration_us)
-    inside = [item for item in samples if start <= item.timestamp_us <= end and item.track_id]
-    tracks = {item.track_id for item in inside}
+    ranges = [(segment.source_start_us, segment.source_end_us) for segment in time_map.segments]
+    chosen: list[FaceDetectionSample] = []
+    for start, end in ranges:
+        inside = [item for item in samples if start <= item.timestamp_us <= end and item.track_id]
+        if not inside:
+            raise ReframeError("face_track_coverage_insufficient")
+        ordered = sorted(inside, key=lambda item: item.timestamp_us)
+        opening = ordered[0].timestamp_us - start
+        closing = end - ordered[-1].timestamp_us
+        if opening > permitted_gap_us or closing > permitted_gap_us:
+            raise ReframeError("face_track_coverage_insufficient")
+        previous = ordered[0].timestamp_us
+        for item in ordered[1:]:
+            if item.timestamp_us - previous > permitted_gap_us:
+                raise ReframeError("face_track_gap_too_long")
+            previous = item.timestamp_us
+        chosen.extend(ordered)
+    unique: dict[str, FaceDetectionSample] = {}
+    for item in chosen:
+        unique.setdefault(item.detection_id, item)
+    tracks = {item.track_id for item in unique.values()}
     if len(tracks) != 1:
         raise ReframeError("face_follow_requires_one_track")
-    chosen = sorted(inside, key=lambda item: item.timestamp_us)
-    if any(item.confidence < _MIN_CONFIDENCE for item in chosen):
+    ordered = sorted(unique.values(), key=lambda item: (item.timestamp_us, item.detection_id))
+    if any(item.confidence < _MIN_CONFIDENCE for item in ordered):
         raise ReframeError("face_track_confidence_insufficient")
-    if chosen[0].timestamp_us - start > _MAX_GAP_US or end - chosen[-1].timestamp_us > _MAX_GAP_US:
-        raise ReframeError("face_track_coverage_insufficient")
-    previous = chosen[0].timestamp_us
-    for item in chosen[1:]:
-        if item.timestamp_us - previous > _MAX_GAP_US:
-            raise ReframeError("face_track_gap_too_long")
-        previous = item.timestamp_us
-    covered = min(end, chosen[-1].timestamp_us) - max(start, chosen[0].timestamp_us)
-    if end <= start or covered * 1000 // (end - start) < _MIN_COVERAGE:
-        raise ReframeError("face_track_coverage_insufficient")
-    return chosen
+    return ordered
 
 
 def _trajectory(
     samples: list[FaceDetectionSample],
     width: int,
     height: int,
-    duration_us: int,
-    words: list[AlignedWord],
+    time_map: TimeMap,
 ) -> FaceFollowTrajectory:
     crop_w, crop_h = _crop_size(width, height)
-    frames = max(1, duration_us * 30 // 1_000_000)
-    first_face = _face_at(samples, _output_to_source(words, 0, duration_us), width, height)
+    duration_us = time_map.total_output_duration()
+    frames = frame_count_for_duration(duration_us)
+    first_source = time_map.output_to_source(0)
+    first_face = _face_at(samples, first_source, width, height)
     smooth_x = first_face[0] - (crop_w // 2)
     smooth_y = first_face[1] - (crop_h // 2)
     built: list[FaceFollowSample] = []
     previous_x = _clamp(smooth_x, 0, width - crop_w)
     previous_y = _clamp(smooth_y, 0, height - crop_h)
     for index in range(frames):
-        output_us = index * 1_000_000 // 30
-        source_us = _output_to_source(words, output_us, duration_us)
+        output_us = frame_start_us(index, _RATE)
+        if output_us >= duration_us:
+            raise ReframeError("time_map_stale")
+        source_us = time_map.output_to_source(output_us)
         face = _face_at(samples, source_us, width, height)
         desired_x = face[0] - (crop_w // 2)
         desired_y = face[1] - (crop_h // 2)
@@ -200,35 +258,23 @@ def _trajectory(
     )
 
 
-def _evidence(samples: list[FaceDetectionSample], duration_us: int) -> FaceTrackEvidence:
+def _evidence(
+    samples: list[FaceDetectionSample],
+    duration_us: int,
+    cadence_us: int,
+    tolerance_us: int,
+) -> FaceTrackEvidence:
     gaps = [samples[index].timestamp_us - samples[index - 1].timestamp_us for index in range(1, len(samples))]
     mean = sum(item.confidence for item in samples) / len(samples)
     return FaceTrackEvidence(
         track_id=samples[0].track_id or "track",
         sample_count=len(samples),
         mean_confidence_permille=int(mean * 1000),
-        coverage_permille=min(1000, len(samples) * _MAX_GAP_US * 1000 // max(1, duration_us)),
+        coverage_permille=1000 if duration_us > 0 else 0,
         max_gap_us=max(gaps, default=0),
+        face_sample_interval_us=cadence_us,
+        gap_tolerance_us=tolerance_us,
     )
-
-
-def _source_span(words: list[AlignedWord], duration_us: int) -> tuple[int, int]:
-    if not words:
-        return 0, duration_us
-    return words[0].source_start_us, max(words[-1].source_end_us, words[0].source_start_us + 1)
-
-
-def _output_to_source(words: list[AlignedWord], output_us: int, duration_us: int) -> int:
-    if not words:
-        return min(output_us, duration_us)
-    for word in words:
-        if word.output_start_us <= output_us < word.output_end_us:
-            out_span = max(1, word.output_end_us - word.output_start_us)
-            src_span = max(0, word.source_end_us - word.source_start_us)
-            return word.source_start_us + (output_us - word.output_start_us) * src_span // out_span
-    if output_us < words[0].output_start_us:
-        return words[0].source_start_us
-    return words[-1].source_end_us
 
 
 def _face_at(
@@ -344,13 +390,41 @@ def facts_line(document: ReframePlanDocument, *, blocker: str = "") -> str:
     )
 
 
-def windows_match(document: ReframePlanDocument, windows: list[tuple[int, int, int, int, int]]) -> bool:
-    """Compare crop rectangles. The tuple is x, y, width, height, output_us."""
+def window_end_us(document: ReframePlanDocument, index: int, duration_us: int) -> int:
     trajectory = document.trajectory
-    if trajectory is None or len(windows) != len(trajectory.samples):
+    if trajectory is None:
+        raise ReframeError("visual_analysis_missing")
+    if index + 1 < len(trajectory.samples):
+        return trajectory.samples[index + 1].output_us
+    return duration_us
+
+
+def windows_follow_trajectory(
+    document: ReframePlanDocument,
+    windows: list[ReframingWindow],
+    duration_us: int,
+) -> bool:
+    """True when every window is the stored crop for that output frame."""
+    trajectory = document.trajectory
+    if trajectory is None or len(windows) != len(trajectory.samples) or not windows:
         return False
-    for window, sample in zip(windows, trajectory.samples, strict=True):
-        if window != (sample.crop_x, sample.crop_y, sample.crop_width, sample.crop_height, sample.output_us):
+    if windows[0].output_start_us != 0 or windows[-1].output_end_us != duration_us:
+        return False
+    for index, (window, sample) in enumerate(zip(windows, trajectory.samples, strict=True)):
+        strategy = window.strategy_id.strategy_id
+        expected_end = window_end_us(document, index, duration_us)
+        if strategy != "face_follow" or window.output_start_us != sample.output_us:
+            return False
+        if window.output_end_us != expected_end:
+            return False
+        if (
+            window.source_x != sample.crop_x
+            or window.source_y != sample.crop_y
+            or window.source_width != sample.crop_width
+            or window.source_height != sample.crop_height
+            or window.frame_width != sample.frame_width
+            or window.frame_height != sample.frame_height
+        ):
             return False
     return True
 

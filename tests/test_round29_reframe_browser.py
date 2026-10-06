@@ -22,6 +22,7 @@ from clipforge.schemas.advanced import (
     TypographyEvent,
 )
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
 from tests.test_round29_reframe import _track
 
 pytestmark = [pytest.mark.preview, pytest.mark.browser]
@@ -49,11 +50,16 @@ def test_remotion_face_follow_keeps_the_marker_and_contain_keeps_bars(
     _encode(broll, "color=c=red:s=320x180:r=30:d=1")
     _audio(speech, "flac")
     _audio(effect, "wav")
+    time_map = TimeMapDocument(
+        time_map_id="map-1",
+        segments=[TimelineSegment(segment_id="seg-1", source_start_us=0, source_end_us=1_000_000)],
+    )
     document = build_face_follow(
         samples=_track(),
         source_width=320,
         source_height=180,
-        duration_us=1_000_000,
+        time_map=time_map,
+        time_map_sha256=digest_time_map(time_map),
         source_sha256=_SHA,
         analysis_source_sha256=_SHA,
         analysis_present=True,
@@ -61,11 +67,12 @@ def test_remotion_face_follow_keeps_the_marker_and_contain_keeps_bars(
         visual_analysis_id="analysis-1",
         visual_analysis_sha256=_SHA,
         producer_job_id="job-visual",
-        words=[],
         plan_id="reframe-1",
         source_asset_id="source-1",
         created_by="ada",
         tool_version="0.29.0",
+        profile_fingerprint=_SHA,
+        face_sample_interval_us=500_000,
     )
     assert document.trajectory is not None
     windows = []
@@ -86,7 +93,19 @@ def test_remotion_face_follow_keeps_the_marker_and_contain_keeps_bars(
                 frame_height=180,
             )
         )
-    followed = _render(tmp_path / "follow", source, speech, broll, effect, "face_follow", windows)
+    followed = _render(
+        tmp_path / "follow",
+        source,
+        speech,
+        broll,
+        effect,
+        "face_follow",
+        windows,
+        trajectory_sha256=document.trajectory_sha256,
+        time_map_sha256=digest_time_map(time_map),
+        source_sha256=_SHA,
+        output_duration_us=1_000_000,
+    )
     contained = _render(
         tmp_path / "contain",
         source,
@@ -132,6 +151,11 @@ def _render(
     effect: Path,
     strategy: str,
     windows: list[ReframingWindow],
+    *,
+    trajectory_sha256: str = "",
+    time_map_sha256: str = "",
+    source_sha256: str = "",
+    output_duration_us: int = 0,
 ) -> Path:
     root.mkdir()
     staging = root / "staging"
@@ -193,6 +217,10 @@ def _render(
         ],
         windows=windows,
         asset_names={"broll-1": "broll.mp4", "sfx-1": "effect.wav"},
+        trajectory_sha256=trajectory_sha256,
+        time_map_sha256=time_map_sha256,
+        source_sha256=source_sha256,
+        output_duration_us=output_duration_us,
     )
     output = root / "candidates" / "cand-1" / "advanced.mp4"
     output.parent.mkdir(parents=True)

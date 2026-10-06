@@ -612,6 +612,12 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "output_duration_us": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Output Duration Us",
+      "type": "integer"
+    },
     "profile_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Profile Fingerprint",
@@ -641,10 +647,28 @@
       "title": "Sfx",
       "type": "array"
     },
+    "source_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
     "speech_name": {
       "const": "asr.flac",
       "default": "asr.flac",
       "title": "Speech Name",
+      "type": "string"
+    },
+    "time_map_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "trajectory_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Trajectory Sha256",
       "type": "string"
     },
     "typography": {

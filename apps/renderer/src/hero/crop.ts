@@ -26,6 +26,26 @@ export function frameStartUs(frame: number): number {
   return Math.floor((frame * 1_000_000) / FPS);
 }
 
+/** Frames that start strictly before durationUs. Matches TimeMap.output_frame_count at 30/1. */
+export function outputFrameCount(durationUs: number): number {
+  if (durationUs <= 0) {
+    return 0;
+  }
+  let count = Math.floor((durationUs * FPS) / 1_000_000);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (count > 0 && frameStartUs(count - 1) >= durationUs) {
+      count -= 1;
+      continue;
+    }
+    if (frameStartUs(count) < durationUs) {
+      count += 1;
+      continue;
+    }
+    return count;
+  }
+  throw new Error("could not count output frames");
+}
+
 export function windowAt(frame: number, windows: CropWindow[]): CropWindow {
   const time = frameStartUs(frame);
   const found = windows.find((item) => time >= item.output_start_us && time < item.output_end_us);

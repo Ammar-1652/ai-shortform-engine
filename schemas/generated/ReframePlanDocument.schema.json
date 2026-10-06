@@ -192,6 +192,16 @@
           "title": "Coverage Permille",
           "type": "integer"
         },
+        "face_sample_interval_us": {
+          "minimum": 1,
+          "title": "Face Sample Interval Us",
+          "type": "integer"
+        },
+        "gap_tolerance_us": {
+          "minimum": 0,
+          "title": "Gap Tolerance Us",
+          "type": "integer"
+        },
         "max_gap_us": {
           "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
           "maximum": 604800000000,
@@ -228,7 +238,9 @@
         "sample_count",
         "mean_confidence_permille",
         "coverage_permille",
-        "max_gap_us"
+        "max_gap_us",
+        "face_sample_interval_us",
+        "gap_tolerance_us"
       ],
       "title": "FaceTrackEvidence",
       "type": "object"
@@ -262,6 +274,11 @@
       ],
       "default": null
     },
+    "face_sample_interval_us": {
+      "minimum": 1,
+      "title": "Face Sample Interval Us",
+      "type": "integer"
+    },
     "face_track_id": {
       "default": "",
       "title": "Face Track Id",
@@ -280,6 +297,23 @@
     "fps_numerator": {
       "minimum": 1,
       "title": "Fps Numerator",
+      "type": "integer"
+    },
+    "gap_tolerance_us": {
+      "minimum": 0,
+      "title": "Gap Tolerance Us",
+      "type": "integer"
+    },
+    "headroom_permille": {
+      "maximum": 400,
+      "minimum": 0,
+      "title": "Headroom Permille",
+      "type": "integer"
+    },
+    "max_step_px": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Max Step Px",
       "type": "integer"
     },
     "output_height": {
@@ -309,6 +343,11 @@
       "title": "Producer Job Id",
       "type": "string"
     },
+    "profile_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Profile Fingerprint",
+      "type": "string"
+    },
     "requested_strategy": {
       "enum": [
         "contain",
@@ -327,6 +366,12 @@
       "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "smoothing_divisor": {
+      "maximum": 16,
+      "minimum": 1,
+      "title": "Smoothing Divisor",
+      "type": "integer"
     },
     "source_asset_id": {
       "description": "Stable id. UUID text is the usual value.",
@@ -348,6 +393,11 @@
       "minimum": 1,
       "title": "Source Width",
       "type": "integer"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
     },
     "tool_version": {
       "maxLength": 40,
@@ -391,6 +441,13 @@
     "visual_analysis_id",
     "visual_analysis_sha256",
     "producer_job_id",
+    "time_map_sha256",
+    "profile_fingerprint",
+    "face_sample_interval_us",
+    "gap_tolerance_us",
+    "smoothing_divisor",
+    "max_step_px",
+    "headroom_permille",
     "source_width",
     "source_height",
     "output_width",

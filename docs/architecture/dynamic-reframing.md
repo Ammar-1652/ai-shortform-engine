@@ -4,7 +4,7 @@
 
 ## What face_follow is
 
-The trajectory is a deterministic crop for each output frame. It uses the current visual-analysis artifact: source hash, proxy size, face boxes, confidence, and track id. It keeps one face box inside a 9:16 crop of the source, with a fixed headroom inset, integer smoothing, and a maximum step of 12 pixels per frame.
+The trajectory is a deterministic crop for each output frame. Output time is mapped through the candidate `TimeMap`. Word spans are not a second clock. The plan stores `time_map_sha256` and rejects a mismatched digest. Face samples use the visual analyzer's cadence. The production cadence is 500_000 us. A gap fails only when it is longer than that cadence plus the stored tolerance. The crop keeps one face box inside a 9:16 window, with a fixed headroom inset, integer smoothing, and a maximum step of 12 pixels per frame. Frame count uses the same 30/1 half-open rule as `TimeMap.output_frame_count`. The frame that starts at the exact output endpoint is excluded.
 
 A face box is not an identity. The track id is geometry inside one analysis. `face_follow` does not run face recognition, does not name a person, and does not infer that the visible face is the speaker. `speaker_attribution` stays `unknown`.
 
@@ -18,7 +18,7 @@ An explicit `face_follow` plan is written only when all of these hold:
 - every crop stays inside the source and keeps the face box inside the safe inset;
 - no crop center moves faster than the maximum step.
 
-Otherwise the command fails with a specific blocker such as `face_follow_requires_one_track`, `face_track_coverage_insufficient`, `face_track_confidence_insufficient`, `face_track_gap_too_long`, `face_follow_crop_out_of_bounds`, `face_follow_motion_too_fast`, `visual_analysis_stale`, `visual_analysis_missing`, or `visual_analysis_producer_failed`. The plan does not claim `face_follow` after falling back to `contain`.
+Otherwise the command fails with a specific blocker such as `face_follow_requires_one_track`, `face_track_coverage_insufficient`, `face_track_confidence_insufficient`, `face_track_gap_too_long`, `face_follow_crop_out_of_bounds`, `face_follow_motion_too_fast`, `visual_analysis_stale`, `visual_analysis_missing`, `visual_analysis_producer_failed`, or `time_map_stale`. A requested `face_follow` plan is not rewritten as `contain`. A missing plan is reported as missing, not as a successful reframe.
 
 ## Render and review
 

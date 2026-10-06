@@ -10,7 +10,7 @@ Advanced Hero rendered every picture with static `contain` framing. Face detecti
 
 ## Decision
 
-`contain` remains the default and keeps its profile fingerprint and window geometry. `face_follow` is an opt-in strategy. It builds an integer crop trajectory from the stored visual-analysis artifact and persists that trajectory beside the advanced plan. The renderer consumes the stored windows. It does not sample pixels to find a face.
+`contain` remains the default. `face_follow` is an opt-in strategy. It builds an integer crop trajectory from the stored visual-analysis artifact and the candidate `TimeMap`, and persists that trajectory beside the advanced plan. Output frames are mapped with `TimeMap.output_to_source`. The renderer consumes the stored windows and the publish gate compares every window, the trajectory hash, the TimeMap hash, and the source hash. It does not sample pixels to find a face. The permitted face gap is the analyzer cadence plus a stored tolerance. The production cadence is 500_000 us.
 
 Eligibility fails closed. Insufficient evidence returns a named blocker and does not relabel the result as `face_follow`. The contracts reject unknown keys, non-finite numbers, bad rectangles, and unsafe text. No absolute path is stored.
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { faceInSafe, frameStartUs, placedVideo, windowAt, windowInsideSource, type CropWindow } from "./crop.js";
+import {
+  faceInSafe,
+  frameStartUs,
+  outputFrameCount,
+  placedVideo,
+  windowAt,
+  windowInsideSource,
+  type CropWindow,
+} from "./crop.js";
 
 const frame = (index: number, x: number): CropWindow => ({
   output_start_us: frameStartUs(index),
@@ -30,6 +38,14 @@ describe("face-follow crop", () => {
     for (const item of windows) {
       expect(windowInsideSource(item)).toBe(true);
     }
+  });
+
+  it("counts partial frames the same way as the Python time map", () => {
+    expect(outputFrameCount(1_000_000)).toBe(30);
+    expect(outputFrameCount(1_000_001)).toBe(31);
+    expect(outputFrameCount(18_475_000)).toBe(555);
+    expect(outputFrameCount(18_773_000)).toBe(564);
+    expect(frameStartUs(30)).toBe(1_000_000);
   });
 
   it("keeps the face inside the safe region and does not drift frames", () => {

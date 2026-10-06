@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -13,21 +14,29 @@ from clipforge.hero.reframe import (
     ReframeError,
     assert_unlinked,
     build_face_follow,
+    evidence_digest,
     facts_line,
     max_crop_movement,
     reject_evidence_reference,
-    windows_match,
 )
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.publish.errors import PublishError
 from clipforge.publish.preflight import _reframe_binding, cache_fingerprint
 from clipforge.qa.technical import TechnicalInputs, _reframing
 from clipforge.review.final_gate import _difference
-from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument, AdvancedHeroPlanDocument, ReframingWindow
+from clipforge.schemas.advanced import (
+    AdvancedHeroDraftSetDocument,
+    AdvancedHeroPlanDocument,
+    ReframingStrategy,
+    ReframingWindow,
+)
 from clipforge.schemas.jobs import QAStatus
 from clipforge.schemas.reframe import FaceFollowSample, FaceFollowTrajectory, ReframePlanDocument
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
 from clipforge.schemas.vision import FaceDetectionSample, NormalizedBoundingBox
 from clipforge.storage import Database
+from clipforge.timeline import frame_start_us
+from clipforge.timeline.framerate import FrameRate
 
 _SHA = "ab" * 32
 _OTHER = "cd" * 32
@@ -74,12 +83,28 @@ def _track(
     ]
 
 
+def _time_map(duration_us: int = _DURATION, source_start_us: int = 0) -> TimeMapDocument:
+    return TimeMapDocument(
+        time_map_id="map-1",
+        segments=[
+            TimelineSegment(
+                segment_id="seg-1",
+                source_start_us=source_start_us,
+                source_end_us=source_start_us + duration_us,
+            )
+        ],
+    )
+
+
 def _plan(**overrides: object) -> ReframePlanDocument:
+    time_map = overrides.pop("time_map", None)
+    document = time_map if isinstance(time_map, TimeMapDocument) else _time_map()
     values: dict[str, object] = {
         "samples": _track(),
         "source_width": _WIDTH,
         "source_height": _HEIGHT,
-        "duration_us": _DURATION,
+        "time_map": document,
+        "time_map_sha256": digest_time_map(document),
         "source_sha256": _SHA,
         "analysis_source_sha256": _SHA,
         "analysis_present": True,
@@ -87,11 +112,12 @@ def _plan(**overrides: object) -> ReframePlanDocument:
         "visual_analysis_id": "analysis-1",
         "visual_analysis_sha256": _OTHER,
         "producer_job_id": "job-visual",
-        "words": [],
         "plan_id": "reframe-1",
         "source_asset_id": "source-1",
         "created_by": "ada",
         "tool_version": "0.29.0",
+        "profile_fingerprint": _SHA,
+        "face_sample_interval_us": 500_000,
     }
     values.update(overrides)
     return build_face_follow(**values)  # type: ignore[arg-type]
@@ -238,21 +264,32 @@ def test_changed_trajectory_invalidates_qa(tmp_path: Path) -> None:
     path = workspace.reframe_plan_file("cand-1")
     path.parent.mkdir(parents=True)
     path.write_text(document.model_dump_json(), encoding="utf-8")
+    assert document.trajectory is not None
+    windows = []
+    samples = document.trajectory.samples
+    for index, sample in enumerate(samples):
+        end = samples[index + 1].output_us if index + 1 < len(samples) else _DURATION
+        windows.append(
+            ReframingWindow(
+                window_id=f"window-{index}",
+                strategy_id=ReframingStrategy(strategy_id="face_follow"),
+                output_start_us=sample.output_us,
+                output_end_us=end,
+                source_x=sample.crop_x + (8 if index == 0 else 0),
+                source_y=sample.crop_y,
+                source_width=sample.crop_width,
+                source_height=sample.crop_height,
+                frame_width=sample.frame_width,
+                frame_height=sample.frame_height,
+            )
+        )
     plan = AdvancedHeroPlanDocument.model_construct(
         candidate_id="cand-1",
         reframing_strategy="face_follow",
         source_sha256=_SHA,
         visual_analysis_sha256=_OTHER,
-        windows=[
-            ReframingWindow.model_construct(
-                output_start_us=sample.output_us,
-                source_x=sample.crop_x + 8,
-                source_y=sample.crop_y,
-                source_width=sample.crop_width,
-                source_height=sample.crop_height,
-            )
-            for sample in document.trajectory.samples  # type: ignore[union-attr]
-        ],
+        time_map_sha256=document.time_map_sha256,
+        windows=windows,
     )
     inputs = TechnicalInputs(
         database=Database(tmp_path / "missing.sqlite"),
@@ -273,11 +310,9 @@ def test_changed_trajectory_invalidates_qa(tmp_path: Path) -> None:
     check = _reframing(inputs)
     assert check.status is QAStatus.FAIL
     assert "visual_analysis_stale" in check.evidence
-    matched = [
-        (item.source_x, item.source_y, item.source_width, item.source_height, item.output_start_us)
-        for item in plan.windows
-    ]
-    assert windows_match(document, matched) is False
+    from clipforge.hero.reframe import windows_follow_trajectory
+
+    assert windows_follow_trajectory(document, list(plan.windows), _DURATION) is False
 
 
 def test_changed_trajectory_invalidates_final_approval_and_delivery(tmp_path: Path) -> None:
@@ -398,4 +433,106 @@ def test_contain_strategy_needs_no_face_evidence(tmp_path: Path) -> None:
     binding = _reframe_binding(SourceWorkspace(tmp_path, "project-1", "source-1"), plan, _SHA, _SHA)
     assert binding.applied == "contain"
     assert binding.trajectory_sha256 == ""
+    assert not (tmp_path / "reframe.json").exists()
+
+
+def test_time_map_offset_and_jump_cut_and_endpoint() -> None:
+    from clipforge.hero.reframe import frame_count_for_duration
+
+    start = 117_610_000
+    duration = 2_000_000
+    stamps = [start + offset for offset in (0, 500_000, 1_000_000, 1_500_000, 2_000_000)]
+    samples = [_sample(index, stamp, 0.4, width=0.1) for index, stamp in enumerate(stamps)]
+    document = _plan(samples=samples, time_map=_time_map(duration, start))
+    assert document.trajectory is not None
+    by_output = {item.output_us: item.source_us for item in document.trajectory.samples}
+    assert by_output[100_000] == 117_710_000
+    assert by_output[700_000] == 118_310_000
+    assert by_output[1_500_000] == 119_110_000
+    assert document.trajectory.samples[-1].output_us < duration
+    assert frame_start_us(frame_count_for_duration(duration), FrameRate(30, 1)) >= duration
+    jump = TimeMapDocument(
+        time_map_id="map-jump",
+        segments=[
+            TimelineSegment(segment_id="seg-a", source_start_us=0, source_end_us=500_000),
+            TimelineSegment(segment_id="seg-b", source_start_us=2_000_000, source_end_us=2_500_000),
+        ],
+    )
+    first = [_sample(index, stamp, 0.4, width=0.1) for index, stamp in enumerate((0, 250_000, 500_000))]
+    second = [
+        _sample(index + 10, stamp, 0.42, width=0.1, track="track-1")
+        for index, stamp in enumerate((2_000_000, 2_250_000, 2_500_000))
+    ]
+    jumped = _plan(samples=[*first, *second], time_map=jump)
+    assert jumped.trajectory is not None
+    jumped_map = {item.output_us: item.source_us for item in jumped.trajectory.samples}
+    assert jumped_map[0] == 0
+    assert jumped_map[700_000] == 2_200_000
+
+
+def test_production_cadence_succeeds_and_a_longer_gap_fails() -> None:
+    samples = [_sample(index, stamp, 0.4, width=0.1) for index, stamp in enumerate((0, 500_000, 1_000_000))]
+    document = _plan(samples=samples, time_map=_time_map(1_000_000))
+    assert document.evidence is not None
+    assert document.evidence.face_sample_interval_us == 500_000
+    assert document.evidence.max_gap_us == 500_000
+    with pytest.raises(ReframeError, match="face_track_gap_too_long"):
+        _plan(
+            samples=[_sample(0, 0, 0.4, width=0.1), _sample(1, 1_000_001, 0.4, width=0.1)],
+            time_map=_time_map(1_500_000),
+        )
+
+
+def test_duplicate_skipped_and_unaligned_frames_fail() -> None:
+    document = _plan()
+    assert document.trajectory is not None
+    payload = document.trajectory.model_dump()
+    duplicate = json.loads(json.dumps(payload))
+    duplicate["samples"][1]["output_us"] = duplicate["samples"][0]["output_us"]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        FaceFollowTrajectory.model_validate(duplicate)
+    skipped = json.loads(json.dumps(payload))
+    skipped["samples"][1]["output_us"] = frame_start_us(2, FrameRate(30, 1))
+    with pytest.raises(ValidationError, match="30/1 frame start"):
+        FaceFollowTrajectory.model_validate(skipped)
+    skewed = json.loads(json.dumps(payload))
+    skewed["samples"][1]["output_us"] = 100
+    with pytest.raises(ValidationError, match="30/1 frame start"):
+        FaceFollowTrajectory.model_validate(skewed)
+
+
+def test_frame_counts_match_the_canonical_time_map() -> None:
+    from clipforge.hero.reframe import frame_count_for_duration
+
+    assert frame_count_for_duration(1_000_000) == 30
+    assert frame_count_for_duration(1_000_001) == 31
+    assert frame_count_for_duration(18_475_000) == 555
+    assert frame_count_for_duration(18_773_000) == 564
+
+
+def test_recompute_matches_build_and_fingerprint_binds_inputs() -> None:
+    first = _plan()
+    second = _plan()
+    assert first.trajectory is not None and second.trajectory is not None
+    assert first.trajectory.model_dump() == second.trajectory.model_dump()
+    assert first.trajectory_sha256 == second.trajectory_sha256
+    assert evidence_digest(first).model_dump() == evidence_digest(second).model_dump()
+    assert first.plan_fingerprint == second.plan_fingerprint
+    changed_job = _plan(producer_job_id="job-other")
+    assert changed_job.plan_fingerprint != first.plan_fingerprint
+    with pytest.raises(ReframeError, match="time_map_stale"):
+        _plan(time_map_sha256="11" * 32)
+
+
+def test_explicit_face_follow_does_not_report_contain(tmp_path: Path) -> None:
+    from clipforge.campaign.production import ReframeFacts
+
+    facts = ReframeFacts(
+        requested="face_follow",
+        applied="none",
+        status="blocked",
+        blocker="visual_analysis_missing",
+    )
+    assert facts.applied != "contain"
+    assert facts.blocker == "visual_analysis_missing"
     assert not (tmp_path / "reframe.json").exists()

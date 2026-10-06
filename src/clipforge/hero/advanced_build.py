@@ -26,6 +26,7 @@ from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterva
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import Database
 from clipforge.transcription.io import publish_json
@@ -82,7 +83,8 @@ def build_advanced_plan(
         visual,
         duration_us,
         candidate_id,
-        alignment.words,
+        hero_plan.edit_plan.time_map,
+        hero_plan.edit_plan.time_map_sha256,
         source_sha256,
         source_asset_id,
         visual_sha256,
@@ -286,7 +288,8 @@ def _windows(
     visual: VisualAnalysisDocument,
     duration_us: int,
     candidate_id: str,
-    words: list[AlignedWord],
+    time_map: TimeMapDocument,
+    time_map_sha256: str,
     source_sha256: str,
     source_asset_id: str,
     visual_sha256: str,
@@ -300,9 +303,9 @@ def _windows(
     if strategy == "face_follow":
         return _face_follow_windows(
             visual,
-            duration_us,
             candidate_id,
-            words,
+            time_map,
+            time_map_sha256,
             source_sha256,
             source_asset_id,
             visual_sha256,
@@ -346,9 +349,9 @@ def _windows(
 
 def _face_follow_windows(
     visual: VisualAnalysisDocument,
-    duration_us: int,
     candidate_id: str,
-    words: list[AlignedWord],
+    time_map: TimeMapDocument,
+    time_map_sha256: str,
     source_sha256: str,
     source_asset_id: str,
     visual_sha256: str,
@@ -372,7 +375,8 @@ def _face_follow_windows(
             samples=list(visual.face_detection_samples),
             source_width=visual.proxy_width,
             source_height=visual.proxy_height,
-            duration_us=duration_us,
+            time_map=time_map,
+            time_map_sha256=time_map_sha256,
             source_sha256=source_sha256,
             analysis_source_sha256=visual.source_sha256,
             analysis_present=bool(visual.face_detection_samples),
@@ -380,22 +384,24 @@ def _face_follow_windows(
             visual_analysis_id=visual.analysis_id,
             visual_analysis_sha256=visual_sha256,
             producer_job_id=job_id,
-            words=words,
             plan_id=stable_id("reframe", candidate_id),
             source_asset_id=source_asset_id,
             created_by=actor,
             tool_version=tool_version,
+            profile_fingerprint=profile.fingerprint(),
+            face_sample_interval_us=visual.face_sample_interval_us,
         )
     except ReframeError as exc:
         raise MediaError(exc.code) from exc
     if document.trajectory is None:
         raise MediaError("visual_analysis_missing")
+    from clipforge.hero.reframe import window_end_us
+
     windows: list[ReframingWindow] = []
     samples = document.trajectory.samples
+    duration_us = time_map.to_time_map().total_output_duration()
     for index, sample in enumerate(samples):
-        end = (
-            samples[index + 1].output_us if index + 1 < len(samples) else max(duration_us, sample.output_us + 1)
-        )
+        end = window_end_us(document, index, duration_us)
         windows.append(
             ReframingWindow(
                 window_id=stable_id("window", candidate_id, "face_follow", str(index)),

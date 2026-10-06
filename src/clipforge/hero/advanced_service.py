@@ -18,6 +18,7 @@ from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvan
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.probe import probe_hero
+from clipforge.hero.reframe import frame_count_for_duration, windows_follow_trajectory
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
 from clipforge.media.hashing import sha256_file
@@ -53,6 +54,7 @@ from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.vision import VisualAnalysisDocument
 from clipforge.storage import (
     ArtifactRow,
@@ -398,10 +400,10 @@ def _render_run(
         render_input = AdvancedHeroRenderInput(
             candidate_id=candidate_id,
             advanced_set_id=advanced_set_id,
-            duration_in_frames=max(1, _output_end_us(plan) * 30 // 1_000_000),
+            duration_in_frames=frame_count_for_duration(_output_end_us(plan)),
             reframing_strategy=plan.reframing_strategy,
             reframing_config_sha256=plan.reframing_config_sha256,
-            profile_fingerprint=profile.fingerprint(),
+            profile_fingerprint=plan.profile_fingerprint,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
@@ -412,6 +414,10 @@ def _render_run(
             sfx=plan.sfx,
             windows=plan.windows,
             asset_names=staged,
+            trajectory_sha256=_plan_trajectory_sha256(workspace, plan),
+            time_map_sha256=plan.time_map_sha256,
+            source_sha256=plan.source_sha256,
+            output_duration_us=_output_end_us(plan),
         )
         output = run_dir / "candidates" / candidate_id / "advanced.mp4"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -721,6 +727,12 @@ def _sample_rate(path: Path) -> int:
     raise MediaError(f"{path.name} has no audio stream")
 
 
+def _plan_trajectory_sha256(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
+    if plan.reframing_strategy != "face_follow":
+        return ""
+    return _sidecar_trajectory(workspace, plan)
+
+
 def _output_end_us(plan: AdvancedHeroPlanDocument) -> int:
     if not plan.windows:
         return 1
@@ -756,16 +768,11 @@ def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanD
         or document.visual_analysis_sha256 != plan.visual_analysis_sha256
     ):
         return False
-    samples = document.trajectory.samples
-    if len(samples) != len(plan.windows):
+    duration_us = plan.windows[-1].output_end_us if plan.windows else 0
+    if document.time_map_sha256 != plan.time_map_sha256:
         return False
-    for sample, window in zip(samples, plan.windows, strict=True):
-        if window.output_start_us != sample.output_us or window.source_x != sample.crop_x:
-            return False
-        if window.source_y != sample.crop_y or window.source_width != sample.crop_width:
-            return False
-        if window.source_height != sample.crop_height:
-            return False
+    if not windows_follow_trajectory(document, list(plan.windows), duration_us):
+        return False
     return document.trajectory_sha256 == document.trajectory.digest()
 
 
@@ -808,7 +815,8 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
     from clipforge.hero.reframe import ReframeError, assert_unlinked, build_face_follow
     from clipforge.storage.repository import get_job
 
-    if not _reframe_sidecar_current(context.workspace, plan):
+    stored = _stored_reframe(context.workspace, plan)
+    if stored is None or not _reframe_sidecar_current(context.workspace, plan):
         raise MediaError("visual_analysis_stale")
     job_id = context.visual.provenance.job_id or ""
     succeeded = False
@@ -823,7 +831,8 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
             samples=list(context.visual.face_detection_samples),
             source_width=context.visual.proxy_width,
             source_height=context.visual.proxy_height,
-            duration_us=context.duration_us,
+            time_map=context.hero_plan.edit_plan.time_map,
+            time_map_sha256=context.hero_plan.edit_plan.time_map_sha256,
             source_sha256=context.source_sha256,
             analysis_source_sha256=context.visual.source_sha256,
             analysis_present=bool(context.visual.face_detection_samples),
@@ -831,15 +840,19 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
             visual_analysis_id=context.visual.analysis_id,
             visual_analysis_sha256=context.visual_sha256,
             producer_job_id=job_id,
-            words=list(context.alignment.words),
-            plan_id=plan.plan_id,
-            source_asset_id=plan.source_asset_id,
-            created_by="clipforge",
-            tool_version="recompute",
+            plan_id=stored.plan_id,
+            source_asset_id=stored.source_asset_id,
+            created_by=stored.created_by,
+            tool_version=stored.tool_version,
+            profile_fingerprint=stored.profile_fingerprint,
+            face_sample_interval_us=stored.face_sample_interval_us,
+            gap_tolerance_us=stored.gap_tolerance_us,
         )
     except ReframeError as exc:
         raise MediaError(exc.code) from exc
-    if rebuilt.trajectory_sha256 != _sidecar_trajectory(context.workspace, plan):
+    same_plan = rebuilt.plan_fingerprint == stored.plan_fingerprint
+    same_trajectory = rebuilt.trajectory_sha256 == stored.trajectory_sha256
+    if not same_plan or not same_trajectory:
         raise MediaError("visual_analysis_stale")
     side = context.workspace.reframe_plan_file(plan.candidate_id)
     try:
@@ -848,11 +861,20 @@ def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, con
         raise MediaError(exc.code) from exc
 
 
-def _sidecar_trajectory(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
-    from clipforge.schemas.reframe import ReframePlanDocument
-
+def _stored_reframe(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> ReframePlanDocument | None:
     path = workspace.reframe_plan_file(plan.candidate_id)
-    document = ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    if path.is_symlink() or not path.is_file():
+        return None
+    try:
+        return ReframePlanDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError):
+        return None
+
+
+def _sidecar_trajectory(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
+    document = _stored_reframe(workspace, plan)
+    if document is None:
+        return ""
     return document.trajectory_sha256
 
 

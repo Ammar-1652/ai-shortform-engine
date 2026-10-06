@@ -63,6 +63,7 @@ def evidence_for_facts(facts: DeliveryFacts) -> dict[str, str]:
         "reframing_strategy": facts.reframing_strategy,
         "source_asset_id": facts.source_asset_id,
         "source_sha256": facts.source_sha256,
+        "time_map_sha256": facts.time_map_sha256,
         "trajectory_sha256": facts.trajectory_sha256,
     }
 
@@ -316,6 +317,7 @@ def final_board(
         "reframing_fallback": facts.reframe_fallback,
         "face_track_id": facts.face_track_id,
         "trajectory_sha256": facts.trajectory_sha256,
+        "time_map_sha256": facts.time_map_sha256,
         "reframe_blocker": facts.reframe_blocker,
         "effective_decision": effective,
         "blockers": [] if code == "approved" else [code],

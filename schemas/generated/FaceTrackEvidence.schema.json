@@ -8,6 +8,16 @@
       "title": "Coverage Permille",
       "type": "integer"
     },
+    "face_sample_interval_us": {
+      "minimum": 1,
+      "title": "Face Sample Interval Us",
+      "type": "integer"
+    },
+    "gap_tolerance_us": {
+      "minimum": 0,
+      "title": "Gap Tolerance Us",
+      "type": "integer"
+    },
     "max_gap_us": {
       "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
       "maximum": 604800000000,
@@ -44,7 +54,9 @@
     "sample_count",
     "mean_confidence_permille",
     "coverage_permille",
-    "max_gap_us"
+    "max_gap_us",
+    "face_sample_interval_us",
+    "gap_tolerance_us"
   ],
   "title": "FaceTrackEvidence",
   "type": "object"
