@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "description": "One aligned word. The Unicode text is the transcript text.",
+  "properties": {
+    "output_end_frame_exclusive": {
+      "minimum": 0,
+      "title": "Output End Frame Exclusive",
+      "type": "integer"
+    },
+    "output_end_us": {
+      "minimum": 0,
+      "title": "Output End Us",
+      "type": "integer"
+    },
+    "output_start_frame": {
+      "minimum": 0,
+      "title": "Output Start Frame",
+      "type": "integer"
+    },
+    "output_start_us": {
+      "minimum": 0,
+      "title": "Output Start Us",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_end_us": {
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "text": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "transcript_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Transcript Id",
+      "type": "string"
+    },
+    "word_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Word Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "word_id",
+    "text",
+    "source_start_us",
+    "source_end_us",
+    "output_start_us",
+    "output_end_us",
+    "output_start_frame",
+    "output_end_frame_exclusive",
+    "source_asset_id",
+    "transcript_id"
+  ],
+  "title": "MultilingualAlignedWord",
+  "type": "object"
+}

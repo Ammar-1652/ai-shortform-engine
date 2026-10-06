@@ -48,6 +48,9 @@ class CampaignSelectionDocument(Versioned):
     reason_code: str = Field(min_length=1, max_length=80)
     publishing: Literal["deferred"] = "deferred"
     whop_live: Literal["not_configured"] = "not_configured"
+    alignment_requirement: Literal["optional", "required"] = "optional"
+    narration_request: Literal["not_requested", "requested"] = "not_requested"
+    language_capability_fingerprint: str = Field(default="0" * 64, pattern=_SHA)
     provenance: ArtifactProvenance
 
     @field_validator("language", "reason_code")

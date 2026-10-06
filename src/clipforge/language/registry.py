@@ -105,3 +105,26 @@ def alignment_claim(language: str) -> str:
 def alignment_identity_matches(*, revision: str, checkpoint: str) -> bool:
     """True only for the English checkpoint this install has already run."""
     return revision == ENGLISH_ALIGNMENT_REVISION and checkpoint == ENGLISH_ALIGNMENT_CHECKPOINT
+
+
+def language_capability_fingerprint() -> str:
+    """Hash the public capability matrix. A change invalidates cached language work."""
+    import json
+
+    rows = [
+        {
+            "alignment": entry.alignment,
+            "alignment_checkpoint_sha256": entry.alignment_checkpoint_sha256,
+            "alignment_evidence": entry.alignment_evidence,
+            "alignment_model": entry.alignment_model,
+            "alignment_revision": entry.alignment_revision,
+            "language": entry.language,
+            "narration_evidence": entry.narration_evidence,
+            "narration_model": entry.narration_model,
+            "narration_reason": entry.narration_reason,
+            "narration_revision": entry.narration_revision,
+        }
+        for entry in capability_registry()
+    ]
+    raw = json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()

@@ -1,0 +1,108 @@
+{
+  "additionalProperties": false,
+  "description": "What narration this install may claim for one language.",
+  "properties": {
+    "commercial_use": {
+      "enum": [
+        "allowed",
+        "prohibited",
+        "unknown",
+        "not_applicable"
+      ],
+      "title": "Commercial Use",
+      "type": "string"
+    },
+    "engine_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Engine Id"
+    },
+    "language": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "model_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Revision"
+    },
+    "provider_id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "verified_live",
+        "available_not_smoked",
+        "not_configured",
+        "unsupported_language",
+        "alignment_not_claimed",
+        "locale_not_smoked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "voice_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Voice Id"
+    }
+  },
+  "required": [
+    "language",
+    "provider_id",
+    "status",
+    "commercial_use",
+    "reason_code"
+  ],
+  "title": "NarrationCapability",
+  "type": "object"
+}

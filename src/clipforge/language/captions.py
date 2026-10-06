@@ -62,8 +62,30 @@ def wrap_caption(text: str, *, language: str, width: int = 12) -> list[str]:
     if not text or text.strip() != text:
         raise ValueError("caption text is empty")
     if profile.language == "ja":
-        return [text[index : index + width] for index in range(0, len(text), width)]
+        return _wrap_cjk(text, width)
     return [text]
+
+
+def _wrap_cjk(text: str, width: int) -> list[str]:
+    """Wrap by character. Closing punctuation stays with the previous glyph."""
+    forbidden_start = {chr(code) for code in (0x3002, 0x3001, 0xFF01, 0xFF1F, 0x300D, 0xFF09, 0x300F)}
+    forbidden_end = {chr(code) for code in (0xFF08, 0x300C, 0x300E)}
+    lines: list[str] = []
+    current = ""
+    for character in text:
+        if len(current) >= width and character not in forbidden_start:
+            carry = ""
+            if current and current[-1] in forbidden_end:
+                carry = current[-1]
+                current = current[:-1]
+            if current:
+                lines.append(current)
+            current = carry + character
+            continue
+        current += character
+    if current:
+        lines.append(current)
+    return lines
 
 
 def assert_no_overlap(cues: list[CaptionCue]) -> None:

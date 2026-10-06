@@ -154,10 +154,16 @@ Status: merged on main as `a642c202eed45a3aef26b791178f233778ff93a1`. See `docs/
 
 ## Round 25 — Provider boundaries and asset handoff
 
-Status: in progress on `round-25-provider-boundaries-asset-handoff`, started from `a642c202eed45a3aef26b791178f233778ff93a1`.
+Status: merged on main as `5ce59f0fecaf5851edf71c0cca67275b680c76cb`. See `docs/operations/round-25-validation.md`.
 
-Import a validated Whop snapshot without credentials. Register a manually downloaded Envato file only after hash, probe, license, and confinement checks. Publishing stays deferred. See `docs/adr/0060-whop-and-envato-provider-boundaries.md` and `docs/operations/round-25-validation.md`.
+Import a validated Whop snapshot without credentials. Register a manually downloaded Envato file only after hash, probe, license, and confinement checks. Publishing stays deferred. See `docs/adr/0060-whop-and-envato-provider-boundaries.md`.
+
+## Round 26 — Multilingual alignment and narration
+
+Status: in progress on `round-26-multilingual-alignment-narration`, started from `5ce59f0fecaf5851edf71c0cca67275b680c76cb`.
+
+Record which languages have a real aligner or narrator. Full-source alignment runs only when that provider is available. Arabic and Japanese captions keep their characters and direction. A fake provider is not a live claim. Live Whop crawling stays a later provider round. See `docs/adr/0061-multilingual-alignment-and-narration.md`.
 
 ## Later
 
-External platform publishing is planned and not implemented. Live Whop crawling is not implemented. Arabic and Japanese alignment stay unclaimed until a real provider runs.
+External platform publishing is planned and not implemented. Live Whop crawling is a separate provider round and is not implemented. Arabic and Japanese alignment stay unclaimed until a real provider runs.
