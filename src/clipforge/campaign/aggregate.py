@@ -356,6 +356,24 @@ def _source(
         )
         for item in pipeline.stages
     ]
+    if pipeline.status == "succeeded":
+        stages.append(
+            CampaignProductionStageFact(
+                stage="final_review",
+                status="succeeded",
+                cache_hit=pipeline.cache_status == "hit",
+                reason_code="approved",
+            )
+        )
+    else:
+        stages.append(
+            CampaignProductionStageFact(
+                stage="final_review",
+                status="blocked",
+                cache_hit=False,
+                reason_code=pipeline.reason_code,
+            )
+        )
     failure = None if pipeline.status == "succeeded" else pipeline.reason_code
     return CampaignProductionSource(
         source_id=pipeline.source_id,

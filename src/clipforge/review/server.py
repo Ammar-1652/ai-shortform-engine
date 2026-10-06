@@ -58,6 +58,32 @@ def open_hero_review_server(
         raise MediaError(f"could not bind the review server on {host}:{port}: {exc}") from exc
 
 
+def open_final_review_server(
+    *,
+    database: Database,
+    source_asset_id: str,
+    candidate_id: str,
+    work_root: Path,
+    host: str = LOOPBACK_HOST,
+    port: int = 8765,
+) -> ThreadingHTTPServer:
+    """Bind a loopback final-review page. Other hosts are refused before listen."""
+    require_loopback(host)
+    if port < 0 or port > 65535:
+        raise MediaError(f"port {port} is outside 0..65535")
+    handler = _handler(
+        database,
+        source_asset_id,
+        work_root.resolve(),
+        surface="final",
+        candidate_id=candidate_id,
+    )
+    try:
+        return ThreadingHTTPServer((host, port), handler)
+    except OSError as exc:
+        raise MediaError(f"could not bind the review server on {host}:{port}: {exc}") from exc
+
+
 def open_review_server(
     *,
     database: Database,
@@ -84,7 +110,10 @@ def _handler(
     work_root: Path,
     *,
     surface: str,
+    candidate_id: str = "",
 ) -> type[BaseHTTPRequestHandler]:
+    bound_candidate = candidate_id
+
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -105,6 +134,26 @@ def _handler(
                     _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("advanced-review.js"))
                 elif path == "/styles.css":
                     _send_bytes(self, 200, "text/css; charset=utf-8", _static("styles.css"))
+                elif path == "/final-review":
+                    _send_bytes(self, 200, "text/html; charset=utf-8", _static("final-review.html"))
+                elif path == "/final-review.js":
+                    _send_bytes(self, 200, "text/javascript; charset=utf-8", _static("final-review.js"))
+                elif path == "/api/final-review" or path == f"/api/final-review/{bound_candidate}":
+                    from clipforge.review.final_gate import final_board
+
+                    _send_json(self, 200, final_board(database, work_root, source_asset_id, bound_candidate))
+                elif path.startswith("/api/final-review/"):
+                    requested = path.removeprefix("/api/final-review/")
+                    _reject_id(requested)
+                    from clipforge.review.final_gate import final_board
+
+                    _send_json(self, 200, final_board(database, work_root, source_asset_id, requested))
+                elif path.startswith("/media/final/"):
+                    requested = path.removeprefix("/media/final/")
+                    _reject_id(requested)
+                    from clipforge.review.final_gate import final_media
+
+                    _send_media(self, final_media(database, work_root, source_asset_id, requested))
                 elif path == "/api/review":
                     _send_json(self, 200, review_board(database, source_asset_id, work_root))
                 elif path == "/api/hero-review":
@@ -156,6 +205,27 @@ def _handler(
                 return
             try:
                 payload = _read_json(self)
+                if isinstance(payload, dict) and payload.get("subject_kind") == "final":
+                    from clipforge.review.final_gate import FinalReviewError, accept_final_post
+
+                    try:
+                        review = accept_final_post(database, work_root, source_asset_id, payload)
+                    except FinalReviewError as exc:
+                        status = 409 if "reload before saving" in str(exc) else 400
+                        _send_json(self, status, {"error": str(exc)})
+                        return
+                    _send_json(
+                        self,
+                        201,
+                        {
+                            "review_id": review.review_id,
+                            "decision": review.decision,
+                            "candidate_id": review.candidate_id,
+                            "artifact_id": review.artifact_id,
+                            "automated": False,
+                        },
+                    )
+                    return
                 context, decision, reviewer, notes = parse_decision_body(payload)
                 if context.source_asset_id != source_asset_id:
                     raise MediaError(

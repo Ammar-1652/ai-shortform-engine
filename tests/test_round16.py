@@ -808,6 +808,18 @@ def _world(tmp_path: Path) -> World:
         _store(connection, "art-advanced", "job-advanced", KIND_ADVANCED, manifest)
         _store(connection, "art-qa", "job-qa", KIND_QA, qa_path)
         insert_review(connection, _review("approved"))
+        insert_review(connection, _candidate_review())
+    from clipforge.review.final_gate import capture_final_decision
+
+    capture_final_decision(
+        database,
+        work,
+        "source-1",
+        "cand-1",
+        decision="approved",
+        reviewer_id="ada",
+        notes="final",
+    )
     return World(database, work, workspace, video, source_path, broll, sfx, manifest, duration, manifest_sha)
 
 
@@ -1004,6 +1016,21 @@ def _store(connection: object, artifact_id: str, job_id: str, kind: str, path: P
         kind=kind,
         uri=path.resolve().as_uri(),
         provenance=_lineage(job_id, None),
+    )
+
+
+def _candidate_review() -> ReviewDecision:
+    return ReviewDecision(
+        review_id="review-candidate-current",
+        project_id="project-1",
+        artifact_id="art-preview",
+        candidate_id="cand-1",
+        subject_kind="candidate",
+        decision="approved",
+        reviewer_id="ada",
+        created_at=stamp(),
+        notes="kept",
+        automated=False,
     )
 
 

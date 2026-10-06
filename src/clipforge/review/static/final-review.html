@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Final review</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main id="board"></main>
+  <video id="preview" controls preload="metadata"></video>
+  <form id="decision-form">
+    <label>Reviewer <input id="reviewer" name="reviewer"></label>
+    <label>Notes <textarea id="notes" name="notes"></textarea></label>
+    <button type="submit" data-decision="approved">Approve</button>
+    <button type="submit" data-decision="rejected">Reject</button>
+    <button type="submit" data-decision="changes_requested">Request changes</button>
+  </form>
+  <p id="status"></p>
+  <script src="/final-review.js"></script>
+</body>
+</html>
