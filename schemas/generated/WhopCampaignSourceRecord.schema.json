@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "One source named by an operator-exported snapshot. The row is not a license.",
+  "properties": {
+    "display_name": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "policy_state": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Policy State",
+      "type": "string"
+    },
+    "rights_state": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Rights State",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selected": {
+      "title": "Selected",
+      "type": "boolean"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "display_name",
+    "rights_state",
+    "policy_state",
+    "selected"
+  ],
+  "title": "WhopCampaignSourceRecord",
+  "type": "object"
+}

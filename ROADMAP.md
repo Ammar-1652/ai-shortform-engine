@@ -112,6 +112,52 @@ Keep local delivery, isolate Remotion browser renders, and add a fail-closed pla
 
 ## Round 18 — Campaign ingestion, multilingual voice, and Envato discovery
 
-Status: in progress on `round-18-campaign-ingestion-multilingual-voice-envato`, started from `646c805fc4490042597c173f468c1e6ed3a1d32d`.
+Status: merged on main as `9209df919d5f6a7503a5e1ae77da9773fc038209`. See `docs/operations/round-18-validation.md`.
 
 Ingest the two selected Antoine Sallis sources, keep native Clipforge editing allowed, and block black-box editors. Voice narration stays optional. Envato search uses the official MCP server and does not download files. External publishing stays deferred. See `docs/architecture/campaign-ingestion.md`.
+
+## Round 19 — Real-source validation and VoiceStudio
+
+Status: merged on main as `75f1553da04d6703fea1f7861dcd2dd999f4dafc`. See `docs/operations/round-19-validation.md`.
+
+Run the authorized local sources through alignment, Hero, QA, and local delivery. English KittenTTS narration is verified live. Arabic and Japanese alignment stay unclaimed.
+
+## Round 20 — Campaign production and integrity
+
+Status: merged on main as `9f554f49b948908b5ea2ba9d48f8d1910e1fc023`. See `docs/operations/round-20-validation.md`.
+
+One campaign runner reuses the verified stages for the selected sources. Cache, resume, review binding, and delivery checks fail closed. See `docs/adr/0056-campaign-production-run-and-language-capabilities.md`.
+
+## Round 21 — CI consolidation
+
+Status: merged on main as `332b879f7d491ab148261c257743ef2d556cf55f`. See `docs/operations/ci-performance.md`.
+
+Pull-request CI is two self-hosted jobs, `verify-python` and `verify-renderer-browser`. Feature-branch pushes do not start a second workflow.
+
+## Round 22 — Campaign operator control plane
+
+Status: merged on main as `1dcd8926b9c4c0dc23f173bdc56bfee1bb6e10b9`. See `docs/operations/round-22-validation.md`.
+
+Operators select catalogue sources in an append-only sidecar and inspect them on a loopback board. Execution stays in the campaign runner. See `docs/adr/0057-campaign-operator-selection-and-control-plane.md`.
+
+## Round 23 — Source acquisition and policy intake
+
+Status: merged on main as `b92270212a87cd59d05acec244f897b32a9d6b83`. See `docs/operations/round-23-validation.md`.
+
+Selected allowed sources are copied into the work root only after hash, size, confinement, and ffprobe checks. Envato search sends only filters the tool schema supports. See `docs/adr/0058-source-acquisition-and-policy-intake.md`.
+
+## Round 24 — Aggregate campaign production
+
+Status: merged on main as `a642c202eed45a3aef26b791178f233778ff93a1`. See `docs/operations/round-24-validation.md`.
+
+`produce` calls the existing runner and writes one aggregate manifest for selection, review, QA, and local delivery. See `docs/adr/0059-aggregate-campaign-production.md`.
+
+## Round 25 — Provider boundaries and asset handoff
+
+Status: in progress on `round-25-provider-boundaries-asset-handoff`, started from `a642c202eed45a3aef26b791178f233778ff93a1`.
+
+Import a validated Whop snapshot without credentials. Register a manually downloaded Envato file only after hash, probe, license, and confinement checks. Publishing stays deferred. See `docs/adr/0060-whop-and-envato-provider-boundaries.md` and `docs/operations/round-25-validation.md`.
+
+## Later
+
+External platform publishing is planned and not implemented. Live Whop crawling is not implemented. Arabic and Japanese alignment stay unclaimed until a real provider runs.

@@ -107,12 +107,11 @@ def require_asset(
         raise MediaError(f"advanced asset {asset_id} is not in the local catalog")
     if entry.reference.project_id != project_id:
         raise MediaError(f"advanced asset {asset_id} belongs to another project")
-    if entry.reference.kind.value != expected_kind:
-        raise MediaError(
-            f"advanced asset {asset_id} kind is {entry.reference.kind.value}, expected {expected_kind}"
-        )
-    if entry.reference.kind.value == "envato":
-        raise MediaError("Envato assets are not searched or downloaded in this round")
+    kind = entry.reference.kind.value
+    if kind != expected_kind and kind != "envato":
+        raise MediaError(f"advanced asset {asset_id} kind is {kind}, expected {expected_kind}")
+    if kind == "envato" and expected_kind not in {"graphic", "audio", "envato"}:
+        raise MediaError(f"advanced asset {asset_id} kind is envato, expected {expected_kind}")
     _reject_remote(entry.reference.uri, "asset uri")
     path = _local_file(workspace, entry, work_root)
     if path.is_symlink():
@@ -123,6 +122,20 @@ def require_asset(
     digest = sha256_file(path)
     if digest != entry.file_sha256:
         raise MediaError(f"advanced asset {asset_id} hash does not match the catalog")
+    if kind == "envato":
+        from clipforge.assets.handoff import assert_envato_registration
+
+        registration = assert_envato_registration(
+            work_root,
+            database,
+            asset_id,
+            project_id=project_id,
+            file_sha256=digest,
+        )
+        if expected_kind == "audio" and registration.media_kind != "audio":
+            raise MediaError(f"advanced asset {asset_id} is not audio")
+        if expected_kind == "graphic" and registration.media_kind == "audio":
+            raise MediaError(f"advanced asset {asset_id} is not a picture")
     try:
         license_record = _license(database, entry.reference.license_record_id)
     except MediaError:
@@ -140,8 +153,13 @@ def require_asset(
     return entry, license_record, path
 
 
-def binding_for(entry: AssetCatalogEntry, license_record: AssetLicenseRecord) -> AssetBinding:
-    kind = "audio" if entry.reference.kind.value == "audio" else "graphic"
+def binding_for(
+    entry: AssetCatalogEntry,
+    license_record: AssetLicenseRecord,
+    *,
+    slot: str | None = None,
+) -> AssetBinding:
+    kind = "audio" if slot == "audio" or entry.reference.kind.value == "audio" else "graphic"
     return AssetBinding(
         asset_id=entry.reference.asset_id,
         project_id=entry.reference.project_id,

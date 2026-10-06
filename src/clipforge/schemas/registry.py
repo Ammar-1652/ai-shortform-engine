@@ -100,6 +100,12 @@ from clipforge.schemas.editorial import (
     MotionEvent,
     OutputInterval,
 )
+from clipforge.schemas.envato_asset import (
+    EnvatoAssetCacheRecord,
+    EnvatoAssetRegistration,
+    EnvatoAssetRequest,
+    EnvatoAssetVerification,
+)
 from clipforge.schemas.governance import (
     AssetLicenseRecord,
     AssetReference,
@@ -202,6 +208,12 @@ from clipforge.schemas.voice import (
     NarrationPlan,
     NarrationRequest,
     VoiceProviderProfile,
+)
+from clipforge.schemas.whop import (
+    WhopCampaignRecord,
+    WhopCampaignSnapshot,
+    WhopCampaignSourceRecord,
+    WhopImportAttempt,
 )
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
@@ -334,6 +346,10 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CampaignSourceChoice,
     CampaignSelectionDocument,
     CampaignImportSnapshot,
+    WhopCampaignSourceRecord,
+    WhopCampaignRecord,
+    WhopCampaignSnapshot,
+    WhopImportAttempt,
     MediaConstraints,
     ProbeFacts,
     CampaignAcquisitionRequest,
@@ -358,6 +374,10 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     LanguageCaptionProfile,
     AssetSearchHit,
     AssetDownloadRequest,
+    EnvatoAssetRequest,
+    EnvatoAssetRegistration,
+    EnvatoAssetVerification,
+    EnvatoAssetCacheRecord,
     BatchChild,
     BatchManifest,
     ReviewDecision,

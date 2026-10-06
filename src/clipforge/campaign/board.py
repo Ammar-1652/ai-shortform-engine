@@ -7,6 +7,7 @@ import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from clipforge.assets.handoff import campaign_asset_board, envato_asset_board, envato_campaign_board
 from clipforge.campaign.acquisition import (
     board_acquisition,
     board_acquisitions,
@@ -28,6 +29,7 @@ from clipforge.campaign.operator import (
     board_sources,
 )
 from clipforge.campaign.providers import CampaignError
+from clipforge.campaign.whop import board_whop_campaign, board_whop_import
 from clipforge.errors import ClipforgeError
 from clipforge.storage import Database
 
@@ -98,7 +100,7 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                 elif path == "/styles.css":
                     _send(self, 200, (_STATIC / "styles.css").read_bytes(), _STATIC_FILES["styles.css"])
                 elif path == "/api/campaigns":
-                    _send_json(self, board_campaigns())
+                    _send_json(self, board_campaigns(work_root))
                 elif path.startswith("/api/campaign-productions/") and path.endswith("/delivery"):
                     run_id = path.removeprefix("/api/campaign-productions/").removesuffix("/delivery")
                     _reject_id(run_id)
@@ -115,6 +117,14 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                     _send_json(self, board_production(work_root, run_id))
                 elif path.startswith("/api/campaign-runs/"):
                     _send_run(self, work_root, path.removeprefix("/api/campaign-runs/"))
+                elif path.startswith("/api/whop-imports/"):
+                    import_id = path.removeprefix("/api/whop-imports/")
+                    _reject_id(import_id)
+                    _send_json(self, board_whop_import(work_root, import_id))
+                elif path.startswith("/api/envato-assets/"):
+                    asset_id = path.removeprefix("/api/envato-assets/")
+                    _reject_id(asset_id)
+                    _send_json(self, envato_asset_board(work_root, asset_id, database))
                 elif path.startswith("/api/acquisitions/"):
                     acquisition_id = path.removeprefix("/api/acquisitions/")
                     _reject_id(acquisition_id)
@@ -134,7 +144,17 @@ def _handler(work_root: Path, database: Database | None) -> type[BaseHTTPRequest
                 elif path.startswith("/api/campaigns/") and path.endswith("/envato"):
                     campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/envato")
                     _reject_id(campaign_id)
-                    _send_json(self, board_envato(work_root, campaign_id))
+                    payload = board_envato(work_root, campaign_id)
+                    payload.update(envato_campaign_board(work_root, campaign_id, database))
+                    _send_json(self, payload)
+                elif path.startswith("/api/campaigns/") and path.endswith("/whop"):
+                    campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/whop")
+                    _reject_id(campaign_id)
+                    _send_json(self, board_whop_campaign(work_root, campaign_id))
+                elif path.startswith("/api/campaigns/") and path.endswith("/assets"):
+                    campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/assets")
+                    _reject_id(campaign_id)
+                    _send_json(self, campaign_asset_board(work_root, campaign_id, database))
                 elif path.startswith("/api/campaigns/") and path.endswith("/productions"):
                     campaign_id = path.removeprefix("/api/campaigns/").removesuffix("/productions")
                     _reject_id(campaign_id)

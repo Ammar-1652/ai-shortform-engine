@@ -1,0 +1,241 @@
+{
+  "additionalProperties": false,
+  "description": "A request the operator downloads. Clipforge does not fetch the item.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "deferred_filters": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Deferred Filters",
+      "type": "object"
+    },
+    "direct_download_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Direct Download Url"
+    },
+    "download_status": {
+      "const": "manual_download_required",
+      "default": "manual_download_required",
+      "title": "Download Status",
+      "type": "string"
+    },
+    "expected_codec": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Codec"
+    },
+    "expected_frame_rate": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]+/[0-9]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Frame Rate"
+    },
+    "expected_height": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Height"
+    },
+    "expected_width": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Width"
+    },
+    "intended_use": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Intended Use",
+      "type": "string"
+    },
+    "item_id": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Id"
+    },
+    "item_page_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Page Url"
+    },
+    "max_bytes": {
+      "default": 200000000,
+      "exclusiveMinimum": 0,
+      "title": "Max Bytes",
+      "type": "integer"
+    },
+    "media_kind": {
+      "default": "unknown",
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "graphic",
+        "unknown"
+      ],
+      "title": "Media Kind",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "provider": {
+      "enum": [
+        "envato_mcp",
+        "fake",
+        "dry_run"
+      ],
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "request_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "requested_duration": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Duration"
+    },
+    "requested_format": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Format"
+    },
+    "requested_resolution": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Resolution"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "supported_filters": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Supported Filters",
+      "type": "object"
+    }
+  },
+  "required": [
+    "request_id",
+    "provider",
+    "provider_version",
+    "query",
+    "intended_use",
+    "campaign_id",
+    "policy_fingerprint",
+    "created_at"
+  ],
+  "title": "EnvatoAssetRequest",
+  "type": "object"
+}

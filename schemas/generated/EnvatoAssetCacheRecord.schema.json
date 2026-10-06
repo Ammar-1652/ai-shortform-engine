@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "description": "Why a registration was reused or written again.",
+  "properties": {
+    "asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Asset Id",
+      "type": "string"
+    },
+    "byte_size": {
+      "minimum": 0,
+      "title": "Byte Size",
+      "type": "integer"
+    },
+    "cache_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Cache Id",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "request_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "cache_id",
+    "asset_id",
+    "request_id",
+    "content_sha256",
+    "byte_size",
+    "policy_fingerprint",
+    "status",
+    "created_at"
+  ],
+  "title": "EnvatoAssetCacheRecord",
+  "type": "object"
+}

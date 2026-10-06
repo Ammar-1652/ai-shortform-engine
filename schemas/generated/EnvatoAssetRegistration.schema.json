@@ -1,0 +1,347 @@
+{
+  "$defs": {
+    "ProbeFacts": {
+      "additionalProperties": false,
+      "description": "ffprobe measurements with no filesystem path.",
+      "properties": {
+        "audio_codec": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Codec"
+        },
+        "duration_us": {
+          "minimum": 0,
+          "title": "Duration Us",
+          "type": "integer"
+        },
+        "format_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format Name"
+        },
+        "frame_rate": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]+/[0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Rate"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "sample_rate": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Rate"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "video_codec": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Video Codec"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "required": [
+        "duration_us"
+      ],
+      "title": "ProbeFacts",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One manually supplied file after confinement, hash, probe, and rights checks.",
+  "properties": {
+    "acquisition_status": {
+      "enum": [
+        "verified",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Acquisition Status",
+      "type": "string"
+    },
+    "asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Asset Id",
+      "type": "string"
+    },
+    "byte_size": {
+      "minimum": 0,
+      "title": "Byte Size",
+      "type": "integer"
+    },
+    "cache_status": {
+      "default": "miss",
+      "enum": [
+        "hit",
+        "miss"
+      ],
+      "title": "Cache Status",
+      "type": "string"
+    },
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "direct_download_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Direct Download Url"
+    },
+    "download_status": {
+      "const": "manual_download_required",
+      "default": "manual_download_required",
+      "title": "Download Status",
+      "type": "string"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Code"
+    },
+    "incoming_relative": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Incoming Relative"
+    },
+    "item_id": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Id"
+    },
+    "item_page_url": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Page Url"
+    },
+    "license_evidence": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Evidence"
+    },
+    "media_kind": {
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "graphic",
+        "unknown"
+      ],
+      "title": "Media Kind",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "probe": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProbeFacts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "producer_job_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Producer Job Id",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provider_version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Provider Version",
+      "type": "string"
+    },
+    "relative_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Relative Path"
+    },
+    "request_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "rights_status": {
+      "enum": [
+        "allowed",
+        "unknown",
+        "prohibited",
+        "missing"
+      ],
+      "title": "Rights Status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sha256"
+    }
+  },
+  "required": [
+    "asset_id",
+    "request_id",
+    "campaign_id",
+    "project_id",
+    "byte_size",
+    "rights_status",
+    "provider_version",
+    "acquisition_status",
+    "producer_job_id",
+    "policy_fingerprint",
+    "media_kind",
+    "created_at"
+  ],
+  "title": "EnvatoAssetRegistration",
+  "type": "object"
+}

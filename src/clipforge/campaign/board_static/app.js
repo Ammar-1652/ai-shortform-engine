@@ -45,6 +45,75 @@
     loadPolicy(payload.campaign_id, card);
     loadAcquisitions(payload.campaign_id, card);
     loadProductions(payload.campaign_id, card);
+    loadWhop(payload.campaign_id, card);
+    loadEnvato(payload.campaign_id, card);
+    loadAssets(payload.campaign_id, card);
+  }
+
+  function loadWhop(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/whop")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "whop_status " + payload.status);
+        text(card, "snapshot_fingerprint " + payload.snapshot_fingerprint);
+        text(card, "whop_policy " + payload.policy_state);
+        text(card, "whop_live " + payload.whop_live);
+        var sources = payload.sources || [];
+        for (var index = 0; index < sources.length; index += 1) {
+          var source = sources[index];
+          text(card, "whop_source " + source.source_id + " " + source.display_name);
+          text(card, "whop_rights " + source.rights_state + " " + source.policy_state);
+        }
+      });
+  }
+
+  function loadEnvato(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/envato")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        text(card, "envato_state " + payload.envato);
+        var requests = payload.requests || [];
+        for (var index = 0; index < requests.length; index += 1) {
+          var request = requests[index];
+          text(card, "envato_request " + request.request_id + " " + request.query);
+          text(card, "item_page_url " + request.item_page_url);
+          text(card, "direct_download_url " + request.direct_download_url);
+          text(card, "download_status " + request.download_status);
+          var deferred = request.deferred_filters || {};
+          var names = Object.keys(deferred);
+          for (var filterIndex = 0; filterIndex < names.length; filterIndex += 1) {
+            text(card, "deferred " + names[filterIndex] + " " + deferred[names[filterIndex]]);
+          }
+        }
+      });
+  }
+
+  function loadAssets(campaignId, card) {
+    fetch("/api/campaigns/" + campaignId + "/assets")
+      .then(function (response) {
+        return response.json();
+      })
+      .then(function (payload) {
+        var assets = payload.assets || [];
+        text(card, "assets " + assets.length);
+        for (var index = 0; index < assets.length; index += 1) {
+          var asset = assets[index];
+          text(card, "asset " + asset.asset_id + " " + asset.rights_status);
+          text(card, "asset_sha256 " + asset.sha256);
+          text(card, "asset_bytes " + asset.byte_size);
+          text(card, "asset_path " + asset.relative_path);
+          text(card, "license_evidence " + asset.license_evidence);
+          text(card, "asset_renderable " + asset.renderable + " " + asset.failure_reason);
+          if (asset.probe) {
+            text(card, "asset_probe " + asset.probe.video_codec + " " + asset.probe.width + " " + asset.probe.height);
+            text(card, "asset_frame_rate " + asset.probe.frame_rate);
+          }
+        }
+      });
   }
 
   function loadProductions(campaignId, card) {

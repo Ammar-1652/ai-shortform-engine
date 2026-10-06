@@ -360,7 +360,7 @@ def _broll(
             expected_kind="graphic",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record))
+        assets.append(binding_for(entry, license_record, slot="graphic"))
         start = min(duration_us - 2, index * slot)
         end = min(duration_us, start + max(1, slot // 2))
         if end <= start:
@@ -397,7 +397,7 @@ def _sfx(
             expected_kind="audio",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record))
+        assets.append(binding_for(entry, license_record, slot="audio"))
         start = min(duration_us - 2, 200_000 + (index * 100_000))
         end = min(duration_us, start + 300_000)
         if end <= start:

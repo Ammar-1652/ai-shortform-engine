@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "WhopCampaignRecord": {
+      "additionalProperties": false,
+      "description": "One campaign inside a snapshot. Policy text is not rights evidence.",
+      "properties": {
+        "campaign_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "policy_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Policy State",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/WhopCampaignSourceRecord"
+          },
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "campaign_id",
+        "title",
+        "policy_state",
+        "sources"
+      ],
+      "title": "WhopCampaignRecord",
+      "type": "object"
+    },
+    "WhopCampaignSourceRecord": {
+      "additionalProperties": false,
+      "description": "One source named by an operator-exported snapshot. The row is not a license.",
+      "properties": {
+        "display_name": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "policy_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Policy State",
+          "type": "string"
+        },
+        "rights_state": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Rights State",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selected": {
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "display_name",
+        "rights_state",
+        "policy_state",
+        "selected"
+      ],
+      "title": "WhopCampaignSourceRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One accepted snapshot. A later export gets a new id.",
+  "properties": {
+    "campaigns": {
+      "items": {
+        "$ref": "#/$defs/WhopCampaignRecord"
+      },
+      "title": "Campaigns",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "import_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Import Id",
+      "type": "string"
+    },
+    "operator_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operator Id",
+      "type": "string"
+    },
+    "policy_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Policy Fingerprint",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "publishing": {
+      "const": "deferred",
+      "default": "deferred",
+      "title": "Publishing",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selectable_source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Selectable Source Ids",
+      "type": "array"
+    },
+    "snapshot_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "whop_live": {
+      "const": "not_configured",
+      "default": "not_configured",
+      "title": "Whop Live",
+      "type": "string"
+    }
+  },
+  "required": [
+    "import_id",
+    "project_id",
+    "snapshot_sha256",
+    "policy_fingerprint",
+    "operator_id",
+    "campaigns",
+    "selectable_source_ids",
+    "status",
+    "reason_code",
+    "created_at"
+  ],
+  "title": "WhopImportAttempt",
+  "type": "object"
+}
