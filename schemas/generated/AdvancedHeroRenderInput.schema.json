@@ -612,6 +612,11 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "language": {
+      "default": "en-US",
+      "title": "Language",
+      "type": "string"
+    },
     "output_duration_us": {
       "default": 0,
       "minimum": 0,

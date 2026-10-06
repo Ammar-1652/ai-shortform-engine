@@ -16,6 +16,7 @@ export type HeroCaption = {
   readonly output_start_frame: number;
   readonly output_end_frame_exclusive: number;
   readonly alignment_quality: "forced";
+  readonly language?: string;
   readonly words: readonly HeroWord[];
 };
 
@@ -45,6 +46,7 @@ export type HeroDraftInput = {
   readonly height: 1920;
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
+  readonly language?: string;
   readonly alignment_quality: "forced";
   readonly alignment_sha256: string;
   readonly edit_plan_sha256: string;

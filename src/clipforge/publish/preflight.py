@@ -115,6 +115,9 @@ class DeliveryFacts:
     trajectory_sha256: str = ""
     time_map_sha256: str = ""
     reframe_blocker: str = ""
+    narration_voice_id: str | None = None
+    narration_model_license: str | None = None
+    narration_requested: bool = False
 
 
 def preflight_delivery(
@@ -274,6 +277,13 @@ def preflight_delivery(
         narration_model_id=None if narration_doc is None else narration_doc.model_id,
         narration_model_revision=None if narration_doc is None else narration_doc.model_revision,
         narration_script_sha256=None if narration_doc is None else narration_doc.script_sha256,
+        narration_voice_id=None if narration_doc is None else narration_doc.voice_profile_id,
+        narration_model_license=(
+            None
+            if narration_doc is None or narration_doc.model_license is None
+            else narration_doc.model_license
+        ),
+        narration_requested=include_narration,
         broll=broll,
         sfx=sfx,
         typography=tuple(event.text for event in plan.typography),

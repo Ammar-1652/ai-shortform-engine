@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -129,19 +127,17 @@ class WhisperXFullSourceAligner:
     live_execution = False
 
     def prepare(self) -> None:
-        if os.environ.get("CLIPFORGE_ALIGNMENT_LIVE_SMOKE", "").strip() != "1":
-            raise LanguageError("full-source alignment runtime is not configured", code="not_configured")
-        if importlib.util.find_spec("whisperx") is None:
-            raise LanguageError("whisperx is not installed", code="not_configured")
-        os.environ["HF_HUB_OFFLINE"] = "1"
-        os.environ["TRANSFORMERS_OFFLINE"] = "1"
-        os.environ["HF_DATASETS_OFFLINE"] = "1"
-        self.live_execution = True
+        raise LanguageError(
+            "full-source WhisperX alignment is not configured",
+            code="not_configured",
+        )
 
     def align(self, count: int, duration_us: int) -> list[tuple[int, int]]:
-        if not self.live_execution:
-            raise LanguageError("full-source alignment runtime is not configured", code="not_configured")
-        return _even_spans(count, duration_us)
+        del count, duration_us
+        raise LanguageError(
+            "full-source WhisperX alignment is not configured. Even spans are not an alignment.",
+            code="not_configured",
+        )
 
 
 def doctor_text() -> str:

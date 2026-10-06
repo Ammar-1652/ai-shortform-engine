@@ -79,6 +79,11 @@
       "title": "Hero Set Id",
       "type": "string"
     },
+    "language": {
+      "default": "en-US",
+      "title": "Language",
+      "type": "string"
+    },
     "media_trim_frame": {
       "minimum": 0,
       "title": "Media Trim Frame",

@@ -137,8 +137,8 @@ def test_remotion_face_follow_keeps_the_marker_and_contain_keeps_bars(
     contain_late = _rgb(contained, 0.7)
     assert _pixel(follow_late, 20, 20)[2] > 70
     assert _pixel(contain_late, 20, 20)[0] < 40
-    assert _yellow(follow_late)
-    assert _yellow(contain_late)
+    assert _caption_plate(follow_late)
+    assert _caption_plate(contain_late)
     assert _pixel(follow_early, 540, 960)[0] > 150
     assert _pixel(follow_late, 540, 400)[2] > _pixel(follow_late, 540, 400)[0]
 
@@ -321,10 +321,11 @@ def _pixel(raw: bytes, x: int, y: int) -> tuple[int, int, int]:
     return raw[offset], raw[offset + 1], raw[offset + 2]
 
 
-def _yellow(raw: bytes) -> bool:
-    for y in range(1500, 1650, 8):
-        for x in range(100, 900, 12):
+def _caption_plate(raw: bytes) -> bool:
+    """The production plate is white React text in the lower safe area."""
+    for y in range(1400, 1860, 4):
+        for x in range(64, 1016, 8):
             red, green, blue = _pixel(raw, x, y)
-            if red > 180 and green > 180 and blue < 80:
+            if red > 200 and green > 200 and blue > 200:
                 return True
     return False

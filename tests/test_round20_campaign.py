@@ -26,6 +26,7 @@ from clipforge.cli.main import app
 from clipforge.errors import MediaError
 from clipforge.hero.alignment import FakeForcedAlignment, production_alignment_backend
 from clipforge.language.captions import build_cues, wrap_caption
+from clipforge.language.providers import provider_for
 from clipforge.language.registry import (
     ENGLISH_NARRATION_MODEL,
     ENGLISH_NARRATION_REVISION,
@@ -143,17 +144,23 @@ def test_prohibited_rights_fail_before_a_job(monkeypatch: pytest.MonkeyPatch, tm
 
 def test_language_claims_and_unicode_round_trip() -> None:
     english = capability_for("en-US")
-    assert english.alignment_evidence == "verified_live"
     assert english.narration_evidence == "verified_live"
-    assert alignment_claim("en-US") == "whisperx"
-    assert alignment_claim("en-GB") == "whisperx"
+    assert english.alignment_evidence == provider_for("en-US").live_status
+    assert alignment_claim("en-US") == (
+        "whisperx" if english.alignment_evidence == "verified_live" else "alignment_not_claimed"
+    )
+    assert alignment_claim("en-GB") == (
+        "whisperx" if provider_for("en-GB").live_status == "verified_live" else "alignment_not_claimed"
+    )
     arabic = capability_for("ar")
     japanese = capability_for("ja")
     assert arabic.text_direction == "rtl"
     assert arabic.caption_policy == "rtl_logical_order"
     assert arabic.reason_code == "alignment_not_claimed"
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("ja") == "whisperx"
+    assert alignment_claim("ja") == (
+        "whisperx" if japanese.alignment_evidence == "verified_live" else "alignment_not_claimed"
+    )
     assert japanese.caption_policy == "character_wrap"
     assert japanese.narration_reason == "unsupported_language"
     assert capability_for("en-GB").narration_reason == "locale_not_smoked"

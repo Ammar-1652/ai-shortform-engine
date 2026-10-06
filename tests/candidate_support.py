@@ -157,6 +157,7 @@ def transcript_document(
     asr_sha256: str,
     job_id: str = "job-transcript",
     transcript_id: str = "transcript-1",
+    language: str = "en",
 ) -> Transcript:
     words = sum(len(item.words) for item in segments)
     profile = DecodingProfile(
@@ -166,7 +167,7 @@ def transcript_document(
         vad_filter=False,
         condition_on_previous_text=True,
         temperature=0.0,
-        language="en",
+        language=language,
     )
     return Transcript(
         transcript_id=transcript_id,
@@ -188,13 +189,13 @@ def transcript_document(
         device_requested="cpu",
         device="cpu",
         compute_type="int8",
-        language_requested="en",
+        language_requested=language,
         beam_size=5,
         word_timestamps=True,
         vad_filter=False,
         condition_on_previous_text=True,
         temperature=0.0,
-        detected_language="en",
+        detected_language=language,
         language_probability=0.99 if segments else 0.0,
         speech_detected=bool(segments),
         segment_count=len(segments),

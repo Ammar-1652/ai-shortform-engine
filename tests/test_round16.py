@@ -257,6 +257,19 @@ def test_narration_rights_and_hash(tmp_path: Path) -> None:
     world = _world(tmp_path)
     request = _narration("Hello from the booth")
     audio = generate_narration(world.database, world.work, request, FakeVoiceProvider())
+    from clipforge.review.final_gate import capture_final_decision
+
+    capture_final_decision(
+        world.database,
+        world.work,
+        "source-1",
+        "cand-1",
+        decision="approved",
+        reviewer_id="ada",
+        notes="narration included",
+        include_narration=True,
+        narration_artifact_id=audio.artifact_id,
+    )
     result = export_delivery(
         world.database,
         world.work,

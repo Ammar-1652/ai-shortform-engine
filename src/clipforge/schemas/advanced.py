@@ -218,6 +218,7 @@ class AdvancedHeroRenderInput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
+    language: str = "en-US"
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)

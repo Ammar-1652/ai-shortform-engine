@@ -61,6 +61,7 @@ class AlignedWord(Versioned):
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
     alignment_quality: Literal["forced"] = "forced"
+    segment_index: int = Field(default=-1, ge=-1)
 
     @model_validator(mode="after")
     def ranges_are_positive(self) -> Self:
@@ -102,13 +103,14 @@ class ForcedAlignmentDocument(Versioned):
     alignment_scope: str = "selected_clip"
     alignment_recipe: str = "hero-align-v1"
     binding_sha256: str = ""
+    manifest_sha256: str = ""
     unavailable_reason: str = "none"
 
     @model_validator(mode="after")
     def words_are_monotonic(self) -> Self:
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("alignment provenance must include source_asset_id")
-        previous_end = -1
+        previous_output = -1
         seen: set[str] = set()
         for word in self.words:
             if word.candidate_id != self.candidate_id:
@@ -116,9 +118,21 @@ class ForcedAlignmentDocument(Versioned):
             if word.word_id in seen:
                 raise ValueError("aligned word ids must be unique")
             seen.add(word.word_id)
-            if word.source_start_us < previous_end:
-                raise ValueError("aligned words overlap or go backwards in source time")
-            previous_end = word.source_end_us
+            if word.output_start_us < previous_output:
+                raise ValueError("aligned words must be monotonic in output order")
+            if word.output_end_us <= word.output_start_us or word.source_end_us <= word.source_start_us:
+                raise ValueError("aligned word intervals must be positive")
+            previous_output = word.output_end_us
+        grouped: dict[int, list[AlignedWord]] = {}
+        for word in self.words:
+            grouped.setdefault(word.segment_index, []).append(word)
+        for group in grouped.values():
+            ordered = sorted(group, key=lambda item: (item.source_start_us, item.source_end_us))
+            previous_source_end = -1
+            for word in ordered:
+                if word.source_start_us < previous_source_end:
+                    raise ValueError("aligned words overlap inside one TimeMap segment")
+                previous_source_end = word.source_end_us
         if self.alignment_status == "verified_live" and self.model_name == "fake-forced-align-v1":
             raise ValueError("a fake alignment cannot be verified live")
         if self.checkpoint_sha256 and len(self.checkpoint_sha256) != 64:
@@ -144,6 +158,7 @@ class HeroRenderInput(Versioned):
     height: Literal[1920] = 1920
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    language: str = "en-US"
     alignment_quality: Literal["forced"] = "forced"
     alignment_sha256: str = Field(pattern=_SHA)
     edit_plan_sha256: str = Field(pattern=_SHA)

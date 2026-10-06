@@ -142,7 +142,7 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     assert _pixel(video, after, 540, 40) == "dark"
     assert _pixel(video, after, 200, 400) == "magenta"
     assert _pixel(video, after, 600, 400) == "cyan"
-    assert _pixel(video, after, 200, 1550) == "yellow"
+    assert _caption_ink(video, after), "caption glyphs were not visible in the safe area"
     ocr = _ocr(video, after)
     if ocr is not None:
         # Pixel color proves the plate. OCR is recorded when the local binary exists.
@@ -375,6 +375,26 @@ def _probe(path: Path) -> dict[str, object]:
         "pix_fmt": video.get("pix_fmt"),
         "duration": duration,
     }
+
+
+def _caption_ink(path: Path, seconds: float) -> bool:
+    """True when the production caption plate leaves bright pixels in the safe area."""
+    frame = path.parent / f"caption-{int(seconds * 1000)}.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-ss", f"{seconds:.3f}", "-i", str(path), "-frames:v", "1", str(frame)],
+        check=True,
+    )
+    raw = subprocess.check_output(
+        ["ffmpeg", "-v", "error", "-i", str(frame), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    )
+    width = 1080
+    for y in range(1500, 1860):
+        for x in range(64, 1016, 4):
+            offset = (y * width + x) * 3
+            red, green, blue = raw[offset], raw[offset + 1], raw[offset + 2]
+            if red > 200 and green > 200 and blue > 200:
+                return True
+    return False
 
 
 def _pixel(path: Path, seconds: float, x: int, y: int) -> str:

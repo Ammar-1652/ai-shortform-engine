@@ -156,12 +156,13 @@ def production_alignment_backend(
 
     requested = "en-US" if language in {None, ""} else language
     record = provider_for(requested)
-    if record.live_status == "unsupported_language":
-        raise MediaError("unsupported_language")
+    if record.live_status in {"unsupported_language", "alignment_not_claimed"}:
+        raise MediaError(record.live_status)
     if not license_is_allowed(record.model_license, record.model_id):
         raise MediaError("model_license_unknown")
+    runnable = record.live_status in {"verified_live", "available_not_smoked"}
     download_missing = allow_model_download and record.live_status == "model_missing"
-    if record.live_status != "verified_live" and not download_missing:
+    if not runnable and not download_missing:
         raise MediaError(record.live_status)
     return WhisperXAlignment(
         allow_model_download=allow_model_download,
@@ -200,6 +201,7 @@ def build_alignment(
     backend: ForcedAlignmentBackend,
     created_by: str,
     tool_version: str,
+    source_sha256: str = "",
 ) -> ForcedAlignmentDocument:
     """Align the candidate's own words. Missing word ids are a hard failure."""
     if not bundle.transcript_word_ids:
@@ -219,14 +221,15 @@ def build_alignment(
     aligned: list[AlignedWord] = []
     previous_output_end = -1
     duration = time_map.total_output_duration()
-    for word, (start, end) in zip(ordered, bounds, strict=True):
+    for word, (start, end, segment_index) in zip(ordered, bounds, strict=True):
         if end <= start:
             raise MediaError(f"aligned word {word.word_id} has no positive duration")
-        if _owner_segment(candidate.time_map.segments, start, end) is None:
-            raise MediaError(f"aligned word {word.word_id} leaves the candidate TimeMap")
+        segment = candidate.time_map.segments[segment_index]
+        if start < segment.source_start_us or start >= segment.source_end_us or end > segment.source_end_us:
+            raise MediaError(f"aligned word {word.word_id} is outside its TimeMap segment")
         output_start = time_map.source_to_output(start)
         output_end = time_map.source_to_output(end)
-        if output_end > duration or output_start < 0:
+        if output_end > duration or output_start < 0 or output_start >= duration:
             raise MediaError(f"aligned word {word.word_id} leaves the output TimeMap")
         if output_start < previous_output_end:
             raise MediaError(f"aligned word {word.word_id} overlaps the previous word on the output clock")
@@ -254,6 +257,7 @@ def build_alignment(
                 output_end_us=output_end,
                 output_start_frame=start_frame,
                 output_end_frame_exclusive=end_frame,
+                segment_index=segment_index,
             )
         )
     from datetime import UTC, datetime
@@ -280,15 +284,23 @@ def build_alignment(
             device=backend.device,
         ),
         words=aligned,
-        locale=str(getattr(backend, "locale", "en-US")),
-        normalized_language=str(getattr(backend, "language_code", "en")),
-        model_revision=str(getattr(backend, "model_revision", "")),
-        checkpoint_sha256=str(getattr(backend, "checkpoint_sha256", "")),
+        locale=_stored_locale(backend),
+        normalized_language=_stored_language(backend, transcript),
+        model_revision=_observed_revision(backend),
+        checkpoint_sha256=_observed_checkpoint(backend),
         model_license=str(getattr(backend, "model_license", "")),
         alignment_status=_stored_alignment_status(backend),
         alignment_scope="selected_clip",
         alignment_recipe="hero-align-v1",
-        binding_sha256=_binding_for(backend, candidate, transcript_sha256, asr_audio_sha256),
+        binding_sha256=_binding_for(
+            backend,
+            candidate,
+            transcript_sha256,
+            asr_audio_sha256,
+            transcript_language=transcript.detected_language or "",
+            source_sha256=source_sha256,
+        ),
+        manifest_sha256=_observed_manifest(backend),
         unavailable_reason="none",
         provenance=ArtifactProvenance(
             created_at=stamp,
@@ -309,26 +321,27 @@ def _align_groups(
     words: list[TranscriptWord],
     segments: list[TimelineSegment],
     backend: ForcedAlignmentBackend,
-) -> list[tuple[int, int]]:
+) -> list[tuple[int, int, int]]:
     """Align each TimeMap segment on its own source interval. One segment stays one call."""
     if len(segments) == 1:
         segment = segments[0]
-        return backend.align_words(
+        bounds = backend.align_words(
             words,
             source_start_us=segment.source_start_us,
             source_end_us=segment.source_end_us,
         )
+        return [(start, end, 0) for start, end in bounds]
     grouped = _partition_words(words, segments)
-    bounds: list[tuple[int, int]] = []
+    grouped_bounds: list[tuple[int, int, int]] = []
     for segment, group in grouped:
-        bounds.extend(
-            backend.align_words(
-                group,
-                source_start_us=segment.source_start_us,
-                source_end_us=segment.source_end_us,
-            )
-        )
-    return bounds
+        index = segments.index(segment)
+        for start, end in backend.align_words(
+            group,
+            source_start_us=segment.source_start_us,
+            source_end_us=segment.source_end_us,
+        ):
+            grouped_bounds.append((start, end, index))
+    return grouped_bounds
 
 
 def _partition_words(
@@ -368,6 +381,22 @@ def _owner_segment(segments: list[TimelineSegment], start: int, end: int) -> Tim
     return None
 
 
+def _stored_locale(backend: ForcedAlignmentBackend) -> str:
+    from clipforge.language.providers import canonical_locale
+
+    raw = str(getattr(backend, "locale", "en-US"))
+    return canonical_locale(raw) or "en-US"
+
+
+def _stored_language(backend: ForcedAlignmentBackend, transcript: Transcript) -> str:
+    from clipforge.language.providers import normalized_language
+
+    detected = normalized_language(transcript.detected_language or "")
+    if detected:
+        return detected
+    return str(getattr(backend, "language_code", "en"))
+
+
 def _reject_transcript_language(transcript: Transcript, backend: ForcedAlignmentBackend) -> None:
     detected = transcript.detected_language
     if not detected:
@@ -403,24 +432,204 @@ def _binding_for(
     candidate: CandidateClip,
     transcript_sha256: str,
     asr_audio_sha256: str,
+    *,
+    transcript_language: str = "",
+    source_sha256: str = "",
 ) -> str:
+    from clipforge.language.providers import canonical_locale, normalized_language
+
     provider = "fake" if backend.model_name == FAKE_MODEL_NAME else "whisperx"
+    stored_locale = canonical_locale(str(getattr(backend, "locale", "en-US"))) or "en-US"
+    detected = normalized_language(transcript_language) if transcript_language else ""
+    language = detected or str(getattr(backend, "language_code", "en"))
     return alignment_binding_sha256(
-        asr_audio_sha256=asr_audio_sha256,
         alignment_recipe="hero-align-v1",
+        asr_audio_sha256=asr_audio_sha256,
         candidate_id=candidate.candidate_id,
-        checkpoint_sha256=str(getattr(backend, "checkpoint_sha256", "")),
-        locale=str(getattr(backend, "locale", "en-US")),
+        checkpoint_sha256=_observed_checkpoint(backend),
+        locale=stored_locale,
+        manifest_sha256=_observed_manifest(backend),
         model_id=backend.model_name,
-        model_revision=str(getattr(backend, "model_revision", "")),
-        normalized_language=str(getattr(backend, "language_code", "en")),
+        model_revision=_observed_revision(backend),
+        normalized_language=language,
         provider_name=provider,
         provider_version=backend.whisperx_version,
         source_asset_id=candidate.source_asset_id,
+        source_sha256=source_sha256,
         time_map_sha256=_time_map_sha(candidate),
-        transcript_language=str(getattr(backend, "language_code", "en")),
+        transcript_language=language,
         transcript_sha256=transcript_sha256,
     )
+
+
+def expected_binding(
+    alignment: ForcedAlignmentDocument,
+    *,
+    candidate: CandidateClip,
+    transcript_sha256: str,
+    asr_audio_sha256: str,
+    transcript_language: str,
+    source_sha256: str,
+    aligner: ForcedAlignmentBackend | None,
+) -> str:
+    """Recompute the cache key. A missing production identity is incomplete."""
+    from clipforge.language.providers import canonical_locale, normalized_language, provider_for
+
+    if aligner is not None:
+        return _binding_for(
+            aligner,
+            candidate,
+            transcript_sha256,
+            asr_audio_sha256,
+            transcript_language=transcript_language,
+            source_sha256=source_sha256,
+        )
+    locale = canonical_locale(alignment.locale)
+    if not alignment.binding_sha256 or not locale:
+        raise MediaError("stored alignment identity is incomplete")
+    detected = normalized_language(transcript_language) if transcript_language else ""
+    language = detected or normalized_language(locale)
+    if alignment.model_name == FAKE_MODEL_NAME:
+        return alignment_binding_sha256(
+            alignment_recipe=alignment.alignment_recipe or "hero-align-v1",
+            asr_audio_sha256=asr_audio_sha256,
+            candidate_id=candidate.candidate_id,
+            checkpoint_sha256=alignment.checkpoint_sha256,
+            locale=locale,
+            manifest_sha256=alignment.manifest_sha256,
+            model_id=alignment.model_name,
+            model_revision=alignment.model_revision,
+            normalized_language=language,
+            provider_name="fake",
+            provider_version=alignment.whisperx_version,
+            source_asset_id=candidate.source_asset_id,
+            source_sha256=source_sha256,
+            time_map_sha256=_time_map_sha(candidate),
+            transcript_language=language,
+            transcript_sha256=transcript_sha256,
+        )
+    if (
+        not alignment.model_revision
+        or not alignment.checkpoint_sha256
+        or not alignment.whisperx_version
+        or not alignment.manifest_sha256
+    ):
+        raise MediaError("stored alignment identity is incomplete")
+    record = provider_for(locale)
+    if record.provider_name != "whisperx":
+        raise MediaError("alignment_not_claimed")
+    if alignment.model_name != record.model_id or alignment.model_revision != record.model_revision:
+        raise MediaError("stale_alignment")
+    if alignment.checkpoint_sha256 != record.checkpoint_sha256:
+        raise MediaError("stale_alignment")
+    if alignment.whisperx_version != record.provider_version:
+        raise MediaError("stale_alignment")
+    if alignment.alignment_status != record.live_status:
+        raise MediaError("stale_alignment")
+    manifest = _manifest_for_model(record.model_id, record.normalized_language, record.model_revision)
+    if alignment.manifest_sha256 != manifest:
+        raise MediaError("stale_alignment")
+    return alignment_binding_sha256(
+        alignment_recipe=alignment.alignment_recipe or "hero-align-v1",
+        asr_audio_sha256=asr_audio_sha256,
+        candidate_id=candidate.candidate_id,
+        checkpoint_sha256=record.checkpoint_sha256,
+        locale=locale,
+        manifest_sha256=manifest,
+        model_id=record.model_id,
+        model_revision=record.model_revision,
+        normalized_language=language,
+        provider_name=record.provider_name,
+        provider_version=record.provider_version,
+        source_asset_id=candidate.source_asset_id,
+        source_sha256=source_sha256,
+        time_map_sha256=_time_map_sha(candidate),
+        transcript_language=language,
+        transcript_sha256=transcript_sha256,
+    )
+
+
+def _observed_revision(backend: ForcedAlignmentBackend) -> str:
+    return str(getattr(backend, "model_revision", ""))
+
+
+def _measured_pair(backend: ForcedAlignmentBackend) -> tuple[str, str]:
+    """Observed checkpoint and manifest. Catalog pins are compared, not trusted."""
+    if backend.model_name == FAKE_MODEL_NAME:
+        return (
+            str(getattr(backend, "checkpoint_sha256", "")),
+            str(getattr(backend, "manifest_sha256", "")),
+        )
+    cached = getattr(backend, "_measured_pair", None)
+    if isinstance(cached, tuple) and len(cached) == 2:
+        return cached
+    from clipforge.language.providers import provider_for
+
+    locale = str(getattr(backend, "locale", "en-US"))
+    record = provider_for(locale)
+    if record.model_id != backend.model_name:
+        raise MediaError("stale_alignment")
+    checkpoint, manifest = _measure_checkpoint_and_manifest(
+        record.model_id,
+        record.normalized_language,
+        record.model_revision,
+        record.checkpoint_sha256,
+    )
+    pair = (checkpoint, manifest)
+    backend._measured_pair = pair  # type: ignore[attr-defined]
+    return pair
+
+
+def _observed_checkpoint(backend: ForcedAlignmentBackend) -> str:
+    return _measured_pair(backend)[0]
+
+
+def _observed_manifest(backend: ForcedAlignmentBackend) -> str:
+    return _measured_pair(backend)[1]
+
+
+def _measure_checkpoint_and_manifest(
+    model_id: str,
+    language_code: str,
+    revision: str,
+    expected_checkpoint: str,
+) -> tuple[str, str]:
+    """Return the on-disk checkpoint and manifest. A mismatch is stale."""
+    from clipforge.language.model_manifest import (
+        english_checkpoint_file,
+        huggingface_snapshot,
+        measure_english_checkpoint,
+        measure_tree,
+        sha256_file,
+    )
+
+    if model_id == "WAV2VEC2_ASR_BASE_960H" or language_code == "en":
+        path = english_checkpoint_file()
+        if path is None:
+            raise MediaError("model_missing")
+        digest = sha256_file(path)
+        if expected_checkpoint and digest != expected_checkpoint:
+            raise MediaError("stale_alignment")
+        return digest, measure_english_checkpoint(path).manifest_sha256
+    snapshot = huggingface_snapshot(model_id, revision)
+    if snapshot is None:
+        raise MediaError("model_missing")
+    tree = measure_tree(snapshot, model_id=model_id, revision=revision)
+    if tree is None:
+        raise MediaError("model_missing")
+    if expected_checkpoint and tree.checkpoint_sha256 != expected_checkpoint:
+        raise MediaError("stale_alignment")
+    return tree.checkpoint_sha256, tree.manifest_sha256
+
+
+def _manifest_for_model(model_id: str, language_code: str, revision: str) -> str:
+    """Hash the local snapshot. A missing weight file is model_missing."""
+    from clipforge.language.providers import provider_for_model
+
+    row = provider_for_model(model_id)
+    expected = "" if row is None else row.checkpoint_sha256
+    _checkpoint, manifest = _measure_checkpoint_and_manifest(model_id, language_code, revision, expected)
+    return manifest
 
 
 def _evidence_words(transcript: Transcript, bundle: CandidateEvidenceBundle) -> list[TranscriptWord]:
@@ -480,10 +689,16 @@ def align_span_with_whisperx(
     import os
 
     _reject_alignment_model(language_code, model_name)
+    model_path, _checkpoint_path, _revision = _local_identity(language_code, model_name)
     if not allow_model_download:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_DATASETS_OFFLINE"] = "1"
+        english = model_name == "WAV2VEC2_ASR_BASE_960H"
+        if english and not _checkpoint_path:
+            raise MediaError("model_missing")
+        if not english and (not model_path or not _revision):
+            raise MediaError("model_missing")
     try:
         import whisperx  # type: ignore[import-not-found]
     except ImportError:
@@ -515,7 +730,7 @@ def align_span_with_whisperx(
                 whisperx,
                 allow_model_download=allow_model_download,
                 language_code=language_code,
-                model_name=model_name,
+                model_name=model_path or model_name,
             )
     except MediaError:
         raise
@@ -661,6 +876,13 @@ def _align_with_side_python(
     """Run the optional alignment interpreter. The result is still production WhisperX."""
     import subprocess
 
+    model_path, checkpoint_path, revision = _local_identity(language_code, model_name)
+    if not allow_model_download:
+        english = model_name == "WAV2VEC2_ASR_BASE_960H"
+        if english and not checkpoint_path:
+            raise MediaError("model_missing")
+        if not english and (not model_path or not revision):
+            raise MediaError("model_missing")
     python = _align_python()
     if python is None:
         raise MediaError(
@@ -683,6 +905,9 @@ def _align_with_side_python(
         "allow_model_download": allow_model_download,
         "language_code": language_code,
         "model_name": model_name,
+        "model_path": model_path,
+        "checkpoint_path": checkpoint_path,
+        "revision": revision,
         "words": [{"text": word.text} for word in words],
     }
     completed = subprocess.run(
@@ -717,7 +942,65 @@ def _align_with_side_python(
         if not isinstance(start, int) or not isinstance(end, int):
             raise MediaError("WhisperX returned a word without text or times.")
         pairs.append((token, start, end))
+    _require_worker_identity(
+        language_code=language_code,
+        model_name=model_name,
+        revision=revision,
+        model_path=model_path,
+        checkpoint_path=checkpoint_path,
+        reported=document if isinstance(document, dict) else {},
+    )
     return _collapse_alignment_tokens(words, pairs, source_offset=source_start_us)
+
+
+def _local_identity(language_code: str, model_name: str) -> tuple[str, str, str]:
+    """Local snapshot or English checkpoint. An empty path means the weight is missing."""
+    from clipforge.language.model_manifest import english_checkpoint_file, huggingface_snapshot
+    from clipforge.language.providers import provider_for_model
+
+    if language_code == "en" and model_name == "WAV2VEC2_ASR_BASE_960H":
+        path = english_checkpoint_file()
+        return "", "" if path is None else str(path), "3.4.5"
+    row = provider_for_model(model_name)
+    revision = "" if row is None else row.model_revision
+    snapshot = None if row is None else huggingface_snapshot(row.model_id, row.model_revision)
+    return "" if snapshot is None else str(snapshot), "", revision
+
+
+def _require_worker_identity(
+    *,
+    language_code: str,
+    model_name: str,
+    revision: str,
+    model_path: str,
+    checkpoint_path: str,
+    reported: dict[str, object],
+) -> None:
+    """The worker's report must match a fresh local measurement."""
+    from clipforge.language.model_manifest import measure_tree, sha256_file
+    from clipforge.language.providers import WHISPERX_VERSION
+
+    if reported.get("revision") != revision or reported.get("model") != model_name:
+        raise MediaError("stale_alignment")
+    if reported.get("language_code") != language_code:
+        raise MediaError("stale_alignment")
+    if reported.get("whisperx") != WHISPERX_VERSION or reported.get("device") != "cpu":
+        raise MediaError("stale_alignment")
+    if checkpoint_path:
+        measured = sha256_file(Path(checkpoint_path))
+        if reported.get("checkpoint_sha256") != measured:
+            raise MediaError("stale_alignment")
+        tree = measure_tree(
+            Path(checkpoint_path).parent,
+            model_id=model_name,
+            revision=revision,
+        )
+        if tree is None or reported.get("manifest_sha256") != tree.manifest_sha256:
+            raise MediaError("stale_alignment")
+    if model_path:
+        measured_tree = measure_tree(Path(model_path), model_id=model_name, revision=revision)
+        if measured_tree is None or reported.get("manifest_sha256") != measured_tree.manifest_sha256:
+            raise MediaError("model_missing")
 
 
 def _collapse_alignment_tokens(

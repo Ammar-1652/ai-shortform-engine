@@ -1,5 +1,6 @@
 import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
 
+import { CaptionPlate } from "../captions/CaptionPlate.js";
 import { emphasisScale, layerOpacity, revealedCaption } from "./motion.js";
 import { NEUTRAL_DARK, type HeroDraftInput } from "./types.js";
 import { parseHeroInput } from "./validation.js";
@@ -24,9 +25,9 @@ export function HeroDraft(raw: HeroDraftInput) {
   const frame = useCurrentFrame();
   const opacity = layerOpacity(input.motion_events, frame);
   const scale = emphasisScale(input.motion_events, frame);
-  const caption = input.captions
-    .map((item) => revealedCaption(item, frame))
-    .find((text) => text.length > 0);
+  const active = input.captions.find((item) => revealedCaption(item, frame).length > 0);
+  const caption = active === undefined ? undefined : revealedCaption(active, frame);
+  const language = active?.language ?? input.language ?? "en-US";
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
@@ -44,35 +45,9 @@ export function HeroDraft(raw: HeroDraftInput) {
         />
       </AbsoluteFill>
       {caption === undefined ? null : (
-        <div
-          style={{
-            position: "absolute",
-            left: 72,
-            right: 72,
-            bottom: 280,
-            display: "flex",
-            justifyContent: "center",
-            transform: `scale(${scale})`,
-          }}
-        >
-          <div
-            style={{
-              color: "#ffffff",
-              fontFamily: "sans-serif",
-              fontWeight: 700,
-              fontSize: 54,
-              lineHeight: 1.25,
-              textAlign: "center",
-              textShadow: "0 2px 8px rgba(0,0,0,0.85)",
-              backgroundColor: "rgba(0,0,0,0.45)",
-              padding: "16px 20px",
-              maxWidth: "100%",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {caption}
-          </div>
-        </div>
+        <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
+          <CaptionPlate text={caption} language={language} />
+        </AbsoluteFill>
       )}
     </AbsoluteFill>
   );

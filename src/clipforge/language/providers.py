@@ -154,16 +154,16 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
         model_id=ENGLISH_ALIGNMENT_MODEL,
         model_revision=ENGLISH_ALIGNMENT_REVISION,
         checkpoint_sha256=ENGLISH_ALIGNMENT_CHECKPOINT,
-        live_status="verified_live",
-        reason="none",
+        live_status="available_not_smoked",
+        reason="available_not_smoked",
     )
     british = _whisperx(
         "en-GB",
         model_id=ENGLISH_ALIGNMENT_MODEL,
         model_revision=ENGLISH_ALIGNMENT_REVISION,
         checkpoint_sha256=ENGLISH_ALIGNMENT_CHECKPOINT,
-        live_status="verified_live",
-        reason="none",
+        live_status="available_not_smoked",
+        reason="available_not_smoked",
     )
     return {
         "en-US": english,
@@ -173,8 +173,8 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
             model_id=FRENCH_ALIGNMENT_MODEL,
             model_revision=FRENCH_ALIGNMENT_REVISION,
             checkpoint_sha256=FRENCH_ALIGNMENT_CHECKPOINT,
-            live_status="verified_live",
-            reason="none",
+            live_status="available_not_smoked",
+            reason="available_not_smoked",
         ),
         "es-ES": _whisperx(
             "es-ES",
@@ -197,8 +197,8 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
             model_id=JAPANESE_ALIGNMENT_MODEL,
             model_revision=JAPANESE_ALIGNMENT_REVISION,
             checkpoint_sha256=JAPANESE_ALIGNMENT_CHECKPOINT,
-            live_status="verified_live",
-            reason="none",
+            live_status="available_not_smoked",
+            reason="available_not_smoked",
         ),
         "ar": _unclaimed("ar", "alignment_not_claimed"),
         "zh-CN": _unclaimed("zh-CN", "unsupported_language"),
@@ -206,12 +206,73 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
 
 
 def provider_for(locale: str) -> AlignmentProviderRecord:
-    """Resolve one locale. An unknown tag is ``unsupported_language`` and is not echoed."""
+    """Resolve one locale. Live status is measured. It is not copied from a table."""
     canonical = canonical_locale(locale)
     row = _catalog().get(canonical)
     if row is None:
         return _unclaimed("zh-CN", "unsupported_language")
-    return row
+    status = _measured_status(row)
+    if status == row.live_status:
+        return row
+    reason = "none" if status == "verified_live" else status
+    return AlignmentProviderRecord(
+        locale=row.locale,
+        normalized_language=row.normalized_language,
+        provider_name=row.provider_name,
+        provider_version=row.provider_version,
+        model_id=row.model_id,
+        model_revision=row.model_revision,
+        checkpoint_sha256=row.checkpoint_sha256,
+        model_license=row.model_license,
+        runtime_version=row.runtime_version,
+        device=row.device,
+        alignment_scope=row.alignment_scope,
+        live_status=status,
+        unavailable_reason=reason,
+    )
+
+
+def _measured_status(row: AlignmentProviderRecord) -> str:
+    """Promote a row only when the local bytes, and any speech record, agree."""
+    if row.provider_name != "whisperx":
+        return row.live_status
+    from clipforge.language.model_manifest import (
+        english_checkpoint_file,
+        huggingface_snapshot,
+        measure_english_checkpoint,
+        measure_tree,
+        sha256_file,
+    )
+
+    if row.normalized_language == "en":
+        path = english_checkpoint_file()
+        if path is None:
+            return "model_missing"
+        if sha256_file(path) != row.checkpoint_sha256:
+            return "stale_alignment"
+        english_manifest = measure_english_checkpoint(path).manifest_sha256
+        if _speech_matches(row.locale, english_manifest):
+            return "verified_live"
+        return "available_not_smoked"
+    snapshot = huggingface_snapshot(row.model_id, row.model_revision)
+    if snapshot is None:
+        return "model_missing"
+    tree = measure_tree(snapshot, model_id=row.model_id, revision=row.model_revision)
+    if tree is None:
+        return "model_missing"
+    if row.checkpoint_sha256 and tree.checkpoint_sha256 != row.checkpoint_sha256:
+        return "stale_alignment"
+    if _speech_matches(row.locale, tree.manifest_sha256):
+        return "verified_live"
+    return "available_not_smoked"
+
+
+def _speech_matches(locale: str, manifest: str) -> bool:
+    """A catalog row is live only when a stored speech smoke names this manifest."""
+    from clipforge.language.model_manifest import speech_smoke_manifest
+
+    smoked = speech_smoke_manifest(locale)
+    return bool(manifest) and smoked == manifest
 
 
 def provider_for_model(model_id: str) -> AlignmentProviderRecord | None:
@@ -223,10 +284,14 @@ def provider_for_model(model_id: str) -> AlignmentProviderRecord | None:
 
 
 def license_is_allowed(license_name: str, model_id: str) -> bool:
-    """Reject unknown, prohibited, and non-commercial alignment weights."""
+    """Require an explicit Apache-2.0 allow. A blacklist is not a license."""
+    from clipforge.language.model_manifest import license_explicitly_allowed
+
     if model_id in _PROHIBITED_MODELS or model_id.lower().startswith("k2-fsa/"):
         return False
-    return license_name.strip().lower() not in _PROHIBITED_LICENSES
+    if license_name.strip().lower() in _PROHIBITED_LICENSES:
+        return False
+    return license_explicitly_allowed(license_name)
 
 
 def alignment_cache_key(**parts: str) -> str:

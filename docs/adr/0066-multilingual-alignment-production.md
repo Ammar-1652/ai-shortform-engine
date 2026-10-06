@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Round 30. English, Japanese, and French alignment are `verified_live`. Spanish and German remain `model_missing`.
+Accepted for Round 30. `verified_live` requires a stored multi-word speech record whose manifest matches the measured model. en-US, fr-FR, and ja have that record for eSpeak NG synthetic speech. en-GB has no speech record. Spanish and German remain `model_missing`. Full-source alignment is `not_configured`. Selected-clip `hero align` is the production path.
 
 ## Context
 
@@ -14,13 +14,13 @@ Provider lookup is a typed catalog. The stored document keeps the requested loca
 
 Statuses stay specific. `verified_live` means a real provider execution of a hashed checkpoint. `model_missing` means the model id and license are known and the weight file is not installed. `alignment_not_claimed` means this install will not claim that language. `unsupported_language` means the locale is outside the matrix. A fake provider cannot be stored as `verified_live`.
 
-The smoked English checkpoint stays `WAV2VEC2_ASR_BASE_960H`, revision `3.4.5`, SHA-256 `488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d`.
+The English checkpoint expected identity stays `WAV2VEC2_ASR_BASE_960H`, revision `3.4.5`, SHA-256 `488fd4f16de84438ffc945334278c1b9fb9b7159a806c1080b16111a958c945d`. A catalog row is not proof. The worker must report the same revision, and the parent remeasures the local files before writing an alignment.
 
-Japanese is `verified_live`:
+Japanese is `verified_live` only when the speech record matches:
 
 - `jonatasgrosman/wav2vec2-large-xlsr-53-japanese`, revision `cf031e020336460d15a417eba710bbc5bb43be9a`, checkpoint SHA-256 `4f6821dcd79770fcd4c11487c4ee5c040b3a7e1863425224014ba5ea8fbc1b67`
 
-French is `verified_live`:
+French is `verified_live` only when the speech record matches:
 
 - `jonatasgrosman/wav2vec2-large-xlsr-53-french`, revision `7c79e105a6525d38e1e69f640b974b4a679723cc`, checkpoint SHA-256 `2fc4760bab7bf7d0d6c06e9b7f829a27a3e66eefee3733f53c88dbedf6607f2e`
 

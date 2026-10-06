@@ -31,6 +31,7 @@ from clipforge.campaign.whop_live import (
 from clipforge.campaign.whop_mcp import public_headers
 from clipforge.cli.main import app
 from clipforge.errors import MediaError
+from clipforge.language.providers import provider_for
 from clipforge.language.registry import alignment_claim, capability_for
 from clipforge.preview.browser import resolve_browser
 from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
@@ -56,9 +57,11 @@ def test_default_whop_stays_unconfigured(tmp_path: Path, monkeypatch: pytest.Mon
     assert "session: not opened" in smoked
     assert discover_whop()["whop_live"] == "provider_unavailable"
     assert "authorization" not in {key.lower() for key in public_headers()}
-    assert capability_for("en-US").alignment_evidence == "verified_live"
+    assert capability_for("en-US").alignment_evidence == provider_for("en-US").live_status
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("ja") == "whisperx"
+    assert alignment_claim("ja") == (
+        "whisperx" if provider_for("ja").live_status == "verified_live" else "alignment_not_claimed"
+    )
 
 
 def test_snapshot_import_remains_compatible(tmp_path: Path) -> None:

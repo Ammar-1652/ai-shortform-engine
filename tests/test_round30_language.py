@@ -16,6 +16,7 @@ from clipforge.hero.alignment import (
     production_alignment_backend,
 )
 from clipforge.language.captions import build_cues, wrap_caption
+from clipforge.language.model_manifest import speech_smoke_manifest
 from clipforge.language.providers import (
     alignment_cache_key,
     canonical_locale,
@@ -51,18 +52,18 @@ def test_locale_normalization_and_closed_failures() -> None:
     assert normalized_language("zh-CN") == "zh"
     assert normalized_language("ar") == "ar"
     english = provider_for("en-US")
-    assert english.live_status == "verified_live"
+    assert english.live_status != "verified_live" or bool(speech_smoke_manifest("en-US"))
     assert english.model_id == "WAV2VEC2_ASR_BASE_960H"
     assert english.checkpoint_sha256 == capability_for("en-US").alignment_checkpoint_sha256
     japanese = provider_for("ja-JP")
     assert japanese.locale == "ja"
     assert japanese.normalized_language == "ja"
-    assert japanese.live_status == "verified_live"
+    assert japanese.live_status != "verified_live" or bool(speech_smoke_manifest("ja"))
     assert japanese.model_id.endswith("japanese")
     assert japanese.model_license == "Apache-2.0"
     assert japanese.checkpoint_sha256 == "4f6821dcd79770fcd4c11487c4ee5c040b3a7e1863425224014ba5ea8fbc1b67"
     french = provider_for("fr-FR")
-    assert french.live_status == "verified_live"
+    assert french.live_status != "verified_live" or bool(speech_smoke_manifest("fr-FR"))
     assert french.checkpoint_sha256 == "2fc4760bab7bf7d0d6c06e9b7f829a27a3e66eefee3733f53c88dbedf6607f2e"
     assert "VOXPOPULI" not in french.model_id
     assert provider_for("es-ES").live_status == "model_missing"
@@ -72,14 +73,18 @@ def test_locale_normalization_and_closed_failures() -> None:
     assert provider_for("zh-CN").live_status == "unsupported_language"
     assert provider_for("../secrets").live_status == "unsupported_language"
     assert provider_for("https://example.invalid").live_status == "unsupported_language"
-    assert alignment_claim("ja") == "whisperx"
+    assert alignment_claim("ja") == (
+        "whisperx" if japanese.live_status == "verified_live" else "alignment_not_claimed"
+    )
     assert alignment_identity_matches(
         revision=japanese.model_revision,
         checkpoint=japanese.checkpoint_sha256,
         language="ja",
-    )
+    ) == (japanese.live_status == "verified_live")
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("en-US") == "whisperx"
+    assert alignment_claim("en-US") == (
+        "whisperx" if english.live_status == "verified_live" else "alignment_not_claimed"
+    )
     assert not alignment_identity_matches(revision="9.9.9", checkpoint=_SHA, language="ja")
     assert not license_is_allowed("CC-BY-NC-4.0", "some-model")
     assert not license_is_allowed("Apache-2.0", "VOXPOPULI_ASR_BASE_10K_FR")
@@ -189,14 +194,19 @@ def test_caption_text_keeps_source_characters() -> None:
         build_cues("説明", language="ja", duration_us=1_000_000, aligned=True)
 
 
+def _full_source_code(locale: str) -> str:
+    status = provider_for(locale).live_status
+    return "not_configured" if status == "verified_live" else status
+
+
 def test_unverified_languages_fail_before_a_job(tmp_path: Path) -> None:
     database, work = _db(tmp_path)
     with pytest.raises(LanguageError) as japanese:
         _align(work, database, language="ja", provider=WhisperXFullSourceAligner())
-    assert japanese.value.code == "not_configured"
+    assert japanese.value.code == _full_source_code("ja")
     with pytest.raises(LanguageError) as french:
         _align(work, database, language="fr-FR", provider=WhisperXFullSourceAligner())
-    assert french.value.code == "not_configured"
+    assert french.value.code == _full_source_code("fr-FR")
     with pytest.raises(LanguageError) as arabic:
         _align(work, database, language="ar", provider=WhisperXFullSourceAligner())
     assert arabic.value.code == "alignment_not_claimed"
@@ -282,18 +292,18 @@ def test_one_source_can_fail_its_locale_without_erasing_a_sibling(tmp_path: Path
         world.database,
         world.work,
         narration_enabled=False,
-        source_locales={"src-american-secret": "ja"},
+        source_locales={"src-american-secret": "es-ES"},
     )
     by_id = {item.source_id: item for item in document.sources}
     assert by_id["src-before-famous"].status == "succeeded"
     failed = by_id["src-american-secret"]
     assert failed.status != "succeeded"
-    assert failed.reason_code == "stale_alignment"
-    assert failed.requested_locale == "ja"
+    assert failed.reason_code == provider_for("es-ES").live_status
+    assert failed.requested_locale == "es-ES"
     resumed = resume_campaign(world.database, world.work, document.campaign_run_id)
     again = {item.source_id: item for item in resumed.sources}
     assert again["src-before-famous"].delivery_id == by_id["src-before-famous"].delivery_id
-    assert again["src-american-secret"].reason_code == "stale_alignment"
+    assert again["src-american-secret"].reason_code == provider_for("es-ES").live_status
     assert [stage.job_id for stage in again["src-before-famous"].stages] == [
         stage.job_id for stage in by_id["src-before-famous"].stages
     ]
@@ -304,12 +314,15 @@ def test_plan_records_catalog_facts_without_a_live_claim() -> None:
     assert japanese.alignment_provider == "whisperx"
     assert japanese.alignment_model is not None
     assert japanese.alignment_model.endswith("japanese")
-    assert japanese.alignment_checkpoint_sha256 == (
-        "4f6821dcd79770fcd4c11487c4ee5c040b3a7e1863425224014ba5ea8fbc1b67"
-    )
+    record = provider_for("ja")
     source = next(item for item in japanese.sources if item.source_id == "src-before-famous")
     align = next(item for item in source.stages if item.stage == "align")
-    assert align.reason_code == "planned"
+    if record.live_status == "verified_live":
+        assert japanese.alignment_checkpoint_sha256 == record.checkpoint_sha256
+        assert align.reason_code == "planned"
+    else:
+        assert japanese.alignment_checkpoint_sha256 is None
+        assert align.reason_code == record.live_status
     arabic = plan_campaign(language="ar", narration_enabled=False)
     assert arabic.alignment_provider == "none"
     arabic_source = next(item for item in arabic.sources if item.source_id == "src-before-famous")

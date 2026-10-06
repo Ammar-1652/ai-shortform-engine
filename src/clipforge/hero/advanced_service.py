@@ -412,6 +412,7 @@ def _render_run(
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
+            language=_alignment_locale(workspace, candidate_id),
             typography=plan.typography,
             diagrams=plan.diagrams,
             emphasis=plan.emphasis,
@@ -736,6 +737,20 @@ def _plan_trajectory_sha256(workspace: SourceWorkspace, plan: AdvancedHeroPlanDo
     if plan.reframing_strategy != "face_follow":
         return ""
     return _sidecar_trajectory(workspace, plan)
+
+
+def _alignment_locale(workspace: object, candidate_id: str) -> str:
+    """Locale stored on the selected-clip alignment. Missing evidence is not English."""
+    from clipforge.schemas.hero import ForcedAlignmentDocument
+
+    path = workspace.hero_alignment_file(candidate_id)  # type: ignore[attr-defined]
+    if not path.is_file() or path.is_symlink():
+        return "missing"
+    try:
+        document = ForcedAlignmentDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return "missing"
+    return document.locale or "missing"
 
 
 def _output_end_us(plan: AdvancedHeroPlanDocument) -> int:

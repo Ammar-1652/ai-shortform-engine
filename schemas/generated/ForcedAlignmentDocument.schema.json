@@ -46,6 +46,12 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "segment_index": {
+          "default": -1,
+          "minimum": -1,
+          "title": "Segment Index",
+          "type": "integer"
+        },
         "source_end_us": {
           "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
           "maximum": 604800000000,
@@ -237,6 +243,11 @@
     "locale": {
       "default": "en-US",
       "title": "Locale",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "default": "",
+      "title": "Manifest Sha256",
       "type": "string"
     },
     "model_license": {
