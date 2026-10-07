@@ -25,6 +25,13 @@ describe("advanced hero composition", () => {
     expect(source).toContain("diagram.payload?.left_label");
     expect(source).toContain("staticFile(name)");
     expect(source).toContain("names.narration");
+    expect(source).toContain("hook-card-v1");
+    expect(source).toContain("punch-card-v1");
+    expect(source).toContain("activeEmphasis");
+    expect(source).toContain("editorial-clean-v1");
+    expect(source).toContain("output_start_frame");
+    expect(source).toContain("unsupported production diagram kind");
+    expect(source).not.toContain("top: 1720");
   });
 
   it("converts SFX gain from dB and rejects music-range values", () => {

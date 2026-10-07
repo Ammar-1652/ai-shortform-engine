@@ -67,6 +67,25 @@ class ReframingWindow(Versioned):
         return self
 
 
+class CaptionWordTiming(Versioned):
+    """One forced word inside a grouped Advanced Hero caption."""
+
+    word_id: EntityId
+    text: str = Field(min_length=1, max_length=200)
+    output_start_us: Microseconds
+    output_end_us: Microseconds
+    output_start_frame: int = Field(ge=0)
+    output_end_frame_exclusive: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.output_end_us <= self.output_start_us:
+            raise ValueError("caption word microsecond interval must be positive")
+        if self.output_end_frame_exclusive <= self.output_start_frame:
+            raise ValueError("caption word frame interval must be positive and half-open")
+        return self
+
+
 class TypographyEvent(Versioned):
     """On-screen text copied from alignment or a validated payload. It is not HTML."""
 
@@ -79,6 +98,7 @@ class TypographyEvent(Versioned):
     y: int = Field(ge=_SAFE_Y, le=_FRAME_H - _SAFE_Y)
     font_size: int = Field(ge=24, le=96)
     color: Literal["#ffffff"] = "#ffffff"
+    words: list[CaptionWordTiming] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def box_stays_in_safe_area(self) -> Self:
@@ -86,6 +106,13 @@ class TypographyEvent(Versioned):
             raise ValueError("typography component id must be plain text")
         if self.y + self.font_size > _FRAME_H - _SAFE_Y:
             raise ValueError("typography extends below the safe area")
+        if self.component_id.startswith("caption-") and not self.words:
+            raise ValueError("advanced captions require forced word timing")
+        for word in self.words:
+            if word.output_start_us < self.interval.output_start_us:
+                raise ValueError("caption word starts before its cue")
+            if word.output_end_us > self.interval.output_end_us:
+                raise ValueError("caption word ends after its cue")
         return self
 
 
@@ -97,6 +124,11 @@ class DiagramPayload(Versioned):
     right_label: str = Field(min_length=1, max_length=40)
     left_value: int = Field(ge=0, le=1_000_000_000)
     right_value: int = Field(ge=0, le=1_000_000_000)
+    # Optional exact display strings preserve currency, decimal, and unit text.
+    # Numeric magnitudes remain for proportional geometry when a grounded
+    # comparison is explicitly supplied.
+    left_display: str | None = Field(default=None, min_length=1, max_length=40)
+    right_display: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class DiagramEvent(Versioned):
@@ -114,6 +146,8 @@ class DiagramEvent(Versioned):
 
     @model_validator(mode="after")
     def box_stays_in_safe_area(self) -> Self:
+        if self.payload.kind != "number_comparison":
+            raise ValueError(f"unsupported production diagram kind: {self.payload.kind}")
         if self.x + self.width > _FRAME_W - _SAFE_X:
             raise ValueError("diagram extends past the safe area width")
         if self.y + self.height > _FRAME_H - _SAFE_Y:
@@ -176,11 +210,21 @@ class AdvancedHeroProfile(Versioned):
     narration_duck_db: float = -12
     audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
-    caption_algorithm_version: Literal["advanced-caption-v1"] = "advanced-caption-v1"
-    typography_version: Literal["advanced-typography-v1"] = "advanced-typography-v1"
-    diagram_version: Literal["advanced-diagram-v1"] = "advanced-diagram-v1"
-    renderer_recipe_version: Literal["advanced-hero-renderer-v1"] = "advanced-hero-renderer-v1"
-    motion_library_version: Literal["advanced-motion-v1"] = "advanced-motion-v1"
+    caption_algorithm_version: Literal["advanced-caption-v1", "advanced-caption-clean-v1"] = (
+        "advanced-caption-clean-v1"
+    )
+    typography_version: Literal["advanced-typography-v1", "advanced-typography-clean-v1"] = (
+        "advanced-typography-clean-v1"
+    )
+    diagram_version: Literal["advanced-diagram-v1", "advanced-diagram-grounded-v1"] = (
+        "advanced-diagram-grounded-v1"
+    )
+    renderer_recipe_version: Literal["advanced-hero-renderer-v1", "advanced-hero-renderer-clean-v1"] = (
+        "advanced-hero-renderer-clean-v1"
+    )
+    motion_library_version: Literal["advanced-motion-v1", "advanced-motion-clean-v1"] = (
+        "advanced-motion-clean-v1"
+    )
     reframing: ReframingStrategy
     broll_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
     sfx_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
@@ -201,7 +245,20 @@ class AdvancedHeroProfile(Versioned):
         return self
 
     def fingerprint(self) -> str:
-        return advanced_fingerprint(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        # Round-30 profiles predate the explicit audio policy fields.  Keep
+        # their recorded fingerprint verifiable without reinterpreting them;
+        # every clean-v1 profile includes the complete current payload.
+        if self.renderer_recipe_version == "advanced-hero-renderer-v1":
+            for key in (
+                "audio_loudness_lufs",
+                "audio_true_peak_dbfs",
+                "audio_lra_lu",
+                "narration_duck_db",
+                "audio_mix_version",
+            ):
+                payload.pop(key, None)
+        return advanced_fingerprint(payload)
 
 
 class AdvancedHeroRenderInput(Versioned):
@@ -218,6 +275,8 @@ class AdvancedHeroRenderInput(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
+    style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
     advanced_plan_sha256: str = Field(pattern=_SHA)

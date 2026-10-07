@@ -221,14 +221,20 @@
           "type": "string"
         },
         "caption_algorithm_version": {
-          "const": "advanced-caption-v1",
-          "default": "advanced-caption-v1",
+          "default": "advanced-caption-clean-v1",
+          "enum": [
+            "advanced-caption-v1",
+            "advanced-caption-clean-v1"
+          ],
           "title": "Caption Algorithm Version",
           "type": "string"
         },
         "diagram_version": {
-          "const": "advanced-diagram-v1",
-          "default": "advanced-diagram-v1",
+          "default": "advanced-diagram-grounded-v1",
+          "enum": [
+            "advanced-diagram-v1",
+            "advanced-diagram-grounded-v1"
+          ],
           "title": "Diagram Version",
           "type": "string"
         },
@@ -294,8 +300,11 @@
           "type": "integer"
         },
         "motion_library_version": {
-          "const": "advanced-motion-v1",
-          "default": "advanced-motion-v1",
+          "default": "advanced-motion-clean-v1",
+          "enum": [
+            "advanced-motion-v1",
+            "advanced-motion-clean-v1"
+          ],
           "title": "Motion Library Version",
           "type": "string"
         },
@@ -326,8 +335,11 @@
           "$ref": "#/$defs/ReframingStrategy"
         },
         "renderer_recipe_version": {
-          "const": "advanced-hero-renderer-v1",
-          "default": "advanced-hero-renderer-v1",
+          "default": "advanced-hero-renderer-clean-v1",
+          "enum": [
+            "advanced-hero-renderer-v1",
+            "advanced-hero-renderer-clean-v1"
+          ],
           "title": "Renderer Recipe Version",
           "type": "string"
         },
@@ -344,8 +356,11 @@
           "type": "string"
         },
         "typography_version": {
-          "const": "advanced-typography-v1",
-          "default": "advanced-typography-v1",
+          "default": "advanced-typography-clean-v1",
+          "enum": [
+            "advanced-typography-v1",
+            "advanced-typography-clean-v1"
+          ],
           "title": "Typography Version",
           "type": "string"
         },

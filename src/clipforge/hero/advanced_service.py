@@ -18,6 +18,7 @@ from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
+from clipforge.hero.motion_style import style_for_renderer_version
 from clipforge.hero.probe import probe_hero
 from clipforge.hero.reframe import (
     frame_count_for_duration,
@@ -79,7 +80,14 @@ from clipforge.transcription.io import publish_json
 _ModelT = TypeVar("_ModelT")
 KIND_ADVANCED = "advanced_hero_draft_set_json"
 JOB_ADVANCED = "advanced_hero_render"
-_PROFILE = AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="contain"))
+_PROFILE = AdvancedHeroProfile(
+    reframing=ReframingStrategy(strategy_id="contain"),
+    caption_algorithm_version="advanced-caption-clean-v1",
+    typography_version="advanced-typography-clean-v1",
+    diagram_version="advanced-diagram-grounded-v1",
+    renderer_recipe_version="advanced-hero-renderer-clean-v1",
+    motion_library_version="advanced-motion-clean-v1",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -422,6 +430,8 @@ def _render_run(
             reframing_strategy=plan.reframing_strategy,
             reframing_config_sha256=plan.reframing_config_sha256,
             profile_fingerprint=plan.profile_fingerprint,
+            style_id=style_for_renderer_version(profile.renderer_recipe_version).style_id,
+            style_fingerprint=style_for_renderer_version(profile.renderer_recipe_version).fingerprint(),
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),

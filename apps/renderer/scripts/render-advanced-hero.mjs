@@ -62,10 +62,26 @@ for (const item of batch.items) {
   if (input.debug_overlays === true) {
     throw new Error("production advanced render rejects debug overlays");
   }
+  if (input.style_id !== undefined && input.style_id !== "legacy-v1" && input.style_id !== "editorial-clean-v1") {
+    throw new Error(`unsupported motion style ${input.style_id}`);
+  }
   for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
     const component = typeof event?.component_id === "string" ? event.component_id.toLowerCase() : "";
     if (component.includes("debug") || component.includes("fixture") || component.includes("marker")) {
       throw new Error("production advanced render rejects diagnostic-only events");
+    }
+  }
+  for (const diagram of input.diagrams ?? []) {
+    const kind = diagram?.payload?.kind ?? "number_comparison";
+    if (kind !== "number_comparison") {
+      throw new Error(`unsupported production diagram kind ${kind}`);
+    }
+    const x = diagram.x ?? 120;
+    const y = diagram.y ?? 280;
+    const width = diagram.width ?? 840;
+    const height = diagram.height ?? 360;
+    if (x < 48 || y < 48 || width < 80 || height < 80 || x + width > 1032 || y + height > 1872) {
+      throw new Error("diagram geometry is outside the production safe area");
     }
   }
   if (

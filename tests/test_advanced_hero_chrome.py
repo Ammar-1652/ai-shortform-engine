@@ -227,7 +227,7 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert "sfx-1" in first["text"]
         assert "owned" in first["text"]
         assert "dB" in first["text"]
-        assert "number_comparison" in first["text"]
+        assert "number_comparison" not in first["text"]
         assert "emphasis" in first["text"]
         assert first["images"] == 0
         notes = 'Café 説明 $12.50 <unsafe>&"quoted"'

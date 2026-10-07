@@ -63,6 +63,7 @@
     "DiagramEvent",
     "AssetBinding",
     "AudioMixEvent",
+    "CaptionWordTiming",
     "EmphasisEvent",
     "AdvancedHeroRenderInput",
     "AdvancedHeroDraftOutput",

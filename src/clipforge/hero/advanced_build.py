@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import re
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
 from clipforge.hero.captions import hero_caption_pieces
+from clipforge.hero.motion_style import style_for_renderer_version
 from clipforge.hero.reframe import (
     ReframeError,
     build_face_follow,
@@ -20,8 +23,8 @@ from clipforge.schemas.advanced import (
     AdvancedHeroProfile,
     AssetBinding,
     AudioMixEvent,
+    CaptionWordTiming,
     DiagramEvent,
-    DiagramPayload,
     EmphasisEvent,
     ReframingWindow,
     TypographyEvent,
@@ -100,7 +103,9 @@ def build_advanced_plan(
     emphasis = _emphasis(alignment, candidate_id)
     captions = _captions(alignment, candidate_id)
     typography = _typography(alignment, emphasis, candidate_id)
-    diagrams = _diagrams(emphasis, duration_us, candidate_id)
+    # A diagram is editorial evidence, not a decoration.  Until an operator
+    # supplies a source-grounded diagram instruction, the safe plan is none.
+    diagrams: list[DiagramEvent] = []
     assets: list[AssetBinding] = []
     broll = _broll(
         database,
@@ -128,6 +133,7 @@ def build_advanced_plan(
         "manual_window": manual,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
+        "motion_style": asdict(style_for_renderer_version(profile.renderer_recipe_version)),
     }
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
@@ -225,9 +231,37 @@ def _typography(
     emphasis: list[EmphasisEvent],
     candidate_id: str,
 ) -> list[TypographyEvent]:
-    chosen: list[tuple[str, int, int, MotionPurpose]] = []
+    words = [word for word in alignment.words if word.text.strip()]
+    if not words:
+        return []
+    chosen: list[tuple[str, int, int, MotionPurpose, str]] = []
+    hook_index = next(
+        (
+            index
+            for index, word in enumerate(words)
+            if word.text.strip().lower() in {"never", "secret", "surprise"}
+        ),
+        0,
+    )
+    hook_end = min(len(words), hook_index + 5)
+    hook_text = _phrase(words[hook_index:hook_end])
+    punch_words = words[-3:]
+    punch_text = _phrase(punch_words)
+    hook_end_us = min(1_400_000, max(600_000, words[0].output_end_us))
+    if punch_words and punch_words[0].output_start_us <= hook_end_us:
+        hook_end_us = max(1, punch_words[0].output_start_us - 1)
+    chosen.append(
+        (
+            hook_text,
+            0,
+            hook_end_us,
+            MotionPurpose.KEY_PHRASE,
+            "hook-card-v1",
+        )
+    )
+
     seen: set[str] = set()
-    for word in alignment.words:
+    for word in words:
         stripped = word.text.strip()
         non_ascii = any(ord(char) > 127 for char in stripped)
         numeric = any(char.isdigit() or char == "$" for char in stripped)
@@ -235,25 +269,60 @@ def _typography(
         if not interesting or not stripped or stripped in seen:
             continue
         seen.add(stripped)
-        chosen.append((stripped, word.output_start_us, word.output_end_us, MotionPurpose.KEY_PHRASE))
+        chosen.append(
+            (stripped, word.output_start_us, word.output_end_us, MotionPurpose.KEY_PHRASE, "typography-card-v1")
+        )
     if not chosen and emphasis:
         item = emphasis[0]
-        chosen.append((item.text.strip(), item.output_start_us, item.output_end_us, item.purpose))
+        chosen.append(
+            (item.text.strip(), item.output_start_us, item.output_end_us, item.purpose, "typography-card-v1")
+        )
+    if punch_text and punch_text.lower() != hook_text.lower() and punch_words[0].output_start_us > hook_end_us:
+        chosen.append(
+            (
+                punch_text,
+                punch_words[0].output_start_us,
+                punch_words[-1].output_end_us,
+                MotionPurpose.KEY_PHRASE,
+                "punch-card-v1",
+            )
+        )
+    hooks = [item for item in chosen if item[4] == "hook-card-v1"][:1]
+    punches = [item for item in chosen if item[4] == "punch-card-v1"][:1]
+    middle = [item for item in chosen if item[4] == "typography-card-v1"]
+    middle.sort(key=lambda item: (0 if any(char.isdigit() or char == "$" for char in item[0]) else 1, item[1]))
+    ordered = sorted(hooks + middle[:2] + punches, key=lambda item: (item[1], item[4]))
+    selected: list[tuple[str, int, int, MotionPurpose, str]] = []
+    for candidate in ordered:
+        if selected and candidate[1] < selected[-1][2]:
+            if candidate[4] == "punch-card-v1":
+                while selected and candidate[1] < selected[-1][2]:
+                    selected.pop()
+            else:
+                continue
+        selected.append(candidate)
     events: list[TypographyEvent] = []
-    for index, (text, start, end, purpose) in enumerate(chosen[:3]):
+    for index, (text, start, end, purpose, component_id) in enumerate(selected):
+        y = 220 if component_id == "hook-card-v1" else 1320 if component_id == "punch-card-v1" else 360
         events.append(
             TypographyEvent(
                 event_id=stable_id("type", candidate_id, text, str(index)),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 purpose=purpose,
-                component_id=f"typography-{index}",
+                component_id=component_id,
                 text=text,
                 x=72,
-                y=1480,
+                y=y,
                 font_size=64,
             )
         )
     return events
+
+
+def _phrase(words: list[AlignedWord]) -> str:
+    """Join exact aligned words into a readable teaser without changing wording."""
+    text = " ".join(word.text.strip() for word in words if word.text.strip())
+    return re.sub(r"\s+([,.;?!…。？！:])", r"\1", text).strip()  # noqa: RUF001
 
 
 def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[TypographyEvent]:
@@ -273,46 +342,20 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                 x=72,
                 y=1540,
                 font_size=54,
+                words=[
+                    CaptionWordTiming(
+                        word_id=word.word_id,
+                        text=word.text,
+                        output_start_us=word.output_start_us,
+                        output_end_us=word.output_end_us,
+                        output_start_frame=word.output_start_frame,
+                        output_end_frame_exclusive=word.output_end_frame_exclusive,
+                    )
+                    for word in piece.words
+                ],
             )
         )
     return events
-
-
-def _diagrams(emphasis: list[EmphasisEvent], duration_us: int, candidate_id: str) -> list[DiagramEvent]:
-    numeric = [item for item in emphasis if any(char.isdigit() or char == "$" for char in item.text)]
-    if not numeric:
-        return []
-    label = numeric[0].text.strip()
-    other = numeric[1].text.strip() if len(numeric) > 1 else "Next"
-    end = min(duration_us, 800_000)
-    if end <= 0:
-        raise MediaError("advanced diagram needs a positive time map")
-    return [
-        DiagramEvent(
-            event_id=stable_id("diagram", candidate_id, "comparison"),
-            interval=OutputInterval(output_start_us=0, output_end_us=end),
-            purpose=MotionPurpose.COMPARISON,
-            component_id="number-comparison-v1",
-            payload=DiagramPayload(
-                kind="number_comparison",
-                left_label=label[:40],
-                right_label=other[:40],
-                left_value=_number(label),
-                right_value=_number(other),
-            ),
-            x=120,
-            y=280,
-            width=840,
-            height=360,
-        )
-    ]
-
-
-def _number(text: str) -> int:
-    digits = "".join(character for character in text if character.isdigit())
-    if not digits:
-        return 0
-    return min(int(digits[:9]), 1_000_000_000)
 
 
 def _windows(

@@ -6,6 +6,7 @@ import json
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -15,12 +16,15 @@ from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
+from clipforge.hero.advanced_build import _typography
 from clipforge.hero.advanced_service import (
+    default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
     select_advanced_backend,
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
+from clipforge.hero.motion_style import EDITORIAL_CLEAN_V1, LEGACY_V1
 from clipforge.hero.show import load_current_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
@@ -80,6 +84,9 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     )
     assert plan.reframing_strategy == "contain"
     assert any("$" in item.text or item.text.strip() for item in plan.typography)
+    assert plan.typography[0].component_id == "hook-card-v1"
+    assert plan.typography[0].interval.output_start_us == 0
+    assert plan.captions and all(item.words for item in plan.captions)
     backend = FakeAdvancedRenderBackend()
     result = render_advanced_drafts(
         database=fixture.database,
@@ -106,6 +113,23 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     render_input = json.loads(before[-1].read_text(encoding="utf-8"))
     with pytest.raises(ValidationError, match="debug_overlays"):
         AdvancedHeroRenderInput.model_validate({**render_input, "debug_overlays": True})
+
+
+def test_typography_builds_exact_hook_and_punch_cards() -> None:
+    words = []
+    for index, text in enumerate(("Intro", "line", "never", "knew", "his", "biological", "father,", "final.")):
+        start = index * 1_000_000
+        words.append(
+            SimpleNamespace(
+                text=text,
+                output_start_us=start,
+                output_end_us=start + 900_000,
+            )
+        )
+    events = _typography(SimpleNamespace(words=words), [], "candidate")
+    assert [item.component_id for item in events] == ["hook-card-v1", "punch-card-v1"]
+    assert events[0].text == "never knew his biological father,"
+    assert events[1].text == "biological father, final."
 
 
 def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
@@ -228,7 +252,23 @@ def test_remote_url_and_music_are_rejected() -> None:
         )
 
 
-def test_overlap_typography_and_unsafe_diagram_box() -> None:
+def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
+    assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
+    assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
+    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-clean-v1"
+    legacy = default_advanced_profile().model_copy(
+        update={
+            "caption_algorithm_version": "advanced-caption-v1",
+            "typography_version": "advanced-typography-v1",
+            "diagram_version": "advanced-diagram-v1",
+            "renderer_recipe_version": "advanced-hero-renderer-v1",
+            "motion_library_version": "advanced-motion-v1",
+        }
+    )
+    assert legacy.fingerprint() != default_advanced_profile().fingerprint()
+
+
+def test_overlap_typography_and_unsupported_diagram_box() -> None:
     interval = OutputInterval(output_start_us=0, output_end_us=100)
     text = TypographyEvent(
         event_id="t1",
@@ -243,7 +283,7 @@ def test_overlap_typography_and_unsafe_diagram_box() -> None:
     other = text.model_copy(update={"event_id": "t2"})
     with pytest.raises(ValidationError, match="overlapping"):
         AdvancedHeroPlanDocument.model_validate(_minimum_plan(typography=[text, other]))
-    with pytest.raises(ValidationError, match="safe area"):
+    with pytest.raises(ValidationError, match="unsupported production diagram kind"):
         DiagramEvent(
             event_id="d",
             interval=interval,
@@ -469,7 +509,7 @@ def test_changed_sfx_hash_and_review_payload_are_safe(tmp_path: Path) -> None:
     assert draft["sfx"][0]["role"] == "sfx"
     assert "gain_db" in draft["sfx"][0]
     assert draft["typography"]
-    assert draft["diagrams"][0]["kind"] == "number_comparison"
+    assert draft["diagrams"] == []
     assert draft["emphasis"]
     fixture.workspace.advanced_asset_file("sfx-1").write_bytes(b"changed-sfx")
     with pytest.raises(MediaError, match="hash"):
@@ -526,11 +566,10 @@ def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> N
     plan_path = fixture.workspace.advanced_plan_file(candidate_id)
     stored = json.loads(plan_path.read_text(encoding="utf-8"))
     hostile_name = "<img src=x onerror=alert(1)>"
-    hostile_label = "<script>alert(1)</script>"
     for asset in stored["assets"]:
         if asset["asset_id"] == "broll-1":
             asset["display_name"] = hostile_name
-    stored["diagrams"][0]["payload"]["left_label"] = hostile_label
+    stored["diagrams"] = []
     plan_path.write_text(json.dumps(stored), encoding="utf-8")
     from clipforge.hero.advanced_service import advanced_review_board, advanced_review_card
 
@@ -538,9 +577,8 @@ def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> N
     draft = advanced_review_card(fixture.database, SOURCE_ID, candidate_id, fixture.work)
     broll = next(item for item in draft["broll"] if item["asset_id"] == "broll-1")
     assert broll["display_name"] == hostile_name
-    assert draft["diagrams"][0]["left_label"] == hostile_label
     encoded = json.dumps(board)
-    assert json.loads(encoded)["drafts"][0]["diagrams"][0]["left_label"] == hostile_label
+    assert json.loads(encoded)["drafts"][0]["diagrams"] == []
     assert "/home/" not in encoded
     assert "/tmp/" not in encoded
     page = (Path(__file__).parents[1] / "src/clipforge/review/static/advanced-review.js").read_text(
