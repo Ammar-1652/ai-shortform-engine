@@ -11,7 +11,7 @@ from pathlib import Path
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
 from clipforge.hero.captions import hero_caption_pieces
-from clipforge.hero.motion_style import style_for_renderer_version
+from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.reframe import (
     ReframeError,
     build_face_follow,
@@ -30,6 +30,7 @@ from clipforge.schemas.advanced import (
     TypographyEvent,
     advanced_fingerprint,
 )
+from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -78,6 +79,8 @@ def build_advanced_plan(
     sfx_asset_ids: list[str],
     actor: str,
     tool_version: str,
+    direction: DirectionDocument | None = None,
+    direction_sha256: str = "",
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
         raise MediaError("advanced Hero profile cannot allow music")
@@ -102,7 +105,11 @@ def build_advanced_plan(
     )
     emphasis = _emphasis(alignment, candidate_id)
     captions = _captions(alignment, candidate_id)
-    typography = _typography(alignment, emphasis, candidate_id)
+    typography = (
+        _directed_typography(direction, alignment, candidate_id)
+        if direction is not None
+        else _typography(alignment, emphasis, candidate_id)
+    )
     # A diagram is editorial evidence, not a decoration.  Until an operator
     # supplies a source-grounded diagram instruction, the safe plan is none.
     diagrams: list[DiagramEvent] = []
@@ -129,11 +136,16 @@ def build_advanced_plan(
         profile,
     )
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
+    motion_style = (
+        style_for_id(direction.style_id)
+        if direction is not None
+        else style_for_renderer_version(profile.renderer_recipe_version)
+    )
     config: dict[str, object] = {
         "manual_window": manual,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
-        "motion_style": asdict(style_for_renderer_version(profile.renderer_recipe_version)),
+        "motion_style": asdict(motion_style),
     }
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
@@ -161,6 +173,12 @@ def build_advanced_plan(
         visual_analysis_sha256=visual_sha256,
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
         profile_fingerprint=profile.fingerprint(),
+        direction_id="" if direction is None else direction.direction_id,
+        direction_sha256=direction_sha256,
+        style_id=motion_style.style_id,
+        style_fingerprint=motion_style.fingerprint(),
+        safe_region_id="portrait-safe-v1",
+        motion_style=motion_style.contract(),
         reframing_strategy=profile.reframing.strategy_id,
         reframing_config_sha256=advanced_fingerprint(config),
         windows=windows,
@@ -224,6 +242,41 @@ def _rule(word: AlignedWord) -> str | None:
     if stripped[-1] in ".?!…。？！:":  # noqa: RUF001
         return "terminal_punctuation"
     return None
+
+
+def _directed_typography(
+    direction: DirectionDocument,
+    alignment: ForcedAlignmentDocument,
+    candidate_id: str,
+) -> list[TypographyEvent]:
+    """Optional cards use only selected, exact source-bound words and timing."""
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    evidence = {item.evidence_id: item for item in option.evidence}
+    words = {word.word_id: word for word in alignment.words}
+    events: list[TypographyEvent] = []
+    for beat in option.beats:
+        if beat.display_text is None:
+            continue
+        bound_words = [
+            words[word_id]
+            for evidence_id in beat.evidence_ids
+            for word_id in evidence[evidence_id].source_word_ids
+        ]
+        start = min(word.output_start_us for word in bound_words)
+        end = max(word.output_end_us for word in bound_words)
+        events.append(
+            TypographyEvent(
+                event_id=stable_id("direction-type", candidate_id, direction.direction_id, beat.beat_id),
+                interval=OutputInterval(output_start_us=start, output_end_us=end),
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id="typography-card-v1",
+                text=beat.display_text,
+                x=72,
+                y=220,
+                font_size=64,
+            )
+        )
+    return events
 
 
 def _typography(

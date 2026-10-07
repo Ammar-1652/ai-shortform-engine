@@ -91,6 +91,13 @@ from clipforge.schemas.candidates import (
     EditOpportunityWeights,
     QualityWeights,
 )
+from clipforge.schemas.direction import (
+    DirectionBeat,
+    DirectionDocument,
+    DirectionEvidence,
+    DirectionOption,
+    MotionStyleSpec,
+)
 from clipforge.schemas.editorial import (
     AudioEvent,
     BrollEvent,
@@ -315,6 +322,11 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AdvancedHeroDraftSetDocument,
     AdvancedHeroCacheRecord,
     AdvancedHeroPlanDocument,
+    MotionStyleSpec,
+    DirectionEvidence,
+    DirectionBeat,
+    DirectionOption,
+    DirectionDocument,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

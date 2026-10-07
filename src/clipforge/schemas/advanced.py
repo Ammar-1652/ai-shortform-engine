@@ -13,6 +13,7 @@ from typing import Any, Literal, Self
 from pydantic import AwareDatetime, Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.direction import MotionStyleSpec
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
 
@@ -277,6 +278,10 @@ class AdvancedHeroRenderInput(Versioned):
     profile_fingerprint: str = Field(pattern=_SHA)
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    motion_style: MotionStyleSpec | None = None
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
     advanced_plan_sha256: str = Field(pattern=_SHA)
@@ -305,6 +310,10 @@ class AdvancedHeroRenderInput(Versioned):
 
     @model_validator(mode="after")
     def local_names_only(self) -> Self:
+        if self.motion_style is not None and self.motion_style.style_id != self.style_id:
+            raise ValueError("render input motion style does not match style_id")
+        if self.style_id != "legacy-v1" and not self.style_fingerprint:
+            raise ValueError("production motion style requires a fingerprint")
         for name in self.asset_names.values():
             lowered = name.lower()
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
@@ -324,6 +333,9 @@ class AdvancedHeroDraftOutput(Versioned):
     hero_plan_id: EntityId
     hero_plan_sha256: str = Field(pattern=_SHA)
     advanced_plan_sha256: str = Field(pattern=_SHA)
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
     preview_sha256: str = Field(pattern=_SHA)
@@ -375,6 +387,12 @@ class AdvancedHeroPlanDocument(Versioned):
     visual_analysis_sha256: str = Field(pattern=_SHA)
     time_map_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
+    style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
+    motion_style: MotionStyleSpec | None = None
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     windows: list[ReframingWindow] = Field(default_factory=list)
@@ -398,6 +416,11 @@ class AdvancedHeroPlanDocument(Versioned):
         for event in self.sfx:
             if event.role != "sfx":
                 raise ValueError("advanced Hero audio rejects music")
+        if self.motion_style is not None:
+            if self.motion_style.style_id != self.style_id:
+                raise ValueError("advanced plan motion style does not match style_id")
+            if self.style_fingerprint == "":
+                raise ValueError("advanced plan motion style requires a fingerprint")
         return self
 
 
@@ -422,6 +445,8 @@ class AdvancedHeroDraftSetDocument(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    direction_sha256s: list[str] = Field(default_factory=list)
+    style_ids: list[str] = Field(default_factory=list)
     drafts: list[AdvancedHeroDraftOutput] = Field(min_length=1)
     provenance: ArtifactProvenance
 
@@ -460,6 +485,7 @@ class AdvancedHeroCacheRecord(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    direction_sha256s: list[str] = Field(default_factory=list)
     manifest_sha256: str = Field(pattern=_SHA)
     manifest_size_bytes: int = Field(ge=1)
     rendered_count: int = Field(ge=1)

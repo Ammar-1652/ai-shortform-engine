@@ -118,6 +118,11 @@ class DeliveryFacts:
     narration_voice_id: str | None = None
     narration_model_license: str | None = None
     narration_requested: bool = False
+    direction_id: str = ""
+    direction_sha256: str = ""
+    style_id: str = "legacy-v1"
+    style_fingerprint: str = ""
+    safe_region_id: str = "portrait-safe-v1"
 
 
 def preflight_delivery(
@@ -256,6 +261,11 @@ def preflight_delivery(
         advanced_artifact_size=manifest_size,
         advanced_plan_id=plan.plan_id,
         advanced_plan_sha256=draft.advanced_plan_sha256,
+        direction_id=plan.direction_id,
+        direction_sha256=plan.direction_sha256,
+        style_id=plan.style_id,
+        style_fingerprint=plan.style_fingerprint,
+        safe_region_id=plan.safe_region_id,
         alignment_id=alignment_id,
         alignment_sha256=alignment_sha,
         qa_set_id=qa_set_id,
@@ -334,6 +344,11 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "narration_sha256": facts.narration_sha256 or "",
         "plan_sha256": facts.advanced_plan_sha256,
         "profile_fingerprint": facts.profile_fingerprint,
+        "direction_id": facts.direction_id,
+        "direction_sha256": facts.direction_sha256,
+        "style_id": facts.style_id,
+        "style_fingerprint": facts.style_fingerprint,
+        "safe_region_id": facts.safe_region_id,
         "qa_set_id": facts.qa_set_id,
         "qa_set_sha256": facts.qa_set_sha256,
         "reframing_strategy": facts.reframing_strategy,
@@ -437,6 +452,17 @@ def _reject_render_strategy(
         raise PublishError("advanced render input could not be read", category="artifact_changed") from exc
     if rendered.reframing_strategy != plan.reframing_strategy or rendered.reframing_strategy != reframe.applied:
         raise PublishError("render used a different reframing strategy", category="stale_final_review")
+    if plan.direction_id or plan.motion_style is not None:
+        if (
+            rendered.direction_id != plan.direction_id
+            or rendered.direction_sha256 != plan.direction_sha256
+            or rendered.style_id != plan.style_id
+            or rendered.style_fingerprint != plan.style_fingerprint
+            or rendered.safe_region_id != plan.safe_region_id
+        ):
+            raise PublishError("motion direction changed", category="stale_final_review")
+        if plan.motion_style is not None and rendered.motion_style != plan.motion_style:
+            raise PublishError("motion style recipe changed", category="stale_final_review")
     if reframe.applied != "face_follow":
         return
     if rendered.trajectory_sha256 != reframe.trajectory_sha256 or not rendered.trajectory_sha256:

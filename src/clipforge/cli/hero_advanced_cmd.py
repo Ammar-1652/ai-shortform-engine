@@ -17,6 +17,11 @@ advanced_app = typer.Typer(
     no_args_is_help=True,
     help="Plan and render an advanced Hero draft from the current Hero set.",
 )
+direction_app = typer.Typer(
+    no_args_is_help=True,
+    help="Validate source-grounded motion direction before Advanced Hero planning.",
+)
+advanced_app.add_typer(direction_app, name="direction")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -71,6 +76,134 @@ def advanced_plan(
     typer.echo(f"reframing: {plan.reframing_strategy}")
     typer.echo(f"applied: {plan.reframing_strategy}")
     typer.echo("blocker: none")
+
+
+@direction_app.command("plan")
+def direction_plan(
+    source_asset_id: Annotated[str, typer.Argument(help="Ingested source id.")],
+    candidate_id: Annotated[str, typer.Argument(help="Approved Hero candidate id.")],
+    brief: Annotated[
+        Path,
+        typer.Option("--brief", exists=True, readable=True, help="Skill-produced direction JSON."),
+    ],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    style: Annotated[str, typer.Option("--style", help="auto or one allowlisted preset id.")] = "auto",
+) -> None:
+    """Validate and persist one immutable direction brief."""
+    from clipforge.hero.direction_service import save_direction_brief
+
+    try:
+        document, destination, digest = save_direction_brief(
+            database=Database(resolve_db_path(db)),
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            work_root=resolve_work_dir(work_dir),
+            brief_path=brief.resolve(),
+            style=style,
+        )
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(f"direction_id: {document.direction_id}")
+    typer.echo(f"selected_option_id: {document.selected_option_id}")
+    typer.echo(f"style_id: {document.style_id}")
+    typer.echo(f"direction_sha256: {digest}")
+    typer.echo(f"path: {destination}")
+    typer.echo("blocker: none")
+
+
+@direction_app.command("doctor")
+def direction_doctor() -> None:
+    """Report the declarative direction contract and allowlisted presets."""
+    from clipforge.hero.motion_style import production_style_ids, style_for_id
+
+    typer.echo("PASS direction_contract: direction-v1")
+    typer.echo("PASS options: exactly_three")
+    typer.echo("PASS safe_region: portrait-safe-v1")
+    typer.echo(f"styles: {','.join(production_style_ids())}")
+    for style_id in production_style_ids():
+        profile = style_for_id(style_id)
+        typer.echo(f"style_{style_id}: {profile.fingerprint()}")
+
+
+@direction_app.command("show")
+def direction_show(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Show the persisted direction and its selected preset."""
+    from clipforge.hero.direction_service import load_direction
+    from clipforge.preview.inputs import load_preview_inputs
+    from clipforge.preview.service import default_profile
+
+    try:
+        root = resolve_work_dir(work_dir)
+        inputs = load_preview_inputs(
+            Database(resolve_db_path(db)),
+            source_asset_id,
+            root,
+            profile_fingerprint=default_profile().fingerprint(),
+            create_workspace=False,
+        )
+        loaded = load_direction(inputs.pair.workspace, candidate_id)
+        if loaded is None:
+            raise ClipforgeError("no direction document for candidate")
+        document, digest = loaded
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(f"direction_id: {document.direction_id}")
+    typer.echo(f"selected_option_id: {document.selected_option_id}")
+    typer.echo(f"style_id: {document.style_id}")
+    typer.echo(f"direction_sha256: {digest}")
+
+
+@direction_app.command("verify")
+def direction_verify(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Verify direction evidence and binding to the current promoted Hero plan."""
+    from clipforge.hero.advanced_service import _context
+    from clipforge.hero.direction_service import load_direction, validate_source_evidence
+    from clipforge.hero.motion_style import style_for_id
+
+    try:
+        root = resolve_work_dir(work_dir)
+        database = Database(resolve_db_path(db))
+        context = _context(database, source_asset_id, candidate_id, root)
+        loaded = load_direction(context.workspace, candidate_id)
+        if loaded is None:
+            raise ClipforgeError("no direction document for candidate")
+        document, digest = loaded
+        if (
+            document.source_sha256 != context.source_sha256
+            or document.hero_plan_sha256 != context.hero_plan_sha256
+        ):
+            raise ClipforgeError("direction is stale against the current promoted Hero plan")
+        if document.time_map_sha256 != context.hero_plan.edit_plan.time_map_sha256:
+            raise ClipforgeError("direction is stale against the current TimeMap")
+        if document.alignment_sha256 != context.alignment_sha256:
+            raise ClipforgeError("direction is stale against the current forced alignment")
+        if document.visual_analysis_sha256 != context.visual_sha256:
+            raise ClipforgeError("direction is stale against the current visual analysis")
+        profile = style_for_id(document.style_id)
+        if document.style_fingerprint != profile.fingerprint():
+            raise ClipforgeError("direction style fingerprint is stale")
+        validate_source_evidence(
+            document,
+            context.alignment.words,
+            context.hero_plan.edit_plan.time_map,
+            {scene.scene_id for scene in context.visual.scenes},
+        )
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo("PASS direction")
+    typer.echo(f"style_id: {document.style_id}")
+    typer.echo(f"direction_sha256: {digest}")
 
 
 @advanced_app.command("render")

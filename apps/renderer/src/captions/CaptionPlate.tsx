@@ -82,24 +82,32 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
           boxShadow: typography || hook || punch ? "0 12px 34px rgba(0,0,0,0.34)" : "0 5px 18px rgba(0,0,0,0.28)",
         }}
       >
-        {layout.lines.map((line, lineIndex) => (
-          <div key={`${line}-${lineIndex}`}>
-            {line.split(/(\s+)/).map((part, partIndex) => {
-              const highlighted = Boolean(emphasis) && !highlightedTokenUsed && tokenKey(part) === emphasis;
-              if (highlighted) highlightedTokenUsed = true;
-              return highlighted ? (
-                <span
-                  key={`${part}-${partIndex}`}
-                  style={{ color: "#ffcf4a", textShadow: "0 0 18px rgba(255,207,74,0.45)" }}
-                >
-                  {part}
-                </span>
-              ) : (
-                <span key={`${part}-${partIndex}`}>{part}</span>
-              );
-            })}
-          </div>
-        ))}
+        {layout.lines.map((line, lineIndex) => {
+          // Keep RTL and CJK as whole shaped runs. Splitting their characters
+          // into independently styled spans can change joining, grapheme
+          // shaping, or punctuation placement in the browser.
+          if (layout.direction === "rtl" || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
+            return <div key={`${line}-${lineIndex}`}>{line}</div>;
+          }
+          return (
+            <div key={`${line}-${lineIndex}`}>
+              {line.split(/(\s+)/).map((part, partIndex) => {
+                const highlighted = Boolean(emphasis) && !highlightedTokenUsed && tokenKey(part) === emphasis;
+                if (highlighted) highlightedTokenUsed = true;
+                return highlighted ? (
+                  <span
+                    key={`${part}-${partIndex}`}
+                    style={{ color: "#ffcf4a", textShadow: "0 0 18px rgba(255,207,74,0.45)" }}
+                  >
+                    {part}
+                  </span>
+                ) : (
+                  <span key={`${part}-${partIndex}`}>{part}</span>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

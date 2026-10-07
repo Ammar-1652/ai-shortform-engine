@@ -1,6 +1,7 @@
 import { AbsoluteFill, Audio, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
+import type { CSSProperties } from "react";
 
-import { CaptionPlate, type CaptionVariant } from "../captions/CaptionPlate.js";
+import { CaptionPlate } from "../captions/CaptionPlate.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
 
@@ -62,10 +63,30 @@ type SfxEvent = {
 
 type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: number };
 
+type MotionStyle = {
+  style_id?: string;
+  easing?: string;
+  enter_frames?: number;
+  exit_frames?: number;
+  max_travel_px?: number;
+  max_scale_permille?: number;
+  caption_mode?: "phrase_active_word" | "phrase_whole_run";
+  contrast?: string;
+  accent?: string;
+};
+
 export type AdvancedHeroInput = {
   duration_in_frames: number;
-  style_id?: "legacy-v1" | "editorial-clean-v1";
+  style_id?:
+    | "legacy-v1"
+    | "editorial-clean-v1"
+    | "kinetic-caption-v1"
+    | "documentary-broll-v1"
+    | "data-explainer-v1"
+    | "paper-explainer-v1"
+    | "premium-minimal-v1";
   style_fingerprint?: string;
+  motion_style?: MotionStyle;
   reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
@@ -90,12 +111,6 @@ export type AdvancedHeroInput = {
 const FPS = 30;
 const NEUTRAL_DARK = "#111111";
 
-function captionVariant(index: number, count: number): CaptionVariant {
-  if (index === 0) return "hook";
-  if (index === count - 1) return "punch";
-  return "body";
-}
-
 function frameAt(microseconds: number | undefined): number {
   if (typeof microseconds !== "number") {
     return 0;
@@ -115,6 +130,43 @@ function span(interval: Interval | undefined): { from: number; duration: number 
   return { from, duration: Math.max(1, end - from) };
 }
 
+function eased(value: number, easing: string | undefined): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  if (easing === "ease_in_out_cubic") {
+    return clamped < 0.5 ? 4 * clamped * clamped * clamped : 1 - Math.pow(-2 * clamped + 2, 3) / 2;
+  }
+  if (easing === "ease_out_cubic") {
+    return 1 - Math.pow(1 - clamped, 3);
+  }
+  return clamped;
+}
+
+function motionFor(frame: number, interval: Interval | undefined, style: MotionStyle | undefined): CSSProperties {
+  if (!style || style.style_id === "legacy-v1") {
+    return {};
+  }
+  const start = frameAt(interval?.output_start_us);
+  const end = Math.max(start + 1, frameAt(interval?.output_end_us));
+  const duration = end - start;
+  const enter = Math.min(Math.max(0, style.enter_frames ?? 0), Math.floor(duration / 3));
+  const exit = Math.min(Math.max(0, style.exit_frames ?? 0), Math.floor(duration / 3));
+  const enterProgress = enter === 0 ? 1 : eased((frame - start) / enter, style.easing);
+  const exitProgress = exit === 0 ? 1 : eased((end - frame) / exit, style.easing);
+  // Captions must be readable on their first/last owned frame. Motion never
+  // turns a short forced cue into an invisible fade.
+  const opacity = 0.85 + 0.15 * Math.min(1, enterProgress, exitProgress);
+  const travel = Math.max(0, style.max_travel_px ?? 0);
+  const entranceOffset = (1 - enterProgress) * travel;
+  const exitOffset = (1 - exitProgress) * -travel * 0.5;
+  const scaleMax = Math.max(1000, style.max_scale_permille ?? 1000) / 1000;
+  const scale = 1 + (scaleMax - 1) * enterProgress * (1 - exitProgress);
+  return {
+    opacity,
+    transform: `translate3d(0, ${entranceOffset + exitOffset}px, 0) scale(${scale})`,
+    transformOrigin: "center center",
+  };
+}
+
 /**
  * Advanced portrait draft. Contain keeps the whole source picture.
  * Text nodes are React children. A face box is not a speaker. Music is not a layer.
@@ -123,11 +175,22 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
   const strategy = input.reframing_strategy ?? "contain";
   const style = input.style_id ?? "legacy-v1";
-  if (style !== "legacy-v1" && style !== "editorial-clean-v1") {
+  const productionStyles = new Set([
+    "editorial-clean-v1",
+    "kinetic-caption-v1",
+    "documentary-broll-v1",
+    "data-explainer-v1",
+    "paper-explainer-v1",
+    "premium-minimal-v1",
+  ]);
+  if (style !== "legacy-v1" && !productionStyles.has(style)) {
     throw new Error(`unsupported motion style ${String(style)}`);
   }
-  if (style === "editorial-clean-v1" && !/^[0-9a-f]{64}$/.test(input.style_fingerprint ?? "")) {
-    throw new Error("editorial-clean-v1 requires a style fingerprint");
+  if (style !== "legacy-v1" && !/^[0-9a-f]{64}$/.test(input.style_fingerprint ?? "")) {
+    throw new Error(`${style} requires a style fingerprint`);
+  }
+  if (input.motion_style && input.motion_style.style_id !== style) {
+    throw new Error("motion style payload does not match style_id");
   }
   if (input.debug_overlays === true) {
     throw new Error("production advanced renders reject debug overlays");
@@ -138,19 +201,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const names = input.asset_names ?? {};
   const captions = input.captions ?? [];
   const typography = input.typography ?? [];
-  const activeDesignedCard = typography.find(
-    (item) =>
-      active(frame, item.interval) &&
-      (item.component_id === "hook-card-v1" || item.component_id === "punch-card-v1"),
+  const visibleCaptions = captions.filter(
+    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
   );
-  const hasDesignedHook = typography.some((item) => item.component_id === "hook-card-v1");
-  const cardText = activeDesignedCard?.text?.replace(/\s+/g, " ").trim().toLowerCase();
-  const visibleCaptions = captions.filter((item) => {
-    if (!active(frame, item.interval) || (item.text ?? "").trim().length === 0) return false;
-    if (!cardText) return true;
-    const captionText = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-    return !captionText.includes(cardText);
-  });
   const visibleType = typography.filter((item) => {
     if (!active(frame, item.interval) || (item.text ?? "").trim().length === 0) {
       return false;
@@ -166,6 +219,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
   // deterministic without treating the sentinel as a supported locale claim.
   const language = !rawLanguage || rawLanguage === "missing" ? "en-US" : rawLanguage;
+  const motionStyle = input.motion_style;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
   if (diagram && (diagram.payload?.kind ?? "number_comparison") !== "number_comparison") {
     throw new Error(`unsupported production diagram kind ${String(diagram.payload?.kind)}`);
@@ -304,9 +358,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       )}
       {visibleCaptions.map((item) => (
         (() => {
-          const index = captions.indexOf(item);
           const activeWord =
-            style === "editorial-clean-v1" &&
+            style !== "legacy-v1" &&
+            motionStyle?.caption_mode === "phrase_active_word" &&
             !language.startsWith("ar") &&
             !language.startsWith("ja")
               ? item.words?.find(
@@ -316,29 +370,37 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 )?.text
               : undefined;
           return (
-            <CaptionPlate
+            <AbsoluteFill
               key={`${item.component_id ?? "caption"}-${item.event_id ?? ""}-${item.text}`}
-              text={(item.text ?? "").trim()}
-              language={item.language || language}
-              variant={style === "editorial-clean-v1" ? (hasDesignedHook && index === 0 ? "body" : captionVariant(index, captions.length)) : "body"}
-              emphasisText={activeWord ?? (style === "editorial-clean-v1" ? activeEmphasis : undefined)}
-            />
+              style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
+            >
+              <CaptionPlate
+                text={(item.text ?? "").trim()}
+                language={item.language || language}
+                variant="body"
+                emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
+              />
+            </AbsoluteFill>
           );
         })()
       ))}
       {visibleType.map((item) => (
-        <CaptionPlate
+        <AbsoluteFill
           key={`${item.component_id ?? "type"}-${item.text}`}
-          text={item.text ?? ""}
-          language={item.language || language}
-          variant={style === "editorial-clean-v1" && item.component_id === "hook-card-v1" ? "hook" : style === "editorial-clean-v1" && item.component_id === "punch-card-v1" ? "punch" : "typography"}
-          emphasisText={style === "editorial-clean-v1" ? activeEmphasis : undefined}
-          x={item.x}
-          y={item.y}
-          fontSize={item.font_size}
-        />
+          style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
+        >
+          <CaptionPlate
+            text={item.text ?? ""}
+            language={item.language || language}
+            variant={style !== "legacy-v1" && item.component_id === "hook-card-v1" ? "hook" : style !== "legacy-v1" && item.component_id === "punch-card-v1" ? "punch" : "typography"}
+            emphasisText={style !== "legacy-v1" ? activeEmphasis : undefined}
+            x={item.x}
+            y={item.y}
+            fontSize={item.font_size}
+          />
+        </AbsoluteFill>
       ))}
-      {style === "editorial-clean-v1" ? <AbsoluteFill style={{ pointerEvents: "none" }}>
+      {style !== "legacy-v1" ? <AbsoluteFill style={{ pointerEvents: "none" }}>
         <div
           style={{
             position: "absolute",
@@ -354,7 +416,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             left: 0,
             right: 0,
             height: 12,
-            background: "linear-gradient(90deg, #ffcf4a, #3ddbd6, #ffcf4a)",
+            background: `linear-gradient(90deg, ${motionStyle?.accent ?? "#ffcf4a"}, #3ddbd6, ${motionStyle?.accent ?? "#ffcf4a"})`,
             opacity: interpolate(frame, [0, 8, 18], [1, 0.7, 0.18], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
           }}
         />
@@ -365,7 +427,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             left: 0,
             right: 0,
             height: 10,
-            background: "linear-gradient(90deg, #3ddbd6, #ffcf4a)",
+            background: `linear-gradient(90deg, #3ddbd6, ${motionStyle?.accent ?? "#ffcf4a"})`,
             opacity: interpolate(
               frame,
               [Math.max(0, input.duration_in_frames - 18), Math.max(1, input.duration_in_frames - 6), input.duration_in_frames - 1],

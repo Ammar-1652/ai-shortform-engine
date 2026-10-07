@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "Verifiable transcript/visual evidence for one editorial choice.",
+  "properties": {
+    "evidence_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Note",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_segment_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Segment Ids",
+      "type": "array"
+    },
+    "source_text": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Source Text",
+      "type": "string"
+    },
+    "source_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Word Ids",
+      "type": "array"
+    },
+    "visual_scene_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Visual Scene Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "source_word_ids",
+    "source_segment_ids",
+    "source_text",
+    "note"
+  ],
+  "title": "DirectionEvidence",
+  "type": "object"
+}

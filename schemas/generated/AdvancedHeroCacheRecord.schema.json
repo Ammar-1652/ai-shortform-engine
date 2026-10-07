@@ -29,6 +29,13 @@
       "title": "Created At",
       "type": "string"
     },
+    "direction_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Direction Sha256S",
+      "type": "array"
+    },
     "hero_artifact_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

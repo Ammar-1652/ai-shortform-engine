@@ -18,7 +18,8 @@ from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
-from clipforge.hero.motion_style import style_for_renderer_version
+from clipforge.hero.direction_service import load_direction
+from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.probe import probe_hero
 from clipforge.hero.reframe import (
     frame_count_for_duration,
@@ -57,6 +58,7 @@ from clipforge.schemas.advanced import (
     ReframingStrategy,
     advanced_fingerprint,
 )
+from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
@@ -125,11 +127,43 @@ def plan_advanced_candidate(
     sfx_asset_ids: list[str] | None = None,
     profile: AdvancedHeroProfile | None = None,
     created_by: str | None = None,
+    direction: DirectionDocument | None = None,
 ) -> AdvancedHeroPlanDocument:
     """Write one advanced plan. Asset and approval failures happen before a render job."""
     root = work_root.resolve()
     active = profile or default_advanced_profile()
     context = _context(database, source_asset_id, candidate_id, root)
+    stored_direction = direction
+    direction_sha256 = ""
+    if stored_direction is None:
+        loaded_direction = load_direction(context.workspace, candidate_id)
+        if loaded_direction is not None:
+            stored_direction, direction_sha256 = loaded_direction
+    elif stored_direction.direction_id:
+        loaded_direction = load_direction(context.workspace, candidate_id)
+        if loaded_direction is None or loaded_direction[0] != stored_direction:
+            raise MediaError("direction must be validated and persisted before planning")
+        direction_sha256 = loaded_direction[1]
+    if stored_direction is not None and (
+        stored_direction.source_asset_id != source_asset_id
+        or stored_direction.candidate_id != candidate_id
+        or stored_direction.source_sha256 != context.source_sha256
+        or stored_direction.hero_plan_sha256 != context.hero_plan_sha256
+        or stored_direction.time_map_sha256 != context.hero_plan.edit_plan.time_map_sha256
+        or stored_direction.alignment_sha256 != context.alignment_sha256
+        or stored_direction.visual_analysis_sha256 != context.visual_sha256
+        or stored_direction.style_fingerprint != style_for_id(stored_direction.style_id).fingerprint()
+    ):
+        raise MediaError("direction is stale against the current promoted Hero plan")
+    if stored_direction is not None:
+        from clipforge.hero.direction_service import validate_source_evidence
+
+        validate_source_evidence(
+            stored_direction,
+            context.alignment.words,
+            context.hero_plan.edit_plan.time_map,
+            {scene.scene_id for scene in context.visual.scenes},
+        )
     actor = _actor(created_by)
     plan = build_advanced_plan(
         database=database,
@@ -161,6 +195,8 @@ def plan_advanced_candidate(
         sfx_asset_ids=list(sfx_asset_ids or []),
         actor=actor,
         tool_version=__version__,
+        direction=stored_direction,
+        direction_sha256=direction_sha256,
     )
     destination = context.workspace.advanced_plan_file(candidate_id)
     context.workspace.prepare_advanced_file(destination)
@@ -206,6 +242,13 @@ def render_advanced_drafts(
             return AdvancedRenderResult(
                 "noop", source_asset_id, None, None, 0, None, None, False, perf_counter() - started
             )
+        # Validate every plan's immutable source/style/direction bindings before
+        # considering a cache hit.  A stale direction must never be hidden by an
+        # otherwise healthy previous package.
+        for candidate_id, plan in chosen:
+            context = _context(database, source_asset_id, candidate_id, root)
+            _require_plan_binding(database, plan, context)
+            _require_plan_assets(database, inputs.pair.workspace, plan, root)
         if (
             narration_artifact_id is None
             and not force
@@ -223,10 +266,6 @@ def render_advanced_drafts(
                 True,
                 perf_counter() - started,
             )
-        for candidate_id, plan in chosen:
-            context = _context(database, source_asset_id, candidate_id, root)
-            _require_plan_binding(database, plan, context)
-            _require_plan_assets(database, inputs.pair.workspace, plan, root)
         narration: tuple[str, Path] | None = None
         if narration_artifact_id is not None:
             from clipforge.voice.service import require_bound_narration
@@ -424,6 +463,11 @@ def _render_run(
         for binding in plan.assets:
             catalog_file = _asset_path(workspace, binding.asset_id, root)
             _link(catalog_file, staging / staged[binding.asset_id], root)
+        selected_style = (
+            style_for_id(plan.style_id)
+            if plan.style_id != "legacy-v1"
+            else style_for_renderer_version(profile.renderer_recipe_version)
+        )
         render_input = AdvancedHeroRenderInput(
             candidate_id=candidate_id,
             advanced_set_id=advanced_set_id,
@@ -431,8 +475,12 @@ def _render_run(
             reframing_strategy=plan.reframing_strategy,
             reframing_config_sha256=plan.reframing_config_sha256,
             profile_fingerprint=plan.profile_fingerprint,
-            style_id=style_for_renderer_version(profile.renderer_recipe_version).style_id,
-            style_fingerprint=style_for_renderer_version(profile.renderer_recipe_version).fingerprint(),
+            style_id=selected_style.style_id,
+            style_fingerprint=selected_style.fingerprint(),
+            motion_style=selected_style.contract(),
+            direction_id=plan.direction_id,
+            direction_sha256=plan.direction_sha256,
+            safe_region_id=plan.safe_region_id,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
@@ -518,6 +566,13 @@ def _render_run(
                 hero_plan_id=plan.hero_plan_id,
                 hero_plan_sha256=plan.hero_plan_sha256,
                 advanced_plan_sha256=sha256_file(workspace.advanced_plan_file(candidate_id)),
+                direction_id=plan.direction_id,
+                direction_sha256=plan.direction_sha256,
+                style_id=(
+                    style_for_id(plan.style_id).style_id
+                    if plan.style_id != "legacy-v1"
+                    else style_for_renderer_version(profile.renderer_recipe_version).style_id
+                ),
                 render_input_sha256=sha256_file(output.parent / "render-input.json"),
                 preview_relative_path=f"candidates/{candidate_id}/advanced.mp4",
                 preview_sha256=sha256_file(output),
@@ -551,6 +606,8 @@ def _render_run(
         reframing_strategy=_applied_strategy(chosen, profile),
         reframing_config_sha256=outputs[0].advanced_plan_sha256,
         advanced_input_sha256=identity,
+        direction_sha256s=sorted({item.direction_sha256 for item in outputs if item.direction_sha256}),
+        style_ids=sorted({item.style_id for item in outputs}),
         drafts=outputs,
         provenance=ArtifactProvenance(
             created_at=now,
@@ -649,7 +706,15 @@ def _input_digest(
     hero: CurrentHero, profile: AdvancedHeroProfile, drafts: list[AdvancedHeroDraftOutput]
 ) -> str:
     payload = {
-        "drafts": [item.candidate_id for item in drafts],
+        "drafts": [
+            {
+                "candidate_id": item.candidate_id,
+                "advanced_plan_sha256": item.advanced_plan_sha256,
+                "direction_sha256": item.direction_sha256,
+                "style_id": item.style_id,
+            }
+            for item in drafts
+        ],
         "hero_artifact_id": hero.artifact_id,
         "hero_manifest_sha256": hero.manifest_sha256,
         "profile": profile.fingerprint(),
@@ -721,6 +786,7 @@ def _cache_record(
         reframing_strategy=document.reframing_strategy,
         reframing_config_sha256=document.reframing_config_sha256,
         advanced_input_sha256=document.advanced_input_sha256,
+        direction_sha256s=document.direction_sha256s,
         manifest_sha256=digest,
         manifest_size_bytes=size,
         rendered_count=len(document.drafts),
@@ -925,6 +991,22 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
     if plan.reframing_strategy == "face_follow":
         _require_face_follow(database, plan, context)
+    if plan.motion_style is not None:
+        selected_style = style_for_id(plan.style_id)
+        if (
+            plan.style_fingerprint != selected_style.fingerprint()
+            or plan.motion_style != selected_style.contract()
+        ):
+            raise MediaError("advanced plan is stale: motion recipe changed after planning")
+    if plan.direction_id:
+        loaded_direction = load_direction(context.workspace, plan.candidate_id)
+        if loaded_direction is None:
+            raise MediaError("advanced plan is stale: direction document is missing")
+        direction, direction_sha256 = loaded_direction
+        if direction.direction_id != plan.direction_id or direction_sha256 != plan.direction_sha256:
+            raise MediaError("advanced plan is stale: direction changed after planning")
+        if direction.style_id != plan.style_id or direction.style_fingerprint != plan.style_fingerprint:
+            raise MediaError("advanced plan is stale: selected motion style changed")
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),

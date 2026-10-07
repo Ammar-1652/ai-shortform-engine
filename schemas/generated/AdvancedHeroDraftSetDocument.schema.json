@@ -56,6 +56,18 @@
           "title": "Detected Video Codec",
           "type": "string"
         },
+        "direction_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Direction Id",
+          "type": "string"
+        },
+        "direction_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Direction Sha256",
+          "type": "string"
+        },
         "duration_error_us": {
           "title": "Duration Error Us",
           "type": "integer"
@@ -137,6 +149,13 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "style_id": {
+          "default": "legacy-v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
           "type": "string"
         },
         "width": {
@@ -606,6 +625,13 @@
       "title": "Candidate Set Sha256",
       "type": "string"
     },
+    "direction_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Direction Sha256S",
+      "type": "array"
+    },
     "drafts": {
       "items": {
         "$ref": "#/$defs/AdvancedHeroDraftOutput"
@@ -686,6 +712,13 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Source Sha256",
       "type": "string"
+    },
+    "style_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Style Ids",
+      "type": "array"
     },
     "visual_analysis_id": {
       "description": "Stable id. UUID text is the usual value.",

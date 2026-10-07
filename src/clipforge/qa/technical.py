@@ -6,13 +6,17 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path, require_asset
 from clipforge.hero.constants import DURATION_TOLERANCE_US, OUTPUT_HEIGHT, OUTPUT_WIDTH
+from clipforge.hero.motion_style import style_for_id
 from clipforge.hero.probe import probe_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument, AdvancedHeroPlanDocument
+from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.jobs import QACheck, QAStatus
 from clipforge.storage import Database
 
@@ -54,6 +58,7 @@ def technical_checks(inputs: TechnicalInputs) -> list[QACheck]:
         _producers(inputs),
         _remote(inputs),
         _reframing(inputs),
+        _direction(inputs),
         _assets(inputs),
     ]
     return checks
@@ -278,6 +283,38 @@ def _reframing(inputs: TechnicalInputs) -> QACheck:
             return _check("reframing", False, f"{facts_line(document, blocker='visual_analysis_stale')}")
         lines.append(facts_line(document))
     return _check("reframing", True, " ".join(lines))
+
+
+def _direction(inputs: TechnicalInputs) -> QACheck:
+    """Bind the direction artifact and style recipe into the QA evidence."""
+    lines: list[str] = []
+    for plan in inputs.plans:
+        if not plan.direction_id:
+            lines.append(f"candidate={plan.candidate_id} direction=none")
+            continue
+        path = inputs.workspace.direction_file(plan.candidate_id)
+        if path.is_symlink() or not path.is_file():
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=direction_missing")
+        try:
+            direction = DirectionDocument.model_validate_json(path.read_text(encoding="utf-8"))
+            style = style_for_id(plan.style_id)
+        except (OSError, UnicodeError, ValidationError, ValueError):
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=direction_invalid")
+        if sha256_file(path) != plan.direction_sha256:
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=direction_stale")
+        if (
+            direction.direction_id != plan.direction_id
+            or direction.style_id != plan.style_id
+            or direction.style_fingerprint != plan.style_fingerprint
+            or style.fingerprint() != plan.style_fingerprint
+        ):
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=style_stale")
+        lines.append(
+            f"candidate={plan.candidate_id} direction_sha256={plan.direction_sha256} "
+            f"style={plan.style_id} style_fingerprint={plan.style_fingerprint} "
+            f"safe_region={plan.safe_region_id}"
+        )
+    return _check("direction", True, " ".join(lines))
 
 
 def _assets(inputs: TechnicalInputs) -> QACheck:

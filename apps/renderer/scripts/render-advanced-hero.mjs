@@ -62,8 +62,24 @@ for (const item of batch.items) {
   if (input.debug_overlays === true) {
     throw new Error("production advanced render rejects debug overlays");
   }
-  if (input.style_id !== undefined && input.style_id !== "legacy-v1" && input.style_id !== "editorial-clean-v1") {
+  const productionStyles = new Set([
+    "editorial-clean-v1",
+    "kinetic-caption-v1",
+    "documentary-broll-v1",
+    "data-explainer-v1",
+    "paper-explainer-v1",
+    "premium-minimal-v1",
+  ]);
+  if (input.style_id !== undefined && input.style_id !== "legacy-v1" && !productionStyles.has(input.style_id)) {
     throw new Error(`unsupported motion style ${input.style_id}`);
+  }
+  if (input.style_id !== undefined && input.style_id !== "legacy-v1") {
+    if (typeof input.style_fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(input.style_fingerprint)) {
+      throw new Error(`motion style ${input.style_id} requires a fingerprint`);
+    }
+    if (input.motion_style && input.motion_style.style_id !== input.style_id) {
+      throw new Error("motion style payload does not match style_id");
+    }
   }
   for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
     const component = typeof event?.component_id === "string" ? event.component_id.toLowerCase() : "";

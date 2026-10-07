@@ -1,0 +1,490 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "DirectionBeat": {
+      "additionalProperties": false,
+      "description": "One hook/body/punch beat. Text is copied from the source evidence.",
+      "properties": {
+        "beat_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "display_text": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Text"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "hook",
+            "body",
+            "punch"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "output_end_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output End Us"
+        },
+        "output_start_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Start Us"
+        },
+        "purpose": {
+          "enum": [
+            "context",
+            "contrast",
+            "consequence",
+            "payoff"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_segment_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Segment Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "beat_id",
+        "kind",
+        "purpose",
+        "source_segment_ids",
+        "evidence_ids"
+      ],
+      "title": "DirectionBeat",
+      "type": "object"
+    },
+    "DirectionEvidence": {
+      "additionalProperties": false,
+      "description": "Verifiable transcript/visual evidence for one editorial choice.",
+      "properties": {
+        "evidence_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_segment_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Segment Ids",
+          "type": "array"
+        },
+        "source_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Source Text",
+          "type": "string"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Word Ids",
+          "type": "array"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "source_word_ids",
+        "source_segment_ids",
+        "source_text",
+        "note"
+      ],
+      "title": "DirectionEvidence",
+      "type": "object"
+    },
+    "DirectionOption": {
+      "additionalProperties": false,
+      "description": "One source-grounded direction alternative presented to the selector.",
+      "properties": {
+        "beats": {
+          "items": {
+            "$ref": "#/$defs/DirectionBeat"
+          },
+          "maxItems": 12,
+          "minItems": 3,
+          "title": "Beats",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/DirectionEvidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "option_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Option Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_order": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Segment Order",
+          "type": "array"
+        },
+        "selection_reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Selection Reason",
+          "type": "string"
+        },
+        "selection_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Selection Score",
+          "type": "number"
+        },
+        "style_id": {
+          "enum": [
+            "editorial-clean-v1",
+            "kinetic-caption-v1",
+            "documentary-broll-v1",
+            "data-explainer-v1",
+            "paper-explainer-v1",
+            "premium-minimal-v1"
+          ],
+          "title": "Style Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "option_id",
+        "style_id",
+        "title",
+        "beats",
+        "evidence",
+        "segment_order",
+        "selection_score",
+        "selection_reason"
+      ],
+      "title": "DirectionOption",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Immutable, validated direction selected for one promoted candidate.",
+  "properties": {
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "direction_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_recipe_version": {
+      "const": "direction-v1",
+      "default": "direction-v1",
+      "title": "Direction Recipe Version",
+      "type": "string"
+    },
+    "hero_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Plan Sha256",
+      "type": "string"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/DirectionOption"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Options",
+      "type": "array"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "safe_region_id": {
+      "const": "portrait-safe-v1",
+      "default": "portrait-safe-v1",
+      "title": "Safe Region Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selected_option_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Selected Option Id",
+      "type": "string"
+    },
+    "selection_mode": {
+      "enum": [
+        "automatic",
+        "operator_override"
+      ],
+      "title": "Selection Mode",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "style_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Style Fingerprint",
+      "type": "string"
+    },
+    "style_id": {
+      "enum": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "documentary-broll-v1",
+        "data-explainer-v1",
+        "paper-explainer-v1",
+        "premium-minimal-v1"
+      ],
+      "title": "Style Id",
+      "type": "string"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "direction_id",
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "source_sha256",
+    "hero_plan_sha256",
+    "time_map_sha256",
+    "alignment_sha256",
+    "visual_analysis_sha256",
+    "options",
+    "selected_option_id",
+    "selection_mode",
+    "style_id",
+    "style_fingerprint",
+    "provenance"
+  ],
+  "title": "DirectionDocument",
+  "type": "object"
+}

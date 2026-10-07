@@ -554,6 +554,143 @@
       "title": "MotionPurpose",
       "type": "string"
     },
+    "MotionStyleSpec": {
+      "additionalProperties": false,
+      "description": "Serializable numeric style choices consumed by Python and Remotion.",
+      "properties": {
+        "accent": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Accent",
+          "type": "string"
+        },
+        "caption_mode": {
+          "enum": [
+            "phrase_active_word",
+            "phrase_whole_run"
+          ],
+          "title": "Caption Mode",
+          "type": "string"
+        },
+        "contrast": {
+          "enum": [
+            "legacy",
+            "outline_shadow_backplate",
+            "soft_backplate",
+            "minimal_outline"
+          ],
+          "title": "Contrast",
+          "type": "string"
+        },
+        "easing": {
+          "enum": [
+            "linear",
+            "ease_out_cubic",
+            "ease_in_out_cubic"
+          ],
+          "title": "Easing",
+          "type": "string"
+        },
+        "enter_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Enter Frames",
+          "type": "integer"
+        },
+        "exit_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Exit Frames",
+          "type": "integer"
+        },
+        "font_identity": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Font Identity",
+          "type": "string"
+        },
+        "font_sha256": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Font Sha256",
+          "type": "array"
+        },
+        "max_scale_permille": {
+          "maximum": 1100,
+          "minimum": 1000,
+          "title": "Max Scale Permille",
+          "type": "integer"
+        },
+        "max_simultaneous_emphasis": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Simultaneous Emphasis",
+          "type": "integer"
+        },
+        "max_travel_px": {
+          "maximum": 80,
+          "minimum": 0,
+          "title": "Max Travel Px",
+          "type": "integer"
+        },
+        "safe_bottom": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Safe Bottom",
+          "type": "integer"
+        },
+        "safe_left": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Left",
+          "type": "integer"
+        },
+        "safe_right": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Right",
+          "type": "integer"
+        },
+        "safe_top": {
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Safe Top",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "style_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "style_id",
+        "easing",
+        "enter_frames",
+        "exit_frames",
+        "max_travel_px",
+        "max_scale_permille",
+        "caption_mode",
+        "contrast",
+        "font_identity",
+        "accent",
+        "safe_left",
+        "safe_right",
+        "safe_top",
+        "safe_bottom",
+        "max_simultaneous_emphasis"
+      ],
+      "title": "MotionStyleSpec",
+      "type": "object"
+    },
     "OutputInterval": {
       "additionalProperties": false,
       "description": "An interval on the output timeline produced by the candidate's time map.",
@@ -834,6 +971,18 @@
       "title": "Diagrams",
       "type": "array"
     },
+    "direction_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
     "emphasis": {
       "items": {
         "$ref": "#/$defs/EmphasisEvent"
@@ -879,6 +1028,17 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Hero Set Id",
       "type": "string"
+    },
+    "motion_style": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MotionStyleSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "plan_id": {
       "description": "Stable id. UUID text is the usual value.",
@@ -930,6 +1090,13 @@
       "title": "Rough Preview Artifact Id",
       "type": "string"
     },
+    "safe_region_id": {
+      "default": "portrait-safe-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Safe Region Id",
+      "type": "string"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
@@ -952,6 +1119,19 @@
     "source_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Source Sha256",
+      "type": "string"
+    },
+    "style_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Style Fingerprint",
+      "type": "string"
+    },
+    "style_id": {
+      "default": "legacy-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Style Id",
       "type": "string"
     },
     "time_map_sha256": {
