@@ -1222,7 +1222,6 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
     manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
     if sha256_file(manifest) != _sidecar_digest(workspace):
         raise MediaError("advanced manifest hash does not match the sidecar")
-    from clipforge.hero.advanced_assets import confine_work_path
 
     from clipforge.language.evidence import validate_current_alignment_evidence
     from clipforge.schemas.hero import ForcedAlignmentDocument
