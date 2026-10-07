@@ -55,7 +55,10 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     effect = media / "effect.wav"
     _lavfi(source, "color=c=0x00aa00:s=640x360:r=30:d=2", "anullsrc=r=48000:cl=stereo", "2")
     _lavfi(broll, "color=c=0xff0000:s=640x360:r=30:d=2", "anullsrc=r=48000:cl=stereo", "2")
-    _audio(speech, "flac")
+    # The production staging contract now rejects a speech track that ends
+    # before the selected picture span. Keep this fixture synchronized with
+    # the 1.2-second candidate used below.
+    _audio(speech, "flac", duration=1.2)
     _audio(effect, "wav")
     spoken = segment(0, 0, 1_200_000, _PHRASE)
     fixture = ready_stack(
@@ -327,14 +330,14 @@ def _lavfi(path: Path, video: str, audio: str, seconds: str) -> None:
     )
 
 
-def _audio(path: Path, codec: str) -> None:
+def _audio(path: Path, codec: str, *, duration: float = 1.0) -> None:
     argv = [
         "ffmpeg",
         "-y",
         "-f",
         "lavfi",
         "-i",
-        "sine=frequency=880:sample_rate=48000:d=1",
+        f"sine=frequency=880:sample_rate=48000:d={duration}",
     ]
     if codec == "wav":
         argv.extend(["-f", "wav"])

@@ -59,6 +59,18 @@ def probe_preview(path: Path, *, expected_duration_us: int, log_path: Path | Non
             f"{path.name} duration {duration} us differs from the time map {expected_duration_us} us "
             f"by {error} us, past the {DURATION_TOLERANCE_US} us preview tolerance."
         )
+    audio_duration = seconds_text_to_us(audio.get("duration"))
+    if audio_duration is None or audio_duration <= 0:
+        raise MediaError(f"{path.name} has no measurable audio duration")
+    audio_error = audio_duration - expected_duration_us
+    if abs(audio_error) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"{path.name} audio duration {audio_duration} us differs from the time map by {audio_error} us "
+            f"past the {DURATION_TOLERANCE_US} us preview tolerance"
+        )
+    audio_start = seconds_text_to_us(audio.get("start_time"))
+    if audio_start is not None and abs(audio_start) > DURATION_TOLERANCE_US:
+        raise MediaError(f"{path.name} audio starts at {audio_start} us instead of zero")
     codec = audio.get("codec_name")
     if not isinstance(codec, str) or not codec:
         raise MediaError(f"{path.name} audio codec is missing")

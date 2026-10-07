@@ -133,6 +133,63 @@ def test_time_map_stage_concatenates_ordered_ranges_without_repetition(tmp_path:
     assert staged.audio_path.is_file()
     recipe = (tmp_path / "stage-jump-cut" / "span.recipe.json").read_text(encoding="utf-8")
     assert '"source_ranges": [[2000000, 4000000], [12000000, 15000000]]' in recipe
+    assert '"audio_source_ranges": [[2000000, 4000000], [12000000, 15000000]]' in recipe
+
+
+def test_time_map_stage_records_identical_picture_and_speech_ranges_for_one_range(
+    tmp_path: Path,
+) -> None:
+    """A one-shot Hero must not fall back to two independently staged clocks."""
+    video, audio = _long_media(tmp_path / "single-range", rate="30")
+    stage = tmp_path / "stage-single-range"
+    stage_time_map(
+        video,
+        audio,
+        stage,
+        stem="span",
+        time_map=TimeMapDocument(
+            time_map_id="single-map",
+            segments=[TimelineSegment(segment_id="only", source_start_us=3_000_000, source_end_us=7_000_000)],
+        ),
+        frame_count=120,
+        root=tmp_path,
+        log_path=None,
+    )
+    recipe = (stage / "span.recipe.json").read_text(encoding="utf-8")
+    assert '"source_ranges": [[3000000, 7000000]]' in recipe
+    assert '"audio_source_ranges": [[3000000, 7000000]]' in recipe
+
+
+def test_candidate_trim_rejects_speech_duration_drift(tmp_path: Path) -> None:
+    video, audio = _long_media(tmp_path / "av-drift", rate="30")
+    resolve_ffmpeg_path = resolve_ffmpeg()
+    ProcessRunner().run(
+        [
+            resolve_ffmpeg_path,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=330:sample_rate=16000:duration=1",
+            "-c:a",
+            "flac",
+            str(audio),
+        ],
+        log_path=None,
+        check=True,
+    )
+    with pytest.raises(MediaError, match=r"speech duration|AV-unsynchronized"):
+        stage_candidate_span(
+            video,
+            audio,
+            tmp_path / "stage-av-drift",
+            stem="clip",
+            start_us=8_500_000,
+            end_us=12_500_000,
+            frame_count=120,
+            root=tmp_path,
+            log_path=None,
+        )
 
 
 def test_failed_preview_does_not_promote_a_partial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

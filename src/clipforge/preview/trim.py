@@ -154,6 +154,13 @@ def stage_candidate_span(
         raise MediaError(
             f"staged clip duration {measured} us differs from the candidate span {duration_us} us by {error} us"
         )
+    audio_duration = _audio_duration_us(destination_audio, runner, log_path)
+    audio_error = audio_duration - duration_us
+    if abs(audio_error) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"staged speech duration {audio_duration} us differs from the candidate span {duration_us} us "
+            f"by {audio_error} us; refusing an AV-unsynchronized render"
+        )
     recipe_path = staging / f"{stem}.recipe.json"
     ensure_within(root, recipe_path)
     recipe_path.write_text(json.dumps(recipe, sort_keys=True) + "\n", encoding="utf-8")
@@ -290,10 +297,17 @@ def stage_time_map(
     audio_us = seconds_text_to_us(audio_stream.get("duration")) if isinstance(audio_stream, dict) else None
     if audio_us is None or abs(audio_us - expected_us) > DURATION_TOLERANCE_US:
         raise MediaError("staged TimeMap speech duration does not match its source ranges")
+    audio_start = seconds_text_to_us(audio_stream.get("start_time")) if isinstance(audio_stream, dict) else None
+    if audio_start is not None and abs(audio_start) > DURATION_TOLERANCE_US:
+        raise MediaError("staged TimeMap speech starts away from output zero")
     recipe_path.write_text(
         json.dumps(
             {
                 "source_ranges": source_ranges,
+                # Keep the speech edit auditable: the audio and picture are
+                # intentionally cut from the identical ordered ranges.  A
+                # future adapter must not infer a second ordering here.
+                "audio_source_ranges": source_ranges,
                 "time_map_sha256": digest_time_map(time_map),
                 "expected_duration_us": expected_us,
                 "frame_count": frame_count,
@@ -358,6 +372,23 @@ def _duration_us(path: Path, runner: ProcessRunner, log_path: Path | None) -> in
         if duration is not None and duration > 0:
             return duration
     raise MediaError(f"{path.name} has no positive duration")
+
+
+def _audio_duration_us(path: Path, runner: ProcessRunner, log_path: Path | None) -> int:
+    payload = read_ffprobe_json(path, runner, log_path)
+    streams = payload.get("streams")
+    if not isinstance(streams, list):
+        raise MediaError(f"{path.name} has no stream list")
+    audio_streams = [item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"]
+    if len(audio_streams) != 1:
+        raise MediaError(f"{path.name} must contain exactly one speech stream")
+    duration = seconds_text_to_us(audio_streams[0].get("duration"))
+    if duration is None or duration <= 0:
+        raise MediaError(f"{path.name} has no measurable speech duration")
+    start = seconds_text_to_us(audio_streams[0].get("start_time"))
+    if start is not None and abs(start) > DURATION_TOLERANCE_US:
+        raise MediaError(f"{path.name} speech starts at {start} us instead of zero")
+    return duration
 
 
 def ffprobe_available() -> str:

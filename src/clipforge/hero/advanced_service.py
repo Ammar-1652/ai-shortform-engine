@@ -1088,9 +1088,12 @@ def _stage_candidate_base(
     operator-authored jump-cut plan render one contiguous moment and encouraged
     callers to repeat it to fill a target duration.  Keep the cheap mining
     contract intact, but make the production staging path consume every
-    validated segment in order.
+    validated segment in order. Even a one-range Hero uses ``stage_time_map``
+    here so its recipe proves that picture and speech came from the same
+    canonical map; the renderer must never accept two independently prepared
+    files just because their durations happen to match.
     """
-    from clipforge.preview.trim import stage_candidate_span, stage_time_map
+    from clipforge.preview.trim import stage_time_map
 
     for name in ("analysis.mp4", "asr.flac", "span.mp4", "span.flac", "span.recipe.json"):
         path = staging / name
@@ -1098,35 +1101,18 @@ def _stage_candidate_base(
             raise MediaError("refusing to replace a symlinked advanced stage file")
         if path.exists():
             path.unlink()
-    segments = tuple((item.source_start_us, item.source_end_us) for item in time_map.segments)
-    if len(segments) == 1:
-        start_us, end_us = segments[0]
-        staged = stage_candidate_span(
-            inputs.proxy_path,  # type: ignore[attr-defined]
-            inputs.asr_path,  # type: ignore[attr-defined]
-            staging,
-            stem="span",
-            start_us=start_us,
-            end_us=end_us,
-            frame_count=frame_count,
-            root=root,
-            log_path=log_path,
-        )
-        staged_video_path = staged.video_path
-        staged_audio_path = staged.audio_path
-    else:
-        staged_jump_cut = stage_time_map(
-            inputs.proxy_path,  # type: ignore[attr-defined]
-            inputs.asr_path,  # type: ignore[attr-defined]
-            staging,
-            stem="span",
-            time_map=time_map,
-            frame_count=frame_count,
-            root=root,
-            log_path=log_path,
-        )
-        staged_video_path = staged_jump_cut.video_path
-        staged_audio_path = staged_jump_cut.audio_path
+    staged_jump_cut = stage_time_map(
+        inputs.proxy_path,  # type: ignore[attr-defined]
+        inputs.asr_path,  # type: ignore[attr-defined]
+        staging,
+        stem="span",
+        time_map=time_map,
+        frame_count=frame_count,
+        root=root,
+        log_path=log_path,
+    )
+    staged_video_path = staged_jump_cut.video_path
+    staged_audio_path = staged_jump_cut.audio_path
     staged_video_path.rename(staging / "analysis.mp4")
     staged_audio_path.rename(staging / "asr.flac")
 
