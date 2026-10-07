@@ -1240,9 +1240,7 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
         if sha256_file(alignment_path) != draft.alignment_sha256:
             raise MediaError("advanced alignment hash does not match the draft")
         try:
-            alignment = ForcedAlignmentDocument.model_validate_json(
-                alignment_path.read_text(encoding="utf-8")
-            )
+            alignment = ForcedAlignmentDocument.model_validate_json(alignment_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, ValidationError, ValueError) as exc:
             raise MediaError("advanced alignment is invalid") from exc
         if alignment.alignment_status == "verified_live":
