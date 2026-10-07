@@ -218,6 +218,7 @@ def _ink(frame: bytes, *, x0: int, y0: int, x1: int, y1: int, width: int = 1080)
             total += frame[offset] + frame[offset + 1] + frame[offset + 2]
     return total
 
+
 def _caption_changes(
     frame: bytes,
     baseline: bytes,
@@ -292,9 +293,7 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
 
     advanced_backend = RemotionAdvancedRenderBackend()
     advanced_backend.render_batch(advanced_batch, log_path=advanced_run / "render.log")
-    advanced_baseline = (
-        advanced_run / "candidates" / "cand-caption" / "advanced-without-captions.mp4"
-    )
+    advanced_baseline = advanced_run / "candidates" / "cand-caption" / "advanced-without-captions.mp4"
     advanced_caption_free = _advanced_input()
     advanced_caption_free["typography"] = []
     advanced_batch.write_text(
