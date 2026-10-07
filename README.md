@@ -34,7 +34,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge review doctor` reports the review contract and that the server binds to loopback.
 - `clipforge review open SOURCE_ID` serves a local page for the current rough previews. The host must be `127.0.0.1`.
 - `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append human decisions. A decision does not change the preview files.
-- `clipforge hero doctor` reports WhisperX, the alignment model cache, and that a normal run does not download.
+- `clipforge hero doctor` reports the WhisperX side interpreter, the alignment model cache, the speech-evidence gate, and that a normal run does not download. If the evidence directory is present, export `CLIPFORGE_SPEECH_EVIDENCE_ROOT` before `hero align`; the doctor prints the exact missing configuration instead of leaving a later plan failure ambiguous.
 - `clipforge hero align SOURCE_ID CANDIDATE_ID` force-aligns one approved clip from the ASR FLAC. It does not align the rest of the source. `--allow-model-download` is required before a missing model can be fetched.
 - `clipforge hero plan SOURCE_ID CANDIDATE_ID` writes a Hero edit plan from that forced alignment. Provisional timing is refused.
 - `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
