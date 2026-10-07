@@ -32,6 +32,8 @@ describe("advanced hero composition", () => {
     expect(source).toContain("output_start_frame");
     expect(source).toContain("unsupported production diagram kind");
     expect(source).not.toContain("top: 1720");
+    const captionPlate = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../captions/CaptionPlate.tsx"), "utf8");
+    expect(captionPlate).toContain("top: hook || punch || typography");
   });
 
   it("converts SFX gain from dB and rejects music-range values", () => {

@@ -18,6 +18,8 @@ from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
 from clipforge.media.workspace import ensure_within
 from clipforge.preview.constants import DURATION_TOLERANCE_US
+from clipforge.schemas.time import TimeMapDocument, digest_time_map
+from clipforge.timeline import FrameRate
 
 # Enough to land on a prior keyframe for a typical long-GOP H.264 proxy.
 _KEYFRAME_PAD_US = 10_000_000
@@ -34,6 +36,19 @@ class StagedSpan:
     ffmpeg_version: str
     source_start_us: int
     source_end_us: int
+
+
+@dataclass(frozen=True, slots=True)
+class StagedTimeMap:
+    """A frame-accurate local clip made from an ordered jump-cut TimeMap."""
+
+    video_path: Path
+    audio_path: Path
+    video_sha256: str
+    audio_sha256: str
+    duration_us: int
+    ffmpeg_version: str
+    source_ranges: tuple[tuple[int, int], ...]
 
 
 def stage_candidate_span(
@@ -151,6 +166,155 @@ def stage_candidate_span(
         ffmpeg_version=version,
         source_start_us=start_us,
         source_end_us=end_us,
+    )
+
+
+def stage_time_map(
+    video: Path,
+    audio: Path,
+    staging: Path,
+    *,
+    stem: str,
+    time_map: TimeMapDocument,
+    frame_count: int,
+    root: Path,
+    log_path: Path | None,
+) -> StagedTimeMap:
+    """Stage ordered source ranges without silently repeating the first span.
+
+    Candidate mining remains single-span, but Hero editorial plans may use an
+    explicit ordered TimeMap.  Each range is trimmed on the source clock and
+    concatenated in list order.  No floating seconds are persisted: the
+    integer microseconds are converted only at the ffmpeg argv boundary.
+    """
+    mapped = time_map.to_time_map()
+    source_ranges = tuple((item.source_start_us, item.source_end_us) for item in time_map.segments)
+    if not source_ranges or frame_count < 1:
+        raise MediaError("a TimeMap stage needs at least one range and one frame")
+    if frame_count != mapped.output_frame_count(FrameRate(30, 1)):
+        raise MediaError("TimeMap stage frame count does not match its canonical duration at 30/1")
+    if not _safe_name(f"{stem}.mp4") or not _safe_name(f"{stem}.flac"):
+        raise MediaError("candidate staging name is not safe")
+    _require_local(video, root)
+    _require_local(audio, root)
+    ensure_within(root, staging)
+    if staging.is_symlink():
+        raise MediaError("refusing to stage into a symlink")
+    staging.mkdir(parents=True, exist_ok=True)
+    destination_video = staging / f"{stem}.mp4"
+    destination_audio = staging / f"{stem}.flac"
+    recipe_path = staging / f"{stem}.recipe.json"
+    for path in (destination_video, destination_audio, recipe_path):
+        ensure_within(root, path)
+        if path.exists() or path.is_symlink():
+            raise MediaError(f"refusing to replace staged media {path.name}")
+    ffmpeg = resolve_ffmpeg()
+    runner = ProcessRunner()
+    version = _ffmpeg_version(ffmpeg, runner)
+
+    video_parts = []
+    for index, (start_us, end_us) in enumerate(source_ranges):
+        video_parts.append(
+            f"[0:v]trim=start={us_to_seconds_str(start_us)}:end={us_to_seconds_str(end_us)},"
+            f"setpts=PTS-STARTPTS[v{index}]"
+        )
+    video_labels = "".join(f"[v{index}]" for index in range(len(source_ranges)))
+    video_filter = ";".join(video_parts) + ";" + video_labels + f"concat=n={len(source_ranges)}:v=1:a=0[v]"
+    runner.run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(video),
+            "-filter_complex",
+            video_filter,
+            "-map",
+            "[v]",
+            "-an",
+            "-frames:v",
+            str(frame_count),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            "30",
+            "-fps_mode",
+            "cfr",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            str(destination_video),
+        ],
+        log_path=log_path,
+        check=True,
+    )
+    audio_parts = []
+    for index, (start_us, end_us) in enumerate(source_ranges):
+        audio_parts.append(
+            f"[0:a]atrim=start={us_to_seconds_str(start_us)}:end={us_to_seconds_str(end_us)},"
+            f"asetpts=PTS-STARTPTS[a{index}]"
+        )
+    audio_labels = "".join(f"[a{index}]" for index in range(len(source_ranges)))
+    audio_filter = ";".join(audio_parts) + ";" + audio_labels + f"concat=n={len(source_ranges)}:v=0:a=1[a]"
+    runner.run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(audio),
+            "-filter_complex",
+            audio_filter,
+            "-map",
+            "[a]",
+            "-c:a",
+            "flac",
+            str(destination_audio),
+        ],
+        log_path=log_path,
+        check=True,
+    )
+    duration_us = _duration_us(destination_video, runner, log_path)
+    expected_us = mapped.total_output_duration()
+    error = duration_us - expected_us
+    if abs(error) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"staged TimeMap duration {duration_us} us differs from its ranges {expected_us} us by {error} us"
+        )
+    audio_probe = read_ffprobe_json(destination_audio, runner, log_path)
+    audio_streams = audio_probe.get("streams")
+    if not isinstance(audio_streams, list) or len(audio_streams) != 1:
+        raise MediaError("staged TimeMap speech must contain exactly one audio stream")
+    audio_stream = audio_streams[0]
+    audio_us = seconds_text_to_us(audio_stream.get("duration")) if isinstance(audio_stream, dict) else None
+    if audio_us is None or abs(audio_us - expected_us) > DURATION_TOLERANCE_US:
+        raise MediaError("staged TimeMap speech duration does not match its source ranges")
+    recipe_path.write_text(
+        json.dumps(
+            {
+                "source_ranges": source_ranges,
+                "time_map_sha256": digest_time_map(time_map),
+                "expected_duration_us": expected_us,
+                "frame_count": frame_count,
+                "ffmpeg_version": version,
+                "video_codec": "h264",
+                "audio_codec": "flac",
+                "output_fps": "30/1",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return StagedTimeMap(
+        video_path=destination_video,
+        audio_path=destination_audio,
+        video_sha256=sha256_file(destination_video),
+        audio_sha256=sha256_file(destination_audio),
+        duration_us=duration_us,
+        ffmpeg_version=version,
+        source_ranges=source_ranges,
     )
 
 

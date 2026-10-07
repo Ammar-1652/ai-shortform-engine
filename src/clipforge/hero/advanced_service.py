@@ -62,6 +62,7 @@ from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.vision import VisualAnalysisDocument
 from clipforge.storage import (
     ArtifactRow,
@@ -468,10 +469,16 @@ def _render_run(
     batch = run_dir / "batch.json"
     if renderer.requires_browser:
         for item, (_rank, candidate_id, _plan, render_input, _output) in zip(items, prepared, strict=True):
+            hero_plan = _read_model(
+                hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
+                HeroPlanDocument,
+                "hero plan",
+            )
             _stage_candidate_base(
                 inputs,
                 staging,
                 candidate_id,
+                hero_plan.edit_plan.time_map,
                 render_input.duration_in_frames,
                 root,
                 run_dir / "logs" / f"{candidate_id}.trim.log",
@@ -1070,35 +1077,58 @@ def _stage_candidate_base(
     inputs: object,
     staging: Path,
     candidate_id: str,
+    time_map: TimeMapDocument,
     frame_count: int,
     root: Path,
     log_path: Path,
 ) -> None:
-    """Replace the shared base names with one short candidate clip."""
-    from clipforge.preview.trim import stage_candidate_span
+    """Replace shared base names with the candidate's ordered TimeMap clip.
 
-    candidates = inputs.candidate_document.candidates  # type: ignore[attr-defined]
-    candidate = next(item for item in candidates if item.candidate_id == candidate_id)
-    segment = candidate.time_map.segments[0]
+    The old implementation staged only ``segments[0]``.  That made any
+    operator-authored jump-cut plan render one contiguous moment and encouraged
+    callers to repeat it to fill a target duration.  Keep the cheap mining
+    contract intact, but make the production staging path consume every
+    validated segment in order.
+    """
+    from clipforge.preview.trim import stage_candidate_span, stage_time_map
+
     for name in ("analysis.mp4", "asr.flac", "span.mp4", "span.flac", "span.recipe.json"):
         path = staging / name
         if path.is_symlink():
             raise MediaError("refusing to replace a symlinked advanced stage file")
         if path.exists():
             path.unlink()
-    staged = stage_candidate_span(
-        inputs.proxy_path,  # type: ignore[attr-defined]
-        inputs.asr_path,  # type: ignore[attr-defined]
-        staging,
-        stem="span",
-        start_us=segment.source_start_us,
-        end_us=segment.source_end_us,
-        frame_count=frame_count,
-        root=root,
-        log_path=log_path,
-    )
-    staged.video_path.rename(staging / "analysis.mp4")
-    staged.audio_path.rename(staging / "asr.flac")
+    segments = tuple((item.source_start_us, item.source_end_us) for item in time_map.segments)
+    if len(segments) == 1:
+        start_us, end_us = segments[0]
+        staged = stage_candidate_span(
+            inputs.proxy_path,  # type: ignore[attr-defined]
+            inputs.asr_path,  # type: ignore[attr-defined]
+            staging,
+            stem="span",
+            start_us=start_us,
+            end_us=end_us,
+            frame_count=frame_count,
+            root=root,
+            log_path=log_path,
+        )
+        staged_video_path = staged.video_path
+        staged_audio_path = staged.audio_path
+    else:
+        staged_jump_cut = stage_time_map(
+            inputs.proxy_path,  # type: ignore[attr-defined]
+            inputs.asr_path,  # type: ignore[attr-defined]
+            staging,
+            stem="span",
+            time_map=time_map,
+            frame_count=frame_count,
+            root=root,
+            log_path=log_path,
+        )
+        staged_video_path = staged_jump_cut.video_path
+        staged_audio_path = staged_jump_cut.audio_path
+    staged_video_path.rename(staging / "analysis.mp4")
+    staged_audio_path.rename(staging / "asr.flac")
 
 
 def _link(source: Path, destination: Path, root: Path) -> None:

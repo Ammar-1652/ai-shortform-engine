@@ -12,7 +12,8 @@ from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.probe import probe_preview
-from clipforge.preview.trim import stage_candidate_span
+from clipforge.preview.trim import stage_candidate_span, stage_time_map
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument
 from tests.candidate_support import segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 
@@ -106,6 +107,32 @@ def test_candidate_trim_starts_off_zero_for_both_frame_rates(tmp_path: Path) -> 
             if isinstance(stream, dict) and stream.get("codec_type") == "audio"
         }
         assert audio_kinds == {"flac"}
+
+
+def test_time_map_stage_concatenates_ordered_ranges_without_repetition(tmp_path: Path) -> None:
+    video, audio = _long_media(tmp_path / "jump-cut", rate="30")
+    staged = stage_time_map(
+        video,
+        audio,
+        tmp_path / "stage-jump-cut",
+        stem="span",
+        time_map=TimeMapDocument(
+            time_map_id="jump-map",
+            segments=[
+                TimelineSegment(segment_id="first", source_start_us=2_000_000, source_end_us=4_000_000),
+                TimelineSegment(segment_id="second", source_start_us=12_000_000, source_end_us=15_000_000),
+            ],
+        ),
+        frame_count=150,
+        root=tmp_path,
+        log_path=None,
+    )
+    assert staged.source_ranges == ((2_000_000, 4_000_000), (12_000_000, 15_000_000))
+    assert abs(staged.duration_us - 5_000_000) <= 100_000
+    assert staged.video_path.is_file()
+    assert staged.audio_path.is_file()
+    recipe = (tmp_path / "stage-jump-cut" / "span.recipe.json").read_text(encoding="utf-8")
+    assert '"source_ranges": [[2000000, 4000000], [12000000, 15000000]]' in recipe
 
 
 def test_failed_preview_does_not_promote_a_partial(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

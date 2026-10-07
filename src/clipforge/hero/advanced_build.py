@@ -303,7 +303,10 @@ def _typography(
         selected.append(candidate)
     events: list[TypographyEvent] = []
     for index, (text, start, end, purpose, component_id) in enumerate(selected):
-        y = 220 if component_id == "hook-card-v1" else 1320 if component_id == "punch-card-v1" else 360
+        # Punch cards are now positioned by the renderer in final portrait
+        # coordinates.  Keep the default in the lower safe region while
+        # leaving room for the baseline caption plate beneath it.
+        y = 220 if component_id == "hook-card-v1" else 1450 if component_id == "punch-card-v1" else 360
         events.append(
             TypographyEvent(
                 event_id=stable_id("type", candidate_id, text, str(index)),

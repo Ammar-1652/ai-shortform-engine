@@ -41,8 +41,13 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
               ? 64
               : undefined
             : 1080 - layout.safe.right,
-        top: hook || typography ? y ?? (hook ? 220 : 1420) : undefined,
-        bottom: hook || typography ? undefined : punch ? 300 : 220,
+        // Designed cards use their declarative y coordinate in the final
+        // portrait space.  Punch cards previously ignored y and were always
+        // pinned from the bottom, which made a valid punch collide with the
+        // final caption.  Keep the legacy default when y is absent while
+        // honoring an explicit safe-area placement.
+        top: hook || punch || typography ? y ?? (hook ? 220 : 1420) : undefined,
+        bottom: hook || punch || typography ? undefined : 220,
         direction: layout.direction,
         color: "#ffffff",
         fontFamily: typography || hook || punch
