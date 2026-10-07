@@ -271,7 +271,8 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
     hero_backend.render_batch(batch, log_path=run / "render.log")
     baseline_output = run / "candidates" / "cand-caption" / "hero-without-captions.mp4"
     caption_free = _input()
-    caption_free["captions"] = []
+    # Hero input requires one forced cue; keep it outside every sampled frame.
+    caption_free["captions"] = [_cue("baseline", "x", 110, "en-US")]
     batch.write_text(
         json.dumps({"items": [{"outputPath": str(baseline_output), "h264Crf": 23, "input": caption_free}]}),
         encoding="utf-8",
