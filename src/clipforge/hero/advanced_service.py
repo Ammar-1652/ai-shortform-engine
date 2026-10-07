@@ -1234,7 +1234,12 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
 
-        alignment_path = workspace.hero_alignment_file(draft.candidate_id)
+        alignment_path = manifest.parent / "candidates" / draft.candidate_id / "alignment.json"
+        alignment_path = confine_work_path(
+            root,
+            alignment_path.relative_to(root).as_posix(),
+            label="advanced alignment",
+        )
         if alignment_path.is_symlink() or not alignment_path.is_file():
             raise MediaError("advanced alignment is missing or a symlink")
         if sha256_file(alignment_path) != draft.alignment_sha256:
