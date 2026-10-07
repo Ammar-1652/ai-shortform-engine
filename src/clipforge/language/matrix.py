@@ -34,7 +34,7 @@ def profiles() -> list[LanguageProfile]:
                 script=script,
                 text_direction=direction,  # type: ignore[arg-type]
                 caption_locale=locale,
-                alignment_provider="whisperx" if language.startswith("en") else "unspecified",
+                alignment_provider="whisperx" if not language.startswith("ar") else "unspecified",
                 voice_provider="voicestudio",
                 supported_status="supported",
                 campaign_policy_status=language_decision(language),

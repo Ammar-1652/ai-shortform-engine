@@ -65,6 +65,7 @@ def evidence_for_facts(facts: DeliveryFacts) -> dict[str, str]:
         "source_sha256": facts.source_sha256,
         "time_map_sha256": facts.time_map_sha256,
         "trajectory_sha256": facts.trajectory_sha256,
+        **language_evidence(facts),
     }
 
 
@@ -77,6 +78,8 @@ def capture_final_decision(
     decision: str,
     reviewer_id: str,
     notes: str,
+    include_narration: bool = False,
+    narration_artifact_id: str | None = None,
 ) -> ReviewDecision:
     """Record a final decision from the current delivery evidence. This does not export."""
     from clipforge.publish.preflight import preflight_delivery
@@ -86,6 +89,8 @@ def capture_final_decision(
         work_root,
         source_asset_id,
         candidate_id,
+        include_narration=include_narration,
+        narration_artifact_id=narration_artifact_id,
         probe=False,
         require_final=False,
     )
@@ -319,6 +324,7 @@ def final_board(
         "trajectory_sha256": facts.trajectory_sha256,
         "time_map_sha256": facts.time_map_sha256,
         "reframe_blocker": facts.reframe_blocker,
+        **language_evidence(facts),
         "effective_decision": effective,
         "blockers": [] if code == "approved" else [code],
         "history": history_rows(reviews, facts.candidate_id, facts.advanced_artifact_id),
@@ -326,6 +332,73 @@ def final_board(
         "whop": "deferred",
         "automated": False,
     }
+
+
+def language_evidence(facts: object) -> dict[str, str]:
+    """Facts from the current alignment validator and the bound narration artifact."""
+    from clipforge.language.evidence import validate_current_alignment_evidence
+
+    workspace = getattr(facts, "workspace", None)
+    candidate_id = str(getattr(facts, "candidate_id", "") or "")
+    card = {
+        "requested_locale": "missing",
+        "normalized_language": "missing",
+        "alignment_status": "alignment_not_claimed",
+        "alignment_provider": "none",
+        "alignment_model": "none",
+        "alignment_revision": "none",
+        "alignment_checkpoint": "none",
+        "alignment_manifest": "none",
+        "alignment_id": "",
+        "alignment_sha256": "",
+        "evidence_audio_sha256": "",
+        "alignment_cache": "miss",
+        "alignment_blocker": "alignment_not_claimed",
+        "narration_status": "narration_not_requested",
+        "narration_provider": "none",
+        "narration_engine": "none",
+        "narration_model": "none",
+        "narration_revision": "none",
+        "narration_voice": "none",
+        "narration_license": "none",
+        "narration_audio_sha256": "none",
+    }
+    path = None if workspace is None or not candidate_id else workspace.hero_alignment_file(candidate_id)
+    if path is not None:
+        evidence = validate_current_alignment_evidence(
+            path,
+            candidate_id=candidate_id,
+            source_sha256=str(getattr(facts, "source_sha256", "") or ""),
+        )
+        card["requested_locale"] = evidence.canonical_locale or "missing"
+        card["normalized_language"] = evidence.normalized_language or "missing"
+        card["alignment_status"] = evidence.status
+        card["alignment_provider"] = evidence.provider_name or "none"
+        card["alignment_model"] = evidence.model_id or "none"
+        card["alignment_revision"] = evidence.model_revision or "none"
+        card["alignment_checkpoint"] = evidence.checkpoint_sha256 or "none"
+        card["alignment_manifest"] = evidence.manifest_sha256 or "none"
+        card["alignment_id"] = evidence.alignment_id
+        card["alignment_sha256"] = evidence.alignment_sha256
+        card["evidence_audio_sha256"] = evidence.speech_sha256
+        card["alignment_blocker"] = evidence.blocker
+        card["alignment_cache"] = "current" if evidence.blocker in {"", "none"} else "stale"
+    narration_sha = getattr(facts, "narration_sha256", None)
+    voice = getattr(facts, "narration_voice_id", None)
+    license_name = getattr(facts, "narration_model_license", None)
+    if narration_sha:
+        card["narration_provider"] = str(getattr(facts, "narration_provider_id", None) or "none")
+        card["narration_engine"] = str(getattr(facts, "narration_engine_id", None) or "none")
+        card["narration_model"] = str(getattr(facts, "narration_model_id", None) or "none")
+        card["narration_revision"] = str(getattr(facts, "narration_model_revision", None) or "none")
+        card["narration_voice"] = str(voice or "none")
+        card["narration_license"] = str(license_name or "none")
+        card["narration_audio_sha256"] = str(narration_sha)
+        incomplete = card["narration_revision"] == "none" or card["narration_model"] == "none"
+        card["narration_status"] = "stale_narration" if incomplete else "recorded"
+    elif getattr(facts, "narration_requested", False) is True or getattr(facts, "narration_provider_id", None):
+        card["narration_status"] = "missing"
+    return card
 
 
 def accept_final_post(

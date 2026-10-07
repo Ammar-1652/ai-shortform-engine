@@ -1,5 +1,6 @@
 import { AbsoluteFill, Audio, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
 
+import { CaptionPlate } from "../captions/CaptionPlate.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
 
@@ -10,6 +11,7 @@ type TypeEvent = {
   interval?: Interval;
   component_id?: string;
   purpose?: string;
+  language?: string;
 };
 
 type DiagramEvent = {
@@ -50,6 +52,7 @@ export type AdvancedHeroInput = {
   emphasis?: EmphasisEvent[];
   asset_names?: Record<string, string>;
   windows?: CropWindow[];
+  language?: string;
 };
 
 const FPS = 30;
@@ -86,8 +89,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   }
   const names = input.asset_names ?? {};
   const typography = input.typography ?? [];
-  const typeVisible = typography.some((item) => active(frame, item.interval));
-  const typeText = typography.map((item) => item.text ?? "").join(" ");
+  const visibleType = typography.filter((item) => active(frame, item.interval) && (item.text ?? "").length > 0);
+  const language = input.language ?? "en-US";
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
   const emphasis = (input.emphasis ?? []).filter(
     (item) => frame >= frameAt(item.output_start_us) && frame < frameAt(item.output_end_us),
@@ -163,33 +166,21 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           </div>
         </AbsoluteFill>
       )}
-      {typeVisible ? (
+      {visibleType.map((item) => (
+        <CaptionPlate
+          key={`${item.component_id ?? "type"}-${item.text}`}
+          text={item.text ?? ""}
+          language={item.language || language}
+        />
+      ))}
+      {emphasis.map((item) => (
         <div
-          style={{
-            position: "absolute",
-            left: 72,
-            top: 1480,
-            width: 936,
-            height: 220,
-            backgroundColor: "#ffff00",
-            color: "#000000",
-            fontFamily: "sans-serif",
-            fontSize: 64,
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            textAlign: "center",
-          }}
+          key={`emphasis-${item.text ?? ""}-${item.output_start_us ?? 0}`}
+          style={{ position: "absolute", left: 72, top: 1720, color: "#ffffff", fontFamily: "sans-serif", fontSize: 28 }}
         >
-          {typeText}
+          {item.text ?? ""}
         </div>
-      ) : null}
-      {emphasis.length === 0 ? null : (
-        <div style={{ position: "absolute", left: 72, top: 1720, color: "#ffffff", fontFamily: "sans-serif", fontSize: 28 }}>
-          {emphasis.map((item) => item.text ?? "").join(" ")}
-        </div>
-      )}
+      ))}
     </AbsoluteFill>
   );
 }

@@ -63,6 +63,10 @@ def hero_align(
         bool,
         typer.Option("--allow-model-download", help="Permit fetching a missing alignment model."),
     ] = False,
+    language: Annotated[
+        str | None,
+        typer.Option("--language", help="Requested locale. It must match the transcript language."),
+    ] = None,
     db: Annotated[Path | None, typer.Option("--db", help="SQLite database path.")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir", help="Derived-media work root.")] = None,
 ) -> None:
@@ -76,6 +80,7 @@ def hero_align(
             candidate_id=candidate_id,
             work_root=resolve_work_dir(work_dir),
             allow_model_download=allow_model_download,
+            language=language,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
@@ -83,6 +88,8 @@ def hero_align(
     typer.echo(f"candidate_id: {document.candidate_id}")
     typer.echo(f"model_name: {document.model_name}")
     typer.echo(f"whisperx_version: {document.whisperx_version}")
+    typer.echo(f"locale: {document.locale}")
+    typer.echo(f"alignment_status: {document.alignment_status}")
     typer.echo(f"word_count: {len(document.words)}")
     typer.echo("alignment_quality: forced")
 

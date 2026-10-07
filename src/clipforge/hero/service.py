@@ -120,11 +120,20 @@ def _select_aligner(
     inputs: PreviewInputs,
     alignment_backend: ForcedAlignmentBackend | None,
     allow_model_download: bool,
+    language: str | None = None,
 ) -> ForcedAlignmentBackend:
     if alignment_backend is not None:
         return alignment_backend
+    detected = inputs.pair.transcript.detected_language
+    if language and detected:
+        from clipforge.language.providers import normalized_language
+
+        requested = normalized_language(language)
+        found = normalized_language(detected)
+        if requested and found and requested != found:
+            raise MediaError("transcript_language_mismatch")
     return production_alignment_backend(
-        inputs.pair.transcript.detected_language,
+        language or detected,
         allow_model_download=allow_model_download,
     )
 
@@ -257,6 +266,7 @@ def align_hero_candidate(
     alignment_backend: ForcedAlignmentBackend | None = None,
     allow_model_download: bool = False,
     created_by: str | None = None,
+    language: str | None = None,
 ) -> ForcedAlignmentDocument:
     """Align one approved candidate. A missing approval or a stale preview fails first."""
     root = work_root.resolve()
@@ -289,7 +299,11 @@ def align_hero_candidate(
         current = require_current_preview(database, source_asset_id, root)
         reviews = _reviews(database, inputs.pair.source.project_id)
         pair = _require_approved(inputs, reviews, current.artifact_id, candidate_id)
-        aligner = _select_aligner(inputs, alignment_backend, allow_model_download)
+        aligner = _select_aligner(inputs, alignment_backend, allow_model_download, language)
+        stored = inputs.pair.workspace.hero_alignment_file(candidate_id)
+        existing = _stored_alignment(stored, inputs, pair[0], pair[1], current.artifact_id, aligner)
+        if existing is not None:
+            return existing
         staging = inputs.pair.workspace.hero_root() / "staging"
         inputs.pair.workspace.prepare_hero_file(staging / "asr.flac")
         _link_or_copy(inputs.asr_path, staging / "asr.flac", root)
@@ -657,6 +671,7 @@ def _render_input(
                 "output_start_frame": piece.output_start_frame,
                 "output_end_frame_exclusive": piece.output_end_frame_exclusive,
                 "alignment_quality": "forced",
+                "language": alignment.locale,
                 "words": [
                     {
                         "text": word.text,
@@ -681,6 +696,7 @@ def _render_input(
         review_id=review.review_id,
         review_digest=review_digest(review),
         profile_fingerprint=profile.fingerprint(),
+        language=alignment.locale,
         captions=captions,
         motion_events=events,
     )
@@ -768,10 +784,26 @@ def _build_one_alignment(
     if aligner.needs_staged_audio:
         if not isinstance(aligner, WhisperXAlignment):
             raise MediaError("staged Hero audio is only defined for the WhisperX adapter")
-        segment = candidate.time_map.segments[0]
-        trimmed = staging / f"{candidate.candidate_id}.flac"
-        _trim_asr(inputs.asr_path, trimmed, segment.source_start_us, segment.source_end_us, root)
-        backend = WhisperXAlignment(allow_model_download=allow_model_download, audio_path=str(trimmed))
+        single = len(candidate.time_map.segments) == 1
+        if single:
+            segment = candidate.time_map.segments[0]
+            audio_path = staging / f"{candidate.candidate_id}.flac"
+            _trim_asr(inputs.asr_path, audio_path, segment.source_start_us, segment.source_end_us, root)
+            source_clock = False
+        else:
+            audio_path = inputs.asr_path
+            source_clock = True
+        backend = WhisperXAlignment(
+            allow_model_download=allow_model_download,
+            audio_path=str(audio_path),
+            language_code=str(getattr(aligner, "language_code", "en")),
+            model_name=aligner.model_name,
+            locale=str(getattr(aligner, "locale", "en-US")),
+            model_revision=str(getattr(aligner, "model_revision", "")),
+            checkpoint_sha256=str(getattr(aligner, "checkpoint_sha256", "")),
+            model_license=str(getattr(aligner, "model_license", "")),
+            audio_is_source_clock=source_clock,
+        )
     return build_alignment(
         alignment_id=str(uuid.uuid4()),
         transcript=inputs.pair.transcript,
@@ -784,6 +816,7 @@ def _build_one_alignment(
         backend=backend,
         created_by=actor,
         tool_version=__version__,
+        source_sha256=inputs.pair.manifest.content_sha256,
     )
 
 
@@ -833,12 +866,67 @@ def _require_fresh_alignment(
         raise MediaError("stored alignment does not match the current ASR audio")
     if alignment.time_map_sha256 != digest_time_map(candidate.time_map):
         raise MediaError("stored alignment does not match the candidate TimeMap")
+    if not alignment.binding_sha256 or not alignment.locale:
+        raise MediaError("stored alignment identity is incomplete")
+    production = alignment.model_name != "fake-forced-align-v1"
+    if production and (
+        not alignment.model_revision
+        or not alignment.checkpoint_sha256
+        or not alignment.whisperx_version
+        or not alignment.manifest_sha256
+    ):
+        raise MediaError("stored alignment identity is incomplete")
+    from clipforge.language.evidence import validate_current_alignment_evidence
+
+    evidence = validate_current_alignment_evidence(
+        document=alignment,
+        project_id=candidate.project_id,
+        source_asset_id=candidate.source_asset_id,
+        candidate_id=candidate.candidate_id,
+        transcript_sha256=inputs.pair.transcript_sha256,
+        asr_audio_sha256=inputs.asr_sha256,
+        time_map_sha256=digest_time_map(candidate.time_map),
+        rough_preview_artifact_id=rough_artifact_id,
+        review_id=review.review_id,
+        review_digest=review_digest(review),
+        source_sha256=inputs.pair.manifest.content_sha256,
+    )
+    if evidence.blocker not in {"", "none"}:
+        raise MediaError(evidence.blocker)
+    if alignment.alignment_status == "verified_live" and evidence.status != "verified_live":
+        raise MediaError(evidence.status)
     if aligner is not None and (
         alignment.model_name != aligner.model_name
         or alignment.whisperx_version != aligner.whisperx_version
         or alignment.device != ("cuda" if aligner.device == "cuda" else "cpu")
     ):
         raise MediaError("stored alignment was produced by a different alignment configuration")
+    if aligner is not None:
+        from clipforge.hero.alignment import _observed_checkpoint, _observed_manifest, _observed_revision
+        from clipforge.language.providers import canonical_locale
+
+        expected_locale = canonical_locale(str(getattr(aligner, "locale", "en-US"))) or "en-US"
+        if canonical_locale(alignment.locale) != expected_locale:
+            raise MediaError("stale_alignment")
+        if (
+            alignment.model_revision != _observed_revision(aligner)
+            or alignment.checkpoint_sha256 != _observed_checkpoint(aligner)
+            or alignment.manifest_sha256 != _observed_manifest(aligner)
+        ):
+            raise MediaError("stale_alignment")
+    from clipforge.hero.alignment import expected_binding
+
+    fresh = expected_binding(
+        alignment,
+        candidate=candidate,
+        transcript_sha256=inputs.pair.transcript_sha256,
+        asr_audio_sha256=inputs.asr_sha256,
+        transcript_language=inputs.pair.transcript.detected_language or "",
+        source_sha256=inputs.pair.manifest.content_sha256,
+        aligner=aligner,
+    )
+    if fresh != alignment.binding_sha256:
+        raise MediaError("stored alignment identity does not match the current provider")
 
 
 def _read_alignment(path: Path) -> ForcedAlignmentDocument:

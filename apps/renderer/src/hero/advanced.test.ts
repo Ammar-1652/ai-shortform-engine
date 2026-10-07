@@ -19,7 +19,9 @@ describe("advanced hero composition", () => {
     expect(source).toContain('objectFit: "contain"');
     expect(source).toContain("broll_source_in_us");
     expect(source).toContain("linearVolume");
-    expect(source).toContain("{typeText}");
+    expect(source).toContain("CaptionPlate");
+    expect(source).not.toContain("{typeText}");
+    expect(source).not.toContain(".join(\" \")");
     expect(source).toContain("diagram.payload?.left_label");
     expect(source).toContain("staticFile(name)");
     expect(source).toContain("names.narration");

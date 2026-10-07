@@ -77,6 +77,15 @@ class CampaignProductionSource(Versioned):
     reframe_status: str = "succeeded"
     reframe_cache_hit: bool = False
     reframe_blocker: str = "none"
+    requested_locale: str = "en-US"
+    transcript_language: str = "en-US"
+    alignment_provider: str = "none"
+    alignment_model_id: str = "none"
+    alignment_model_revision: str = "none"
+    alignment_checkpoint_sha256: str = "none"
+    alignment_artifact_id: str = "none"
+    alignment_cache_status: str = "miss"
+    alignment_blocker: str = "none"
 
     @field_validator(
         "failure_code",
@@ -92,6 +101,15 @@ class CampaignProductionSource(Versioned):
         "reframe_evidence_sha256",
         "reframe_status",
         "reframe_blocker",
+        "requested_locale",
+        "transcript_language",
+        "alignment_provider",
+        "alignment_model_id",
+        "alignment_model_revision",
+        "alignment_checkpoint_sha256",
+        "alignment_artifact_id",
+        "alignment_cache_status",
+        "alignment_blocker",
     )
     @classmethod
     def facts_are_plain(cls, value: str | None) -> str | None:

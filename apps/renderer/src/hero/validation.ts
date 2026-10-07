@@ -30,6 +30,7 @@ const TOP_KEYS = new Set([
   "height",
   "video_fit",
   "background",
+  "language",
   "alignment_quality",
   "alignment_sha256",
   "edit_plan_sha256",
@@ -52,6 +53,7 @@ const CAPTION_KEYS = new Set([
   "output_start_frame",
   "output_end_frame_exclusive",
   "alignment_quality",
+  "language",
   "words",
 ]);
 
@@ -137,6 +139,7 @@ export function parseHeroInput(raw: unknown): HeroDraftInput {
     review_digest: String(record.review_digest),
     motion_library_version: MOTION_LIBRARY_VERSION,
     profile_fingerprint: String(record.profile_fingerprint),
+    language: typeof record.language === "string" && record.language.length > 0 ? String(record.language) : "en-US",
     captions,
     motion_events: motion,
   };
@@ -181,6 +184,7 @@ function parseCaption(raw: unknown, duration: number): HeroCaption {
     output_start_frame: start,
     output_end_frame_exclusive: end,
     alignment_quality: "forced",
+    ...(typeof record.language === "string" ? { language: String(record.language) } : {}),
     words: record.words.map((word) => parseWord(word, duration)),
   };
 }

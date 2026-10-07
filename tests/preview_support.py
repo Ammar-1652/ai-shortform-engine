@@ -101,6 +101,7 @@ def ready_stack(
     duration_us: int | None = None,
     proxy_bytes: bytes = b"proxy-bytes",
     asr_bytes: bytes = b"asr-bytes",
+    language: str = "en",
 ) -> PreviewFixture:
     spoken, implied = isolated_segments(1)
     pieces = spoken if segments is None else segments
@@ -123,7 +124,7 @@ def ready_stack(
     proxy.write_bytes(proxy_bytes)
     asr_sha = sha256_file(asr)
     proxy_sha = sha256_file(proxy)
-    transcript = transcript_document(pieces, duration, asr_sha256=asr_sha)
+    transcript = transcript_document(pieces, duration, asr_sha256=asr_sha, language=language)
     run = workspace.make_vision_run("analysis-1")
     visual = visual_document(
         duration,

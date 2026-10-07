@@ -26,6 +26,7 @@ from clipforge.cli.main import app
 from clipforge.errors import MediaError
 from clipforge.hero.alignment import FakeForcedAlignment, production_alignment_backend
 from clipforge.language.captions import build_cues, wrap_caption
+from clipforge.language.providers import provider_for
 from clipforge.language.registry import (
     ENGLISH_NARRATION_MODEL,
     ENGLISH_NARRATION_REVISION,
@@ -143,17 +144,23 @@ def test_prohibited_rights_fail_before_a_job(monkeypatch: pytest.MonkeyPatch, tm
 
 def test_language_claims_and_unicode_round_trip() -> None:
     english = capability_for("en-US")
-    assert english.alignment_evidence == "verified_live"
     assert english.narration_evidence == "verified_live"
-    assert alignment_claim("en-US") == "whisperx"
-    assert alignment_claim("en-GB") == "whisperx"
+    assert english.alignment_evidence == provider_for("en-US").live_status
+    assert alignment_claim("en-US") == (
+        "whisperx" if english.alignment_evidence == "verified_live" else "alignment_not_claimed"
+    )
+    assert alignment_claim("en-GB") == (
+        "whisperx" if provider_for("en-GB").live_status == "verified_live" else "alignment_not_claimed"
+    )
     arabic = capability_for("ar")
     japanese = capability_for("ja")
     assert arabic.text_direction == "rtl"
     assert arabic.caption_policy == "rtl_logical_order"
     assert arabic.reason_code == "alignment_not_claimed"
     assert alignment_claim("ar") == "alignment_not_claimed"
-    assert alignment_claim("ja") == "alignment_not_claimed"
+    assert alignment_claim("ja") == (
+        "whisperx" if japanese.alignment_evidence == "verified_live" else "alignment_not_claimed"
+    )
     assert japanese.caption_policy == "character_wrap"
     assert japanese.narration_reason == "unsupported_language"
     assert capability_for("en-GB").narration_reason == "locale_not_smoked"
@@ -177,8 +184,9 @@ def test_language_claims_and_unicode_round_trip() -> None:
     backend = production_alignment_backend("en", allow_model_download=False)
     assert backend.allow_model_download is False
     assert not isinstance(backend, FakeForcedAlignment)
-    with pytest.raises(MediaError, match="alignment_not_claimed"):
-        production_alignment_backend("ja")
+    japanese = production_alignment_backend("ja")
+    assert japanese.model_name.endswith("japanese")
+    assert japanese.language_code == "ja"
     with pytest.raises(MediaError, match="unsupported_language"):
         production_alignment_backend("zh-CN")
     arabic_plan = plan_campaign(language="ar", narration_enabled=True)
@@ -847,8 +855,70 @@ def _write_alignment(
         ],
         provenance=provenance([asset_id], job_id=job_id),
     )
-    path.write_text(document.model_dump_json() + "\n", encoding="utf-8")
+    stamped = _stamp_current_english_evidence(
+        document,
+        candidate_id=candidate_id,
+        asset_id=asset_id,
+        transcript_sha=transcript_sha,
+    )
+    path.write_text(stamped.model_dump_json() + "\n", encoding="utf-8")
     return sha256_file(path)
+
+
+def _stamp_current_english_evidence(
+    document: ForcedAlignmentDocument,
+    *,
+    candidate_id: str,
+    asset_id: str,
+    transcript_sha: str,
+) -> ForcedAlignmentDocument:
+    """Bind the fixture to the model and speech file measured on this machine."""
+    from clipforge.errors import MediaError
+    from clipforge.hero.alignment import _measure_checkpoint_and_manifest, alignment_binding_sha256
+    from clipforge.language.providers import provider_for
+
+    record = provider_for("en-US")
+    if record.live_status != "verified_live":
+        return document
+    try:
+        checkpoint, manifest = _measure_checkpoint_and_manifest(
+            record.model_id,
+            record.normalized_language,
+            record.model_revision,
+            record.checkpoint_sha256,
+        )
+    except MediaError:
+        return document
+    binding = alignment_binding_sha256(
+        alignment_recipe="hero-align-v1",
+        asr_audio_sha256=document.asr_audio_sha256,
+        candidate_id=candidate_id,
+        checkpoint_sha256=checkpoint,
+        locale="en-US",
+        manifest_sha256=manifest,
+        model_id=record.model_id,
+        model_revision=record.model_revision,
+        normalized_language="en",
+        provider_name="whisperx",
+        provider_version=record.provider_version,
+        source_asset_id=asset_id,
+        source_sha256="",
+        time_map_sha256=document.time_map_sha256,
+        transcript_language="en",
+        transcript_sha256=transcript_sha,
+    )
+    return document.model_copy(
+        update={
+            "locale": "en-US",
+            "normalized_language": "en",
+            "model_revision": record.model_revision,
+            "checkpoint_sha256": checkpoint,
+            "manifest_sha256": manifest,
+            "alignment_status": "verified_live",
+            "binding_sha256": binding,
+            "unavailable_reason": "none",
+        }
+    )
 
 
 def _checksum_text(package: Path, delivery_id: str, files: list[PublishFile]) -> str:

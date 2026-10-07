@@ -115,6 +115,9 @@ class DeliveryFacts:
     trajectory_sha256: str = ""
     time_map_sha256: str = ""
     reframe_blocker: str = ""
+    narration_voice_id: str | None = None
+    narration_model_license: str | None = None
+    narration_requested: bool = False
 
 
 def preflight_delivery(
@@ -188,7 +191,12 @@ def preflight_delivery(
     plan = _plan(root, workspace, draft, document)
     _reject_plan_text(plan)
     reframe = _reframe_binding(workspace, plan, visual_sha, manifest.content_sha256)
-    alignment_id, alignment_sha, cues = _alignment(root, workspace, draft)
+    alignment_id, alignment_sha, cues = _alignment(
+        root,
+        workspace,
+        draft,
+        source_sha256=manifest.content_sha256,
+    )
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
     _reject_render_strategy(video.parent / "render-input.json", workspace, plan, reframe)
@@ -274,6 +282,13 @@ def preflight_delivery(
         narration_model_id=None if narration_doc is None else narration_doc.model_id,
         narration_model_revision=None if narration_doc is None else narration_doc.model_revision,
         narration_script_sha256=None if narration_doc is None else narration_doc.script_sha256,
+        narration_voice_id=None if narration_doc is None else narration_doc.voice_profile_id,
+        narration_model_license=(
+            None
+            if narration_doc is None or narration_doc.model_license is None
+            else narration_doc.model_license
+        ),
+        narration_requested=include_narration,
         broll=broll,
         sfx=sfx,
         typography=tuple(event.text for event in plan.typography),
@@ -672,6 +687,8 @@ def _alignment(
     root: Path,
     workspace: SourceWorkspace,
     draft: AdvancedHeroDraftOutput,
+    *,
+    source_sha256: str,
 ) -> tuple[str | None, str | None, tuple[tuple[int, int, str], ...]]:
     path = workspace.hero_alignment_file(draft.candidate_id)
     try:
@@ -700,6 +717,22 @@ def _alignment(
         and document.candidate_id == draft.candidate_id
     ):
         cues = tuple((word.output_start_us, word.output_end_us, word.text) for word in document.words)
+        if document.alignment_status == "verified_live":
+            from clipforge.language.evidence import validate_current_alignment_evidence
+
+            evidence = validate_current_alignment_evidence(
+                document=document,
+                candidate_id=draft.candidate_id,
+                source_asset_id=document.source_asset_id,
+                project_id=document.project_id,
+                source_sha256=source_sha256,
+                file_sha256=digest,
+            )
+            if evidence.status != "verified_live":
+                raise PublishError(
+                    "alignment evidence is no longer verified",
+                    category=evidence.blocker or evidence.status,
+                )
     return draft.alignment_id, draft.alignment_sha256, cues
 
 

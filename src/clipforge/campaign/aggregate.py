@@ -215,7 +215,15 @@ def production_report(work_root: Path, run_id: str) -> str:
                     f"review {source.review_decision or 'missing'}",
                     f"qa {source.qa_set_id or 'missing'}",
                     f"delivery {source.delivery_id or 'missing'}",
+                    f"locale {source.requested_locale}",
                     f"alignment {source.alignment_status}",
+                    f"provider {source.alignment_provider}",
+                    f"model {source.alignment_model_id}",
+                    f"revision {source.alignment_model_revision}",
+                    f"checkpoint {source.alignment_checkpoint_sha256}",
+                    f"alignment_artifact {source.alignment_artifact_id}",
+                    f"alignment_cache {source.alignment_cache_status}",
+                    f"alignment_blocker {source.alignment_blocker}",
                     f"narration {source.narration_status}",
                     f"cache {source.cache_status}",
                     f"reframe {source.reframe_applied}",
@@ -293,7 +301,8 @@ def _build(
 ) -> CampaignProductionManifest:
     by_id = {item.source_id: item for item in produced.sources}
     sources = [
-        _source(root, database, by_id[source_id], produced.project_id) for source_id in selection.source_ids
+        _source(root, database, by_id[source_id], produced.project_id, produced)
+        for source_id in selection.source_ids
     ]
     created = created_at or datetime.now(UTC)
     cache = CampaignProductionCacheRecord(
@@ -340,6 +349,7 @@ def _source(
     database: Database,
     pipeline: CampaignSourceRun,
     project_id: str,
+    produced: CampaignProductionRun,
 ) -> CampaignProductionSource:
     acquired = latest_successful_result(root, pipeline.source_id, pipeline.source_sha256)
     candidate = pipeline.candidates[0] if pipeline.candidates else None
@@ -388,6 +398,7 @@ def _source(
             reason_code=stage_reason[:80],
         )
     )
+    align_stage = next(item for item in pipeline.stages if item.stage == "align")
     failure = None if pipeline.status == "succeeded" else pipeline.reason_code
     source_status = pipeline.status
     if pipeline.status == "succeeded" and reframed.status == "blocked":
@@ -428,6 +439,15 @@ def _source(
         reframe_status=reframed.status,
         reframe_cache_hit=reframed.cache_hit,
         reframe_blocker=reframed.blocker,
+        requested_locale=pipeline.requested_locale or produced.language,
+        transcript_language=produced.language,
+        alignment_provider=produced.alignment_provider,
+        alignment_model_id=produced.alignment_model or "none",
+        alignment_model_revision=produced.alignment_revision or "none",
+        alignment_checkpoint_sha256=produced.alignment_checkpoint_sha256 or "none",
+        alignment_artifact_id=align_stage.artifact_id or "none",
+        alignment_cache_status=pipeline.cache_status,
+        alignment_blocker="none" if align_stage.status == "succeeded" else align_stage.reason_code,
     )
 
 
@@ -739,7 +759,16 @@ def _source_card(source: CampaignProductionSource) -> dict[str, object]:
         "review_decision": source.review_decision,
         "hero_review_id": source.hero_review_id,
         "qa_set_id": source.qa_set_id,
+        "requested_locale": source.requested_locale,
+        "transcript_language": source.transcript_language,
         "alignment_status": source.alignment_status,
+        "alignment_provider": source.alignment_provider,
+        "alignment_model_id": source.alignment_model_id,
+        "alignment_model_revision": source.alignment_model_revision,
+        "alignment_checkpoint_sha256": source.alignment_checkpoint_sha256,
+        "alignment_artifact_id": source.alignment_artifact_id,
+        "alignment_cache_status": source.alignment_cache_status,
+        "alignment_blocker": source.alignment_blocker,
         "narration_status": source.narration_status,
         "analytics_status": source.analytics_status,
         "delivery_relative": source.delivery_relative,

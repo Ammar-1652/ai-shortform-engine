@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { layoutCaption, plateInsideSafeArea, wrapCjk } from "./layout.js";
+import { layoutCaption, plateInsideSafeArea, wrapCjk, wrapWords } from "./layout.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +38,27 @@ describe("multilingual caption plates", () => {
     expect(layout.safe.left).toBe(64);
     expect(layout.safe.right).toBe(1016);
     expect(layout.lines.some((line) => line.startsWith("。"))).toBe(false);
+  });
+
+  it("wraps Latin currency and numbers on word boundaries", () => {
+    const text = "Café costs $12.50 today.";
+    const lines = wrapWords(text, 12);
+    expect(lines.join(" ")).toBe(text);
+    expect(lines.some((line) => line.includes("$12.50"))).toBe(true);
+    expect(lines.some((line) => line.startsWith(".") || line.startsWith("$") && line.length === 1)).toBe(false);
+    const layout = layoutCaption(text, "en-US", 12);
+    expect(layout.direction).toBe("ltr");
+    expect(layout.lines.join(" ")).toBe(text);
+    expect(plateInsideSafeArea(layout)).toBe(true);
+  });
+
+  it("keeps Arabic digits and punctuation in source order", () => {
+    const text = "السعر ١٢٫٥٠ أو 12.50.";
+    const layout = layoutCaption(text, "ar", 40);
+    expect(layout.direction).toBe("rtl");
+    expect(layout.text).toBe(text);
+    expect([...layout.lines.join(" ")]).toEqual([...text]);
+    expect(plateInsideSafeArea(layout)).toBe(true);
   });
 
   it("refuses markup and keeps the plate source free of remote execution", () => {

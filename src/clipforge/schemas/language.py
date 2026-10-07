@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
-from clipforge.schemas.campaign import PolicyOutcome, _plain
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.campaign import PolicyOutcome, _plain, _relative
+from clipforge.schemas.common import MAX_TIMELINE_US, EntityId, Versioned
 
 _SHA = r"^[0-9a-f]{64}$"
 Support = Literal["supported", "optional", "not_claimed", "unsupported"]
@@ -73,6 +73,59 @@ class LanguageAlignmentDocument(Versioned):
     provider_id: EntityId
     provider_status: Support
     source_sha256: str = Field(pattern=_SHA)
+
+
+class SpeechEvidenceRecord(Versioned):
+    """One external speech file bound to one alignment model. Metadata alone is not proof."""
+
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    audio_class: Literal["recorded_speech", "tts_speech"]
+    audio_filename: str = Field(min_length=1, max_length=80)
+    audio_sha256: str = Field(pattern=_SHA)
+    sample_rate: int = Field(ge=8000, le=96000)
+    channels: int = Field(ge=1, le=2)
+    duration_us: int = Field(gt=0, le=MAX_TIMELINE_US)
+    transcript: str = Field(min_length=1, max_length=400)
+    token_count: int = Field(ge=3, le=200)
+    whisperx_version: str = Field(min_length=1, max_length=40)
+    model_id: str = Field(min_length=1, max_length=120)
+    model_revision: str = Field(min_length=1, max_length=80)
+    checkpoint_sha256: str = Field(pattern=_SHA)
+    manifest_sha256: str = Field(pattern=_SHA)
+    device: Literal["cpu", "cuda"]
+    provenance: str = Field(min_length=1, max_length=400)
+
+    @field_validator("audio_filename")
+    @classmethod
+    def filename_stays_in_the_evidence_root(cls, value: str) -> str:
+        relative = _relative(value)
+        if "/" in relative or relative in {".", ".."}:
+            raise ValueError("speech audio filename must be one path segment")
+        return relative
+
+    @field_validator(
+        "transcript",
+        "whisperx_version",
+        "model_id",
+        "model_revision",
+        "provenance",
+    )
+    @classmethod
+    def speech_text_is_plain(cls, value: str) -> str:
+        return _plain(value, label="speech evidence")
+
+
+class SpeechEvidenceCatalog(Versioned):
+    """Index of speech evidence. The audio files stay outside the repository."""
+
+    records: list[SpeechEvidenceRecord] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def locales_are_unique(self) -> Self:
+        locales = [item.locale for item in self.records]
+        if len(locales) != len(set(locales)):
+            raise ValueError("speech evidence locales must be unique")
+        return self
 
 
 class LanguageCaptionProfile(Versioned):

@@ -325,6 +325,17 @@ def _context(database: Database, source_asset_id: str, candidate_id: str, root: 
         raise MediaError("advanced Hero plan hash does not match the Hero draft")
     if any(word.alignment_quality != "forced" for word in alignment.words):
         raise MediaError("advanced Hero refuses provisional timing")
+    if alignment.alignment_status == "verified_live":
+        from clipforge.language.evidence import validate_current_alignment_evidence
+
+        evidence = validate_current_alignment_evidence(
+            document=alignment,
+            candidate_id=candidate_id,
+            source_asset_id=source_asset_id,
+            source_sha256=inputs.pair.manifest.content_sha256,
+        )
+        if evidence.status != "verified_live":
+            raise MediaError(evidence.blocker or evidence.status)
     source_sha = inputs.pair.manifest.content_sha256
     if source_sha != hero.document.source_sha256:
         raise MediaError("advanced Hero source bytes do not match the Hero draft")
@@ -412,6 +423,7 @@ def _render_run(
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
+            language=_alignment_locale(workspace, candidate_id),
             typography=plan.typography,
             diagrams=plan.diagrams,
             emphasis=plan.emphasis,
@@ -736,6 +748,20 @@ def _plan_trajectory_sha256(workspace: SourceWorkspace, plan: AdvancedHeroPlanDo
     if plan.reframing_strategy != "face_follow":
         return ""
     return _sidecar_trajectory(workspace, plan)
+
+
+def _alignment_locale(workspace: object, candidate_id: str) -> str:
+    """Locale stored on the selected-clip alignment. Missing evidence is not English."""
+    from clipforge.schemas.hero import ForcedAlignmentDocument
+
+    path = workspace.hero_alignment_file(candidate_id)  # type: ignore[attr-defined]
+    if not path.is_file() or path.is_symlink():
+        return "missing"
+    try:
+        document = ForcedAlignmentDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return "missing"
+    return document.locale or "missing"
 
 
 def _output_end_us(plan: AdvancedHeroPlanDocument) -> int:
@@ -1192,11 +1218,14 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
     from clipforge.hero.advanced_assets import confine_work_path
 
     workspace = loaded.pair.workspace
+    hero = load_current_hero(database, source_asset_id, root)
     manifest = workspace.advanced_run_dir(document.advanced_set_id) / "manifest.json"
     manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
     if sha256_file(manifest) != _sidecar_digest(workspace):
         raise MediaError("advanced manifest hash does not match the sidecar")
-    from clipforge.hero.advanced_assets import confine_work_path
+
+    from clipforge.language.evidence import validate_current_alignment_evidence
+    from clipforge.schemas.hero import ForcedAlignmentDocument
 
     for draft in document.drafts:
         video = manifest.parent / draft.preview_relative_path
@@ -1205,6 +1234,32 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
             raise MediaError("advanced output is missing or a symlink")
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
+
+        alignment_path = hero.manifest_path.parent / "candidates" / draft.candidate_id / "alignment.json"
+        alignment_path = confine_work_path(
+            root,
+            alignment_path.relative_to(root).as_posix(),
+            label="advanced alignment",
+        )
+        if alignment_path.is_symlink() or not alignment_path.is_file():
+            raise MediaError("advanced alignment is missing or a symlink")
+        if sha256_file(alignment_path) != draft.alignment_sha256:
+            raise MediaError("advanced alignment hash does not match the draft")
+        try:
+            alignment = ForcedAlignmentDocument.model_validate_json(alignment_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError("advanced alignment is invalid") from exc
+        if alignment.alignment_status == "verified_live":
+            evidence = validate_current_alignment_evidence(
+                document=alignment,
+                candidate_id=draft.candidate_id,
+                source_asset_id=source_asset_id,
+                project_id=loaded.pair.source.project_id,
+                source_sha256=loaded.pair.manifest.content_sha256,
+                file_sha256=draft.alignment_sha256,
+            )
+            if evidence.status != "verified_live":
+                raise MediaError(evidence.blocker or evidence.status)
 
 
 def _load_current_document(

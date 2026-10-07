@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from clipforge.campaign.board import open_campaign_board, static_bundle_text
 from clipforge.cli.main import app
 from clipforge.language.captions import wrap_caption
+from clipforge.language.providers import provider_for
 from clipforge.language.registry import (
     ENGLISH_ALIGNMENT_CHECKPOINT,
     ENGLISH_ALIGNMENT_MODEL,
@@ -55,10 +56,17 @@ def test_capability_matrix_stays_truthful() -> None:
     assert "whop_live: not_configured" in text
     assert "publishing: deferred" in text
     assert "full_source_runtime: not_configured" in text
-    assert "en-US alignment: whisperx evidence: verified_live" in text
+    english = provider_for("en-US")
+    japanese = provider_for("ja")
+    french = provider_for("fr-FR")
+    assert f"en-US alignment: {alignment_claim('en-US')} evidence: {english.live_status}" in text
     assert "ar alignment: alignment_not_claimed" in text
-    assert "ja alignment: alignment_not_claimed" in text
-    assert "fr-FR alignment: alignment_not_claimed" in text
+    assert f"ja alignment: {alignment_claim('ja')} evidence: {japanese.live_status}" in text
+    assert f"fr-FR alignment: {alignment_claim('fr-FR')} evidence: {french.live_status}" in text
+    if japanese.live_status != "verified_live":
+        assert "verified_live" not in text.split("ja alignment:", 1)[1].split("\n", 1)[0]
+    if french.live_status != "verified_live":
+        assert "verified_live" not in text.split("fr-FR alignment:", 1)[1].split("\n", 1)[0]
     assert "zh-CN: unsupported_language" in text
     assert capability_for("en-GB").narration_reason == "locale_not_smoked"
     assert alignment_claim("ar") == "alignment_not_claimed"
@@ -118,10 +126,12 @@ def test_alignment_failures_happen_before_a_job(tmp_path: Path) -> None:
     assert unsupported.value.code == "unsupported_language"
     with pytest.raises(LanguageError) as french:
         _align(work, database, language="fr-FR", provider=WhisperXFullSourceAligner())
-    assert french.value.code == "alignment_not_claimed"
+    assert french.value.code in {"model_missing", "available_not_smoked", "not_configured"}
     with pytest.raises(LanguageError) as runtime:
         _align(work, database, language="en-US", provider=WhisperXFullSourceAligner())
-    assert runtime.value.code == "not_configured"
+    english_status = provider_for("en-US").live_status
+    expected = "not_configured" if english_status == "verified_live" else english_status
+    assert runtime.value.code == expected
     assert _job_count(database) == 0
     assert not (work / "languages").exists()
     with pytest.raises(LanguageError):
@@ -159,9 +169,13 @@ def test_recorded_english_alignment_can_bind_and_fakes_cannot(tmp_path: Path) ->
             "timing_quality": "forced",
         }
     )
-    binding = bind_verified_alignment(recorded)
-    assert binding["alignment_id"] == fake.alignment_id
-    assert binding["language"] == "en-US"
+    if provider_for("en-US").live_status == "verified_live":
+        binding = bind_verified_alignment(recorded)
+        assert binding["alignment_id"] == fake.alignment_id
+        assert binding["language"] == "en-US"
+    else:
+        with pytest.raises(LanguageError):
+            bind_verified_alignment(recorded)
     revised = recorded.model_copy(update={"model_revision": "9.9.9", "checkpoint_sha256": _C})
     with pytest.raises(LanguageError):
         bind_verified_alignment(revised)

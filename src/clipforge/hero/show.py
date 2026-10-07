@@ -155,6 +155,7 @@ def _show_lines(current: CurrentHero, draft: HeroDraftOutput) -> list[str]:
         f"alignment_sha256: {draft.alignment_sha256}",
         f"alignment_model: {current.document.alignment_model}",
         f"whisperx_version: {current.document.whisperx_version}",
+        *_alignment_lines(current.document.alignment_model),
         "alignment_quality: forced",
         f"edit_plan_sha256: {draft.edit_plan_sha256}",
         f"time_map_sha256: {draft.time_map_sha256}",
@@ -171,6 +172,32 @@ def _show_lines(current: CurrentHero, draft: HeroDraftOutput) -> list[str]:
         f"audio_codec: {draft.detected_audio_codec}",
         f"pixel_format: {draft.detected_pixel_format}",
         f"caption_count: {draft.caption_count}",
+    ]
+
+
+def _alignment_lines(model_name: str) -> list[str]:
+    from clipforge.language.providers import provider_for_model
+
+    record = provider_for_model(model_name)
+    if record is None:
+        return [
+            "locale: unknown",
+            "normalized_language: unknown",
+            "alignment_status: alignment_not_claimed",
+            "alignment_provider: none",
+            "alignment_revision: none",
+            "alignment_checkpoint: none",
+            "alignment_blocker: alignment_not_claimed",
+        ]
+    checkpoint = record.checkpoint_sha256 or "none"
+    return [
+        f"locale: {record.locale}",
+        f"normalized_language: {record.normalized_language}",
+        f"alignment_status: {record.live_status}",
+        f"alignment_provider: {record.provider_name}",
+        f"alignment_revision: {record.model_revision}",
+        f"alignment_checkpoint: {checkpoint}",
+        f"alignment_blocker: {record.unavailable_reason}",
     ]
 
 

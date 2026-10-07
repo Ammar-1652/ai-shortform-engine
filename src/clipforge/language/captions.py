@@ -63,7 +63,31 @@ def wrap_caption(text: str, *, language: str, width: int = 12) -> list[str]:
         raise ValueError("caption text is empty")
     if profile.language == "ja":
         return _wrap_cjk(text, width)
-    return [text]
+    return _wrap_words(text, width)
+
+
+def _wrap_words(text: str, width: int) -> list[str]:
+    """Wrap on spaces. Currency and numeric tokens stay intact. Text is not reversed."""
+    words = text.split(" ")
+    if any(not word for word in words):
+        raise ValueError("caption text is empty")
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        if not current:
+            current = word
+            continue
+        joined = current + " " + word
+        if len(joined) > width:
+            lines.append(current)
+            current = word
+        else:
+            current = joined
+    if current:
+        lines.append(current)
+    if " ".join(lines) != text:
+        raise ValueError("caption wrap changed the source characters")
+    return lines
 
 
 def _wrap_cjk(text: str, width: int) -> list[str]:
