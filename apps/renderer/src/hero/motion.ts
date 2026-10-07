@@ -35,11 +35,9 @@ export function revealedCaption(caption: HeroCaption, frame: number): string {
   if (frame < caption.output_start_frame || frame >= caption.output_end_frame_exclusive) {
     return "";
   }
-  return caption.words
-    .filter((word) => frame >= word.output_start_frame)
-    .map((word) => word.text)
-    .join("")
-    .trim();
+  // Word timing is retained for emphasis and evidence, while the viewer
+  // receives a complete readable phrase rather than a one-word card.
+  return caption.text.replace(/\s+/g, " ").trim();
 }
 
 export function serializeMotion(events: readonly HeroMotionEvent[]): string {

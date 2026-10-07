@@ -8,8 +8,9 @@ import { parseHeroInput } from "./validation.js";
 /**
  * One approved candidate in a portrait Hero frame.
  *
- * The picture is contained. Caption text is a React text node revealed from
- * forced word frames. Motion is a short fade plus a small emphasis scale.
+ * The picture stays legible in a contained foreground over a blurred full-frame
+ * treatment. Captions are grouped by cue; forced word frames remain timing
+ * evidence for emphasis. Motion is a short fade plus a small emphasis scale.
  */
 function stagedName(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
@@ -34,13 +35,32 @@ export function HeroDraft(raw: HeroDraftInput) {
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
-        <OffthreadVideo
-          src={staticFile(stagedName(input.video_path))}
-          trimBefore={input.media_trim_frame}
-          durationInFrames={input.duration_in_frames}
-          muted
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-        />
+        <AbsoluteFill style={{ overflow: "hidden" }}>
+          <OffthreadVideo
+            src={staticFile(stagedName(input.video_path))}
+            trimBefore={input.media_trim_frame}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
+          />
+          <AbsoluteFill
+            style={{
+              position: "absolute",
+              width: "100%",
+              aspectRatio: `${input.source_width} / ${input.source_height}`,
+              top: "50%",
+              transform: "translateY(-50%)",
+            }}
+          >
+            <OffthreadVideo
+              src={staticFile(stagedName(input.video_path))}
+              trimBefore={input.media_trim_frame}
+              durationInFrames={input.duration_in_frames}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "fill" }}
+            />
+          </AbsoluteFill>
+        </AbsoluteFill>
         <Audio
           src={staticFile(stagedName(input.audio_path))}
           trimBefore={input.media_trim_frame}

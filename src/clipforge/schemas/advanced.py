@@ -170,6 +170,11 @@ class AdvancedHeroProfile(Versioned):
     pixel_format: Literal["yuv420p"] = "yuv420p"
     audio_codec: Literal["aac"] = "aac"
     audio_sample_rate: Literal[48000] = 48000
+    audio_loudness_lufs: float = -16
+    audio_true_peak_dbfs: float = -1.5
+    audio_lra_lu: float = 11
+    narration_duck_db: float = -12
+    audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     caption_algorithm_version: Literal["advanced-caption-v1"] = "advanced-caption-v1"
     typography_version: Literal["advanced-typography-v1"] = "advanced-typography-v1"
@@ -219,6 +224,7 @@ class AdvancedHeroRenderInput(Versioned):
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
     language: str = "en-US"
+    captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
@@ -230,6 +236,13 @@ class AdvancedHeroRenderInput(Versioned):
     time_map_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     output_duration_us: int = Field(default=0, ge=0)
+    source_gain_db: float = Field(default=0, ge=-24, le=6)
+    narration_gain_db: float = Field(default=0, ge=-24, le=6)
+    audio_loudness_lufs: float = -16
+    audio_true_peak_dbfs: float = -1.5
+    audio_lra_lu: float = 11
+    audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
+    debug_overlays: Literal[False] = False
 
     @model_validator(mode="after")
     def local_names_only(self) -> Self:
@@ -306,6 +319,7 @@ class AdvancedHeroPlanDocument(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     windows: list[ReframingWindow] = Field(default_factory=list)
+    captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
@@ -320,6 +334,7 @@ class AdvancedHeroPlanDocument(Versioned):
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("advanced plan provenance must include source_asset_id")
         _reject_overlaps(self.broll, "b-roll")
+        _reject_overlaps_typed(self.captions, "captions")
         _reject_overlaps_typed(self.typography, "typography")
         for event in self.sfx:
             if event.role != "sfx":

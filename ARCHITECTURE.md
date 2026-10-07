@@ -28,7 +28,7 @@ Owns bytes, clocks, and pictures.
 - Visual analysis: `VisualAnalysisDocument` over the analysis proxy. `Scene.analysis_complete` stays false until transcript evidence exists. `FaceObservation.speaker_attribution` stays `unknown`. See [docs/architecture/visual-analysis.md](docs/architecture/visual-analysis.md).
 - Time mapping: implemented. See [docs/architecture/time-mapping.md](docs/architecture/time-mapping.md).
 - Rough preview: `RoughPreviewSetDocument` for the current candidate set. The picture is the analysis proxy and the speech is the ASR FLAC. Captions are provisional. See [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md).
-- Rendering and output validation: Remotion composites the rough review at 720×1280 and the Hero draft at 1080×1920. FFmpeg probes both. It does not draw the captions. Hero drafts are `hero_draft_set_json` and do not replace `rough_preview_set_json`.
+- Rendering and output validation: Remotion composites the rough review at 720×1280 and Hero/Advanced Hero drafts at 1080×1920. Advanced Hero burns grouped captions, typography, diagrams, B-roll, and approved SFX from typed render input; FFmpeg probes and normalizes the resulting audio. Hero drafts are `hero_draft_set_json` and do not replace `rough_preview_set_json`.
 
 ### AI decision plane
 

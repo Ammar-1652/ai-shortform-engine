@@ -367,6 +367,8 @@ def language_evidence(facts: object) -> dict[str, str]:
     if path is not None:
         evidence = validate_current_alignment_evidence(
             path,
+            project_id=str(getattr(facts, "project_id", "") or ""),
+            source_asset_id=str(getattr(facts, "source_asset_id", "") or ""),
             candidate_id=candidate_id,
             source_sha256=str(getattr(facts, "source_sha256", "") or ""),
         )

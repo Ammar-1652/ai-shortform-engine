@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
 from clipforge.media.probe import read_ffprobe_json
 from clipforge.media.process import ProcessRunner
+from clipforge.media.tools import resolve_ffmpeg
 from clipforge.media.workspace import (
     SourceWorkspace,
     advanced_hero_lock,
@@ -424,6 +426,7 @@ def _render_run(
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
             language=_alignment_locale(workspace, candidate_id),
+            captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
             emphasis=plan.emphasis,
@@ -435,6 +438,12 @@ def _render_run(
             time_map_sha256=plan.time_map_sha256,
             source_sha256=plan.source_sha256,
             output_duration_us=_output_end_us(plan),
+            source_gain_db=profile.narration_duck_db if narration is not None else 0,
+            narration_gain_db=0,
+            audio_loudness_lufs=profile.audio_loudness_lufs,
+            audio_true_peak_dbfs=profile.audio_true_peak_dbfs,
+            audio_lra_lu=profile.audio_lra_lu,
+            audio_mix_version=profile.audio_mix_version,
         )
         output = run_dir / "candidates" / candidate_id / "advanced.mp4"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -462,6 +471,13 @@ def _render_run(
     else:
         batch.write_text(json_dumps({"items": items}), encoding="utf-8")
         renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
+    for _rank, candidate_id, _plan, render_input, output in prepared:
+        _normalize_audio(
+            output,
+            render_input,
+            root,
+            run_dir / "logs" / f"{candidate_id}.audio-normalize.log",
+        )
     _cleanup_dir(staging, root)
     outputs: list[AdvancedHeroDraftOutput] = []
     for rank, candidate_id, plan, render_input, output in prepared:
@@ -532,6 +548,84 @@ def _render_run(
     manifest = run_dir / "manifest.json"
     publish_json(manifest, document, root, workspace.partial_for(manifest))
     return document, manifest
+
+
+def _normalize_audio(
+    output: Path,
+    render_input: AdvancedHeroRenderInput,
+    root: Path,
+    log_path: Path,
+) -> None:
+    """Normalize the rendered mix without changing video frames."""
+    ensure_within(root, output)
+    if output.is_symlink() or not output.is_file() or output.stat().st_size < 1:
+        raise MediaError("advanced output is missing before audio normalization")
+    normalized = output.with_name("advanced.audio-normalized.mp4")
+    ensure_within(root, normalized)
+    if normalized.exists() or normalized.is_symlink():
+        raise MediaError("refusing to replace an existing audio normalization output")
+    filter_value = (
+        f"loudnorm=I={render_input.audio_loudness_lufs}:"
+        f"TP={render_input.audio_true_peak_dbfs}:LRA={render_input.audio_lra_lu}"
+    )
+    ProcessRunner().run(
+        [
+            resolve_ffmpeg(),
+            "-y",
+            "-i",
+            str(output),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            "-c:v",
+            "copy",
+            "-af",
+            filter_value,
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-movflags",
+            "+faststart",
+            str(normalized),
+        ],
+        log_path=log_path,
+        check=True,
+    )
+    if normalized.is_symlink() or not normalized.is_file() or normalized.stat().st_size < 1:
+        raise MediaError("audio normalization did not write a usable output")
+    normalized.replace(output)
+    _require_usable_audio(output, log_path.with_name(log_path.stem + ".measure.log"))
+
+
+def _require_usable_audio(output: Path, log_path: Path) -> None:
+    result = ProcessRunner().run(
+        [
+            resolve_ffmpeg(),
+            "-v",
+            "info",
+            "-i",
+            str(output),
+            "-map",
+            "0:a:0",
+            "-af",
+            "volumedetect",
+            "-f",
+            "null",
+            "-",
+        ],
+        log_path=log_path,
+        check=True,
+    )
+    match = re.search(r"mean_volume:\s*(-?inf|[-+]?\d+(?:\.\d+)?)\s*dB", result.stderr_tail)
+    if match is None:
+        raise MediaError("advanced output audio loudness could not be measured")
+    value = match.group(1)
+    if value == "-inf" or float(value) < -55:
+        raise MediaError("advanced output audio is unusably quiet")
 
 
 def _input_digest(
@@ -809,7 +903,7 @@ def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanD
 
 def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
     """Fail closed when the stored plan no longer matches the current producers."""
-    if plan.reframing_strategy not in {"contain", "face_follow"}:
+    if plan.reframing_strategy not in {"contain", "center_crop", "face_follow"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
     if plan.reframing_strategy == "face_follow":

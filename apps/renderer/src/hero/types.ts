@@ -44,6 +44,8 @@ export type HeroDraftInput = {
   readonly fps_denominator: 1;
   readonly width: 1080;
   readonly height: 1920;
+  readonly source_width: number;
+  readonly source_height: number;
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
   readonly language?: string;

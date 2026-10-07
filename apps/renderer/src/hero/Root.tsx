@@ -17,6 +17,8 @@ const placeholder: HeroDraftInput = {
   fps_denominator: 1,
   width: 1080,
   height: 1920,
+  source_width: 1920,
+  source_height: 1080,
   video_fit: "contain",
   background: "neutral-dark-v1",
   alignment_quality: "forced",

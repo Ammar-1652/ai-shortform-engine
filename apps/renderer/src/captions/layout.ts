@@ -15,18 +15,29 @@ const FRAME_HEIGHT = 1920;
 const FORBIDDEN_START = new Set(["。", "、", "！", "？", "」", "）", "』"]);
 const FORBIDDEN_END = new Set(["（", "「", "『"]);
 
+function localeFamily(language: string): "en" | "fr" | "ja" | "ar" {
+  const normalized = language.trim().toLowerCase();
+  if (normalized === "en" || normalized.startsWith("en-")) return "en";
+  if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
+  if (normalized === "ja" || normalized.startsWith("ja-")) return "ja";
+  if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
+  throw new Error(`unsupported caption locale: ${language}`);
+}
+
 export function layoutCaption(text: string, language: string, maxChars = 12): CaptionLayout {
-  if (!text || text.trim() !== text) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
     throw new Error("caption text is empty");
   }
-  if (text.includes("<") || text.includes(">")) {
+  if (normalized.includes("<") || normalized.includes(">")) {
     throw new Error("caption text is not html");
   }
-  const direction: CaptionDirection = language === "ar" || language.startsWith("ar-") ? "rtl" : "ltr";
-  const cjk = language === "ja" || language.startsWith("ja-");
-  const lines = cjk ? wrapCjk(text, maxChars) : wrapWords(text, maxChars);
+  const family = localeFamily(language);
+  const direction: CaptionDirection = family === "ar" ? "rtl" : "ltr";
+  const cjk = family === "ja";
+  const lines = cjk ? wrapCjk(normalized, maxChars) : wrapWords(normalized, maxChars);
   return {
-    text,
+    text: normalized,
     direction,
     lines,
     safe: {
@@ -42,7 +53,7 @@ export function wrapWords(text: string, width: number): string[] {
   if (width < 1) {
     throw new Error("caption width must be positive");
   }
-  const words = text.split(" ");
+  const words = text.trim().split(/\s+/);
   if (words.some((word) => word.length === 0)) {
     throw new Error("caption text is empty");
   }

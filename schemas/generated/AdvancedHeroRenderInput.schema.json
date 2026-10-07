@@ -545,6 +545,27 @@
       "title": "Asset Names",
       "type": "object"
     },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
+    },
     "base_video_name": {
       "const": "analysis.mp4",
       "default": "analysis.mp4",
@@ -564,11 +585,24 @@
       "title": "Candidate Id",
       "type": "string"
     },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/TypographyEvent"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
     "composition_id": {
       "const": "AdvancedHeroDraft",
       "default": "AdvancedHeroDraft",
       "title": "Composition Id",
       "type": "string"
+    },
+    "debug_overlays": {
+      "const": false,
+      "default": false,
+      "title": "Debug Overlays",
+      "type": "boolean"
     },
     "diagrams": {
       "items": {
@@ -617,6 +651,13 @@
       "title": "Language",
       "type": "string"
     },
+    "narration_gain_db": {
+      "default": 0,
+      "maximum": 6,
+      "minimum": -24,
+      "title": "Narration Gain Db",
+      "type": "number"
+    },
     "output_duration_us": {
       "default": 0,
       "minimum": 0,
@@ -651,6 +692,13 @@
       },
       "title": "Sfx",
       "type": "array"
+    },
+    "source_gain_db": {
+      "default": 0,
+      "maximum": 6,
+      "minimum": -24,
+      "title": "Source Gain Db",
+      "type": "number"
     },
     "source_sha256": {
       "default": "",

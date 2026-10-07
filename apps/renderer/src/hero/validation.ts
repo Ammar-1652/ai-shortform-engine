@@ -28,6 +28,8 @@ const TOP_KEYS = new Set([
   "fps_denominator",
   "width",
   "height",
+  "source_width",
+  "source_height",
   "video_fit",
   "background",
   "language",
@@ -81,6 +83,10 @@ export function parseHeroInput(raw: unknown): HeroDraftInput {
   if (record.width !== OUTPUT_WIDTH || record.height !== OUTPUT_HEIGHT) {
     throw new Error(`hero render input dimensions must be ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
   }
+  const sourceWidth = record.source_width ?? 1920;
+  const sourceHeight = record.source_height ?? 1080;
+  requirePositiveInt(sourceWidth, "source_width");
+  requirePositiveInt(sourceHeight, "source_height");
   if (record.fps_numerator !== 30 || record.fps_denominator !== 1) {
     throw new Error("hero render input fps must be 30/1");
   }
@@ -129,6 +135,8 @@ export function parseHeroInput(raw: unknown): HeroDraftInput {
     fps_denominator: 1,
     width: OUTPUT_WIDTH,
     height: OUTPUT_HEIGHT,
+    source_width: Number(sourceWidth),
+    source_height: Number(sourceHeight),
     video_fit: "contain",
     background: "neutral-dark-v1",
     alignment_quality: "forced",
@@ -261,6 +269,13 @@ function requireSha(value: unknown, label: string): void {
 function requireFrameCount(value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
     throw new Error("duration_in_frames must be a positive integer");
+  }
+  return value;
+}
+
+function requirePositiveInt(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a positive integer`);
   }
   return value;
 }

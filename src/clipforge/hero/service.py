@@ -582,6 +582,8 @@ def _render_one(
         video_name=video_name,
         audio_name=audio_name,
         trim_frame=trim_frame,
+        source_width=inputs.pair.visual.proxy_width,
+        source_height=inputs.pair.visual.proxy_height,
     )
     input_path = directory / "render-input.json"
     publish_json(input_path, rendered, root, inputs.pair.workspace.partial_for(input_path))
@@ -649,6 +651,8 @@ def _render_input(
     video_name: str = "analysis.mp4",
     audio_name: str = "asr.flac",
     trim_frame: int | None = None,
+    source_width: int,
+    source_height: int,
 ) -> HeroRenderInput:
     if plan.edit_plan.stage != "hero":
         raise MediaError("Hero render refuses a plan whose stage is not hero")
@@ -690,6 +694,8 @@ def _render_input(
         audio_path=str(run_dir / "staging" / audio_name),
         media_trim_frame=media_trim_frame(segment.source_start_us) if trim_frame is None else trim_frame,
         duration_in_frames=frame_count,
+        source_width=source_width,
+        source_height=source_height,
         alignment_sha256=alignment_sha256,
         edit_plan_sha256=edit_plan_sha256,
         time_map_sha256=digest_time_map(candidate.time_map),

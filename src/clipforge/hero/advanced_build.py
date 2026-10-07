@@ -8,6 +8,7 @@ from pathlib import Path
 
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
+from clipforge.hero.captions import hero_caption_pieces
 from clipforge.hero.reframe import (
     ReframeError,
     build_face_follow,
@@ -97,6 +98,7 @@ def build_advanced_plan(
         tool_version,
     )
     emphasis = _emphasis(alignment, candidate_id)
+    captions = _captions(alignment, candidate_id)
     typography = _typography(alignment, emphasis, candidate_id)
     diagrams = _diagrams(emphasis, duration_us, candidate_id)
     assets: list[AssetBinding] = []
@@ -156,6 +158,7 @@ def build_advanced_plan(
         reframing_strategy=profile.reframing.strategy_id,
         reframing_config_sha256=advanced_fingerprint(config),
         windows=windows,
+        captions=captions,
         typography=typography,
         diagrams=diagrams,
         emphasis=emphasis,
@@ -253,9 +256,34 @@ def _typography(
     return events
 
 
+def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[TypographyEvent]:
+    """Persist grouped forced captions separately from optional typography cards."""
+    events: list[TypographyEvent] = []
+    for index, piece in enumerate(hero_caption_pieces(alignment.words)):
+        text = piece.cue.text.strip()
+        if not text:
+            continue
+        events.append(
+            TypographyEvent(
+                event_id=stable_id("caption", candidate_id, str(index)),
+                interval=piece.cue.interval,
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id=f"caption-{index}",
+                text=text,
+                x=72,
+                y=1540,
+                font_size=54,
+            )
+        )
+    return events
+
+
 def _diagrams(emphasis: list[EmphasisEvent], duration_us: int, candidate_id: str) -> list[DiagramEvent]:
-    label = emphasis[0].text.strip() if emphasis else "Step"
-    other = emphasis[1].text.strip() if len(emphasis) > 1 else "Next"
+    numeric = [item for item in emphasis if any(char.isdigit() or char == "$" for char in item.text)]
+    if not numeric:
+        return []
+    label = numeric[0].text.strip()
+    other = numeric[1].text.strip() if len(numeric) > 1 else "Next"
     end = min(duration_us, 800_000)
     if end <= 0:
         raise MediaError("advanced diagram needs a positive time map")

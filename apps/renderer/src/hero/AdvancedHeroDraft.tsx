@@ -7,6 +7,7 @@ import { linearVolume } from "./gain.js";
 type Interval = { output_start_us?: number; output_end_us?: number };
 
 type TypeEvent = {
+  event_id?: string;
   text?: string;
   interval?: Interval;
   component_id?: string;
@@ -45,6 +46,7 @@ export type AdvancedHeroInput = {
   reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
+  captions?: TypeEvent[];
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
   broll?: BrollEvent[];
@@ -53,6 +55,13 @@ export type AdvancedHeroInput = {
   asset_names?: Record<string, string>;
   windows?: CropWindow[];
   language?: string;
+  source_gain_db?: number;
+  narration_gain_db?: number;
+  audio_loudness_lufs?: number;
+  audio_true_peak_dbfs?: number;
+  audio_lra_lu?: number;
+  audio_mix_version?: string;
+  debug_overlays?: boolean;
 };
 
 const FPS = 30;
@@ -84,13 +93,31 @@ function span(interval: Interval | undefined): { from: number; duration: number 
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
   const strategy = input.reframing_strategy ?? "contain";
-  if (strategy !== "contain" && strategy !== "face_follow") {
+  if (input.debug_overlays === true) {
+    throw new Error("production advanced renders reject debug overlays");
+  }
+  if (strategy !== "contain" && strategy !== "center_crop" && strategy !== "face_follow") {
     throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
+  const captions = input.captions ?? [];
   const typography = input.typography ?? [];
-  const visibleType = typography.filter((item) => active(frame, item.interval) && (item.text ?? "").length > 0);
-  const language = input.language ?? "en-US";
+  const visibleCaptions = captions.filter((item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0);
+  const visibleType = typography.filter((item) => {
+    if (!active(frame, item.interval) || (item.text ?? "").trim().length === 0) {
+      return false;
+    }
+    const text = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+    // A typography event copied from the transcript must not be painted over
+    // the grouped caption that already carries the same words.
+    return !visibleCaptions.some((caption) =>
+      caption.text?.replace(/\s+/g, " ").toLowerCase().includes(text),
+    );
+  });
+  const rawLanguage = input.language?.trim();
+  // Legacy/offline fixtures may omit locale evidence. Keep the layout
+  // deterministic without treating the sentinel as a supported locale claim.
+  const language = !rawLanguage || rawLanguage === "missing" ? "en-US" : rawLanguage;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
   const emphasis = (input.emphasis ?? []).filter(
     (item) => frame >= frameAt(item.output_start_us) && frame < frameAt(item.output_end_us),
@@ -98,16 +125,36 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const speech = input.speech_name ?? "asr.flac";
   const picture = input.base_video_name ?? "analysis.mp4";
   const contained = { width: "100%", height: "100%", objectFit: "contain" as const };
-  const followed = strategy === "face_follow" ? placedVideo(windowAt(frame, input.windows ?? [])) : null;
+  const sourceWindow = input.windows?.[0];
+  const containBox = sourceWindow
+    ? {
+        position: "absolute" as const,
+        width: "100%",
+        aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`,
+        top: "50%",
+        transform: "translateY(-50%)",
+      }
+    : { position: "absolute" as const, inset: 0 };
+  const followed = strategy === "face_follow" || strategy === "center_crop" ? placedVideo(windowAt(frame, input.windows ?? [])) : null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       {followed === null ? (
-        <OffthreadVideo
-          src={staticFile(picture)}
-          durationInFrames={input.duration_in_frames}
-          muted
-          style={contained}
-        />
+        <AbsoluteFill style={{ overflow: "hidden" }}>
+          <OffthreadVideo
+            src={staticFile(picture)}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{ ...contained, objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
+          />
+          <AbsoluteFill style={containBox}>
+            <OffthreadVideo
+              src={staticFile(picture)}
+              durationInFrames={input.duration_in_frames}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "fill" }}
+            />
+          </AbsoluteFill>
+        </AbsoluteFill>
       ) : (
         <AbsoluteFill style={{ overflow: "hidden" }}>
           <OffthreadVideo
@@ -118,9 +165,17 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           />
         </AbsoluteFill>
       )}
-      <Audio src={staticFile(speech)} durationInFrames={input.duration_in_frames} />
+      <Audio
+        src={staticFile(speech)}
+        durationInFrames={input.duration_in_frames}
+        volume={linearVolume(input.source_gain_db ?? 0)}
+      />
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
-        <Audio src={staticFile(names.narration)} />
+        <Audio
+          src={staticFile(names.narration)}
+          durationInFrames={input.duration_in_frames}
+          volume={linearVolume(input.narration_gain_db ?? 0)}
+        />
       ) : null}
       {(input.broll ?? []).map((item) => {
         const name = item.asset_id ? names[item.asset_id] : undefined;
@@ -136,7 +191,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 trimBefore={frameAt(item.broll_source_in_us)}
                 durationInFrames={window.duration}
                 muted
-                style={contained}
+                style={{ ...contained, objectFit: "cover" }}
               />
             </AbsoluteFill>
           </Sequence>
@@ -155,17 +210,42 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         );
       })}
       {diagram === undefined ? null : (
-        <AbsoluteFill>
-          <div style={{ position: "absolute", left: 140, top: 320, width: 280, height: 280, backgroundColor: "#ff00ff" }} />
-          <div style={{ position: "absolute", left: 520, top: 320, width: 280, height: 280, backgroundColor: "#00ffff" }} />
-          <div style={{ position: "absolute", left: 160, top: 340, color: "#000000", fontFamily: "sans-serif", fontSize: 36 }}>
-            {diagram.payload?.left_label} {diagram.payload?.left_value}
-          </div>
-          <div style={{ position: "absolute", left: 540, top: 340, color: "#000000", fontFamily: "sans-serif", fontSize: 36 }}>
-            {diagram.payload?.right_label} {diagram.payload?.right_value}
+        <AbsoluteFill style={{ left: 72, right: 72, top: 280, height: 360, display: "flex", justifyContent: "center" }}>
+          <div
+            style={{
+              width: 840,
+              height: 360,
+              borderRadius: 28,
+              backgroundColor: "rgba(17,17,17,0.88)",
+              border: "2px solid rgba(255,255,255,0.22)",
+              color: "#ffffff",
+              fontFamily: "sans-serif",
+              fontSize: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-evenly",
+              textAlign: "center",
+            }}
+          >
+            <div>
+              <div>{diagram.payload?.left_label}</div>
+              <strong>{diagram.payload?.left_value}</strong>
+            </div>
+            <div style={{ opacity: 0.6 }}>vs</div>
+            <div>
+              <div>{diagram.payload?.right_label}</div>
+              <strong>{diagram.payload?.right_value}</strong>
+            </div>
           </div>
         </AbsoluteFill>
       )}
+      {visibleCaptions.map((item) => (
+        <CaptionPlate
+          key={`${item.component_id ?? "caption"}-${item.event_id ?? ""}-${item.text}`}
+          text={(item.text ?? "").trim()}
+          language={item.language || language}
+        />
+      ))}
       {visibleType.map((item) => (
         <CaptionPlate
           key={`${item.component_id ?? "type"}-${item.text}`}
