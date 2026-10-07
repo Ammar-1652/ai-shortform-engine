@@ -250,8 +250,12 @@ def _measured_status(row: AlignmentProviderRecord) -> str:
             return "model_missing"
         if sha256_file(path) != row.checkpoint_sha256:
             return "stale_alignment"
-        english_manifest = measure_english_checkpoint(path).manifest_sha256
-        if _speech_matches(row.locale, english_manifest):
+        english_model = measure_english_checkpoint(path)
+        if _speech_matches(
+            row,
+            manifest=english_model.manifest_sha256,
+            checkpoint=english_model.checkpoint_sha256,
+        ):
             return "verified_live"
         return "available_not_smoked"
     snapshot = huggingface_snapshot(row.model_id, row.model_revision)
@@ -262,17 +266,27 @@ def _measured_status(row: AlignmentProviderRecord) -> str:
         return "model_missing"
     if row.checkpoint_sha256 and tree.checkpoint_sha256 != row.checkpoint_sha256:
         return "stale_alignment"
-    if _speech_matches(row.locale, tree.manifest_sha256):
+    if _speech_matches(row, manifest=tree.manifest_sha256, checkpoint=tree.checkpoint_sha256):
         return "verified_live"
     return "available_not_smoked"
 
 
-def _speech_matches(locale: str, manifest: str) -> bool:
-    """A catalog row is live only when a stored speech smoke names this manifest."""
-    from clipforge.language.model_manifest import speech_smoke_manifest
+def _speech_matches(row: AlignmentProviderRecord, *, manifest: str, checkpoint: str) -> bool:
+    """Live only when the external speech file and the measured model are one identity."""
+    from clipforge.language.model_manifest import measured_whisperx_version, speech_evidence_grants_live
 
-    smoked = speech_smoke_manifest(locale)
-    return bool(manifest) and smoked == manifest
+    installed = measured_whisperx_version()
+    if not installed or installed != row.provider_version:
+        return False
+    return speech_evidence_grants_live(
+        row.locale,
+        model_id=row.model_id,
+        model_revision=row.model_revision,
+        checkpoint_sha256=checkpoint,
+        manifest_sha256=manifest,
+        whisperx_version=row.provider_version,
+        device=row.device,
+    )
 
 
 def provider_for_model(model_id: str) -> AlignmentProviderRecord | None:

@@ -145,6 +145,8 @@ from clipforge.schemas.language import (
     LanguageCapability,
     LanguageCaptionProfile,
     LanguageProfile,
+    SpeechEvidenceCatalog,
+    SpeechEvidenceRecord,
     TranslatedTranscript,
 )
 from clipforge.schemas.media import (
@@ -407,6 +409,8 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     LanguageProfile,
     LanguageCapability,
     TranslatedTranscript,
+    SpeechEvidenceRecord,
+    SpeechEvidenceCatalog,
     LanguageAlignmentDocument,
     LanguageCaptionProfile,
     AlignmentProfile,

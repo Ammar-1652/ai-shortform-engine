@@ -4,16 +4,16 @@ Branch `round-30-multilingual-alignment-production`, started from `4d9254f528912
 
 ## Result
 
-Sine-wave runs are not speech-alignment evidence and are withdrawn. `verified_live` requires a stored multi-word speech record whose manifest matches the model files measured on disk. en-US, fr-FR, and ja have that record for deterministic eSpeak NG 1.52.0 synthetic speech. en-GB uses the English checkpoint and has no speech record, so it stays `available_not_smoked`. Full-source alignment is `not_configured`. Selected-clip `hero align` is the production path. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. Tesseract is not installed, so caption OCR was not claimed.
+Sine-wave runs and tone runs are not speech-alignment evidence and are withdrawn. `verified_live` requires an external speech file under `CLIPFORGE_SPEECH_EVIDENCE_ROOT`. Clipforge checks that file's SHA-256, sample rate, channel count, and duration against the packaged speech record, then checks the record's locale, model id, revision, checkpoint, manifest, WhisperX version, and device against the model measured on disk. A missing root, a missing file, a JSON row, a catalog constant, a tone, a sine wave, noise, or silence stays non-live. en-US, fr-FR, and ja are `verified_live` only when their own eSpeak NG 1.52.0 files and measured models both match. en-GB uses the English checkpoint and has no speech record, so it stays `available_not_smoked`. Full-source alignment is `not_configured`. Selected-clip `hero align` is the production path. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. Tesseract is not installed, so caption OCR was not claimed.
 
 ## Languages
 
 | Locale | Alignment status | Model | License |
 | --- | --- | --- | --- |
-| en-US | `verified_live` when the speech record matches the measured checkpoint | `WAV2VEC2_ASR_BASE_960H` revision `3.4.5` | Apache-2.0 |
-| en-GB | `available_not_smoked` | same English checkpoint, no speech record | Apache-2.0 |
-| ja, ja-JP | `verified_live` when the speech record matches the measured snapshot, otherwise `available_not_smoked` or `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-japanese` revision `cf031e020336460d15a417eba710bbc5bb43be9a` | Apache-2.0 |
-| fr-FR | `verified_live` when the speech record matches the measured snapshot, otherwise `available_not_smoked` or `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-french` revision `7c79e105a6525d38e1e69f640b974b4a679723cc` | Apache-2.0 |
+| en-US | `verified_live` only when `en-speech.wav` matches the packaged record and the measured English model | `WAV2VEC2_ASR_BASE_960H` revision `3.4.5` | Apache-2.0 |
+| en-GB | `available_not_smoked` | same English checkpoint, no separate speech record | Apache-2.0 |
+| ja, ja-JP | `verified_live` only when `ja-speech.wav` matches the packaged record and the measured snapshot; otherwise `available_not_smoked` or `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-japanese` revision `cf031e020336460d15a417eba710bbc5bb43be9a` | Apache-2.0 |
+| fr-FR | `verified_live` only when `fr-speech.wav` matches the packaged record and the measured snapshot; otherwise `available_not_smoked` or `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-french` revision `7c79e105a6525d38e1e69f640b974b4a679723cc` | Apache-2.0 |
 | es-ES | `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-spanish` revision `96d7e9b4e4a78af515a3c6d3cee7c0826045d276` | Apache-2.0 |
 | de-DE | `model_missing` | `jonatasgrosman/wav2vec2-large-xlsr-53-german` revision `4b8a02957378d0f2da2ef74091156b032c485a89` | Apache-2.0 |
 | ar | `alignment_not_claimed` | none | not applicable |
@@ -31,7 +31,7 @@ Caption fixtures keep Arabic order, Japanese characters, and Latin currency toke
 
 ## Spoken production smoke
 
-The audio is eSpeak NG 1.52.0 synthetic speech, 22050 Hz mono, kept outside the repository. It is not a tone, noise, or silence. The production commands were `clipforge hero doctor`, `clipforge hero align SOURCE CANDIDATE --language LOCALE`, `clipforge hero plan`, `clipforge hero render`, and `clipforge hero verify`. The offline rerun set `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1`, did not pass `--allow-model-download`, and a repeated align returned the same alignment id.
+The audio is eSpeak NG 1.52.0 synthetic speech, 22050 Hz mono, kept outside the repository under `CLIPFORGE_SPEECH_EVIDENCE_ROOT`. The packaged index stores the relative filename only. It is not a tone, noise, or silence. A machine without those files reports a non-live status. The operator restores live evidence by placing the measured WAV files in that directory and exporting `CLIPFORGE_SPEECH_EVIDENCE_ROOT`. Do not commit the WAV files. The production commands were `clipforge hero doctor`, `clipforge hero align SOURCE CANDIDATE --language LOCALE`, `clipforge hero plan`, `clipforge hero render`, and `clipforge hero verify`. The offline rerun set `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1`, did not pass `--allow-model-download`, and a repeated align returned the same alignment id. English duration is 1,685,260 microseconds from the bytes after the data header. The declared data-chunk size in these files is a placeholder.
 
 | Locale | Transcript | Tokens | Audio SHA-256 | Manifest SHA-256 | Alignment SHA-256 |
 | --- | --- | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ The audio is eSpeak NG 1.52.0 synthetic speech, 22050 Hz mono, kept outside the 
 | fr-FR | bonjour le monde ceci est un test | 7 | `a3e9c785cf7a4a84c6af80e944b134eab161d3459d86153249d6d8a02682e254` | `a335fa7cef1be2b74b408940a8a9e16ec89bce5c2d0267832cba739b88c31cc1` | `aece0c6accc98004794c59c1298d39c8b5e1b7d963655cc4ada508d94fa63af6` |
 | ja | これはテストです | 4 | `7cefeb57a7ecdec014512b351d6e668893ee42ca8fcf052c067ee8dab5379934` | `db223cabb82fce1f671fc98f89c507006a29f4dc22ec429ec28d61cac16127ad` | `abbffd62cb5daba50d5b2ea1bdda801ecac0432cbdb6b6b0277cac1d3e251145` |
 
-WhisperX is 3.4.5 on CPU. Word intervals are positive, ordered on the output clock, and different from the provisional transcript times. The stored locale is the requested locale. `hero plan`, `hero render`, and `hero verify` passed for each of those three candidates. The renders stayed outside the repository. Earlier sine-wave numbers are not evidence.
+WhisperX is 3.4.5 on CPU. Word intervals are positive, ordered on the output clock, and different from the provisional transcript times. The stored locale is the requested locale. The repair rerun used the external files, set `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1`, and did not pass `--allow-model-download`. A repeated align returned the same alignment id for each locale: en-US `e388a740-1015-486c-83aa-93d309ea9857`, fr-FR `66e901d9-137b-435d-8a63-7f597bf33c95`, and ja `684c95a6-1aee-4ef2-a6f1-942d4f08bbf3`. `hero plan`, `hero render`, and `hero verify` passed. The English render was a cache hit. The French and Japanese renders wrote new hero sets and verified. The renders stayed outside the repository. Earlier sine-wave numbers are not evidence.
 
 ## Not smoked
 
@@ -49,4 +49,4 @@ CI stays offline. It does not download models. A machine without the cached weig
 
 ## Local validation
 
-`./scripts/validate.sh` passed: ruff, mypy on 259 source files, pytest `679 passed, 2 skipped`, schema check, renderer lint, typecheck, Vitest `33 passed`, and `clipforge doctor` `10 pass, 0 warn, 0 fail`. Tesseract was not installed, so the caption browser smoke checked decoded pixels and did not claim OCR. SQLite schema stays 6.
+`./scripts/validate.sh` passed: ruff, mypy on 259 source files, pytest `705 passed, 2 skipped`, schema check with 201 generated files, renderer lint, typecheck, Vitest `33 passed`, and `clipforge doctor` `10 pass, 0 warn, 0 fail`. Tesseract was not installed, so the caption browser smoke checked decoded pixels and did not claim OCR. SQLite schema stays 6. No model download was requested. No WAV, model weight, render, database, or secret was committed.

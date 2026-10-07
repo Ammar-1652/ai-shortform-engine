@@ -186,7 +186,7 @@ Status: merged on main as `4d9254f52891284a702334e20b762a50ae9b0d2a`. See `docs/
 
 Status: in progress on `round-30-multilingual-alignment-production`, started from `4d9254f52891284a702334e20b762a50ae9b0d2a`.
 
-en-US, fr-FR, and ja alignment are `verified_live` only when a stored multi-word speech record matches the measured model. A tone or a catalog constant is not that record. en-GB has no speech record. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. `zh-CN` stays `unsupported_language`. Full-source alignment is `not_configured`. Nothing falls back to English alignment or translates the transcript. KittenTTS narration stays `en-US` only. Whop MCP and external publishing stay deferred. See `docs/adr/0066-multilingual-alignment-production.md` and `docs/operations/round-30-validation.md`.
+en-US, fr-FR, and ja alignment are `verified_live` only when an external speech file matches the packaged record and the measured model. The artifact hash is checked. A tone, a sine wave, a catalog constant, or a metadata-only row is not evidence. A missing external file stays non-live. en-GB is not verified unless it has its own speech record. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. `zh-CN` stays `unsupported_language`. Full-source alignment is `not_configured`. Selected-clip `hero align` is the production path. Nothing falls back to English alignment or translates the transcript. KittenTTS narration stays `en-US` only. Whop MCP and external publishing stay deferred. See `docs/adr/0066-multilingual-alignment-production.md` and `docs/operations/round-30-validation.md`.
 
 ## Later
 

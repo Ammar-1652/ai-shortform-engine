@@ -167,10 +167,7 @@ def _built(aligner: FakeForcedAlignment | None = None):
 
 
 def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "clipforge.language.model_manifest.speech_smoke_manifest",
-        lambda _locale, evidence_root=None: "",
-    )
+    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
     assert provider_for("en-US").live_status != "verified_live"
     assert provider_for("en-GB").live_status != "verified_live"
     assert provider_for("ja").live_status != "verified_live"
@@ -178,26 +175,17 @@ def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch)
     assert alignment_claim("en-US") == "alignment_not_claimed"
 
 
-def test_matching_speech_manifest_promotes_only_that_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_manifest_string_without_audio_does_not_promote(monkeypatch: pytest.MonkeyPatch) -> None:
     path = english_checkpoint_file()
     if path is None:
         pytest.skip("english checkpoint is not installed")
-    manifest = measure_english_checkpoint(path).manifest_sha256
-
-    def _smoked(locale: str, evidence_root: object = None) -> str:
-        del evidence_root
-        if locale == "en-US":
-            return manifest
-        return ""
-
-    monkeypatch.setattr("clipforge.language.model_manifest.speech_smoke_manifest", _smoked)
-    assert provider_for("en-US").live_status == "verified_live"
-    assert provider_for("en-GB").live_status != "verified_live"
+    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
     monkeypatch.setattr(
         "clipforge.language.model_manifest.speech_smoke_manifest",
-        lambda _locale, evidence_root=None: "0" * 64,
+        lambda _locale, evidence_root=None: measure_english_checkpoint(path).manifest_sha256,
     )
     assert provider_for("en-US").live_status != "verified_live"
+    assert provider_for("en-GB").live_status != "verified_live"
 
 
 def test_weight_tokenizer_and_revision_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -613,7 +601,9 @@ def test_stored_speech_record_is_not_a_tone() -> None:
     import json
 
     document = json.loads(evidence.read_text(encoding="utf-8"))
-    for row in document.values():
+    assert document["schema_version"] == "1.0.0"
+    for row in document["records"]:
         assert row["audio_class"] in {"recorded_speech", "tts_speech"}
         assert row["token_count"] >= 3
-        assert "sine" not in row["audio_class"]
+        assert row["audio_filename"]
+        assert ".." not in row["audio_filename"]

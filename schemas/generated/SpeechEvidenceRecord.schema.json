@@ -1,0 +1,128 @@
+{
+  "additionalProperties": false,
+  "description": "One external speech file bound to one alignment model. Metadata alone is not proof.",
+  "properties": {
+    "audio_class": {
+      "enum": [
+        "recorded_speech",
+        "tts_speech"
+      ],
+      "title": "Audio Class",
+      "type": "string"
+    },
+    "audio_filename": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Audio Filename",
+      "type": "string"
+    },
+    "audio_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Audio Sha256",
+      "type": "string"
+    },
+    "channels": {
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "device": {
+      "enum": [
+        "cpu",
+        "cuda"
+      ],
+      "title": "Device",
+      "type": "string"
+    },
+    "duration_us": {
+      "exclusiveMinimum": 0,
+      "maximum": 604800000000,
+      "title": "Duration Us",
+      "type": "integer"
+    },
+    "locale": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Locale",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "model_id": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_revision": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Model Revision",
+      "type": "string"
+    },
+    "provenance": {
+      "maxLength": 400,
+      "minLength": 1,
+      "title": "Provenance",
+      "type": "string"
+    },
+    "sample_rate": {
+      "maximum": 96000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "token_count": {
+      "maximum": 200,
+      "minimum": 3,
+      "title": "Token Count",
+      "type": "integer"
+    },
+    "transcript": {
+      "maxLength": 400,
+      "minLength": 1,
+      "title": "Transcript",
+      "type": "string"
+    },
+    "whisperx_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Whisperx Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "locale",
+    "audio_class",
+    "audio_filename",
+    "audio_sha256",
+    "sample_rate",
+    "channels",
+    "duration_us",
+    "transcript",
+    "token_count",
+    "whisperx_version",
+    "model_id",
+    "model_revision",
+    "checkpoint_sha256",
+    "manifest_sha256",
+    "device",
+    "provenance"
+  ],
+  "title": "SpeechEvidenceRecord",
+  "type": "object"
+}
