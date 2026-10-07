@@ -15,7 +15,7 @@ describe("advanced hero composition", () => {
     expect(source).not.toContain("eval(");
     expect(source).not.toContain("http://");
     expect(source).not.toContain("https://");
-    expect(source).not.toContain('objectFit: "cover"');
+    expect(source).toContain('objectFit: "cover"');
     expect(source).toContain('objectFit: "contain"');
     expect(source).toContain("broll_source_in_us");
     expect(source).toContain("linearVolume");

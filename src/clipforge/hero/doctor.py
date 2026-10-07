@@ -47,6 +47,7 @@ def hero_doctor(work_root: Path) -> list[DoctorLine]:
     ]
     lines.append(DoctorLine("PASS", "python_compatibility", "project requires Python 3.11 or newer"))
     lines.extend(_whisperx())
+    lines.append(_speech_evidence())
     lines.append(_package("torch"))
     lines.append(_package("torchaudio"))
     lines.append(_package("nltk"))
@@ -85,6 +86,13 @@ def doctor_status(lines: list[DoctorLine]) -> Status:
 
 
 def _whisperx() -> list[DoctorLine]:
+    from clipforge.language.model_manifest import measured_whisperx_version
+
+    measured = measured_whisperx_version()
+    if measured:
+        configured = os.environ.get("CLIPFORGE_ALIGN_PYTHON", "").strip()
+        source = configured or str(Path.home() / ".local" / "clipforge-hero-align" / "bin" / "python")
+        return [DoctorLine("PASS", "whisperx", f"{measured} via {source}")]
     try:
         import whisperx  # type: ignore[import-not-found]
     except ImportError:
@@ -120,6 +128,24 @@ def _package(name: str) -> DoctorLine:
     if not isinstance(version, str) or not version:
         version = "unknown"
     return DoctorLine("PASS", name, version)
+
+
+def _speech_evidence() -> DoctorLine:
+    """Explain the exact operator action needed for a live Hero alignment."""
+    from clipforge.language.model_manifest import speech_evidence_root
+    from clipforge.language.providers import provider_for
+
+    root = speech_evidence_root()
+    if root is None:
+        return DoctorLine(
+            "WARN",
+            "speech_evidence",
+            "not configured; export CLIPFORGE_SPEECH_EVIDENCE_ROOT to the measured WAV directory",
+        )
+    status = provider_for("en-US").live_status
+    if status == "verified_live":
+        return DoctorLine("PASS", "speech_evidence", f"en-US verified_live ({root})")
+    return DoctorLine("WARN", "speech_evidence", f"en-US {status} ({root})")
 
 
 def _punkt() -> DoctorLine:

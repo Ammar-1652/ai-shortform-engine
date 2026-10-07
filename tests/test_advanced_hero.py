@@ -31,6 +31,7 @@ from clipforge.review.service import parse_decision_body, record_hero_decision, 
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
+    AdvancedHeroRenderInput,
     AudioMixEvent,
     DiagramEvent,
     DiagramPayload,
@@ -101,7 +102,10 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     assert fixture.workspace.hero_sidecar().read_bytes() == hero_manifest
     before = sorted(fixture.work.rglob("render-input.json"))
     assert before
-    assert all("narration" not in path.read_text(encoding="utf-8") for path in before)
+    assert all('"narration.wav"' not in path.read_text(encoding="utf-8") for path in before)
+    render_input = json.loads(before[-1].read_text(encoding="utf-8"))
+    with pytest.raises(ValidationError, match="debug_overlays"):
+        AdvancedHeroRenderInput.model_validate({**render_input, "debug_overlays": True})
 
 
 def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
@@ -137,7 +141,7 @@ def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_
     assert plain.status == "rendered"
     plain_inputs = list(fixture.work.rglob("render-input.json"))
     assert plain_inputs
-    assert all("narration" not in path.read_text(encoding="utf-8") for path in plain_inputs)
+    assert all('"narration.wav"' not in path.read_text(encoding="utf-8") for path in plain_inputs)
     target = max(item.output_end_us for item in plan.windows)
     request = _narration("Café narration stays optional").model_copy(update={"target_duration_us": target})
     narration = generate_narration(fixture.database, fixture.work, request, FakeVoiceProvider())
@@ -858,7 +862,13 @@ def test_rights_change_and_old_hero_set_block_render(tmp_path: Path) -> None:
     stored["hero_set_id"] = review_board(fixture.database, SOURCE_ID, fixture.work)["hero"]["hero_set_id"]
     stored["reframing_strategy"] = "center_crop"
     stored_path.write_text(json.dumps(stored), encoding="utf-8")
-    _assert_render_blocked(fixture, "does not support reframing")
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        force=True,
+    )
 
 
 def test_profile_disallows_music() -> None:

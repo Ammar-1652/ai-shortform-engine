@@ -727,6 +727,13 @@
       "title": "Candidate Set Sha256",
       "type": "string"
     },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/TypographyEvent"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
     "diagrams": {
       "items": {
         "$ref": "#/$defs/DiagramEvent"

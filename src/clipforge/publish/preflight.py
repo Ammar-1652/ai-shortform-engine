@@ -195,6 +195,8 @@ def preflight_delivery(
         root,
         workspace,
         draft,
+        project_id=source.project_id,
+        source_asset_id=source_asset_id,
         source_sha256=manifest.content_sha256,
     )
     _hero_plan(root, workspace, draft)
@@ -335,6 +337,10 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "qa_set_id": facts.qa_set_id,
         "qa_set_sha256": facts.qa_set_sha256,
         "reframing_strategy": facts.reframing_strategy,
+        "reframe_requested": facts.reframe_requested,
+        "reframe_applied": facts.reframe_applied,
+        "reframe_fallback": facts.reframe_fallback,
+        "audio_policy": "advanced-audio-mix-v1|-16|-1.5|11",
         "source_sha256": facts.source_sha256,
         "time_map_sha256": facts.time_map_sha256,
         "trajectory_sha256": facts.trajectory_sha256,
@@ -363,10 +369,10 @@ def _reframe_binding(
     source_sha256: str,
 ) -> _ReframeBinding:
     """Contain needs no face evidence. face_follow must match the stored trajectory."""
-    if plan.reframing_strategy == "contain":
+    if plan.reframing_strategy in {"contain", "center_crop"}:
         stored_map = getattr(plan, "time_map_sha256", "")
         map_hash = stored_map if isinstance(stored_map, str) else ""
-        return _ReframeBinding("contain", "contain", "", "", "", map_hash, "")
+        return _ReframeBinding(plan.reframing_strategy, plan.reframing_strategy, "", "", "", map_hash, "")
     if plan.reframing_strategy != "face_follow":
         raise PublishError(
             f"reframing strategy {plan.reframing_strategy} is not supported",
@@ -688,6 +694,8 @@ def _alignment(
     workspace: SourceWorkspace,
     draft: AdvancedHeroDraftOutput,
     *,
+    project_id: str,
+    source_asset_id: str,
     source_sha256: str,
 ) -> tuple[str | None, str | None, tuple[tuple[int, int, str], ...]]:
     path = workspace.hero_alignment_file(draft.candidate_id)
@@ -716,15 +724,15 @@ def _alignment(
         and document.alignment_id == draft.alignment_id
         and document.candidate_id == draft.candidate_id
     ):
-        cues = tuple((word.output_start_us, word.output_end_us, word.text) for word in document.words)
+        cues = tuple((word.output_start_us, word.output_end_us, word.text.strip()) for word in document.words)
         if document.alignment_status == "verified_live":
             from clipforge.language.evidence import validate_current_alignment_evidence
 
             evidence = validate_current_alignment_evidence(
                 document=document,
                 candidate_id=draft.candidate_id,
-                source_asset_id=document.source_asset_id,
-                project_id=document.project_id,
+                source_asset_id=source_asset_id,
+                project_id=project_id,
                 source_sha256=source_sha256,
                 file_sha256=digest,
             )

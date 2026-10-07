@@ -156,6 +156,8 @@ class HeroRenderInput(Versioned):
     fps_denominator: Literal[1] = 1
     width: Literal[1080] = 1080
     height: Literal[1920] = 1920
+    source_width: int = Field(default=1920, ge=1)
+    source_height: int = Field(default=1080, ge=1)
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     language: str = "en-US"

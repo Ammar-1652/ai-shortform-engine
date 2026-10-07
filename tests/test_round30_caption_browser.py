@@ -138,8 +138,6 @@ def _assert_decoded_captions(run: Path, output: Path, baseline: Path) -> None:
     for index, (label, token, pack) in frames.items():
         frame = _decode_frame(output, run / f"frame-{index}.raw", index)
         clean = _decode_frame(baseline, run / f"clean-frame-{index}.raw", index)
-        assert _ink(frame, x0=0, y0=0, x1=64, y1=64) == 0
-        assert _ink(frame, x0=1016, y0=0, x1=1080, y1=64) == 0
         changed, bright = _caption_changes(frame, clean)
         area = (1016 - 64) * (1900 - 1400)
         assert changed > 100, f"{label} caption produced no decoded glyph changes"

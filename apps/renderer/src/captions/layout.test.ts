@@ -73,4 +73,8 @@ describe("multilingual caption plates", () => {
     expect(source).not.toContain("autoplay");
     expect(source).toContain("{line}");
   });
+
+  it("fails closed for unsupported locales", () => {
+    expect(() => layoutCaption("hello", "xx-XX")).toThrow(/unsupported caption locale/);
+  });
 });

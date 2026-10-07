@@ -59,7 +59,20 @@ for (const item of batch.items) {
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
-  if (input.reframing_strategy !== "contain" && input.reframing_strategy !== "face_follow") {
+  if (input.debug_overlays === true) {
+    throw new Error("production advanced render rejects debug overlays");
+  }
+  for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
+    const component = typeof event?.component_id === "string" ? event.component_id.toLowerCase() : "";
+    if (component.includes("debug") || component.includes("fixture") || component.includes("marker")) {
+      throw new Error("production advanced render rejects diagnostic-only events");
+    }
+  }
+  if (
+    input.reframing_strategy !== "contain" &&
+    input.reframing_strategy !== "center_crop" &&
+    input.reframing_strategy !== "face_follow"
+  ) {
     throw new Error(
       `advanced render does not support reframing strategy ${input.reframing_strategy}`,
     );

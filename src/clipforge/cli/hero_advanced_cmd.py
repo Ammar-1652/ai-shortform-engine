@@ -47,7 +47,9 @@ def advanced_plan(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     broll: Annotated[list[str] | None, typer.Option("--broll")] = None,
     sfx: Annotated[list[str] | None, typer.Option("--sfx")] = None,
-    reframing: Annotated[str, typer.Option("--reframing", help="contain or face_follow.")] = "contain",
+    reframing: Annotated[
+        str, typer.Option("--reframing", help="contain, center_crop, or face_follow.")
+    ] = "contain",
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
     from clipforge.hero.advanced_service import plan_advanced_candidate
@@ -184,7 +186,7 @@ advanced_app.add_typer(reframe_app, name="reframe")
 def reframe_doctor() -> None:
     """Report the reframing contract. Does not write."""
     typer.echo("PASS reframing default: contain")
-    typer.echo("PASS reframing opt-in: face_follow")
+    typer.echo("PASS reframing options: center_crop, face_follow")
     typer.echo("PASS identity: not_claimed")
     typer.echo("PASS speaker: not_claimed")
     typer.echo("PASS recognition: not_used")

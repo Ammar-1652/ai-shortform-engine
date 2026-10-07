@@ -125,6 +125,18 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "source_height": {
+      "default": 1080,
+      "minimum": 1,
+      "title": "Source Height",
+      "type": "integer"
+    },
+    "source_width": {
+      "default": 1920,
+      "minimum": 1,
+      "title": "Source Width",
+      "type": "integer"
+    },
     "time_map_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Time Map Sha256",

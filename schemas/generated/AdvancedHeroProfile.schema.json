@@ -119,11 +119,32 @@
       "title": "Audio Codec",
       "type": "string"
     },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
     "audio_sample_rate": {
       "const": 48000,
       "default": 48000,
       "title": "Audio Sample Rate",
       "type": "integer"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
     },
     "background": {
       "const": "neutral-dark-v1",
@@ -221,6 +242,11 @@
       "default": false,
       "title": "Music Allowed",
       "type": "boolean"
+    },
+    "narration_duck_db": {
+      "default": -12,
+      "title": "Narration Duck Db",
+      "type": "number"
     },
     "pixel_format": {
       "const": "yuv420p",

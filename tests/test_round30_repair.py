@@ -19,6 +19,7 @@ from clipforge.hero.alignment import (
     build_alignment,
 )
 from clipforge.hero.captions import _MAX_GAP_US, hero_caption_pieces
+from clipforge.hero.integrity import _alignment_identity_complete
 from clipforge.hero.service import _require_fresh_alignment
 from clipforge.language.model_manifest import (
     english_checkpoint_file,
@@ -458,6 +459,21 @@ def test_aliases_store_one_locale_and_cache_rejects_each_identity_change() -> No
     moved = _Inputs(_Pair(inputs.pair.transcript, _TRANSCRIPT, _SHA), _ASR)
     with pytest.raises(MediaError):
         _require_fresh_alignment(document, moved, _candidate(), _review(), "rough-1", aligner)
+
+
+def test_legacy_alignment_identity_is_incomplete_before_plan_hash_check() -> None:
+    document, _inputs, _aligner = _built()
+    assert _alignment_identity_complete(document)
+    legacy = document.model_copy(
+        update={
+            "alignment_status": "unspecified",
+            "binding_sha256": "",
+            "model_revision": "",
+            "checkpoint_sha256": "",
+            "manifest_sha256": "",
+        }
+    )
+    assert not _alignment_identity_complete(legacy)
 
 
 def _locale_backend(locale: str, language: str) -> FakeForcedAlignment:
