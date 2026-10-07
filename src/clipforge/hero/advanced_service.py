@@ -325,6 +325,17 @@ def _context(database: Database, source_asset_id: str, candidate_id: str, root: 
         raise MediaError("advanced Hero plan hash does not match the Hero draft")
     if any(word.alignment_quality != "forced" for word in alignment.words):
         raise MediaError("advanced Hero refuses provisional timing")
+    if alignment.alignment_status == "verified_live":
+        from clipforge.language.evidence import validate_current_alignment_evidence
+
+        evidence = validate_current_alignment_evidence(
+            document=alignment,
+            candidate_id=candidate_id,
+            source_asset_id=source_asset_id,
+            source_sha256=inputs.pair.manifest.content_sha256,
+        )
+        if evidence.status != "verified_live":
+            raise MediaError(evidence.blocker or evidence.status)
     source_sha = inputs.pair.manifest.content_sha256
     if source_sha != hero.document.source_sha256:
         raise MediaError("advanced Hero source bytes do not match the Hero draft")

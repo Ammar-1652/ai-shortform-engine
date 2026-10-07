@@ -335,8 +335,8 @@ def final_board(
 
 
 def language_evidence(facts: object) -> dict[str, str]:
-    """Facts from the bound alignment and narration. A missing file is not English."""
-    from clipforge.schemas.hero import ForcedAlignmentDocument
+    """Facts from the current alignment validator and the bound narration artifact."""
+    from clipforge.language.evidence import validate_current_alignment_evidence
 
     workspace = getattr(facts, "workspace", None)
     candidate_id = str(getattr(facts, "candidate_id", "") or "")
@@ -349,6 +349,9 @@ def language_evidence(facts: object) -> dict[str, str]:
         "alignment_revision": "none",
         "alignment_checkpoint": "none",
         "alignment_manifest": "none",
+        "alignment_id": "",
+        "alignment_sha256": "",
+        "evidence_audio_sha256": "",
         "alignment_cache": "miss",
         "alignment_blocker": "alignment_not_claimed",
         "narration_status": "narration_not_requested",
@@ -361,40 +364,25 @@ def language_evidence(facts: object) -> dict[str, str]:
         "narration_audio_sha256": "none",
     }
     path = None if workspace is None or not candidate_id else workspace.hero_alignment_file(candidate_id)
-    if path is not None and path.is_file() and not path.is_symlink():
-        try:
-            document = ForcedAlignmentDocument.model_validate_json(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, ValueError):
-            card["alignment_status"] = "stale_alignment"
-            card["alignment_blocker"] = "stale_alignment"
-        else:
-            card["requested_locale"] = document.locale or "missing"
-            card["normalized_language"] = document.normalized_language or "missing"
-            card["alignment_status"] = document.alignment_status or "alignment_not_claimed"
-            card["alignment_provider"] = "whisperx" if document.model_name != "fake-forced-align-v1" else "fake"
-            card["alignment_model"] = document.model_name
-            card["alignment_revision"] = document.model_revision or "none"
-            card["alignment_checkpoint"] = document.checkpoint_sha256 or "none"
-            card["alignment_manifest"] = document.manifest_sha256 or "none"
-            card["alignment_cache"] = "stored"
-            card["alignment_blocker"] = document.unavailable_reason or "none"
-            if not document.binding_sha256:
-                card["alignment_cache"] = "stale"
-    readable = path is not None and path.is_file() and not path.is_symlink()
-    if readable and card["alignment_status"] != "stale_alignment":
-        document_locale = card["requested_locale"]
-        if document_locale in {"", "missing"}:
-            card["alignment_status"] = "stale_alignment"
-            card["alignment_blocker"] = "stale_alignment"
-        elif card["alignment_provider"] == "whisperx" and (
-            card["alignment_revision"] == "none"
-            or card["alignment_checkpoint"] == "none"
-            or card["alignment_manifest"] == "none"
-            or card["alignment_cache"] == "stale"
-        ):
-            card["alignment_status"] = "stale_alignment"
-            card["alignment_blocker"] = "stale_alignment"
-            card["alignment_cache"] = "stale"
+    if path is not None:
+        evidence = validate_current_alignment_evidence(
+            path,
+            candidate_id=candidate_id,
+            source_sha256=str(getattr(facts, "source_sha256", "") or ""),
+        )
+        card["requested_locale"] = evidence.canonical_locale or "missing"
+        card["normalized_language"] = evidence.normalized_language or "missing"
+        card["alignment_status"] = evidence.status
+        card["alignment_provider"] = evidence.provider_name or "none"
+        card["alignment_model"] = evidence.model_id or "none"
+        card["alignment_revision"] = evidence.model_revision or "none"
+        card["alignment_checkpoint"] = evidence.checkpoint_sha256 or "none"
+        card["alignment_manifest"] = evidence.manifest_sha256 or "none"
+        card["alignment_id"] = evidence.alignment_id
+        card["alignment_sha256"] = evidence.alignment_sha256
+        card["evidence_audio_sha256"] = evidence.speech_sha256
+        card["alignment_blocker"] = evidence.blocker
+        card["alignment_cache"] = "current" if evidence.blocker in {"", "none"} else "stale"
     narration_sha = getattr(facts, "narration_sha256", None)
     voice = getattr(facts, "narration_voice_id", None)
     license_name = getattr(facts, "narration_model_license", None)

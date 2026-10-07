@@ -855,8 +855,70 @@ def _write_alignment(
         ],
         provenance=provenance([asset_id], job_id=job_id),
     )
-    path.write_text(document.model_dump_json() + "\n", encoding="utf-8")
+    stamped = _stamp_current_english_evidence(
+        document,
+        candidate_id=candidate_id,
+        asset_id=asset_id,
+        transcript_sha=transcript_sha,
+    )
+    path.write_text(stamped.model_dump_json() + "\n", encoding="utf-8")
     return sha256_file(path)
+
+
+def _stamp_current_english_evidence(
+    document: ForcedAlignmentDocument,
+    *,
+    candidate_id: str,
+    asset_id: str,
+    transcript_sha: str,
+) -> ForcedAlignmentDocument:
+    """Bind the fixture to the model and speech file measured on this machine."""
+    from clipforge.errors import MediaError
+    from clipforge.hero.alignment import _measure_checkpoint_and_manifest, alignment_binding_sha256
+    from clipforge.language.providers import provider_for
+
+    record = provider_for("en-US")
+    if record.live_status != "verified_live":
+        return document
+    try:
+        checkpoint, manifest = _measure_checkpoint_and_manifest(
+            record.model_id,
+            record.normalized_language,
+            record.model_revision,
+            record.checkpoint_sha256,
+        )
+    except MediaError:
+        return document
+    binding = alignment_binding_sha256(
+        alignment_recipe="hero-align-v1",
+        asr_audio_sha256=document.asr_audio_sha256,
+        candidate_id=candidate_id,
+        checkpoint_sha256=checkpoint,
+        locale="en-US",
+        manifest_sha256=manifest,
+        model_id=record.model_id,
+        model_revision=record.model_revision,
+        normalized_language="en",
+        provider_name="whisperx",
+        provider_version=record.provider_version,
+        source_asset_id=asset_id,
+        source_sha256="",
+        time_map_sha256=document.time_map_sha256,
+        transcript_language="en",
+        transcript_sha256=transcript_sha,
+    )
+    return document.model_copy(
+        update={
+            "locale": "en-US",
+            "normalized_language": "en",
+            "model_revision": record.model_revision,
+            "checkpoint_sha256": checkpoint,
+            "manifest_sha256": manifest,
+            "alignment_status": "verified_live",
+            "binding_sha256": binding,
+            "unavailable_reason": "none",
+        }
+    )
 
 
 def _checksum_text(package: Path, delivery_id: str, files: list[PublishFile]) -> str:

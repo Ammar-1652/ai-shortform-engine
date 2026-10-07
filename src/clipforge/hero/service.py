@@ -671,6 +671,7 @@ def _render_input(
                 "output_start_frame": piece.output_start_frame,
                 "output_end_frame_exclusive": piece.output_end_frame_exclusive,
                 "alignment_quality": "forced",
+                "language": alignment.locale,
                 "words": [
                     {
                         "text": word.text,
@@ -695,7 +696,7 @@ def _render_input(
         review_id=review.review_id,
         review_digest=review_digest(review),
         profile_fingerprint=profile.fingerprint(),
-        language=alignment.locale or "en-US",
+        language=alignment.locale,
         captions=captions,
         motion_events=events,
     )
@@ -875,18 +876,25 @@ def _require_fresh_alignment(
         or not alignment.manifest_sha256
     ):
         raise MediaError("stored alignment identity is incomplete")
-    if production:
-        from clipforge.language.providers import provider_for
+    from clipforge.language.evidence import validate_current_alignment_evidence
 
-        record = provider_for(alignment.locale)
-        if (
-            alignment.alignment_status != record.live_status
-            or alignment.model_name != record.model_id
-            or alignment.model_revision != record.model_revision
-            or alignment.checkpoint_sha256 != record.checkpoint_sha256
-            or alignment.whisperx_version != record.provider_version
-        ):
-            raise MediaError("stale_alignment")
+    evidence = validate_current_alignment_evidence(
+        document=alignment,
+        project_id=candidate.project_id,
+        source_asset_id=candidate.source_asset_id,
+        candidate_id=candidate.candidate_id,
+        transcript_sha256=inputs.pair.transcript_sha256,
+        asr_audio_sha256=inputs.asr_sha256,
+        time_map_sha256=digest_time_map(candidate.time_map),
+        rough_preview_artifact_id=rough_artifact_id,
+        review_id=review.review_id,
+        review_digest=review_digest(review),
+        source_sha256=inputs.pair.manifest.content_sha256,
+    )
+    if evidence.blocker not in {"", "none"}:
+        raise MediaError(evidence.blocker)
+    if alignment.alignment_status == "verified_live" and evidence.status != "verified_live":
+        raise MediaError(evidence.status)
     if aligner is not None and (
         alignment.model_name != aligner.model_name
         or alignment.whisperx_version != aligner.whisperx_version

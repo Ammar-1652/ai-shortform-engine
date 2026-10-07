@@ -11,6 +11,7 @@ type TypeEvent = {
   interval?: Interval;
   component_id?: string;
   purpose?: string;
+  language?: string;
 };
 
 type DiagramEvent = {
@@ -169,7 +170,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         <CaptionPlate
           key={`${item.component_id ?? "type"}-${item.text}`}
           text={item.text ?? ""}
-          language={language}
+          language={item.language || language}
         />
       ))}
       {emphasis.map((item) => (

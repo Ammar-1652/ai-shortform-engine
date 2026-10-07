@@ -524,7 +524,11 @@ def test_final_review_reads_the_bound_locale_and_narration(tmp_path: Path) -> No
     path.write_text("{", encoding="utf-8")
     assert language_evidence(broken)["alignment_status"] == "stale_alignment"
     changed = document.model_copy(
-        update={"alignment_status": "stale_alignment", "locale": "fr-FR", "normalized_language": "fr"}
+        update={
+            "binding_sha256": "ab" * 32,
+            "locale": "fr-FR",
+            "normalized_language": "fr",
+        }
     )
     other = language_evidence(_facts(tmp_path / "other", changed))
     assert other["requested_locale"] == "fr-FR"

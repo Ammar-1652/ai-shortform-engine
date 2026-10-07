@@ -410,7 +410,7 @@ def test_alignment_file_failures(tmp_path: Path) -> None:
     _retie_alignment_hash(world.work, "before")
     revised = run_campaign(world.database, world.work, force=True)
     assert {item.source_id: item.reason_code for item in revised.sources}["src-before-famous"] == (
-        "model_revision_changed"
+        "stale_alignment"
     )
     path.write_bytes(original)
     _retie_alignment_hash(world.work, "before")

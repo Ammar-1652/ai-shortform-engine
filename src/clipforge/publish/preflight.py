@@ -191,7 +191,12 @@ def preflight_delivery(
     plan = _plan(root, workspace, draft, document)
     _reject_plan_text(plan)
     reframe = _reframe_binding(workspace, plan, visual_sha, manifest.content_sha256)
-    alignment_id, alignment_sha, cues = _alignment(root, workspace, draft)
+    alignment_id, alignment_sha, cues = _alignment(
+        root,
+        workspace,
+        draft,
+        source_sha256=manifest.content_sha256,
+    )
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
     _reject_render_strategy(video.parent / "render-input.json", workspace, plan, reframe)
@@ -682,6 +687,8 @@ def _alignment(
     root: Path,
     workspace: SourceWorkspace,
     draft: AdvancedHeroDraftOutput,
+    *,
+    source_sha256: str,
 ) -> tuple[str | None, str | None, tuple[tuple[int, int, str], ...]]:
     path = workspace.hero_alignment_file(draft.candidate_id)
     try:
@@ -710,6 +717,22 @@ def _alignment(
         and document.candidate_id == draft.candidate_id
     ):
         cues = tuple((word.output_start_us, word.output_end_us, word.text) for word in document.words)
+        if document.alignment_status == "verified_live":
+            from clipforge.language.evidence import validate_current_alignment_evidence
+
+            evidence = validate_current_alignment_evidence(
+                document=document,
+                candidate_id=draft.candidate_id,
+                source_asset_id=document.source_asset_id,
+                project_id=document.project_id,
+                source_sha256=source_sha256,
+                file_sha256=digest,
+            )
+            if evidence.status != "verified_live":
+                raise PublishError(
+                    "alignment evidence is no longer verified",
+                    category=evidence.blocker or evidence.status,
+                )
     return draft.alignment_id, draft.alignment_sha256, cues
 
 

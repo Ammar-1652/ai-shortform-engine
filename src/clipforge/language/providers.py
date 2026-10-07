@@ -251,13 +251,11 @@ def _measured_status(row: AlignmentProviderRecord) -> str:
         if sha256_file(path) != row.checkpoint_sha256:
             return "stale_alignment"
         english_model = measure_english_checkpoint(path)
-        if _speech_matches(
+        return _speech_status(
             row,
             manifest=english_model.manifest_sha256,
             checkpoint=english_model.checkpoint_sha256,
-        ):
-            return "verified_live"
-        return "available_not_smoked"
+        )
     snapshot = huggingface_snapshot(row.model_id, row.model_revision)
     if snapshot is None:
         return "model_missing"
@@ -266,19 +264,14 @@ def _measured_status(row: AlignmentProviderRecord) -> str:
         return "model_missing"
     if row.checkpoint_sha256 and tree.checkpoint_sha256 != row.checkpoint_sha256:
         return "stale_alignment"
-    if _speech_matches(row, manifest=tree.manifest_sha256, checkpoint=tree.checkpoint_sha256):
-        return "verified_live"
-    return "available_not_smoked"
+    return _speech_status(row, manifest=tree.manifest_sha256, checkpoint=tree.checkpoint_sha256)
 
 
-def _speech_matches(row: AlignmentProviderRecord, *, manifest: str, checkpoint: str) -> bool:
+def _speech_status(row: AlignmentProviderRecord, *, manifest: str, checkpoint: str) -> str:
     """Live only when the external speech file and the measured model are one identity."""
-    from clipforge.language.model_manifest import measured_whisperx_version, speech_evidence_grants_live
+    from clipforge.language.evidence import classify_speech_evidence
 
-    installed = measured_whisperx_version()
-    if not installed or installed != row.provider_version:
-        return False
-    return speech_evidence_grants_live(
+    kind = classify_speech_evidence(
         row.locale,
         model_id=row.model_id,
         model_revision=row.model_revision,
@@ -287,6 +280,11 @@ def _speech_matches(row: AlignmentProviderRecord, *, manifest: str, checkpoint: 
         whisperx_version=row.provider_version,
         device=row.device,
     )
+    if kind == "":
+        return "verified_live"
+    if kind in {"no_record", "runtime_unreadable"}:
+        return "available_not_smoked"
+    return kind
 
 
 def provider_for_model(model_id: str) -> AlignmentProviderRecord | None:

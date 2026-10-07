@@ -92,10 +92,122 @@ def _input() -> dict[str, object]:
             _cue("ar", "مرحبا بالعالم", 0, "ar"),
             _cue("ja", "説明です", 30, "ja"),
             _cue("fr", "bonjour le monde", 60, "fr-FR"),
-            _cue("en", "hello world $12.50", 90, "en-US"),
+            _cue("en", "Café costs $12.50 today.", 90, "en-US"),
         ],
         "motion_events": [],
     }
+
+
+def _advanced_input() -> dict[str, object]:
+    events = [
+        ("ar", "مرحبا بالعالم", 0),
+        ("ja", "説明です", 1_000_000),
+        ("fr-FR", "bonjour le monde", 2_000_000),
+        ("en-US", "Café costs $12.50 today.", 3_000_000),
+    ]
+    return {
+        "composition_id": "AdvancedHeroDraft",
+        "duration_in_frames": 120,
+        "reframing_strategy": "contain",
+        "base_video_name": "analysis.mp4",
+        "speech_name": "asr.flac",
+        "language": "en-US",
+        "typography": [
+            {
+                "component_id": f"type-{language}",
+                "text": text,
+                "language": language,
+                "purpose": "caption",
+                "interval": {"output_start_us": start, "output_end_us": start + 1_000_000},
+            }
+            for language, text, start in events
+        ],
+    }
+
+
+def _assert_decoded_captions(run: Path, output: Path, *, hero: bool) -> None:
+    """Decoded frames must show caption ink inside the safe area."""
+    del hero
+    ocr = shutil.which("tesseract")
+    packs = _tesseract_packs(ocr)
+    frames = {
+        5: ("ar", "مرحبا", "ara"),
+        35: ("ja", "説明", "jpn"),
+        65: ("fr", "bonjour", "fra"),
+        95: ("en", "12", "eng"),
+    }
+    for index, (label, token, pack) in frames.items():
+        frame = _decode_frame(output, run / f"frame-{index}.raw", index)
+        assert _ink(frame, x0=0, y0=0, x1=64, y1=64) == 0
+        assert _ink(frame, x0=1016, y0=0, x1=1080, y1=64) == 0
+        band = _samples(frame, x0=64, y0=1400, x1=1016, y1=1900)
+        assert band
+        assert sum(band) > 0
+        mean = sum(band) / len(band)
+        variance = sum((item - mean) ** 2 for item in band) / len(band)
+        assert variance > 20, f"{label} caption is blank or a flat rectangle"
+        if label == "ar":
+            left = _ink(frame, x0=64, y0=1400, x1=540, y1=1900)
+            right = _ink(frame, x0=540, y0=1400, x1=1016, y1=1900)
+            assert right > left
+        if ocr and pack in packs:
+            png = run / f"frame-{label}.png"
+            subprocess.run(
+                ["ffmpeg", "-y", "-ss", f"{index / 30:.3f}", "-i", str(output), "-frames:v", "1", str(png)],
+                check=True,
+                capture_output=True,
+            )
+            completed = subprocess.run([ocr, str(png), "stdout", "-l", pack], capture_output=True, text=True)
+            if completed.returncode == 0:
+                found = completed.stdout.lower()
+                assert token.lower() in found or (label == "en" and "12" in found)
+                if label == "ja":
+                    assert " " not in completed.stdout.strip()
+
+
+def _tesseract_packs(ocr: str | None) -> set[str]:
+    if ocr is None:
+        return set()
+    completed = subprocess.run([ocr, "--list-langs"], capture_output=True, text=True)
+    if completed.returncode != 0:
+        return set()
+    names = completed.stdout.splitlines()
+    return {line.strip() for line in names if line.strip() and not line.startswith("List")}
+
+
+def _decode_frame(output: Path, raw: Path, index: int) -> bytes:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{index / 30:.3f}",
+            "-i",
+            str(output),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            str(raw),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    frame = raw.read_bytes()
+    assert len(frame) == 1080 * 1920 * 3
+    return frame
+
+
+def _samples(frame: bytes, *, x0: int, y0: int, x1: int, y1: int, width: int = 1080) -> list[int]:
+    values: list[int] = []
+    for y in range(y0, y1):
+        row = y * width * 3
+        for x in range(x0, x1):
+            offset = row + x * 3
+            values.append(frame[offset] + frame[offset + 1] + frame[offset + 2])
+    return values
 
 
 def _ink(frame: bytes, *, x0: int, y0: int, x1: int, y1: int, width: int = 1080) -> int:
@@ -132,41 +244,19 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
         encoding="utf-8",
     )
     RemotionHeroRenderBackend().render_batch(batch, log_path=run / "render.log")
-    ocr = shutil.which("tesseract")
-    for index in (5, 35, 65, 95):
-        raw = run / f"frame-{index}.raw"
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-ss",
-                f"{index / 30:.3f}",
-                "-i",
-                str(output),
-                "-frames:v",
-                "1",
-                "-f",
-                "rawvideo",
-                "-pix_fmt",
-                "rgb24",
-                str(raw),
-            ],
-            check=True,
-            capture_output=True,
-        )
-        frame = raw.read_bytes()
-        assert len(frame) == 1080 * 1920 * 3
-        assert _ink(frame, x0=0, y0=0, x1=64, y1=64) == 0
-        assert _ink(frame, x0=64, y0=1400, x1=1016, y1=1900) > 0
-    if ocr is None:
-        return
-    png = run / "frame-en.png"
-    subprocess.run(
-        ["ffmpeg", "-y", "-ss", "3.167", "-i", str(output), "-frames:v", "1", str(png)],
-        check=True,
-        capture_output=True,
+    _assert_decoded_captions(run, output, hero=True)
+    advanced_run = tmp_path / "advanced"
+    _media(advanced_run / "staging")
+    advanced_output = advanced_run / "candidates" / "cand-caption" / "advanced.mp4"
+    advanced_output.parent.mkdir(parents=True)
+    advanced_batch = advanced_run / "batch.json"
+    advanced_batch.write_text(
+        json.dumps(
+            {"items": [{"outputPath": str(advanced_output), "h264Crf": 23, "input": _advanced_input()}]}
+        ),
+        encoding="utf-8",
     )
-    completed = subprocess.run([ocr, str(png), "stdout", "-l", "eng"], capture_output=True, text=True)
-    if completed.returncode != 0:
-        pytest.fail(f"tesseract could not read the English caption: {completed.stderr}")
-    assert "hello" in completed.stdout.lower() or "12" in completed.stdout
+    from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
+
+    RemotionAdvancedRenderBackend().render_batch(advanced_batch, log_path=advanced_run / "render.log")
+    _assert_decoded_captions(advanced_run, advanced_output, hero=False)

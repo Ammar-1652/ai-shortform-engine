@@ -27,7 +27,10 @@ export function HeroDraft(raw: HeroDraftInput) {
   const scale = emphasisScale(input.motion_events, frame);
   const active = input.captions.find((item) => revealedCaption(item, frame).length > 0);
   const caption = active === undefined ? undefined : revealedCaption(active, frame);
-  const language = active?.language ?? input.language ?? "en-US";
+  const language = active?.language || input.language;
+  if (caption !== undefined && !language) {
+    throw new Error("hero caption is missing a locale");
+  }
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
@@ -46,7 +49,7 @@ export function HeroDraft(raw: HeroDraftInput) {
       </AbsoluteFill>
       {caption === undefined ? null : (
         <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
-          <CaptionPlate text={caption} language={language} />
+          <CaptionPlate text={caption} language={language ?? ""} />
         </AbsoluteFill>
       )}
     </AbsoluteFill>

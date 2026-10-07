@@ -336,12 +336,17 @@ def verify_campaign_run(database: Database, work_root: Path, campaign_run_id: st
     if document.alignment_provider == "whisperx":
         if not document.alignment_revision or not document.alignment_checkpoint_sha256:
             raise CampaignError("alignment identity is missing", code="alignment_missing")
+        from clipforge.language.providers import provider_for
+
+        current = provider_for(document.alignment_language)
+        if current.live_status != "verified_live":
+            raise CampaignError("alignment evidence is not current", code=current.live_status)
         if not alignment_identity_matches(
             revision=document.alignment_revision,
             checkpoint=document.alignment_checkpoint_sha256,
             language=document.alignment_language,
         ):
-            raise CampaignError("alignment model revision changed", code="model_revision_changed")
+            raise CampaignError("alignment model revision changed", code="stale_alignment")
     bound = [_bind_one(database, item.source_id) for item in document.sources]
     _reject_mixed(bound)
     for source, item in zip(document.sources, bound, strict=True):
@@ -1104,7 +1109,8 @@ def _alignment_facts(
         return "cross_project", digest, None, parsed.alignment_id
     if parsed.source_asset_id != binding.source_asset_id:
         return "cross_source", digest, None, parsed.alignment_id
-    from clipforge.language.providers import normalized_language, provider_for
+    from clipforge.language.evidence import validate_current_alignment_evidence
+    from clipforge.language.providers import normalized_language
 
     stored_locale = parsed.locale or "en-US"
     if language:
@@ -1112,13 +1118,17 @@ def _alignment_facts(
         stored = normalized_language(stored_locale)
         if requested and stored and requested != stored:
             return "stale_alignment", digest, None, parsed.alignment_id
-    record = provider_for(language or stored_locale)
-    if record.live_status != "verified_live" or parsed.model_name != record.model_id:
-        return "model_revision_changed", digest, None, parsed.alignment_id
-    if parsed.whisperx_version != record.provider_version:
-        return "model_revision_changed", digest, None, parsed.alignment_id
-    if parsed.checkpoint_sha256 and parsed.checkpoint_sha256 != record.checkpoint_sha256:
-        return "model_revision_changed", digest, None, parsed.alignment_id
+    evidence = validate_current_alignment_evidence(
+        document=parsed,
+        project_id=binding.project_id,
+        source_asset_id=binding.source_asset_id,
+        candidate_id=package.candidate_id,
+        source_sha256="",
+        file_sha256=digest,
+    )
+    if evidence.status != "verified_live":
+        blocker = evidence.blocker if evidence.blocker not in {"", "none"} else evidence.status
+        return blocker, digest, None, parsed.alignment_id
     transcript = _artifact_row(database, binding, "transcript_json")
     if transcript is None:
         return "alignment_changed", digest, None, parsed.alignment_id
