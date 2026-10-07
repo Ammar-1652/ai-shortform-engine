@@ -1218,6 +1218,7 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
     from clipforge.hero.advanced_assets import confine_work_path
 
     workspace = loaded.pair.workspace
+    hero = load_current_hero(database, source_asset_id, root)
     manifest = workspace.advanced_run_dir(document.advanced_set_id) / "manifest.json"
     manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
     if sha256_file(manifest) != _sidecar_digest(workspace):
@@ -1234,7 +1235,7 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
 
-        alignment_path = manifest.parent / "candidates" / draft.candidate_id / "alignment.json"
+        alignment_path = hero.manifest_path.parent / "candidates" / draft.candidate_id / "alignment.json"
         alignment_path = confine_work_path(
             root,
             alignment_path.relative_to(root).as_posix(),
