@@ -1224,6 +1224,9 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
         raise MediaError("advanced manifest hash does not match the sidecar")
     from clipforge.hero.advanced_assets import confine_work_path
 
+    from clipforge.language.evidence import validate_current_alignment_evidence
+    from clipforge.schemas.hero import ForcedAlignmentDocument
+
     for draft in document.drafts:
         video = manifest.parent / draft.preview_relative_path
         video = confine_work_path(root, video.relative_to(root).as_posix(), label="advanced output")
@@ -1231,6 +1234,29 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
             raise MediaError("advanced output is missing or a symlink")
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
+
+        alignment_path = workspace.hero_alignment_file(draft.candidate_id)
+        if alignment_path.is_symlink() or not alignment_path.is_file():
+            raise MediaError("advanced alignment is missing or a symlink")
+        if sha256_file(alignment_path) != draft.alignment_sha256:
+            raise MediaError("advanced alignment hash does not match the draft")
+        try:
+            alignment = ForcedAlignmentDocument.model_validate_json(
+                alignment_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError("advanced alignment is invalid") from exc
+        if alignment.alignment_status == "verified_live":
+            evidence = validate_current_alignment_evidence(
+                document=alignment,
+                candidate_id=draft.candidate_id,
+                source_asset_id=source_asset_id,
+                project_id=loaded.pair.source.project_id,
+                source_sha256=loaded.pair.manifest.content_sha256,
+                file_sha256=draft.alignment_sha256,
+            )
+            if evidence.status != "verified_live":
+                raise MediaError(evidence.blocker or evidence.status)
 
 
 def _load_current_document(
