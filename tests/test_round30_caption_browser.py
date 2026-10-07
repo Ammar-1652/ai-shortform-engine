@@ -125,9 +125,8 @@ def _advanced_input() -> dict[str, object]:
     }
 
 
-def _assert_decoded_captions(run: Path, output: Path, *, hero: bool) -> None:
-    """Decoded frames must show caption ink inside the safe area."""
-    del hero
+def _assert_decoded_captions(run: Path, output: Path, baseline: Path) -> None:
+    """Decoded frames must contain caption glyph changes against a caption-free render."""
     ocr = shutil.which("tesseract")
     packs = _tesseract_packs(ocr)
     frames = {
@@ -138,17 +137,17 @@ def _assert_decoded_captions(run: Path, output: Path, *, hero: bool) -> None:
     }
     for index, (label, token, pack) in frames.items():
         frame = _decode_frame(output, run / f"frame-{index}.raw", index)
+        clean = _decode_frame(baseline, run / f"clean-frame-{index}.raw", index)
         assert _ink(frame, x0=0, y0=0, x1=64, y1=64) == 0
         assert _ink(frame, x0=1016, y0=0, x1=1080, y1=64) == 0
-        band = _samples(frame, x0=64, y0=1400, x1=1016, y1=1900)
-        assert band
-        assert sum(band) > 0
-        mean = sum(band) / len(band)
-        variance = sum((item - mean) ** 2 for item in band) / len(band)
-        assert variance > 20, f"{label} caption is blank or a flat rectangle"
+        changed, bright = _caption_changes(frame, clean)
+        area = (1016 - 64) * (1900 - 1400)
+        assert changed > 100, f"{label} caption produced no decoded glyph changes"
+        assert changed < area // 2, f"{label} caption changed a solid panel instead of text"
+        assert bright > 100, f"{label} caption has no bright decoded glyphs"
         if label == "ar":
-            left = _ink(frame, x0=64, y0=1400, x1=540, y1=1900)
-            right = _ink(frame, x0=540, y0=1400, x1=1016, y1=1900)
+            left, _ = _caption_changes(frame, clean, x0=64, x1=540)
+            right, _ = _caption_changes(frame, clean, x0=540, x1=1016)
             assert right > left
         if ocr and pack in packs:
             png = run / f"frame-{label}.png"
@@ -219,6 +218,30 @@ def _ink(frame: bytes, *, x0: int, y0: int, x1: int, y1: int, width: int = 1080)
             total += frame[offset] + frame[offset + 1] + frame[offset + 2]
     return total
 
+def _caption_changes(
+    frame: bytes,
+    baseline: bytes,
+    *,
+    x0: int = 64,
+    y0: int = 1400,
+    x1: int = 1016,
+    y1: int = 1900,
+    width: int = 1080,
+) -> tuple[int, int]:
+    changed = 0
+    bright = 0
+    for y in range(y0, y1):
+        row = y * width * 3
+        for x in range(x0, x1):
+            offset = row + x * 3
+            current = frame[offset] + frame[offset + 1] + frame[offset + 2]
+            before = baseline[offset] + baseline[offset + 1] + baseline[offset + 2]
+            if abs(current - before) > 18:
+                changed += 1
+            if current - before > 90:
+                bright += 1
+    return changed, bright
+
 
 def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_path: Path) -> None:
     try:
@@ -243,8 +266,17 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
         json.dumps({"items": [{"outputPath": str(output), "h264Crf": 23, "input": _input()}]}),
         encoding="utf-8",
     )
-    RemotionHeroRenderBackend().render_batch(batch, log_path=run / "render.log")
-    _assert_decoded_captions(run, output, hero=True)
+    hero_backend = RemotionHeroRenderBackend()
+    hero_backend.render_batch(batch, log_path=run / "render.log")
+    baseline_output = run / "candidates" / "cand-caption" / "hero-without-captions.mp4"
+    caption_free = _input()
+    caption_free["captions"] = []
+    batch.write_text(
+        json.dumps({"items": [{"outputPath": str(baseline_output), "h264Crf": 23, "input": caption_free}]}),
+        encoding="utf-8",
+    )
+    hero_backend.render_batch(batch, log_path=run / "baseline-render.log")
+    _assert_decoded_captions(run, output, baseline_output)
     advanced_run = tmp_path / "advanced"
     _media(advanced_run / "staging")
     advanced_output = advanced_run / "candidates" / "cand-caption" / "advanced.mp4"
@@ -258,5 +290,26 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
     )
     from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 
-    RemotionAdvancedRenderBackend().render_batch(advanced_batch, log_path=advanced_run / "render.log")
-    _assert_decoded_captions(advanced_run, advanced_output, hero=False)
+    advanced_backend = RemotionAdvancedRenderBackend()
+    advanced_backend.render_batch(advanced_batch, log_path=advanced_run / "render.log")
+    advanced_baseline = (
+        advanced_run / "candidates" / "cand-caption" / "advanced-without-captions.mp4"
+    )
+    advanced_caption_free = _advanced_input()
+    advanced_caption_free["typography"] = []
+    advanced_batch.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "outputPath": str(advanced_baseline),
+                        "h264Crf": 23,
+                        "input": advanced_caption_free,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    advanced_backend.render_batch(advanced_batch, log_path=advanced_run / "baseline-render.log")
+    _assert_decoded_captions(advanced_run, advanced_output, advanced_baseline)
