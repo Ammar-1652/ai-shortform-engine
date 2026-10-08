@@ -1,5 +1,92 @@
 {
   "$defs": {
+    "DirectionAssetPlacement": {
+      "additionalProperties": false,
+      "description": "A reviewed, source-grounded placement for one local asset.\n\nAsset timing is never inferred from the number of assets. The selected\noption must name the exact output interval, the source evidence that makes\nthe asset relevant, and a plain-language editorial reason. The renderer\nconsumes this declarative record; it cannot execute operator code.",
+      "properties": {
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "gain_db": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "minimum": -24,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gain Db"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "kind": {
+          "enum": [
+            "graphic",
+            "audio"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "placement_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Placement Id",
+          "type": "string"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "relevance_note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Relevance Note",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "source_in_us": {
+          "default": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source In Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "placement_id",
+        "asset_id",
+        "kind",
+        "interval",
+        "source_evidence_ids",
+        "purpose",
+        "relevance_note"
+      ],
+      "title": "DirectionAssetPlacement",
+      "type": "object"
+    },
     "DirectionBeat": {
       "additionalProperties": false,
       "description": "One hook/body/punch beat. Text is copied from the source evidence.",
@@ -177,11 +264,66 @@
       ],
       "title": "DirectionEvidence",
       "type": "object"
+    },
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "description": "One source-grounded direction alternative presented to the selector.",
   "properties": {
+    "asset_placements": {
+      "items": {
+        "$ref": "#/$defs/DirectionAssetPlacement"
+      },
+      "maxItems": 12,
+      "title": "Asset Placements",
+      "type": "array"
+    },
     "beats": {
       "items": {
         "$ref": "#/$defs/DirectionBeat"

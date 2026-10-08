@@ -52,13 +52,19 @@ type BrollEvent = {
   asset_id?: string;
   interval?: Interval;
   broll_source_in_us?: number;
+  source_evidence_ids?: string[];
+  relevance_note?: string;
 };
 
 type SfxEvent = {
   asset_id?: string;
   interval?: Interval;
   gain_db?: number;
+  sfx_source_in_us?: number;
   role?: string;
+  source_evidence_ids?: string[];
+  purpose?: string;
+  relevance_note?: string;
 };
 
 type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: number };
@@ -86,6 +92,14 @@ export type AdvancedHeroInput = {
     | "paper-explainer-v1"
     | "premium-minimal-v1";
   style_fingerprint?: string;
+  direction_id?: string;
+  direction_sha256?: string;
+  profile_fingerprint?: string;
+  alignment_sha256?: string;
+  hero_plan_sha256?: string;
+  advanced_plan_sha256?: string;
+  time_map_sha256?: string;
+  source_sha256?: string;
   motion_style?: MotionStyle;
   reframing_strategy?: string;
   base_video_name?: string;
@@ -120,7 +134,10 @@ function frameAt(microseconds: number | undefined): number {
 
 function active(frame: number, interval: Interval | undefined): boolean {
   const start = frameAt(interval?.output_start_us);
-  const end = frameAt(interval?.output_end_us);
+  // A positive cue shorter than one output frame still owns the frame that
+  // contains its start. This preserves the half-open interval while avoiding
+  // an invisible one-word caption after integer frame conversion.
+  const end = Math.max(start + 1, frameAt(interval?.output_end_us));
   return frame >= start && frame < end;
 }
 
@@ -188,6 +205,33 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   }
   if (style !== "legacy-v1" && !/^[0-9a-f]{64}$/.test(input.style_fingerprint ?? "")) {
     throw new Error(`${style} requires a style fingerprint`);
+  }
+  if (style !== "legacy-v1") {
+    for (const [key, value] of Object.entries({
+      profile_fingerprint: input.profile_fingerprint,
+      alignment_sha256: input.alignment_sha256,
+      hero_plan_sha256: input.hero_plan_sha256,
+      advanced_plan_sha256: input.advanced_plan_sha256,
+      time_map_sha256: input.time_map_sha256,
+      source_sha256: input.source_sha256,
+    })) {
+      if (!/^[0-9a-f]{64}$/.test(value ?? "")) {
+        throw new Error(`production advanced render requires ${key}`);
+      }
+    }
+    if (!input.direction_id || !/^[0-9a-f]{64}$/.test(input.direction_sha256 ?? "")) {
+      throw new Error("production advanced render requires a persisted direction binding");
+    }
+    for (const event of input.broll ?? []) {
+      if (!event.source_evidence_ids?.length || !event.relevance_note?.trim()) {
+        throw new Error("production B-roll requires source evidence and relevance");
+      }
+    }
+    for (const event of input.sfx ?? []) {
+      if (!event.source_evidence_ids?.length || !event.relevance_note?.trim() || !event.purpose) {
+        throw new Error("production SFX requires source evidence, purpose, and relevance");
+      }
+    }
   }
   if (input.motion_style && input.motion_style.style_id !== style) {
     throw new Error("motion style payload does not match style_id");
@@ -320,7 +364,11 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         const window = span(item.interval);
         return (
           <Sequence key={`sfx-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
-            <Audio src={staticFile(name)} volume={linearVolume(item.gain_db ?? 0)} />
+            <Audio
+              src={staticFile(name)}
+              trimBefore={frameAt(item.sfx_source_in_us)}
+              volume={linearVolume(item.gain_db ?? 0)}
+            />
           </Sequence>
         );
       })}

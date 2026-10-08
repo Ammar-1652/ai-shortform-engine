@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path, require_asset
+from clipforge.hero.advanced_service import _require_usable_audio
 from clipforge.hero.constants import DURATION_TOLERANCE_US, OUTPUT_HEIGHT, OUTPUT_WIDTH
 from clipforge.hero.motion_style import style_for_id
 from clipforge.hero.probe import probe_hero
@@ -54,6 +55,7 @@ def technical_checks(inputs: TechnicalInputs) -> list[QACheck]:
         _manifest(inputs),
         _media(inputs),
         _probe(inputs),
+        _audio(inputs),
         _intervals(inputs),
         _producers(inputs),
         _remote(inputs),
@@ -159,6 +161,38 @@ def _probe(inputs: TechnicalInputs) -> QACheck:
             f"tolerance_us {DURATION_TOLERANCE_US}"
         )
     return _check("media-probe", True, "; ".join(facts))
+
+
+def _audio(inputs: TechnicalInputs) -> QACheck:
+    """Re-measure encoded audio so an old or manually replaced MP4 cannot pass on duration alone."""
+    problems: list[str] = []
+    profile = inputs.document.profile
+    for draft in inputs.document.drafts:
+        lexical = (
+            inputs.workspace.advanced_run_dir(inputs.document.advanced_set_id) / draft.preview_relative_path
+        )
+        try:
+            path = confine_work_path(
+                inputs.root,
+                lexical.relative_to(inputs.root).as_posix(),
+                label="advanced audio",
+            )
+            _require_usable_audio(
+                path,
+                path.parent / f"{draft.candidate_id}.qa-audio.log",
+                target_lufs=profile.audio_loudness_lufs,
+                true_peak_limit=profile.audio_true_peak_dbfs,
+            )
+        except (MediaError, OSError) as exc:
+            problems.append(f"candidate {draft.candidate_id} {str(exc).replace(str(inputs.root), 'work')}")
+    if problems:
+        return _check("audio-loudness", False, "; ".join(problems))
+    return _check(
+        "audio-loudness",
+        True,
+        f"encoded audio is within {profile.audio_loudness_lufs:.1f} LUFS and "
+        f"{profile.audio_true_peak_dbfs:.1f} dBFS true-peak policy",
+    )
 
 
 def _intervals(inputs: TechnicalInputs) -> QACheck:
@@ -290,6 +324,12 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
     lines: list[str] = []
     for plan in inputs.plans:
         if not plan.direction_id:
+            if inputs.document.profile.renderer_recipe_version == "advanced-hero-renderer-directed-v2":
+                return _check(
+                    "direction",
+                    False,
+                    f"candidate={plan.candidate_id} blocker=direction_missing_for_clean_production",
+                )
             lines.append(f"candidate={plan.candidate_id} direction=none")
             continue
         path = inputs.workspace.direction_file(plan.candidate_id)
@@ -309,6 +349,48 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
             or style.fingerprint() != plan.style_fingerprint
         ):
             return _check("direction", False, f"candidate={plan.candidate_id} blocker=style_stale")
+        selected = next(
+            (option for option in direction.options if option.option_id == direction.selected_option_id),
+            None,
+        )
+        if selected is None:
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=selection_missing")
+        expected_broll = [item for item in selected.asset_placements if item.kind == "graphic"]
+        expected_sfx = [item for item in selected.asset_placements if item.kind == "audio"]
+        if len(plan.broll) != len(expected_broll) or any(
+            event.asset_id != placement.asset_id
+            or event.interval != placement.interval
+            or event.broll_source_in_us != placement.source_in_us
+            or event.source_evidence_ids != placement.source_evidence_ids
+            or event.relevance_note != placement.relevance_note
+            for event, placement in zip(plan.broll, expected_broll, strict=True)
+        ):
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=broll_placement_stale")
+        if len(plan.sfx) != len(expected_sfx) or any(
+            event.asset_id != placement.asset_id
+            or event.interval != placement.interval
+            or event.sfx_source_in_us != placement.source_in_us
+            or event.source_evidence_ids != placement.source_evidence_ids
+            or event.purpose != placement.purpose
+            or event.relevance_note != placement.relevance_note
+            for event, placement in zip(plan.sfx, expected_sfx, strict=True)
+        ):
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=sfx_placement_stale")
+        if any(not event.source_evidence_ids or not event.relevance_note for event in plan.broll):
+            return _check(
+                "direction",
+                False,
+                f"candidate={plan.candidate_id} blocker=broll_relevance_missing",
+            )
+        if any(
+            not event.source_evidence_ids or not event.relevance_note or event.purpose is None
+            for event in plan.sfx
+        ):
+            return _check(
+                "direction",
+                False,
+                f"candidate={plan.candidate_id} blocker=sfx_relevance_missing",
+            )
         lines.append(
             f"candidate={plan.candidate_id} direction_sha256={plan.direction_sha256} "
             f"style={plan.style_id} style_fingerprint={plan.style_fingerprint} "

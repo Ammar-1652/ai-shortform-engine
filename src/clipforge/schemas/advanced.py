@@ -177,6 +177,13 @@ class AudioMixEvent(Versioned):
     asset_id: EntityId
     role: Literal["sfx"] = "sfx"
     gain_db: float = Field(ge=-24, le=6)
+    sfx_source_in_us: Microseconds = Field(default=0, ge=0)
+    # A clean production plan must bind a sound effect to source-grounded
+    # evidence. Empty values are retained only so older immutable plans remain
+    # readable; the production render gate rejects them.
+    source_evidence_ids: list[EntityId] = Field(default_factory=list)
+    purpose: MotionPurpose | None = None
+    relevance_note: str = Field(default="", max_length=500)
 
 
 class EmphasisEvent(Versioned):
@@ -220,9 +227,9 @@ class AdvancedHeroProfile(Versioned):
     diagram_version: Literal["advanced-diagram-v1", "advanced-diagram-grounded-v1"] = (
         "advanced-diagram-grounded-v1"
     )
-    renderer_recipe_version: Literal["advanced-hero-renderer-v1", "advanced-hero-renderer-clean-v1"] = (
-        "advanced-hero-renderer-clean-v1"
-    )
+    renderer_recipe_version: Literal[
+        "advanced-hero-renderer-v1", "advanced-hero-renderer-clean-v1", "advanced-hero-renderer-directed-v2"
+    ] = "advanced-hero-renderer-clean-v1"
     motion_library_version: Literal["advanced-motion-v1", "advanced-motion-clean-v1"] = (
         "advanced-motion-clean-v1"
     )

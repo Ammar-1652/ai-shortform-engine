@@ -80,6 +80,27 @@ for (const item of batch.items) {
     if (input.motion_style && input.motion_style.style_id !== input.style_id) {
       throw new Error("motion style payload does not match style_id");
     }
+    const sha = /^[0-9a-f]{64}$/;
+    for (const key of [
+      "profile_fingerprint",
+      "alignment_sha256",
+      "hero_plan_sha256",
+      "advanced_plan_sha256",
+      "time_map_sha256",
+      "source_sha256",
+    ]) {
+      if (typeof input[key] !== "string" || !sha.test(input[key])) {
+        throw new Error(`production advanced render requires ${key}`);
+      }
+    }
+    if (
+      typeof input.direction_id !== "string" ||
+      input.direction_id.length === 0 ||
+      typeof input.direction_sha256 !== "string" ||
+      !sha.test(input.direction_sha256)
+    ) {
+      throw new Error("production advanced render requires a persisted direction binding");
+    }
   }
   for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
     const component = typeof event?.component_id === "string" ? event.component_id.toLowerCase() : "";
@@ -122,6 +143,27 @@ for (const item of batch.items) {
       (event.gain_db < -24 || event.gain_db > 6)
     ) {
       throw new Error("SFX gain_db must be between -24 and 6");
+    }
+    if (input.style_id !== "legacy-v1") {
+      if (!Array.isArray(event?.source_evidence_ids) || event.source_evidence_ids.length === 0) {
+        throw new Error("production SFX requires source evidence");
+      }
+      if (typeof event?.relevance_note !== "string" || event.relevance_note.trim().length === 0) {
+        throw new Error("production SFX requires a relevance note");
+      }
+      if (typeof event?.purpose !== "string" || event.purpose.length === 0) {
+        throw new Error("production SFX requires a motion purpose");
+      }
+    }
+  }
+  for (const event of input.broll ?? []) {
+    if (input.style_id !== "legacy-v1") {
+      if (!Array.isArray(event?.source_evidence_ids) || event.source_evidence_ids.length === 0) {
+        throw new Error("production B-roll requires source evidence");
+      }
+      if (typeof event?.relevance_note !== "string" || event.relevance_note.trim().length === 0) {
+        throw new Error("production B-roll requires a relevance note");
+      }
     }
   }
   const raw = JSON.stringify(input);

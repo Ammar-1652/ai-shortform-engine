@@ -12,6 +12,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
 
 _SHA = r"^[0-9a-f]{64}$"
@@ -96,6 +97,26 @@ class DirectionBeat(Versioned):
         return self
 
 
+class DirectionAssetPlacement(Versioned):
+    """A reviewed, source-grounded placement for one local asset.
+
+    Asset timing is never inferred from the number of assets. The selected
+    option must name the exact output interval, the source evidence that makes
+    the asset relevant, and a plain-language editorial reason. The renderer
+    consumes this declarative record; it cannot execute operator code.
+    """
+
+    placement_id: EntityId
+    asset_id: EntityId
+    kind: Literal["graphic", "audio"]
+    interval: OutputInterval
+    source_in_us: Microseconds = Field(default=0, ge=0)
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    purpose: MotionPurpose
+    relevance_note: str = Field(min_length=1, max_length=500)
+    gain_db: float | None = Field(default=None, ge=-24, le=6)
+
+
 class DirectionOption(Versioned):
     """One source-grounded direction alternative presented to the selector."""
 
@@ -104,6 +125,7 @@ class DirectionOption(Versioned):
     title: str = Field(min_length=1, max_length=120)
     beats: list[DirectionBeat] = Field(min_length=3, max_length=12)
     evidence: list[DirectionEvidence] = Field(min_length=1)
+    asset_placements: list[DirectionAssetPlacement] = Field(default_factory=list, max_length=12)
     segment_order: list[EntityId] = Field(min_length=1)
     selection_score: float = Field(ge=0, le=1)
     selection_reason: str = Field(min_length=1, max_length=500)
@@ -120,6 +142,18 @@ class DirectionOption(Versioned):
             raise ValueError("direction beat ids must be unique")
         if any(evidence_id not in evidence_ids for beat in self.beats for evidence_id in beat.evidence_ids):
             raise ValueError("every beat evidence id must be declared by the option")
+        placement_ids = [placement.placement_id for placement in self.asset_placements]
+        if len(set(placement_ids)) != len(placement_ids):
+            raise ValueError("direction asset placement ids must be unique")
+        if any(
+            evidence_id not in evidence_ids
+            for placement in self.asset_placements
+            for evidence_id in placement.source_evidence_ids
+        ):
+            raise ValueError("every asset placement evidence id must be declared by the option")
+        for placement in self.asset_placements:
+            if placement.kind == "graphic" and placement.gain_db is not None:
+                raise ValueError("graphic placement cannot declare an audio gain")
         if len(set(self.segment_order)) != len(self.segment_order):
             raise ValueError("direction segment order cannot repeat a segment")
         return self

@@ -73,6 +73,7 @@
     "MotionStyleSpec",
     "DirectionEvidence",
     "DirectionBeat",
+    "DirectionAssetPlacement",
     "DirectionOption",
     "DirectionDocument",
     "CandidateEvidence",

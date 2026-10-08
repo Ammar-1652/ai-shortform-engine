@@ -10,7 +10,7 @@ Reframing strategies include `contain` and the opt-in `face_follow`. `contain` i
 
 ## Plan and render
 
-`clipforge hero advanced plan` reads the current approved Hero review, forced alignment, Hero plan, visual analysis, and local assets. `clipforge hero advanced render` writes `advanced_hero_draft_set_json` through `RemotionAdvancedRenderBackend`. The CLI does not accept a test encoder. Unit tests pass `FakeAdvancedRenderBackend` explicitly. Candidates stay in Hero manifest rank order. Overlapping B-roll and overlapping typography fail planning.
+`clipforge hero advanced plan` reads the current approved Hero review, forced alignment, Hero plan, visual analysis, and local assets. A clean production plan also requires the persisted direction brief. `clipforge hero advanced render` writes `advanced_hero_draft_set_json` through `RemotionAdvancedRenderBackend`. The CLI does not accept a test encoder. Unit tests pass `FakeAdvancedRenderBackend` explicitly. Candidates stay in Hero manifest rank order. Overlapping B-roll and overlapping typography fail planning.
 
 ## Direction and style presets
 
@@ -54,12 +54,17 @@ it collides with a higher-priority layer; it cannot move captions or the source
 subject outside the safe region. Presets do not select a new excerpt, reorder
 speech, add a CTA, or manufacture a hook/punch. Direction beats are editorial
 labels; canonical forced-alignment cues remain the only caption timing source.
+B-roll and SFX are never evenly spaced: a selected option must carry an
+explicit `DirectionAssetPlacement` with source evidence, purpose, relevance
+note, and an output-clock interval. Passing only asset ids creates an explicitly
+marked legacy event that QA and Remotion reject for clean production. A
+direction may omit both asset types when the source does not need them.
 
 Before a render job is inserted, every stored plan is checked against the current source, candidate set, rough preview, Hero artifact, Hero approval, alignment, Hero plan, visual analysis, TimeMap, asset hashes, and rights. A stale or revoked binding fails closed and does not publish a sidecar.
 
 Asset paths are checked lexically before `Path.resolve()`. A symlink at the file or at a parent directory is rejected, including a symlink whose target has the expected hash. Absolute paths, `..`, backslashes, and file URIs outside the work root are rejected. The same check covers cache validation, staging, rendering, and media serving.
 
-The production composition uses `contain` and the neutral-dark background `#111111` unless the stored plan is `face_follow`. `face_follow` places the stored crop and does not use `objectFit: cover`. Other unsupported strategies fail before the job. B-roll keeps its output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB and plays on the declared interval. Music is rejected.
+The production composition uses `contain` over a deliberate blurred full-frame background (not accidental black bars) and the neutral-dark fallback `#111111` unless the stored plan is `face_follow` or `center_crop`. `face_follow` places the stored crop and does not use `objectFit: cover`; `center_crop` uses its explicit portrait crop. Other unsupported strategies fail before the job. B-roll keeps its reviewed output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB, trims from its declared asset in-point, and plays on the declared interval. Music is rejected. After rendering, ffmpeg `ebur128=peak=true` must measure within 1.5 LU of the -16 LUFS target and below -1.5 dBTP; near-silent or clipped output fails before an artifact is committed. Picture and speech are staged from identical ordered TimeMap ranges.
 
 ## Review
 

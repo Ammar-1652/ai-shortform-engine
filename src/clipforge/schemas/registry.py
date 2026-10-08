@@ -92,6 +92,7 @@ from clipforge.schemas.candidates import (
     QualityWeights,
 )
 from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
     DirectionBeat,
     DirectionDocument,
     DirectionEvidence,
@@ -325,6 +326,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     MotionStyleSpec,
     DirectionEvidence,
     DirectionBeat,
+    DirectionAssetPlacement,
     DirectionOption,
     DirectionDocument,
     CandidateEvidence,

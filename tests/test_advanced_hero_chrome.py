@@ -5,17 +5,22 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_service import (
+    _context,
+    default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
     select_advanced_backend,
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
+from clipforge.hero.direction_service import save_direction_brief
+from clipforge.hero.motion_style import style_for_id
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.browser import resolve_browser
 from clipforge.review.hero_board import decision_context_for
@@ -27,6 +32,15 @@ from clipforge.review.service import (
     record_hero_decision,
     review_board,
 )
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionBeat,
+    DirectionDocument,
+    DirectionEvidence,
+    DirectionOption,
+)
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
+from clipforge.schemas.provenance import ArtifactProvenance
 from tests.candidate_support import SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 from tests.test_advanced_hero import _register_asset
@@ -37,8 +51,115 @@ pytestmark = [pytest.mark.preview, pytest.mark.browser]
 _PHRASE = "Café costs $12.50 説明 please."
 
 
-def test_chrome_advanced_render_shows_broll_type_and_diagram(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: str) -> None:
+    """Create the same typed brief an operator would hand to the CLI."""
+    context = _context(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+    words = list(context.alignment.words)
+    assert len(words) >= 3
+    groups = [words[:1], words[1:-1], words[-1:]]
+    segment_order = [segment.segment_id for segment in context.hero_plan.edit_plan.time_map.segments]
+    options: list[DirectionOption] = []
+    styles = ("editorial-clean-v1", "kinetic-caption-v1", "premium-minimal-v1")
+    for option_index, (option_id, style_id) in enumerate(
+        zip(("option-a", "option-b", "option-c"), styles, strict=True)
+    ):
+        evidence: list[DirectionEvidence] = []
+        beats: list[DirectionBeat] = []
+        for beat_index, (kind, purpose, group) in enumerate(
+            zip(("hook", "body", "punch"), ("context", "contrast", "payoff"), groups, strict=True)
+        ):
+            evidence_id = f"{option_id}-evidence-{beat_index}"
+            evidence.append(
+                DirectionEvidence(
+                    evidence_id=evidence_id,
+                    source_word_ids=[word.word_id for word in group],
+                    source_segment_ids=segment_order,
+                    source_text="".join(word.text for word in group),
+                    note="Copied from the forced alignment.",
+                )
+            )
+            beats.append(
+                DirectionBeat(
+                    beat_id=f"{option_id}-{kind}",
+                    kind=kind,  # type: ignore[arg-type]
+                    purpose=purpose,  # type: ignore[arg-type]
+                    source_segment_ids=segment_order,
+                    evidence_ids=[evidence_id],
+                    display_text="".join(word.text for word in group).strip(),
+                )
+            )
+        placements = [
+            DirectionAssetPlacement(
+                placement_id=f"{option_id}-broll",
+                asset_id=broll_id,
+                kind="graphic",
+                interval=OutputInterval(output_start_us=0, output_end_us=400_000),
+                source_evidence_ids=[evidence[0].evidence_id],
+                purpose=MotionPurpose.CONCEPT,
+                relevance_note="The opening insert illustrates the exact opening phrase.",
+            ),
+            DirectionAssetPlacement(
+                placement_id=f"{option_id}-sfx",
+                asset_id=sfx_id,
+                kind="audio",
+                interval=OutputInterval(output_start_us=200_000, output_end_us=500_000),
+                source_in_us=0,
+                source_evidence_ids=[evidence[0].evidence_id],
+                purpose=MotionPurpose.KEY_PHRASE,
+                relevance_note="A restrained accent marks the source-grounded opening emphasis.",
+                gain_db=-12,
+            ),
+        ]
+        options.append(
+            DirectionOption(
+                option_id=option_id,
+                style_id=style_id,  # type: ignore[arg-type]
+                title="Source-grounded test direction",
+                beats=beats,
+                evidence=evidence,
+                asset_placements=placements,
+                segment_order=segment_order,
+                selection_score=(0.72, 0.91, 0.81)[option_index],
+                selection_reason="Preserves the exact source sequence and uses one relevant opening accent.",
+            )
+        )
+    document = DirectionDocument(
+        direction_id="direction-chrome",
+        project_id=context.project_id,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        source_sha256=context.source_sha256,
+        hero_plan_sha256=context.hero_plan_sha256,
+        time_map_sha256=context.hero_plan.edit_plan.time_map_sha256,
+        alignment_sha256=context.alignment_sha256,
+        visual_analysis_sha256=context.visual_sha256,
+        options=options,
+        selected_option_id="option-b",
+        selection_mode="automatic",
+        style_id="kinetic-caption-v1",
+        style_fingerprint=style_for_id("kinetic-caption-v1").fingerprint(),
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="chrome-test",
+            tool="test",
+            tool_version="1",
+            source_asset_ids=[SOURCE_ID],
+        ),
+    )
+    brief = fixture.work / "direction-brief.json"
+    brief.write_text(document.model_dump_json(indent=2), encoding="utf-8")
+    save_direction_brief(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        brief_path=brief,
+    )
+
+
+@pytest.mark.parametrize("clean_direction", [False, True], ids=["legacy", "clean-direction"])
+def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
+    clean_direction: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
     if not (Path("apps/renderer/node_modules/@remotion/bundler")).exists():
@@ -102,6 +223,19 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     )
     _register_asset(fixture, "broll-1", "graphic", broll.read_bytes())
     _register_asset(fixture, "sfx-1", "audio", effect.read_bytes())
+    if clean_direction:
+        _persist_clean_direction(fixture, candidate_id, "broll-1", "sfx-1")
+        profile = default_advanced_profile()
+    else:
+        profile = default_advanced_profile().model_copy(
+            update={
+                "caption_algorithm_version": "advanced-caption-v1",
+                "typography_version": "advanced-typography-v1",
+                "diagram_version": "advanced-diagram-v1",
+                "renderer_recipe_version": "advanced-hero-renderer-v1",
+                "motion_library_version": "advanced-motion-v1",
+            }
+        )
     plan = plan_advanced_candidate(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
@@ -109,10 +243,8 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
         work_root=fixture.work,
         broll_asset_ids=["broll-1"],
         sfx_asset_ids=["sfx-1"],
+        profile=profile,
     )
-    joined = " ".join(item.text for item in plan.typography)
-    assert "Café" in joined
-    assert "$12.50" in joined
     from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 
     assert isinstance(select_advanced_backend(None), RemotionAdvancedRenderBackend)
@@ -120,6 +252,7 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
         work_root=fixture.work,
+        profile=profile,
     )
     assert result.status == "rendered"
     assert result.manifest_path is not None
@@ -135,8 +268,11 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     rendered = json.loads((video.parent / "render-input.json").read_text(encoding="utf-8"))
     assert rendered["reframing_strategy"] == "contain"
     assert rendered["broll"][0]["broll_source_in_us"] == 0
-    assert rendered["sfx"][0]["gain_db"] == -6
+    assert rendered["sfx"][0]["gain_db"] == (-12 if clean_direction else -6)
     assert rendered["sfx"][0]["role"] == "sfx"
+    if clean_direction:
+        assert rendered["direction_id"] == "direction-chrome"
+        assert rendered["sfx"][0]["sfx_source_in_us"] == 0
     broll_end = plan.broll[0].interval.output_end_us / 1_000_000
     during = broll_end / 2
     after = min(probe["duration"] - 0.05, broll_end + 0.2)

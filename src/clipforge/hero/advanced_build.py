@@ -30,7 +30,7 @@ from clipforge.schemas.advanced import (
     TypographyEvent,
     advanced_fingerprint,
 )
-from clipforge.schemas.direction import DirectionDocument
+from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -105,15 +105,23 @@ def build_advanced_plan(
     )
     emphasis = _emphasis(alignment, candidate_id)
     captions = _captions(alignment, candidate_id)
-    typography = (
-        _directed_typography(direction, alignment, candidate_id)
-        if direction is not None
-        else _typography(alignment, emphasis, candidate_id)
-    )
+    if direction is not None:
+        typography = _directed_typography(direction, alignment, candidate_id)
+        typography = _drop_caption_duplicates(typography, captions)
+    elif profile.renderer_recipe_version == "advanced-hero-renderer-v1":
+        # Preserve immutable Round-30 behavior only when an operator
+        # explicitly selects the legacy recipe. Clean production never
+        # invents a hook/punch from word positions or non-ASCII heuristics.
+        typography = _typography(alignment, emphasis, candidate_id)
+    else:
+        typography = []
     # A diagram is editorial evidence, not a decoration.  Until an operator
     # supplies a source-grounded diagram instruction, the safe plan is none.
     diagrams: list[DiagramEvent] = []
     assets: list[AssetBinding] = []
+    selected_placements = _selected_asset_placements(direction)
+    broll_placements = [item for item in selected_placements if item.kind == "graphic"]
+    sfx_placements = [item for item in selected_placements if item.kind == "audio"]
     broll = _broll(
         database,
         workspace,
@@ -123,6 +131,7 @@ def build_advanced_plan(
         duration_us,
         broll_asset_ids,
         assets,
+        broll_placements,
     )
     sfx = _sfx(
         database,
@@ -134,6 +143,7 @@ def build_advanced_plan(
         sfx_asset_ids,
         assets,
         profile,
+        sfx_placements,
     )
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
     motion_style = (
@@ -210,6 +220,13 @@ def _require_forced(alignment: ForcedAlignmentDocument) -> None:
         raise MediaError("advanced plan refuses provisional timing")
 
 
+def _selected_asset_placements(direction: DirectionDocument | None) -> list[DirectionAssetPlacement]:
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.asset_placements)
+
+
 def _emphasis(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[EmphasisEvent]:
     events: list[EmphasisEvent] = []
     for word in alignment.words:
@@ -269,10 +286,10 @@ def _directed_typography(
                 event_id=stable_id("direction-type", candidate_id, direction.direction_id, beat.beat_id),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 purpose=MotionPurpose.KEY_PHRASE,
-                component_id="typography-card-v1",
+                component_id=f"{beat.kind}-card-v1",
                 text=beat.display_text,
                 x=72,
-                y=220,
+                y=220 if beat.kind == "hook" else 1450 if beat.kind == "punch" else 360,
                 font_size=64,
             )
         )
@@ -373,6 +390,30 @@ def _typography(
             )
         )
     return events
+
+
+def _drop_caption_duplicates(
+    typography: list[TypographyEvent], captions: list[TypographyEvent]
+) -> list[TypographyEvent]:
+    """Keep optional cards separate from baseline captions.
+
+    A direction may use a transcript phrase as evidence without asking for a
+    second painted copy. Exact normalized text and overlapping output timing
+    are sufficient to identify that duplicate deterministically.
+    """
+    kept: list[TypographyEvent] = []
+    caption_text = [(re.sub(r"\s+", " ", item.text).strip().casefold(), item.interval) for item in captions]
+    for event in typography:
+        normalized = re.sub(r"\s+", " ", event.text).strip().casefold()
+        duplicate = any(
+            (normalized == text or normalized in text or text in normalized)
+            and event.interval.output_start_us < interval.output_end_us
+            and interval.output_start_us < event.interval.output_end_us
+            for text, interval in caption_text
+        )
+        if not duplicate:
+            kept.append(event)
+    return kept
 
 
 def _phrase(words: list[AlignedWord]) -> str:
@@ -617,8 +658,18 @@ def _broll(
     duration_us: int,
     asset_ids: list[str],
     assets: list[AssetBinding],
+    placements: list[DirectionAssetPlacement] | None = None,
 ) -> list[BrollEvent]:
     events: list[BrollEvent] = []
+    if placements:
+        placement_ids = [item.asset_id for item in placements]
+        if asset_ids and asset_ids != placement_ids:
+            raise MediaError("B-roll asset ids do not match the reviewed direction placements")
+        asset_ids = placement_ids
+    elif asset_ids:
+        # Keep old documents readable, but make the unsafe behavior explicit
+        # in the event. The browser production gate rejects these events.
+        placements = None
     slot = max(1, duration_us // (len(asset_ids) + 1)) if asset_ids else duration_us
     for index, asset_id in enumerate(asset_ids):
         entry, license_record, _path = require_asset(
@@ -629,17 +680,36 @@ def _broll(
             expected_kind="graphic",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record, slot="graphic"))
-        start = min(duration_us - 2, index * slot)
-        end = min(duration_us, start + max(1, slot // 2))
+        if not any(item.asset_id == asset_id for item in assets):
+            assets.append(binding_for(entry, license_record, slot="graphic"))
+        # Placement order is part of the declarative direction contract.  Do
+        # not look up by asset id: one asset may intentionally be reused at
+        # different output times or source in-points.
+        placement = (placements or [])[index] if placements is not None else None
+        if placement is None:
+            start = min(duration_us - 2, index * slot)
+            end = min(duration_us, start + max(1, slot // 2))
+            source_in_us = 0
+            evidence_ids: list[str] = []
+            note = "legacy_auto_spacing: no reviewed source-grounded placement"
+        else:
+            start = placement.interval.output_start_us
+            end = placement.interval.output_end_us
+            source_in_us = placement.source_in_us
+            evidence_ids = list(placement.source_evidence_ids)
+            note = placement.relevance_note
         if end <= start:
             raise MediaError("B-roll interval is empty")
         events.append(
             BrollEvent(
-                event_id=stable_id("broll", candidate_id, asset_id),
+                event_id=stable_id(
+                    "broll", candidate_id, asset_id, placement.placement_id if placement else str(index)
+                ),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 asset_id=asset_id,
-                broll_source_in_us=0,
+                broll_source_in_us=source_in_us,
+                source_evidence_ids=evidence_ids,
+                relevance_note=note,
             )
         )
     return events
@@ -655,8 +725,16 @@ def _sfx(
     asset_ids: list[str],
     assets: list[AssetBinding],
     profile: AdvancedHeroProfile,
+    placements: list[DirectionAssetPlacement] | None = None,
 ) -> list[AudioMixEvent]:
     events: list[AudioMixEvent] = []
+    if placements:
+        placement_ids = [item.asset_id for item in placements]
+        if asset_ids and asset_ids != placement_ids:
+            raise MediaError("SFX asset ids do not match the reviewed direction placements")
+        asset_ids = placement_ids
+    elif asset_ids:
+        placements = None
     for index, asset_id in enumerate(asset_ids):
         entry, license_record, _path = require_asset(
             database,
@@ -666,18 +744,47 @@ def _sfx(
             expected_kind="audio",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record, slot="audio"))
-        start = min(duration_us - 2, 200_000 + (index * 100_000))
-        end = min(duration_us, start + 300_000)
+        if not any(item.asset_id == asset_id for item in assets):
+            assets.append(binding_for(entry, license_record, slot="audio"))
+        placement = (placements or [])[index] if placements is not None else None
+        gain: float
+        if placement is None:
+            start = min(duration_us - 2, 200_000 + (index * 100_000))
+            end = min(duration_us, start + 300_000)
+            gain = min(
+                profile.max_gain_db,
+                max(
+                    profile.min_gain_db,
+                    -6 if profile.renderer_recipe_version == "advanced-hero-renderer-v1" else -12,
+                ),
+            )
+            evidence_ids: list[str] = []
+            purpose = None
+            note = "legacy_auto_spacing: no reviewed source-grounded placement"
+            source_in_us = 0
+        else:
+            start = placement.interval.output_start_us
+            end = placement.interval.output_end_us
+            gain = float(placement.gain_db if placement.gain_db is not None else -12)
+            evidence_ids = list(placement.source_evidence_ids)
+            purpose = placement.purpose
+            note = placement.relevance_note
+            source_in_us = placement.source_in_us
         if end <= start:
             raise MediaError("SFX interval is empty")
-        gain = min(profile.max_gain_db, max(profile.min_gain_db, -6))
+        gain = min(profile.max_gain_db, max(profile.min_gain_db, gain))
         events.append(
             AudioMixEvent(
-                event_id=stable_id("sfx", candidate_id, asset_id),
+                event_id=stable_id(
+                    "sfx", candidate_id, asset_id, placement.placement_id if placement else str(index)
+                ),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 asset_id=asset_id,
                 gain_db=gain,
+                sfx_source_in_us=source_in_us,
+                source_evidence_ids=evidence_ids,
+                purpose=purpose,
+                relevance_note=note,
             )
         )
     return events

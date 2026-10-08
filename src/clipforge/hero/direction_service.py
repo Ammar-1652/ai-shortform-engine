@@ -8,6 +8,7 @@ the renderer can consume them.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import pairwise
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -156,6 +157,7 @@ def validate_source_evidence(
                 raise MediaError(f"direction evidence {evidence.evidence_id} text does not match its word ids")
             if any(scene_id not in scene_ids for scene_id in evidence.visual_scene_ids):
                 raise MediaError("direction evidence names an unknown visual scene")
+        beat_bounds: list[tuple[str, int, int]] = []
         for beat in option.beats:
             beat_evidence = [evidence_by_id[evidence_id] for evidence_id in beat.evidence_ids]
             beat_segments = {sid for item in beat_evidence for sid in item.source_segment_ids}
@@ -174,6 +176,36 @@ def validate_source_evidence(
                 beat.output_start_us != start or beat.output_end_us != end
             ):
                 raise MediaError("direction beat interval differs from forced-word timing")
+            beat_bounds.append((beat.kind, start, end))
+        kinds = [item[0] for item in beat_bounds]
+        if (
+            kinds[0] != "hook"
+            or kinds[-1] != "punch"
+            or any(kind != "body" for kind in kinds[1:-1])
+            or any(left[2] > right[1] for left, right in pairwise(beat_bounds))
+        ):
+            raise MediaError("direction hook, body, and punch beats must be ordered and non-overlapping")
+        duration = time_map.to_time_map().total_output_duration()
+        for placement in option.asset_placements:
+            if placement.interval.output_end_us > duration:
+                raise MediaError("direction asset placement extends past the approved TimeMap")
+            if any(evidence_id not in evidence_by_id for evidence_id in placement.source_evidence_ids):
+                raise MediaError("direction asset placement references undeclared evidence")
+            evidence_words = [
+                by_id[word_id]
+                for evidence_id in placement.source_evidence_ids
+                for word_id in evidence_by_id[evidence_id].source_word_ids
+            ]
+            evidence_start = min(word.output_start_us for word in evidence_words)
+            evidence_end = max(word.output_end_us for word in evidence_words)
+            # Placement may cover a short lead/exit around a phrase, but must
+            # overlap the phrase rather than being an arbitrary evenly-spaced
+            # slot. This also keeps the relation deterministic after cuts.
+            if (
+                placement.interval.output_end_us <= evidence_start
+                or placement.interval.output_start_us >= evidence_end
+            ):
+                raise MediaError("direction asset placement does not overlap its source evidence")
 
 
 def _normalize(value: str) -> str:

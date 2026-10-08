@@ -88,7 +88,7 @@ _PROFILE = AdvancedHeroProfile(
     caption_algorithm_version="advanced-caption-clean-v1",
     typography_version="advanced-typography-clean-v1",
     diagram_version="advanced-diagram-grounded-v1",
-    renderer_recipe_version="advanced-hero-renderer-clean-v1",
+    renderer_recipe_version="advanced-hero-renderer-directed-v2",
     motion_library_version="advanced-motion-clean-v1",
 )
 
@@ -164,6 +164,20 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+    directed_broll_ids: list[str] = []
+    directed_sfx_ids: list[str] = []
+    if stored_direction is not None:
+        selected_option = next(
+            item for item in stored_direction.options if item.option_id == stored_direction.selected_option_id
+        )
+        directed_broll_ids = [
+            item.asset_id for item in selected_option.asset_placements if item.kind == "graphic"
+        ]
+        directed_sfx_ids = [item.asset_id for item in selected_option.asset_placements if item.kind == "audio"]
+        if broll_asset_ids is not None and broll_asset_ids != directed_broll_ids:
+            raise MediaError("B-roll ids must match the selected direction placements")
+        if sfx_asset_ids is not None and sfx_asset_ids != directed_sfx_ids:
+            raise MediaError("SFX ids must match the selected direction placements")
     actor = _actor(created_by)
     plan = build_advanced_plan(
         database=database,
@@ -191,8 +205,8 @@ def plan_advanced_candidate(
         visual=context.visual,
         visual_sha256=context.visual_sha256,
         duration_us=context.duration_us,
-        broll_asset_ids=list(broll_asset_ids or []),
-        sfx_asset_ids=list(sfx_asset_ids or []),
+        broll_asset_ids=directed_broll_ids if stored_direction is not None else list(broll_asset_ids or []),
+        sfx_asset_ids=directed_sfx_ids if stored_direction is not None else list(sfx_asset_ids or []),
         actor=actor,
         tool_version=__version__,
         direction=stored_direction,
@@ -249,6 +263,7 @@ def render_advanced_drafts(
             context = _context(database, source_asset_id, candidate_id, root)
             _require_plan_binding(database, plan, context)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
+            _require_production_direction(plan, renderer, inputs.pair.workspace)
         if (
             narration_artifact_id is None
             and not force
@@ -423,6 +438,72 @@ def _context(database: Database, source_asset_id: str, candidate_id: str, root: 
         visual_sha256=inputs.pair.visual_sha256,
         duration_us=duration,
     )
+
+
+def _require_production_direction(
+    plan: AdvancedHeroPlanDocument,
+    renderer: AdvancedRenderBackend,
+    workspace: SourceWorkspace | None = None,
+) -> None:
+    """Fail closed before a real Remotion render can use unsafe defaults.
+
+    Fake backends remain available for deterministic contract tests. They do
+    not claim a viewer-facing production result and therefore do not bypass
+    the persisted provenance checks below.
+    """
+    if not renderer.requires_browser or plan.style_id == "legacy-v1":
+        return
+    if not plan.direction_id or not plan.direction_sha256:
+        raise MediaError("clean Advanced Hero production requires a persisted source-grounded direction brief")
+    if workspace is not None:
+        direction_path = workspace.direction_file(plan.candidate_id)
+        if direction_path.is_symlink() or not direction_path.is_file():
+            raise MediaError("clean Advanced Hero production direction is missing or unsafe")
+        if sha256_file(direction_path) != plan.direction_sha256:
+            raise MediaError("clean Advanced Hero production direction hash is stale")
+        try:
+            direction = DirectionDocument.model_validate_json(direction_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"clean Advanced Hero production direction is invalid: {exc}") from exc
+        if direction.direction_id != plan.direction_id or direction.style_id != plan.style_id:
+            raise MediaError("clean Advanced Hero production direction does not match the plan")
+        selected = next(
+            (option for option in direction.options if option.option_id == direction.selected_option_id),
+            None,
+        )
+        if selected is None:
+            raise MediaError("clean Advanced Hero production direction selection is missing")
+        expected_broll = [item for item in selected.asset_placements if item.kind == "graphic"]
+        expected_sfx = [item for item in selected.asset_placements if item.kind == "audio"]
+        if len(plan.broll) != len(expected_broll) or any(
+            event.asset_id != placement.asset_id
+            or event.interval != placement.interval
+            or event.broll_source_in_us != placement.source_in_us
+            or event.source_evidence_ids != placement.source_evidence_ids
+            or event.relevance_note != placement.relevance_note
+            for event, placement in zip(plan.broll, expected_broll, strict=True)
+        ):
+            raise MediaError("clean Advanced Hero B-roll no longer matches reviewed direction placements")
+        if len(plan.sfx) != len(expected_sfx) or any(
+            event.asset_id != placement.asset_id
+            or event.interval != placement.interval
+            or event.sfx_source_in_us != placement.source_in_us
+            or event.source_evidence_ids != placement.source_evidence_ids
+            or event.purpose != placement.purpose
+            or event.relevance_note != placement.relevance_note
+            for event, placement in zip(plan.sfx, expected_sfx, strict=True)
+        ):
+            raise MediaError("clean Advanced Hero SFX no longer matches reviewed direction placements")
+    for broll_event in plan.broll:
+        if not broll_event.source_evidence_ids or not broll_event.relevance_note:
+            raise MediaError(
+                "production B-roll requires source evidence, relevance, and explicit reviewed timing"
+            )
+    for sfx_event in plan.sfx:
+        if not sfx_event.source_evidence_ids or not sfx_event.relevance_note or sfx_event.purpose is None:
+            raise MediaError(
+                "production SFX requires source evidence, purpose, relevance, and explicit reviewed timing"
+            )
 
 
 def _render_run(
@@ -672,10 +753,21 @@ def _normalize_audio(
     if normalized.is_symlink() or not normalized.is_file() or normalized.stat().st_size < 1:
         raise MediaError("audio normalization did not write a usable output")
     normalized.replace(output)
-    _require_usable_audio(output, log_path.with_name(log_path.stem + ".measure.log"))
+    _require_usable_audio(
+        output,
+        log_path.with_name(log_path.stem + ".measure.log"),
+        target_lufs=render_input.audio_loudness_lufs,
+        true_peak_limit=render_input.audio_true_peak_dbfs,
+    )
 
 
-def _require_usable_audio(output: Path, log_path: Path) -> None:
+def _require_usable_audio(
+    output: Path,
+    log_path: Path,
+    *,
+    target_lufs: float = -16,
+    true_peak_limit: float = -1.5,
+) -> None:
     result = ProcessRunner().run(
         [
             resolve_ffmpeg(),
@@ -686,7 +778,7 @@ def _require_usable_audio(output: Path, log_path: Path) -> None:
             "-map",
             "0:a:0",
             "-af",
-            "volumedetect",
+            "ebur128=peak=true",
             "-f",
             "null",
             "-",
@@ -694,12 +786,22 @@ def _require_usable_audio(output: Path, log_path: Path) -> None:
         log_path=log_path,
         check=True,
     )
-    match = re.search(r"mean_volume:\s*(-?inf|[-+]?\d+(?:\.\d+)?)\s*dB", result.stderr_tail)
-    if match is None:
+    integrated = re.search(r"Integrated loudness:\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", result.stderr_tail, re.S)
+    true_peak = re.search(r"True peak:\s*Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", result.stderr_tail, re.S)
+    if integrated is None or true_peak is None:
         raise MediaError("advanced output audio loudness could not be measured")
-    value = match.group(1)
-    if value == "-inf" or float(value) < -55:
+    measured_lufs = float(integrated.group(1))
+    measured_peak = float(true_peak.group(1))
+    if measured_lufs < -55:
         raise MediaError("advanced output audio is unusably quiet")
+    if abs(measured_lufs - target_lufs) > 1.5:
+        raise MediaError(
+            f"advanced output loudness {measured_lufs:.1f} LUFS is outside target {target_lufs:.1f} +/- 1.5 LU"
+        )
+    if measured_peak > true_peak_limit + 0.2:
+        raise MediaError(
+            f"advanced output true peak {measured_peak:.1f} dBFS exceeds limit {true_peak_limit:.1f} dBFS"
+        )
 
 
 def _input_digest(
@@ -1007,6 +1109,14 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
             raise MediaError("advanced plan is stale: direction changed after planning")
         if direction.style_id != plan.style_id or direction.style_fingerprint != plan.style_fingerprint:
             raise MediaError("advanced plan is stale: selected motion style changed")
+        from clipforge.hero.direction_service import validate_source_evidence
+
+        validate_source_evidence(
+            direction,
+            context.alignment.words,
+            context.hero_plan.edit_plan.time_map,
+            {scene.scene_id for scene in context.visual.scenes},
+        )
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),

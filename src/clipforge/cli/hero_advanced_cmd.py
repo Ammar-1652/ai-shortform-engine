@@ -57,10 +57,21 @@ def advanced_plan(
     ] = "contain",
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
-    from clipforge.hero.advanced_service import plan_advanced_candidate
+    from clipforge.hero.advanced_service import _context, default_advanced_profile, plan_advanced_candidate
 
     profile = _profile(reframing)
     try:
+        active = profile or default_advanced_profile()
+        if active.renderer_recipe_version != "advanced-hero-renderer-v1":
+            context = _context(
+                Database(resolve_db_path(db)), source_asset_id, candidate_id, resolve_work_dir(work_dir)
+            )
+            direction_path = context.workspace.direction_file(candidate_id)
+            if direction_path.is_symlink() or not direction_path.is_file():
+                raise ClipforgeError(
+                    "clean Advanced Hero planning requires a validated direction brief; "
+                    "run `clipforge hero advanced direction plan` first"
+                )
         plan = plan_advanced_candidate(
             database=Database(resolve_db_path(db)),
             source_asset_id=source_asset_id,
@@ -295,12 +306,18 @@ def advanced_verify(
 
 
 def _profile(name: str) -> AdvancedHeroProfile | None:
+    from clipforge.hero.advanced_service import default_advanced_profile
+
     if name == "contain":
         return None
     if name == "face_follow":
-        return AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="face_follow"))
+        return default_advanced_profile().model_copy(
+            update={"reframing": ReframingStrategy(strategy_id="face_follow")}
+        )
     if name == "center_crop":
-        return AdvancedHeroProfile(reframing=ReframingStrategy(strategy_id="center_crop"))
+        return default_advanced_profile().model_copy(
+            update={"reframing": ReframingStrategy(strategy_id="center_crop")}
+        )
     if name == "manual_window":
         raise ClipforgeError("manual_window strategy requires a reframing window")
     if name in {"visual_safe_window", "multi_face_safe_window", "saliency_window"}:

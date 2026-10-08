@@ -25,6 +25,23 @@
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
+        },
         "role": {
           "const": "sfx",
           "default": "sfx",
@@ -36,6 +53,23 @@
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "sfx_source_in_us": {
+          "default": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Source In Us",
+          "type": "integer"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -73,11 +107,26 @@
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
+        },
         "schema_version": {
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [

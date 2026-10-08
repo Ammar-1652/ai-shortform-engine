@@ -7,48 +7,53 @@ from clipforge.errors import MediaError
 from clipforge.hero.direction_service import validate_source_evidence
 from clipforge.hero.motion_style import style_for_id
 from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
     DirectionBeat,
     DirectionDocument,
     DirectionEvidence,
     DirectionOption,
 )
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import TimelineSegment, TimeMapDocument
 
 
 def _option(option_id: str, style_id: str, score: float) -> DirectionOption:
-    evidence = DirectionEvidence(
-        evidence_id=f"e-{option_id}",
-        source_word_ids=["word-1"],
-        source_segment_ids=["segment-1"],
-        source_text="The source says this.",
-        note="Copied from the forced transcript.",
-    )
+    evidence = [
+        DirectionEvidence(
+            evidence_id=f"e-{option_id}-{index}",
+            source_word_ids=[f"word-{index + 1}"],
+            source_segment_ids=["segment-1"],
+            source_text=text,
+            note="Copied from the forced transcript.",
+        )
+        for index, text in enumerate(("The source", "says this", "today."))
+    ]
     beats = [
         DirectionBeat(
             beat_id=f"{option_id}-hook",
             kind="hook",
             purpose="context",
             source_segment_ids=["segment-1"],
-            evidence_ids=[evidence.evidence_id],
-            display_text="The source says this.",
+            evidence_ids=[evidence[0].evidence_id],
+            display_text="The source",
         ),
         DirectionBeat(
             beat_id=f"{option_id}-body",
             kind="body",
             purpose="contrast",
             source_segment_ids=["segment-1"],
-            evidence_ids=[evidence.evidence_id],
-            display_text="The source says this.",
+            evidence_ids=[evidence[1].evidence_id],
+            display_text="says this",
         ),
         DirectionBeat(
             beat_id=f"{option_id}-punch",
             kind="punch",
             purpose="payoff",
             source_segment_ids=["segment-1"],
-            evidence_ids=[evidence.evidence_id],
-            display_text="The source says this.",
+            evidence_ids=[evidence[2].evidence_id],
+            display_text="today.",
         ),
     ]
     return DirectionOption(
@@ -56,7 +61,7 @@ def _option(option_id: str, style_id: str, score: float) -> DirectionOption:
         style_id=style_id,  # type: ignore[arg-type]
         title="Source-grounded option",
         beats=beats,
-        evidence=[evidence],
+        evidence=evidence,
         segment_order=["segment-1"],
         selection_score=score,
         selection_reason="The option preserves the complete source claim.",
@@ -92,6 +97,23 @@ def _document() -> DirectionDocument:
             source_asset_ids=["source-1"],
         ),
     )
+
+
+def _aligned_words() -> list[AlignedWord]:
+    return [
+        AlignedWord(
+            word_id=f"word-{index + 1}",
+            candidate_id="candidate-1",
+            text=text,
+            source_start_us=index * 1_000_000,
+            source_end_us=(index + 1) * 1_000_000,
+            output_start_us=index * 1_000_000,
+            output_end_us=(index + 1) * 1_000_000,
+            output_start_frame=index * 30,
+            output_end_frame_exclusive=(index + 1) * 30,
+        )
+        for index, text in enumerate(("The source", "says this", "today."))
+    ]
 
 
 def test_direction_requires_three_source_grounded_options() -> None:
@@ -150,22 +172,10 @@ def test_style_contract_is_fingerprintable_and_allowlisted() -> None:
 
 def test_direction_evidence_binds_words_and_time_map() -> None:
     document = _document()
-    words = [
-        AlignedWord(
-            word_id="word-1",
-            candidate_id="candidate-1",
-            text="The source says this.",
-            source_start_us=0,
-            source_end_us=1_000_000,
-            output_start_us=0,
-            output_end_us=1_000_000,
-            output_start_frame=0,
-            output_end_frame_exclusive=30,
-        )
-    ]
+    words = _aligned_words()
     time_map = TimeMapDocument(
         time_map_id="map-1",
-        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=1_000_000)],
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
     )
     validate_source_evidence(document, words, time_map, set())
 
@@ -179,22 +189,32 @@ def test_direction_evidence_rejects_invented_display_text() -> None:
             "options": [option.model_copy(update={"beats": [beat, *option.beats[1:]]}), *document.options[1:]]
         }
     )
-    words = [
-        AlignedWord(
-            word_id="word-1",
-            candidate_id="candidate-1",
-            text="The source says this.",
-            source_start_us=0,
-            source_end_us=1_000_000,
-            output_start_us=0,
-            output_end_us=1_000_000,
-            output_start_frame=0,
-            output_end_frame_exclusive=30,
-        )
-    ]
+    words = _aligned_words()
     time_map = TimeMapDocument(
         time_map_id="map-1",
-        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=1_000_000)],
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
     )
     with pytest.raises(MediaError, match="display text"):
+        validate_source_evidence(document, words, time_map, set())
+
+
+def test_asset_placement_must_overlap_its_source_evidence() -> None:
+    document = _document()
+    placement = DirectionAssetPlacement(
+        placement_id="placement-1",
+        asset_id="asset-1",
+        kind="graphic",
+        interval=OutputInterval(output_start_us=1_100_000, output_end_us=1_500_000),
+        source_evidence_ids=["e-option-a-0"],
+        purpose=MotionPurpose.CONCEPT,
+        relevance_note="A reviewed visual explanation of the phrase.",
+    )
+    option = document.options[0].model_copy(update={"asset_placements": [placement]})
+    document = document.model_copy(update={"options": [option, *document.options[1:]]})
+    words = _aligned_words()
+    time_map = TimeMapDocument(
+        time_map_id="map-1",
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+    )
+    with pytest.raises(MediaError, match="does not overlap"):
         validate_source_evidence(document, words, time_map, set())

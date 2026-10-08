@@ -16,8 +16,9 @@ from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
-from clipforge.hero.advanced_build import _typography
+from clipforge.hero.advanced_build import _broll, _sfx, _typography
 from clipforge.hero.advanced_service import (
+    _require_production_direction,
     default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
@@ -43,6 +44,7 @@ from clipforge.schemas.advanced import (
     ReframingWindow,
     TypographyEvent,
 )
+from clipforge.schemas.direction import DirectionAssetPlacement
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.governance import AssetLicenseRecord, RightsStatus
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -83,9 +85,10 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
         sfx_asset_ids=["sfx-1"],
     )
     assert plan.reframing_strategy == "contain"
-    assert any("$" in item.text or item.text.strip() for item in plan.typography)
-    assert plan.typography[0].component_id == "hook-card-v1"
-    assert plan.typography[0].interval.output_start_us == 0
+    # Clean production does not fabricate cards when no reviewed direction
+    # exists. The explicit legacy recipe is the only compatibility path for
+    # the old heuristic hook/punch behavior.
+    assert plan.typography == []
     assert plan.captions and all(item.words for item in plan.captions)
     backend = FakeAdvancedRenderBackend()
     result = render_advanced_drafts(
@@ -130,6 +133,101 @@ def test_typography_builds_exact_hook_and_punch_cards() -> None:
     assert [item.component_id for item in events] == ["hook-card-v1", "punch-card-v1"]
     assert events[0].text == "never knew his biological father,"
     assert events[1].text == "biological father, final."
+
+
+def test_clean_production_requires_direction_before_remotion() -> None:
+    plan = SimpleNamespace(
+        style_id="editorial-clean-v1",
+        direction_id="",
+        direction_sha256="",
+        broll=[],
+        sfx=[],
+    )
+    with pytest.raises(MediaError, match="requires a persisted source-grounded direction"):
+        _require_production_direction(plan, RemotionAdvancedRenderBackend())  # type: ignore[arg-type]
+
+
+def test_clean_production_rejects_unbound_asset_timing() -> None:
+    plan = SimpleNamespace(
+        style_id="editorial-clean-v1",
+        direction_id="direction-1",
+        direction_sha256="a" * 64,
+        broll=[SimpleNamespace(source_evidence_ids=[], relevance_note="")],
+        sfx=[],
+    )
+    with pytest.raises(MediaError, match="B-roll requires source evidence"):
+        _require_production_direction(plan, RemotionAdvancedRenderBackend())  # type: ignore[arg-type]
+
+
+def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reusing one asset must not collapse later placements onto the first cue."""
+    entry = SimpleNamespace(asset_id="asset-1", file_sha256="a" * 64)
+    license_record = SimpleNamespace(license_record_id="license-1", status=SimpleNamespace(value="licensed"))
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.require_asset",
+        lambda *args, **kwargs: (entry, license_record, tmp_path / "asset"),
+    )
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.binding_for",
+        lambda entry, license_record, slot: SimpleNamespace(asset_id=entry.asset_id),
+    )
+    placements = [
+        DirectionAssetPlacement(
+            placement_id="placement-a",
+            asset_id="asset-1",
+            kind="graphic",
+            interval=OutputInterval(output_start_us=100_000, output_end_us=400_000),
+            source_in_us=2_000_000,
+            source_evidence_ids=["evidence-a"],
+            purpose=MotionPurpose.CONCEPT,
+            relevance_note="The first phrase is illustrated here.",
+        ),
+        DirectionAssetPlacement(
+            placement_id="placement-b",
+            asset_id="asset-1",
+            kind="graphic",
+            interval=OutputInterval(output_start_us=1_100_000, output_end_us=1_500_000),
+            source_in_us=7_000_000,
+            source_evidence_ids=["evidence-b"],
+            purpose=MotionPurpose.VISUAL_REVEAL,
+            relevance_note="The later phrase gets a deliberate return.",
+        ),
+    ]
+    assets: list[object] = []
+    events = _broll(
+        None,
+        None,
+        tmp_path,
+        "project-1",
+        "candidate-1",
+        2_000_000,
+        ["asset-1", "asset-1"],
+        assets,
+        placements,
+    )  # type: ignore[arg-type]
+    assert [event.interval.output_start_us for event in events] == [100_000, 1_100_000]
+    assert [event.broll_source_in_us for event in events] == [2_000_000, 7_000_000]
+    assert events[0].event_id != events[1].event_id
+    assert len(assets) == 1
+
+    sfx_placements = [item.model_copy(update={"kind": "audio"}) for item in placements]
+    audio_assets: list[object] = []
+    sfx = _sfx(
+        None,
+        None,
+        tmp_path,
+        "project-1",
+        "candidate-1",
+        2_000_000,
+        ["asset-1", "asset-1"],
+        audio_assets,
+        default_advanced_profile(),
+        sfx_placements,
+    )  # type: ignore[arg-type]
+    assert [event.sfx_source_in_us for event in sfx] == [2_000_000, 7_000_000]
+    assert len(audio_assets) == 1
 
 
 def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
@@ -255,7 +353,7 @@ def test_remote_url_and_music_are_rejected() -> None:
 def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
     assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
     assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
-    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-clean-v1"
+    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v2"
     legacy = default_advanced_profile().model_copy(
         update={
             "caption_algorithm_version": "advanced-caption-v1",
@@ -508,7 +606,7 @@ def test_changed_sfx_hash_and_review_payload_are_safe(tmp_path: Path) -> None:
     assert draft["broll"][0]["rights_status"] == "owned"
     assert draft["sfx"][0]["role"] == "sfx"
     assert "gain_db" in draft["sfx"][0]
-    assert draft["typography"]
+    assert draft["typography"] == []
     assert draft["diagrams"] == []
     assert draft["emphasis"]
     fixture.workspace.advanced_asset_file("sfx-1").write_bytes(b"changed-sfx")

@@ -142,6 +142,12 @@ class BrollEvent(Versioned):
     broll_source_in_us: Microseconds = Field(
         description="In-point on the B-roll asset clock. Not a program-timeline time."
     )
+    # These fields are deliberately optional for old rough/hero documents. A
+    # production Advanced Hero render must populate them from a reviewed
+    # direction brief; an empty list identifies the old evenly-spaced fallback
+    # and is rejected by the production renderer.
+    source_evidence_ids: list[EntityId] = Field(default_factory=list)
+    relevance_note: str = Field(default="", max_length=500)
 
 
 class AudioEvent(Versioned):

@@ -276,7 +276,8 @@
       "default": "advanced-hero-renderer-clean-v1",
       "enum": [
         "advanced-hero-renderer-v1",
-        "advanced-hero-renderer-clean-v1"
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2"
       ],
       "title": "Renderer Recipe Version",
       "type": "string"
