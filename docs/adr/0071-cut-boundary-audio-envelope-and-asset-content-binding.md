@@ -24,14 +24,18 @@ envelope or conservative level cap.
    be selected at a complete-word boundary; caption grouping cannot repair a
    phonetic cut.
 3. Advanced jump-cut staging cuts picture and speech from the identical
-   ordered TimeMap. Speech receives a deterministic 8 ms fade-in/out only at a
-   discontinuity. It does not overlap, loop, stretch, or introduce a second
-   clock. The staging recipe is hashable and records this policy.
+   ordered TimeMap. Picture segments are padded and trimmed to the canonical
+   output frame grid so repeated off-grid cuts cannot accumulate frame loss.
+   Speech receives a deterministic 8 ms fade-in/out only at a discontinuity.
+   It does not overlap, loop, stretch, or introduce a second clock. The
+   staging recipe and per-segment frame counts are hashable and recorded in
+   the profile fingerprint.
 4. A reviewed local/Envato asset carries operator-confirmed content tags.
    Every clean B-roll placement copies the exact tags and its relevance note
    must name at least one tag. Missing or mismatched tags fail before render.
-   The rule is a relevance gate, not an automated claim that replaces human
-   review.
+   Explicit tag changes produce a distinct registration identity and cache
+   miss. The rule is a relevance gate, not an automated claim that replaces
+   human review.
 5. Clean production SFX defaults to -18 dB gain, is capped at -18 dB by the
    profile, and uses a 20 ms entrance / 60 ms exit envelope. Legacy recipes
    retain their recorded behavior and are not reinterpreted.

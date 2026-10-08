@@ -237,6 +237,9 @@ class AdvancedHeroProfile(Versioned):
     renderer_recipe_version: Literal[
         "advanced-hero-renderer-v1", "advanced-hero-renderer-clean-v1", "advanced-hero-renderer-directed-v2"
     ] = "advanced-hero-renderer-clean-v1"
+    staging_recipe_version: Literal["time-map-v1-audio-envelope", "time-map-v2-frame-quantized"] = (
+        "time-map-v2-frame-quantized"
+    )
     motion_library_version: Literal["advanced-motion-v1", "advanced-motion-clean-v1"] = (
         "advanced-motion-clean-v1"
     )
@@ -275,6 +278,7 @@ class AdvancedHeroProfile(Versioned):
                 "sfx_fade_in_us",
                 "sfx_fade_out_us",
                 "audio_mix_version",
+                "staging_recipe_version",
             ):
                 payload.pop(key, None)
         return advanced_fingerprint(payload)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -216,11 +217,13 @@ def register_envato_asset(
         raise AssetError("file size does not match", code="size_mismatch")
     if size <= 0 or size > request.max_bytes:
         raise AssetError("file exceeds the campaign byte limit", code="file_size_limit")
+    requested_tags = None if content_tags is None else list(_normalize_content_tags(content_tags))
     if not force and asset_id is None and not cancel:
-        cached = _cache_hit(root, request, project_id, digest, size)
+        cached = _cache_hit(root, request, project_id, digest, size, requested_tags)
         if cached is not None:
             return cached.model_copy(update={"cache_status": "hit"})
-    chosen = asset_id if asset_id is not None and not force else _asset_id(digest, force)
+    chosen = asset_id if asset_id is not None and not force else _asset_id(digest, force, requested_tags)
+    stored_tags = list(requested_tags or [])
     if cancel:
         return _write_cancelled(
             root,
@@ -233,7 +236,7 @@ def register_envato_asset(
             rights,
             size,
             digest,
-            content_tags or [],
+            stored_tags,
         )
     return _promote(
         root,
@@ -248,7 +251,7 @@ def register_envato_asset(
         size,
         relative_file,
         promotion_hook,
-        content_tags or [],
+        stored_tags,
     )
 
 
@@ -748,6 +751,7 @@ def _cache_hit(
     project_id: str,
     digest: str,
     size: int,
+    content_tags: list[str] | None,
 ) -> EnvatoAssetRegistration | None:
     for item in list_envato_assets(root, request.campaign_id):
         if item.acquisition_status != "verified" or item.project_id != project_id:
@@ -758,6 +762,8 @@ def _cache_hit(
             continue
         if item.policy_fingerprint != request.policy_fingerprint or item.relative_path is None:
             continue
+        if content_tags is not None and tuple(item.content_tags) != tuple(content_tags):
+            continue
         path = root / item.relative_path
         if path.is_symlink() or not path.is_file() or sha256_file(path) != digest:
             continue
@@ -765,10 +771,17 @@ def _cache_hit(
     return None
 
 
-def _asset_id(digest: str, force: bool) -> str:
+def _asset_id(digest: str, force: bool, content_tags: list[str] | None) -> str:
     if force:
         return f"env-{digest[:12]}-{uuid4().hex[:8]}"
+    if content_tags:
+        tag_digest = hashlib.sha256("\x1f".join(content_tags).encode("utf-8")).hexdigest()[:8]
+        return f"env-{digest[:20]}-tag-{tag_digest}"
     return f"env-{digest[:20]}"
+
+
+def _normalize_content_tags(tags: list[str]) -> tuple[str, ...]:
+    return tuple(sorted({" ".join(tag.split()).strip().casefold() for tag in tags if tag.strip()}))
 
 
 def _media_kind(hit: AssetSearchHit | None, filters: dict[str, str]) -> str:

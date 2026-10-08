@@ -14,8 +14,11 @@ That is not an edit and it breaks the canonical timing contract.
 
 The media staging layer exposes `stage_time_map`, which trims every validated
 source range on the source clock and concatenates them in persisted list order.
-It writes a frame-accurate H.264 picture, a matching FLAC speech track, and a
-recipe containing the integer-microsecond ranges. Advanced Hero uses this path
+It allocates each segment's picture frames from the canonical output grid,
+padding only the final decoded frame when an off-grid source range would
+otherwise lose a frame. It writes a frame-accurate H.264 picture, a matching
+FLAC speech track, and a recipe containing the integer-microsecond ranges.
+Advanced Hero uses this path
 whenever its plan contains more than one segment; the existing single-span path
 remains unchanged for candidate mining and legacy artifacts.
 

@@ -1063,6 +1063,13 @@ def test_profile_disallows_music() -> None:
     assert profile.fingerprint() == again.fingerprint()
 
 
+def test_profile_fingerprint_binds_time_map_staging_recipe() -> None:
+    current = default_advanced_profile()
+    legacy = current.model_copy(update={"staging_recipe_version": "time-map-v1-audio-envelope"})
+    assert current.staging_recipe_version == "time-map-v2-frame-quantized"
+    assert current.fingerprint() != legacy.fingerprint()
+
+
 def _advanced_jobs(fixture) -> list[object]:
     from clipforge.storage import list_jobs
 

@@ -18,6 +18,7 @@ from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
 from clipforge.media.workspace import ensure_within
 from clipforge.preview.constants import DURATION_TOLERANCE_US
+from clipforge.preview.timing import frame_at_or_after
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
 from clipforge.timeline import FrameRate
 
@@ -221,10 +222,19 @@ def stage_time_map(
     version = _ffmpeg_version(ffmpeg, runner)
 
     video_parts = []
-    for index, (start_us, end_us) in enumerate(source_ranges):
+    segment_frame_counts: list[int] = []
+    for index, segment in enumerate(mapped.segments):
+        start_us, end_us = segment.source_start_us, segment.source_end_us
+        start_frame = frame_at_or_after(segment.output_start_us, frame_count)
+        end_frame = frame_at_or_after(segment.output_end_us, frame_count)
+        segment_frames = end_frame - start_frame
+        if segment_frames < 1:
+            raise MediaError("TimeMap segment does not own an output frame")
+        segment_frame_counts.append(segment_frames)
         video_parts.append(
             f"[0:v]trim=start={us_to_seconds_str(start_us)}:end={us_to_seconds_str(end_us)},"
-            f"setpts=PTS-STARTPTS[v{index}]"
+            "setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=0.034,"
+            f"trim=end_frame={segment_frames},setpts=PTS-STARTPTS[v{index}]"
         )
     video_labels = "".join(f"[v{index}]" for index in range(len(source_ranges)))
     # The ordered TimeMap remains the only program clock. Each picture range
@@ -332,7 +342,9 @@ def stage_time_map(
                 "output_fps": "30/1",
                 "audio_boundary_policy": "micro_fade_v1",
                 "audio_boundary_fade_us": _CUT_FADE_US,
-                "staging_recipe": "time-map-v1-audio-envelope",
+                "video_frame_policy": "canonical_output_grid_v1",
+                "video_segment_frame_counts": segment_frame_counts,
+                "staging_recipe": "time-map-v2-frame-quantized",
             },
             sort_keys=True,
         )
