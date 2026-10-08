@@ -114,6 +114,9 @@ class DirectionAssetPlacement(Versioned):
     source_evidence_ids: list[EntityId] = Field(min_length=1)
     purpose: MotionPurpose
     relevance_note: str = Field(min_length=1, max_length=500)
+    # Exact labels copied from the reviewed local asset catalog. A prose note
+    # is editorial context, not semantic proof that a stock clip is relevant.
+    asset_tags: list[str] = Field(default_factory=list, max_length=24)
     gain_db: float | None = Field(default=None, ge=-24, le=6)
 
 

@@ -134,6 +134,7 @@ def test_time_map_stage_concatenates_ordered_ranges_without_repetition(tmp_path:
     recipe = (tmp_path / "stage-jump-cut" / "span.recipe.json").read_text(encoding="utf-8")
     assert '"source_ranges": [[2000000, 4000000], [12000000, 15000000]]' in recipe
     assert '"audio_source_ranges": [[2000000, 4000000], [12000000, 15000000]]' in recipe
+    assert '"audio_boundary_policy": "micro_fade_v1"' in recipe
 
 
 def test_time_map_stage_records_identical_picture_and_speech_ranges_for_one_range(

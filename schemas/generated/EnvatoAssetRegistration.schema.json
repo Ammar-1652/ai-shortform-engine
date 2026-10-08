@@ -149,6 +149,14 @@
       "title": "Campaign Id",
       "type": "string"
     },
+    "content_tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 24,
+      "title": "Content Tags",
+      "type": "array"
+    },
     "created_at": {
       "format": "date-time",
       "title": "Created At",

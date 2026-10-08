@@ -178,6 +178,8 @@ class AudioMixEvent(Versioned):
     role: Literal["sfx"] = "sfx"
     gain_db: float = Field(ge=-24, le=6)
     sfx_source_in_us: Microseconds = Field(default=0, ge=0)
+    fade_in_us: Microseconds = Field(default=20_000, ge=0, le=100_000)
+    fade_out_us: Microseconds = Field(default=60_000, ge=0, le=200_000)
     # A clean production plan must bind a sound effect to source-grounded
     # evidence. Empty values are retained only so older immutable plans remain
     # readable; the production render gate rejects them.
@@ -216,6 +218,11 @@ class AdvancedHeroProfile(Versioned):
     audio_true_peak_dbfs: float = -1.5
     audio_lra_lu: float = 11
     narration_duck_db: float = -12
+    # SFX are accents under speech, never competing foreground audio.
+    sfx_default_gain_db: float = Field(default=-18, ge=-24, le=0)
+    sfx_max_gain_db: Literal[-18] = -18
+    sfx_fade_in_us: Microseconds = Field(default=20_000, ge=0, le=100_000)
+    sfx_fade_out_us: Microseconds = Field(default=60_000, ge=0, le=200_000)
     audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     caption_algorithm_version: Literal["advanced-caption-v1", "advanced-caption-clean-v1"] = (
@@ -263,6 +270,10 @@ class AdvancedHeroProfile(Versioned):
                 "audio_true_peak_dbfs",
                 "audio_lra_lu",
                 "narration_duck_db",
+                "sfx_default_gain_db",
+                "sfx_max_gain_db",
+                "sfx_fade_in_us",
+                "sfx_fade_out_us",
                 "audio_mix_version",
             ):
                 payload.pop(key, None)

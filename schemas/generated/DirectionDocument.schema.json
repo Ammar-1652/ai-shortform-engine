@@ -98,6 +98,14 @@
           "title": "Asset Id",
           "type": "string"
         },
+        "asset_tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Asset Tags",
+          "type": "array"
+        },
         "gain_db": {
           "anyOf": [
             {

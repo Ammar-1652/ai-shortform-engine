@@ -179,6 +179,22 @@
           "title": "Event Id",
           "type": "string"
         },
+        "fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade In Us",
+          "type": "integer"
+        },
+        "fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade Out Us",
+          "type": "integer"
+        },
         "gain_db": {
           "maximum": 6,
           "minimum": -24,

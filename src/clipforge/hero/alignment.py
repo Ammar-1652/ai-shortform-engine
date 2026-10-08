@@ -30,6 +30,8 @@ from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import TimelineSegment
 from clipforge.timeline.framerate import FrameRate
 
+_MIN_FORCED_WORD_US = 5_000
+
 
 class ForcedAlignmentBackend(Protocol):
     model_name: str
@@ -212,6 +214,7 @@ def build_alignment(
     if not candidate.time_map.segments:
         raise MediaError(f"candidate {candidate.candidate_id} has no TimeMap segments")
     ordered = _evidence_words(transcript, bundle)
+    _validate_cut_boundaries(ordered, candidate.time_map.segments)
     _reject_transcript_language(transcript, backend)
     time_map = candidate.time_map.to_time_map()
     frame_count = time_map.output_frame_count(FrameRate(30, 1))
@@ -222,11 +225,16 @@ def build_alignment(
     previous_output_end = -1
     duration = time_map.total_output_duration()
     for word, (start, end, segment_index) in zip(ordered, bounds, strict=True):
-        if end <= start:
-            raise MediaError(f"aligned word {word.word_id} has no positive duration")
         segment = candidate.time_map.segments[segment_index]
         if start < segment.source_start_us or start >= segment.source_end_us or end > segment.source_end_us:
             raise MediaError(f"aligned word {word.word_id} is outside its TimeMap segment")
+        if end <= start:
+            raise MediaError(f"aligned word {word.word_id} has no positive duration")
+        if end - start < _MIN_FORCED_WORD_US:
+            raise MediaError(
+                f"aligned word {word.word_id} is only {end - start} us; "
+                "the alignment would be unreadable and can lose its leading phoneme"
+            )
         output_start = time_map.source_to_output(start)
         output_end = time_map.source_to_output(end)
         if output_end > duration or output_start < 0 or output_start >= duration:
@@ -353,7 +361,10 @@ def _partition_words(
     for word in words:
         found = None
         for index, segment in enumerate(segments):
-            if segment.source_start_us <= word.start_us < segment.source_end_us:
+            if (
+                segment.source_start_us <= word.start_us < segment.source_end_us
+                and word.end_us <= segment.source_end_us
+            ):
                 found = index
                 break
         if found is None:
@@ -372,6 +383,25 @@ def _partition_words(
             cursor += 1
         groups.append((segments[index], group))
     return groups
+
+
+def _validate_cut_boundaries(words: list[TranscriptWord], segments: list[TimelineSegment]) -> None:
+    """Reject editorial cuts through a spoken word.
+
+    A cut inside ``How`` can leave the encoded picture beginning on the /ow/
+    while the audio still contains the word onset.  Such a map is not repaired
+    by a caption change; it must be reselected at a phonetic boundary.
+    """
+    for segment in segments:
+        for boundary, label in (
+            (segment.source_start_us, "start"),
+            (segment.source_end_us, "end"),
+        ):
+            if any(word.start_us < boundary < word.end_us for word in words):
+                raise MediaError(
+                    f"TimeMap {label} {boundary} us falls inside a transcript word; "
+                    "reselect the cut at a complete-word boundary"
+                )
 
 
 def _owner_segment(segments: list[TimelineSegment], start: int, end: int) -> TimelineSegment | None:

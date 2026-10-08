@@ -118,6 +118,9 @@ class EnvatoAssetRegistration(Versioned):
     producer_job_id: EntityId
     policy_fingerprint: str = Field(pattern=_SHA)
     media_kind: MediaKind
+    # Tags are operator-confirmed editorial metadata, separate from rights.
+    # They are required when a downloaded file is selected as B-roll.
+    content_tags: list[str] = Field(default_factory=list, max_length=24)
     download_status: Literal["manual_download_required"] = "manual_download_required"
     direct_download_url: str | None = Field(default=None, max_length=300)
     cache_status: Literal["hit", "miss"] = "miss"
@@ -131,6 +134,16 @@ class EnvatoAssetRegistration(Versioned):
         if value is None:
             return None
         return _plain(value, label="envato registration")
+
+    @field_validator("content_tags")
+    @classmethod
+    def tags_are_plain(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for value in values:
+            item = _plain(" ".join(value.split()).strip(), label="envato content tag").casefold()
+            if item and item not in cleaned:
+                cleaned.append(item)
+        return cleaned
 
     @field_validator("item_page_url", "direct_download_url")
     @classmethod

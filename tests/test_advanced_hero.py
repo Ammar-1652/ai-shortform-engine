@@ -163,7 +163,9 @@ def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Reusing one asset must not collapse later placements onto the first cue."""
-    entry = SimpleNamespace(asset_id="asset-1", file_sha256="a" * 64)
+    entry = SimpleNamespace(
+        asset_id="asset-1", file_sha256="a" * 64, reference=SimpleNamespace(content_tags=["phrase"])
+    )
     license_record = SimpleNamespace(license_record_id="license-1", status=SimpleNamespace(value="licensed"))
     monkeypatch.setattr(
         "clipforge.hero.advanced_build.require_asset",
@@ -183,6 +185,7 @@ def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
             source_evidence_ids=["evidence-a"],
             purpose=MotionPurpose.CONCEPT,
             relevance_note="The first phrase is illustrated here.",
+            asset_tags=["phrase"],
         ),
         DirectionAssetPlacement(
             placement_id="placement-b",
@@ -193,6 +196,7 @@ def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
             source_evidence_ids=["evidence-b"],
             purpose=MotionPurpose.VISUAL_REVEAL,
             relevance_note="The later phrase gets a deliberate return.",
+            asset_tags=["phrase"],
         ),
     ]
     assets: list[object] = []
@@ -227,7 +231,51 @@ def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
         sfx_placements,
     )  # type: ignore[arg-type]
     assert [event.sfx_source_in_us for event in sfx] == [2_000_000, 7_000_000]
+    assert [event.gain_db for event in sfx] == [-18, -18]
+    assert [(event.fade_in_us, event.fade_out_us) for event in sfx] == [
+        (20_000, 60_000),
+        (20_000, 60_000),
+    ]
     assert len(audio_assets) == 1
+
+
+def test_clean_broll_rejects_placement_tags_that_do_not_match_catalog(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entry = SimpleNamespace(
+        asset_id="asset-1", file_sha256="a" * 64, reference=SimpleNamespace(content_tags=["concept"])
+    )
+    license_record = SimpleNamespace(license_record_id="license-1", status=SimpleNamespace(value="licensed"))
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.require_asset",
+        lambda *args, **kwargs: (entry, license_record, tmp_path / "asset"),
+    )
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.binding_for",
+        lambda entry, license_record, slot: SimpleNamespace(asset_id=entry.asset_id),
+    )
+    placement = DirectionAssetPlacement(
+        placement_id="placement-a",
+        asset_id="asset-1",
+        kind="graphic",
+        interval=OutputInterval(output_start_us=100_000, output_end_us=400_000),
+        source_evidence_ids=["evidence-a"],
+        purpose=MotionPurpose.CONCEPT,
+        relevance_note="An unrelated insert.",
+        asset_tags=["unrelated"],
+    )
+    with pytest.raises(MediaError, match="placement tags do not match"):
+        _broll(
+            None,
+            None,
+            tmp_path,
+            "project-1",
+            "candidate-1",
+            2_000_000,
+            ["asset-1"],
+            [],
+            [placement],
+        )  # type: ignore[arg-type]
 
 
 def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
@@ -1149,6 +1197,7 @@ def _register_asset(
             "kind": kind,
             "license_record_id": license_id,
             "provenance": provenance.model_dump(mode="json"),
+            "content_tags": ["concept"] if kind == "graphic" else [],
             "relative_path": relative,
             "file_sha256": digest,
         }

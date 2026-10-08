@@ -196,6 +196,7 @@ def register_envato_asset(
     force: bool = False,
     asset_id: str | None = None,
     cancel: bool = False,
+    content_tags: list[str] | None = None,
     promotion_hook: Callable[[str], None] | None = None,
 ) -> EnvatoAssetRegistration:
     """Promote a file the operator already placed under incoming."""
@@ -232,6 +233,7 @@ def register_envato_asset(
             rights,
             size,
             digest,
+            content_tags or [],
         )
     return _promote(
         root,
@@ -246,6 +248,7 @@ def register_envato_asset(
         size,
         relative_file,
         promotion_hook,
+        content_tags or [],
     )
 
 
@@ -272,6 +275,7 @@ def resume_envato_asset(
         license_relative=current.license_evidence,
         rights="allowed",
         asset_id=asset_id,
+        content_tags=current.content_tags,
         promotion_hook=promotion_hook,
     )
 
@@ -432,6 +436,7 @@ def _promote(
     size: int,
     incoming_relative: str,
     hook: Callable[[str], None] | None,
+    content_tags: list[str],
 ) -> EnvatoAssetRegistration:
     final = root.joinpath(*_ASSETS, asset_id, "media", incoming.name)
     manifest = _manifest_path(root, asset_id)
@@ -475,6 +480,7 @@ def _promote(
             producer_job_id=job_id,
             policy_fingerprint=request.policy_fingerprint,
             media_kind=request.media_kind,
+            content_tags=content_tags,
             direct_download_url=request.direct_download_url,
             cache_status="miss",
             incoming_relative=incoming_relative,
@@ -527,6 +533,7 @@ def _write_cancelled(
     rights: str,
     size: int,
     digest: str,
+    content_tags: list[str],
 ) -> EnvatoAssetRegistration:
     now = datetime.now(UTC)
     job_id = str(uuid4())
@@ -545,6 +552,7 @@ def _write_cancelled(
         producer_job_id=job_id,
         policy_fingerprint=request.policy_fingerprint,
         media_kind=request.media_kind,
+        content_tags=content_tags,
         direct_download_url=request.direct_download_url,
         failure_code="cancelled",
         incoming_relative=incoming_relative,
@@ -886,6 +894,7 @@ def _write_catalog(
             "kind": "envato",
             "license_record_id": f"lic-{registration.asset_id}",
             "provenance": provenance.model_dump(mode="json"),
+            "content_tags": registration.content_tags,
             "relative_path": registration.relative_path,
             "file_sha256": registration.sha256,
         }

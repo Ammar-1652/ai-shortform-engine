@@ -23,6 +23,7 @@ from clipforge.timeline import FrameRate
 
 # Enough to land on a prior keyframe for a typical long-GOP H.264 proxy.
 _KEYFRAME_PAD_US = 10_000_000
+_CUT_FADE_US = 8_000
 _NAME = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,78}$"
 
 
@@ -226,6 +227,9 @@ def stage_time_map(
             f"setpts=PTS-STARTPTS[v{index}]"
         )
     video_labels = "".join(f"[v{index}]" for index in range(len(source_ranges)))
+    # The ordered TimeMap remains the only program clock. Each picture range
+    # is reset to its local zero and concatenated in the declared output order;
+    # the paired audio path below uses those identical ranges.
     video_filter = ";".join(video_parts) + ";" + video_labels + f"concat=n={len(source_ranges)}:v=1:a=0[v]"
     runner.run(
         [
@@ -259,10 +263,21 @@ def stage_time_map(
     )
     audio_parts = []
     for index, (start_us, end_us) in enumerate(source_ranges):
-        audio_parts.append(
-            f"[0:a]atrim=start={us_to_seconds_str(start_us)}:end={us_to_seconds_str(end_us)},"
-            f"asetpts=PTS-STARTPTS[a{index}]"
-        )
+        segment_duration_us = end_us - start_us
+        fade_us = min(_CUT_FADE_US, max(1, segment_duration_us // 3))
+        filters = [
+            f"atrim=start={us_to_seconds_str(start_us)}:end={us_to_seconds_str(end_us)}",
+            "asetpts=PTS-STARTPTS",
+        ]
+        # A short deterministic envelope removes clicks at editorial cuts
+        # without overlapping, duplicating, or retiming speech. The TimeMap
+        # remains the sole program clock.
+        if index > 0 and source_ranges[index - 1][1] != start_us:
+            filters.append(f"afade=t=in:st=0:d={us_to_seconds_str(fade_us)}")
+        if index < len(source_ranges) - 1 and end_us != source_ranges[index + 1][0]:
+            fade_start = max(0, segment_duration_us - fade_us)
+            filters.append(f"afade=t=out:st={us_to_seconds_str(fade_start)}:d={us_to_seconds_str(fade_us)}")
+        audio_parts.append(f"[0:a]{','.join(filters)}[a{index}]")
     audio_labels = "".join(f"[a{index}]" for index in range(len(source_ranges)))
     audio_filter = ";".join(audio_parts) + ";" + audio_labels + f"concat=n={len(source_ranges)}:v=0:a=1[a]"
     runner.run(
@@ -315,6 +330,9 @@ def stage_time_map(
                 "video_codec": "h264",
                 "audio_codec": "flac",
                 "output_fps": "30/1",
+                "audio_boundary_policy": "micro_fade_v1",
+                "audio_boundary_fade_us": _CUT_FADE_US,
+                "staging_recipe": "time-map-v1-audio-envelope",
             },
             sort_keys=True,
         )

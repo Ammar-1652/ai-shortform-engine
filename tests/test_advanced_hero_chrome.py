@@ -96,7 +96,8 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 interval=OutputInterval(output_start_us=0, output_end_us=400_000),
                 source_evidence_ids=[evidence[0].evidence_id],
                 purpose=MotionPurpose.CONCEPT,
-                relevance_note="The opening insert illustrates the exact opening phrase.",
+                relevance_note="The concept opening insert illustrates the exact opening phrase.",
+                asset_tags=["concept"],
             ),
             DirectionAssetPlacement(
                 placement_id=f"{option_id}-sfx",
@@ -268,7 +269,7 @@ def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
     rendered = json.loads((video.parent / "render-input.json").read_text(encoding="utf-8"))
     assert rendered["reframing_strategy"] == "contain"
     assert rendered["broll"][0]["broll_source_in_us"] == 0
-    assert rendered["sfx"][0]["gain_db"] == (-12 if clean_direction else -6)
+    assert rendered["sfx"][0]["gain_db"] == (-18 if clean_direction else -6)
     assert rendered["sfx"][0]["role"] == "sfx"
     if clean_direction:
         assert rendered["direction_id"] == "direction-chrome"

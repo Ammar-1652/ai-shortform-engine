@@ -43,10 +43,11 @@ from clipforge.hero.integrity import hero_problems
 from clipforge.hero.plan import build_hero_plan
 from clipforge.hero.probe import probe_hero
 from clipforge.hero.selection import approved_candidates, review_digest
-from clipforge.media.clock import us_to_seconds_str
+from clipforge.media.clock import seconds_text_to_us, us_to_seconds_str
 from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
+from clipforge.media.probe import read_ffprobe_json
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.media.workspace import (
@@ -550,9 +551,6 @@ def _render_one(
     if renderer.requires_browser:
         from clipforge.preview.trim import stage_candidate_span
 
-        audio_path = staging / f"{candidate.candidate_id}.flac"
-        if not audio_path.is_file():
-            _trim_asr(inputs.asr_path, audio_path, segment.source_start_us, segment.source_end_us, root)
         staged = stage_candidate_span(
             inputs.proxy_path,
             inputs.asr_path,
@@ -567,7 +565,11 @@ def _render_one(
             log_path=run_dir / "logs" / f"{candidate.candidate_id}.trim.log",
         )
         video_name = staged.video_path.name
-        audio_name = audio_path.name
+        # The staged pair is one canonical trim transaction. Do not render a
+        # picture from ``stage_candidate_span`` beside a separately trimmed
+        # audio file: a second ffmpeg recipe can start on a different sample
+        # and reintroduce the reported AV drift at the first cut.
+        audio_name = staged.audio_path.name
         trim_frame = 0
     rendered = _render_input(
         candidate,
@@ -839,8 +841,8 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
             str(source),
             "-ss",
             us_to_seconds_str(start_us),
-            "-to",
-            us_to_seconds_str(end_us),
+            "-t",
+            us_to_seconds_str(end_us - start_us),
             "-c:a",
             "flac",
             str(destination),
@@ -848,6 +850,23 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
         log_path=None,
         check=True,
     )
+    probe = read_ffprobe_json(destination, ProcessRunner(), None)
+    streams = probe.get("streams")
+    audio = (
+        next(
+            (item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"),
+            None,
+        )
+        if isinstance(streams, list)
+        else None
+    )
+    duration = seconds_text_to_us(audio.get("duration")) if isinstance(audio, dict) else None
+    expected = end_us - start_us
+    if duration is None or abs(duration - expected) > 100_000:
+        raise MediaError(
+            f"staged alignment speech duration {duration} us differs from {expected} us; "
+            "refusing a separately clocked Hero render"
+        )
 
 
 def _require_fresh_alignment(

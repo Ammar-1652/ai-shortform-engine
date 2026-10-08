@@ -60,6 +60,8 @@ type SfxEvent = {
   asset_id?: string;
   interval?: Interval;
   gain_db?: number;
+  fade_in_us?: number;
+  fade_out_us?: number;
   sfx_source_in_us?: number;
   role?: string;
   source_evidence_ids?: string[];
@@ -362,12 +364,20 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           return null;
         }
         const window = span(item.interval);
+        const fadeIn = Math.max(0, Math.round((item.fade_in_us ?? 20_000) * FPS / 1_000_000));
+        const fadeOut = Math.max(0, Math.round((item.fade_out_us ?? 60_000) * FPS / 1_000_000));
+        const baseGain = linearVolume(item.gain_db ?? -18);
         return (
           <Sequence key={`sfx-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
             <Audio
               src={staticFile(name)}
               trimBefore={frameAt(item.sfx_source_in_us)}
-              volume={linearVolume(item.gain_db ?? 0)}
+              volume={(localFrame) => {
+                const remaining = window.duration - localFrame;
+                const inScale = fadeIn > 0 ? Math.min(1, (localFrame + 1) / fadeIn) : 1;
+                const outScale = fadeOut > 0 ? Math.min(1, Math.max(0, remaining / fadeOut)) : 1;
+                return baseGain * Math.min(inScale, outScale);
+              }}
             />
           </Sequence>
         );

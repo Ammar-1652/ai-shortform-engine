@@ -698,6 +698,23 @@ def _broll(
             source_in_us = placement.source_in_us
             evidence_ids = list(placement.source_evidence_ids)
             note = placement.relevance_note
+            catalog_tags = tuple(entry.reference.content_tags)
+            placement_tags = tuple(
+                sorted({item.casefold().strip() for item in placement.asset_tags if item.strip()})
+            )
+            if not catalog_tags:
+                raise MediaError(
+                    f"B-roll asset {asset_id} has no reviewed content tags; "
+                    "tag the local asset before selecting it"
+                )
+            if placement_tags != tuple(sorted(catalog_tags)):
+                raise MediaError(
+                    f"B-roll asset {asset_id} placement tags do not match its reviewed catalog tags"
+                )
+            if not _tags_support_note(catalog_tags, note):
+                raise MediaError(
+                    f"B-roll asset {asset_id} relevance note does not mention a reviewed content tag"
+                )
         if end <= start:
             raise MediaError("B-roll interval is empty")
         events.append(
@@ -765,14 +782,19 @@ def _sfx(
         else:
             start = placement.interval.output_start_us
             end = placement.interval.output_end_us
-            gain = float(placement.gain_db if placement.gain_db is not None else -12)
+            gain = float(placement.gain_db if placement.gain_db is not None else profile.sfx_default_gain_db)
             evidence_ids = list(placement.source_evidence_ids)
             purpose = placement.purpose
             note = placement.relevance_note
             source_in_us = placement.source_in_us
         if end <= start:
             raise MediaError("SFX interval is empty")
-        gain = min(profile.max_gain_db, max(profile.min_gain_db, gain))
+        sfx_limit = (
+            profile.max_gain_db
+            if profile.renderer_recipe_version == "advanced-hero-renderer-v1"
+            else profile.sfx_max_gain_db
+        )
+        gain = min(profile.max_gain_db, sfx_limit, max(profile.min_gain_db, gain))
         events.append(
             AudioMixEvent(
                 event_id=stable_id(
@@ -782,9 +804,23 @@ def _sfx(
                 asset_id=asset_id,
                 gain_db=gain,
                 sfx_source_in_us=source_in_us,
+                fade_in_us=profile.sfx_fade_in_us,
+                fade_out_us=profile.sfx_fade_out_us,
                 source_evidence_ids=evidence_ids,
                 purpose=purpose,
                 relevance_note=note,
             )
         )
     return events
+
+
+def _tags_support_note(tags: tuple[str, ...], note: str) -> bool:
+    """Require an explicit reviewed label in the placement explanation.
+
+    Tags are operator-confirmed metadata, not an automated relevance claim.
+    The deterministic check prevents a direction from silently substituting an
+    unrelated stock clip; human review remains the final editorial authority.
+    """
+    normalized = re.sub(r"[^\w%$']+", " ", note.casefold())
+    tokens = set(normalized.split())
+    return any(set(re.sub(r"[^\w%$']+", " ", tag.casefold()).split()) <= tokens for tag in tags)

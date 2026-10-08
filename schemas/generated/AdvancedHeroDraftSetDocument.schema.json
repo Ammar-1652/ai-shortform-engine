@@ -369,6 +369,35 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "sfx_default_gain_db": {
+          "default": -18,
+          "maximum": 0,
+          "minimum": -24,
+          "title": "Sfx Default Gain Db",
+          "type": "number"
+        },
+        "sfx_fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade In Us",
+          "type": "integer"
+        },
+        "sfx_fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade Out Us",
+          "type": "integer"
+        },
+        "sfx_max_gain_db": {
+          "const": -18,
+          "default": -18,
+          "title": "Sfx Max Gain Db",
+          "type": "integer"
+        },
         "sfx_policy": {
           "const": "rights_cleared_local",
           "default": "rights_cleared_local",

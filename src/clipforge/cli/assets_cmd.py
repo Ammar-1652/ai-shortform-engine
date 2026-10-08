@@ -290,6 +290,7 @@ def envato_register(
     force: Annotated[bool, typer.Option("--force")] = False,
     asset_id: Annotated[str | None, typer.Option("--asset-id")] = None,
     cancel: Annotated[bool, typer.Option("--cancel")] = False,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
@@ -308,6 +309,7 @@ def envato_register(
             force=force,
             asset_id=asset_id,
             cancel=cancel,
+            content_tags=content_tags,
         )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)

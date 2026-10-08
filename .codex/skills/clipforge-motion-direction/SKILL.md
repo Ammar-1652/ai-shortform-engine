@@ -41,10 +41,14 @@ Return a concise direction brief with:
    that has a real source-grounded reason. Each placement must name `asset_id`,
    `kind` (`graphic` or `audio`), an integer-microsecond output `interval`,
    `source_in_us`, one or more evidence ids, a `purpose`, and a concise
-   `relevance_note`; SFX may also set a bounded `gain_db`. Never distribute
-   assets evenly or add a whoosh/impact merely to create motion;
-8. a validation checklist covering alignment, rights, geometry, and stale
-   approvals.
+   `relevance_note`; for clean B-roll, copy the exact reviewed `asset_tags`
+   from the asset catalog and name at least one tag in the relevance note. SFX
+   may also set a bounded `gain_db`; clean production defaults to a restrained
+   -18 dB cap with a short deterministic envelope. Never distribute assets
+   evenly or add a whoosh/impact merely to create motion;
+8. a validation checklist covering alignment, rights, geometry, stale
+   approvals, and complete-word TimeMap boundaries. Reject a cut that
+   intersects a spoken word so the picture cannot lose its leading phoneme.
 
 Do not write JavaScript, JSX, CSS, HTML, shell commands, or arbitrary effect
 parameters into the brief. Do not fabricate a hook, comparison, chart, speaker,

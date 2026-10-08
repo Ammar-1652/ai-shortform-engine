@@ -16,6 +16,7 @@ from clipforge.hero.alignment import (
     _align_with_side_python,
     _require_worker_identity,
     _stored_locale,
+    _validate_cut_boundaries,
     build_alignment,
 )
 from clipforge.hero.captions import _MAX_GAP_US, hero_caption_pieces
@@ -381,6 +382,13 @@ def test_boundary_duplicate_skipped_and_wrong_segment_fail() -> None:
 
     with pytest.raises(MediaError, match="outside its TimeMap segment"):
         _built(_Endpoint())
+
+
+def test_timemap_boundary_inside_word_is_rejected_before_alignment() -> None:
+    words = [TranscriptWord(word_id="w-how", text=" How", start_us=100_000, end_us=300_000)]
+    segments = [TimelineSegment(segment_id="cut", source_start_us=0, source_end_us=200_000)]
+    with pytest.raises(MediaError, match="inside a transcript word"):
+        _validate_cut_boundaries(words, segments)
 
 
 def test_caption_gap_above_the_cadence_splits_the_cue() -> None:
