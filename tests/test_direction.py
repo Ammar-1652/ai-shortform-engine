@@ -11,6 +11,7 @@ from clipforge.schemas.direction import (
     DirectionBeat,
     DirectionDocument,
     DirectionEvidence,
+    DirectionMotionGraphic,
     DirectionOption,
 )
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
@@ -218,3 +219,74 @@ def test_asset_placement_must_overlap_its_source_evidence() -> None:
     )
     with pytest.raises(MediaError, match="does not overlap"):
         validate_source_evidence(document, words, time_map, set())
+
+
+def test_motion_graphic_requires_exact_source_text_and_supported_semantics() -> None:
+    document = _document()
+    options: list[DirectionOption] = []
+    for current in document.options:
+        evidence = current.evidence[0].model_copy(update={"source_text": "credit card"})
+        beat = current.beats[0].model_copy(update={"display_text": "credit card"})
+        options.append(
+            current.model_copy(
+                update={"evidence": [evidence, *current.evidence[1:]], "beats": [beat, *current.beats[1:]]}
+            )
+        )
+    option = options[0]
+    evidence = option.evidence[0]
+    beat = option.beats[0]
+    graphic = DirectionMotionGraphic(
+        graphic_id="credit-card-1",
+        template="credit_card",
+        interval=OutputInterval(output_start_us=0, output_end_us=900_000),
+        source_evidence_ids=[evidence.evidence_id],
+        purpose=MotionPurpose.NUMBER,
+        display_text="credit card",
+        x=72,
+        y=900,
+        width=360,
+        height=260,
+    )
+    option = option.model_copy(
+        update={
+            "evidence": [evidence, *option.evidence[1:]],
+            "beats": [beat, *option.beats[1:]],
+            "motion_graphics": [graphic],
+        }
+    )
+    document = document.model_copy(update={"options": [option, *options[1:]]})
+    words = _aligned_words()
+    words[0] = words[0].model_copy(update={"text": "credit card"})
+    time_map = TimeMapDocument(
+        time_map_id="map-1",
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+    )
+    validate_source_evidence(document, words, time_map, set())
+
+    invented = graphic.model_copy(update={"display_text": "Free money"})
+    invalid_option = option.model_copy(update={"motion_graphics": [invented]})
+    invalid = document.model_copy(update={"options": [invalid_option, *options[1:]]})
+    with pytest.raises(MediaError, match="display text"):
+        validate_source_evidence(invalid, words, time_map, set())
+
+    unrelated = graphic.model_copy(update={"template": "business_spotlight"})
+    invalid_option = option.model_copy(update={"motion_graphics": [unrelated]})
+    invalid = document.model_copy(update={"options": [invalid_option, *options[1:]]})
+    with pytest.raises(MediaError, match="not supported"):
+        validate_source_evidence(invalid, words, time_map, set())
+
+
+def test_motion_graphic_cannot_enter_caption_lane() -> None:
+    with pytest.raises(ValidationError, match="caption lane"):
+        DirectionMotionGraphic(
+            graphic_id="graphic-1",
+            template="travel_postcard",
+            interval=OutputInterval(output_start_us=0, output_end_us=1),
+            source_evidence_ids=["e-option-a-0"],
+            purpose=MotionPurpose.CONCEPT,
+            display_text="The source",
+            x=72,
+            y=1240,
+            width=360,
+            height=260,
+        )

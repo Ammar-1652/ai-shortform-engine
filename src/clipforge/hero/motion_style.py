@@ -213,6 +213,10 @@ def production_style_ids() -> tuple[DirectionStyleId, ...]:
 
 
 def style_for_renderer_version(version: str) -> MotionStyleProfile:
-    if version in {"advanced-hero-renderer-clean-v1", "advanced-hero-renderer-directed-v2"}:
+    if version in {
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+    }:
         return EDITORIAL_CLEAN_V1
     return LEGACY_V1

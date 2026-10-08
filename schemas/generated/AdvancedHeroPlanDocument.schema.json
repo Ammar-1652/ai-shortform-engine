@@ -604,6 +604,93 @@
       "title": "EmphasisEvent",
       "type": "object"
     },
+    "MotionGraphicEvent": {
+      "additionalProperties": false,
+      "description": "One source-grounded native Remotion illustration.\n\nThe template is an allowlisted renderer component, never operator-supplied\nJSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan\nso a visual cannot become a free-floating unsupported claim.",
+      "properties": {
+        "display_text": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Display Text",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "height": {
+          "maximum": 560,
+          "minimum": 180,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "template": {
+          "enum": [
+            "credit_card",
+            "travel_postcard",
+            "business_spotlight"
+          ],
+          "title": "Template",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 840,
+          "minimum": 220,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 812,
+          "minimum": 48,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1240,
+          "minimum": 120,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "template",
+        "interval",
+        "purpose",
+        "source_evidence_ids",
+        "display_text",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "MotionGraphicEvent",
+      "type": "object"
+    },
     "MotionPurpose": {
       "enum": [
         "number",
@@ -1093,6 +1180,13 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Hero Set Id",
       "type": "string"
+    },
+    "motion_graphics": {
+      "items": {
+        "$ref": "#/$defs/MotionGraphicEvent"
+      },
+      "title": "Motion Graphics",
+      "type": "array"
     },
     "motion_style": {
       "anyOf": [

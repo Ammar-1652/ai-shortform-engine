@@ -37,6 +37,7 @@ from clipforge.schemas.direction import (
     DirectionBeat,
     DirectionDocument,
     DirectionEvidence,
+    DirectionMotionGraphic,
     DirectionOption,
 )
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
@@ -48,7 +49,7 @@ from tests.test_hero_review_browser import DebugPage
 from tests.test_hero_service import CountingAligner, _hero
 
 pytestmark = [pytest.mark.preview, pytest.mark.browser]
-_PHRASE = "Café costs $12.50 説明 please."
+_PHRASE = "A credit card costs $12.50, Café 説明."
 
 
 def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: str) -> None:
@@ -93,7 +94,10 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 placement_id=f"{option_id}-broll",
                 asset_id=broll_id,
                 kind="graphic",
-                interval=OutputInterval(output_start_us=0, output_end_us=400_000),
+                interval=OutputInterval(
+                    output_start_us=groups[0][0].output_start_us,
+                    output_end_us=groups[0][-1].output_end_us,
+                ),
                 source_evidence_ids=[evidence[0].evidence_id],
                 purpose=MotionPurpose.CONCEPT,
                 relevance_note="The concept opening insert illustrates the exact opening phrase.",
@@ -103,7 +107,10 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 placement_id=f"{option_id}-sfx",
                 asset_id=sfx_id,
                 kind="audio",
-                interval=OutputInterval(output_start_us=200_000, output_end_us=500_000),
+                interval=OutputInterval(
+                    output_start_us=groups[0][0].output_start_us,
+                    output_end_us=groups[0][-1].output_end_us,
+                ),
                 source_in_us=0,
                 source_evidence_ids=[evidence[0].evidence_id],
                 purpose=MotionPurpose.KEY_PHRASE,
@@ -111,6 +118,30 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 gain_db=-12,
             ),
         ]
+        graphics = []
+        if option_id == "option-b":
+            graphic_evidence = DirectionEvidence(
+                evidence_id=f"{option_id}-credit-card-evidence",
+                source_word_ids=[word.word_id for word in words],
+                source_segment_ids=segment_order,
+                source_text="".join(word.text for word in words),
+                note="The exact spoken phrase names a credit card.",
+            )
+            evidence.append(graphic_evidence)
+            graphics.append(
+                DirectionMotionGraphic(
+                    graphic_id=f"{option_id}-credit-card",
+                    template="credit_card",
+                    interval=OutputInterval(output_start_us=400_000, output_end_us=1_100_000),
+                    source_evidence_ids=[graphic_evidence.evidence_id],
+                    purpose=MotionPurpose.NUMBER,
+                    display_text=graphic_evidence.source_text,
+                    x=80,
+                    y=900,
+                    width=420,
+                    height=260,
+                )
+            )
         options.append(
             DirectionOption(
                 option_id=option_id,
@@ -119,6 +150,7 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 beats=beats,
                 evidence=evidence,
                 asset_placements=placements,
+                motion_graphics=graphics,
                 segment_order=segment_order,
                 selection_score=(0.72, 0.91, 0.81)[option_index],
                 selection_reason="Preserves the exact source sequence and uses one relevant opening accent.",
@@ -274,8 +306,10 @@ def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
     if clean_direction:
         assert rendered["direction_id"] == "direction-chrome"
         assert rendered["sfx"][0]["sfx_source_in_us"] == 0
+        assert rendered["motion_graphics"][0]["template"] == "credit_card"
+    broll_start = plan.broll[0].interval.output_start_us / 1_000_000
     broll_end = plan.broll[0].interval.output_end_us / 1_000_000
-    during = broll_end / 2
+    during = (broll_start + broll_end) / 2
     after = min(probe["duration"] - 0.05, broll_end + 0.2)
     pixel = _pixel(video, during, 540, 960)
     assert pixel == "red" or (pixel.count(",") == 2 and int(pixel.split(",")[0]) > 140)
@@ -283,6 +317,8 @@ def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
     assert _pixel(video, after, 540, 40) != "dark"
     assert _pixel(video, after, 200, 400) != "magenta"
     assert _pixel(video, after, 600, 400) != "cyan"
+    if clean_direction:
+        assert _motion_graphic_ink(video, 0.7) > 100, "native motion graphic did not reach encoded MP4"
     assert _caption_ink(video, after), "caption glyphs were not visible in the safe area"
     ocr = _ocr(video, after)
     if ocr is not None:
@@ -536,6 +572,26 @@ def _caption_ink(path: Path, seconds: float) -> bool:
             if red > 200 and green > 200 and blue > 200:
                 return True
     return False
+
+
+def _motion_graphic_ink(path: Path, seconds: float) -> int:
+    """Count card-blue pixels in its declared safe graphic box after encoding."""
+    frame = path.parent / f"motion-graphic-{int(seconds * 1000)}.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-ss", f"{seconds:.3f}", "-i", str(path), "-frames:v", "1", str(frame)],
+        check=True,
+    )
+    raw = subprocess.check_output(
+        ["ffmpeg", "-v", "error", "-i", str(frame), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    )
+    blue_ink = 0
+    for y in range(920, 1140, 4):
+        for x in range(100, 480, 4):
+            offset = (y * 1080 + x) * 3
+            red, green, blue = raw[offset], raw[offset + 1], raw[offset + 2]
+            if blue > green + 25 and blue > red + 25:
+                blue_ink += 1
+    return blue_ink
 
 
 def _pixel(path: Path, seconds: float, x: int, y: int) -> str:

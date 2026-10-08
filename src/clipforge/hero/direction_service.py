@@ -206,6 +206,38 @@ def validate_source_evidence(
                 or placement.interval.output_start_us >= evidence_end
             ):
                 raise MediaError("direction asset placement does not overlap its source evidence")
+        for graphic in option.motion_graphics:
+            if graphic.interval.output_end_us > duration:
+                raise MediaError("direction motion graphic extends past the approved TimeMap")
+            if any(evidence_id not in evidence_by_id for evidence_id in graphic.source_evidence_ids):
+                raise MediaError("direction motion graphic references undeclared evidence")
+            graphic_evidence = [evidence_by_id[item] for item in graphic.source_evidence_ids]
+            if not any(
+                _normalize(graphic.display_text) == _normalize(item.source_text) for item in graphic_evidence
+            ):
+                raise MediaError("direction motion graphic display text must equal its bound evidence")
+            graphic_words = [by_id[word_id] for item in graphic_evidence for word_id in item.source_word_ids]
+            graphic_start = min(word.output_start_us for word in graphic_words)
+            graphic_end = max(word.output_end_us for word in graphic_words)
+            if (
+                graphic.interval.output_end_us <= graphic_start
+                or graphic.interval.output_start_us >= graphic_end
+            ):
+                raise MediaError("direction motion graphic does not overlap its source evidence")
+            # Templates are semantic illustrations, not generic decorations.
+            # Keep their use tied to words which actually support the concept.
+            evidence_text = " ".join(item.source_text for item in graphic_evidence).casefold()
+            required_terms = {
+                "credit_card": ("credit", "card"),
+                "travel_postcard": ("philippines", "vacation", "beach", "tropical", "airbnb"),
+                "business_spotlight": ("business", "company", "founder", "enterprise"),
+            }[graphic.template]
+            if graphic.template == "credit_card":
+                supported = all(term in evidence_text for term in required_terms)
+            else:
+                supported = any(term in evidence_text for term in required_terms)
+            if not supported:
+                raise MediaError("direction motion graphic template is not supported by its source evidence")
 
 
 def _normalize(value: str) -> str:

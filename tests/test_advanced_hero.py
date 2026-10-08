@@ -505,7 +505,7 @@ def test_remote_url_and_music_are_rejected() -> None:
 def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
     assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
     assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
-    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v2"
+    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v3"
     legacy = default_advanced_profile().model_copy(
         update={
             "caption_algorithm_version": "advanced-caption-v1",
@@ -1172,6 +1172,17 @@ def test_profile_fingerprint_binds_time_map_staging_recipe() -> None:
     legacy = current.model_copy(update={"staging_recipe_version": "time-map-v1-audio-envelope"})
     assert current.staging_recipe_version == "time-map-v2-frame-quantized"
     assert current.fingerprint() != legacy.fingerprint()
+
+
+def test_directed_v2_profile_remains_verifiable_without_native_graphics_field() -> None:
+    v2 = default_advanced_profile().model_copy(
+        update={"renderer_recipe_version": "advanced-hero-renderer-directed-v2"}
+    )
+    old_payload = v2.model_dump(mode="json")
+    old_payload.pop("motion_graphics_version")
+    loaded_old = AdvancedHeroProfile.model_validate(old_payload)
+    assert loaded_old.fingerprint() == v2.fingerprint()
+    assert default_advanced_profile().fingerprint() != v2.fingerprint()
 
 
 def _advanced_jobs(fixture) -> list[object]:

@@ -324,7 +324,10 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
     lines: list[str] = []
     for plan in inputs.plans:
         if not plan.direction_id:
-            if inputs.document.profile.renderer_recipe_version == "advanced-hero-renderer-directed-v2":
+            if inputs.document.profile.renderer_recipe_version in {
+                "advanced-hero-renderer-directed-v2",
+                "advanced-hero-renderer-directed-v3",
+            }:
                 return _check(
                     "direction",
                     False,
@@ -376,6 +379,18 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
             for event, placement in zip(plan.sfx, expected_sfx, strict=True)
         ):
             return _check("direction", False, f"candidate={plan.candidate_id} blocker=sfx_placement_stale")
+        expected_graphics = selected.motion_graphics
+        if len(plan.motion_graphics) != len(expected_graphics) or any(
+            event.template != graphic.template
+            or event.interval != graphic.interval
+            or event.purpose != graphic.purpose
+            or event.source_evidence_ids != graphic.source_evidence_ids
+            or event.display_text != graphic.display_text
+            or (event.x, event.y, event.width, event.height)
+            != (graphic.x, graphic.y, graphic.width, graphic.height)
+            for event, graphic in zip(plan.motion_graphics, expected_graphics, strict=True)
+        ):
+            return _check("direction", False, f"candidate={plan.candidate_id} blocker=motion_graphics_stale")
         if any(not event.source_evidence_ids or not event.relevance_note for event in plan.broll):
             return _check(
                 "direction",

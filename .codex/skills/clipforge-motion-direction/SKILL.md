@@ -37,7 +37,18 @@ Return a concise direction brief with:
    source-native text, graphics, B-roll, and captions;
 6. optional diagram facts only when both sides, units, labels, values, and source
    word/span provenance are explicit;
-7. optional `asset_placements` only for locally registered, rights-cleared media
+7. optional native `motion_graphics` only when an allowlisted illustration conveys
+   a source-grounded fact more clearly than captions alone. Each record must name
+   an allowlisted `template`, integer-microsecond output `interval`, exact source
+   evidence ids, a `MotionPurpose`, display text copied exactly from one bound
+   evidence item, and safe-region geometry above the reserved caption lane.
+   Templates are `credit_card` (evidence must contain both “credit” and “card”),
+   `travel_postcard` (travel, Philippines, vacation, beach, tropical, or Airbnb),
+   and `business_spotlight` (business, company, founder, or enterprise). Do not
+   use a graphic as a generic decoration, replacement caption, or way to invent a
+   hook. Graphics must not overlap each other; omission is the correct choice when
+   no template fits;
+8. optional `asset_placements` only for locally registered, rights-cleared media
    that has a real source-grounded reason. Each placement must name `asset_id`,
    `kind` (`graphic` or `audio`), an integer-microsecond output `interval`,
    `source_in_us`, one or more evidence ids, a `purpose`, and a concise
@@ -46,7 +57,7 @@ Return a concise direction brief with:
    may also set a bounded `gain_db`; clean production defaults to a restrained
    -18 dB cap with a short deterministic envelope. Never distribute assets
    evenly or add a whoosh/impact merely to create motion;
-8. a validation checklist covering alignment, rights, geometry, stale
+9. a validation checklist covering alignment, rights, geometry, stale
    approvals, and complete-word TimeMap boundaries. Reject a cut that
    intersects a spoken word so the picture cannot lose its leading phoneme.
 
@@ -63,7 +74,7 @@ The brief is declarative JSON, not executable code. Its top-level fields are
 `selection_mode`, `style_id`,
 `style_fingerprint`, `safe_region_id` (`portrait-safe-v1`), and provenance.
 Each option contains `style_id`, `beats`, `evidence`, `segment_order`,
-`asset_placements`, `selection_score`, and `selection_reason`; every beat contains a `kind`
+`motion_graphics`, `asset_placements`, `selection_score`, and `selection_reason`; every beat contains a `kind`
 (`hook`, `body`, or `punch`), source segment ids, evidence ids, and exact
 source-grounded display text. A brief that cannot populate these fields must
 be rejected rather than filled with invented copy.

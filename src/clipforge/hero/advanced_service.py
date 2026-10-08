@@ -89,7 +89,10 @@ _PROFILE = AdvancedHeroProfile(
     caption_algorithm_version="advanced-caption-clean-v1",
     typography_version="advanced-typography-clean-v1",
     diagram_version="advanced-diagram-grounded-v1",
-    renderer_recipe_version="advanced-hero-renderer-directed-v2",
+    # v3 adds source-bound native Remotion illustration events.  Its recipe
+    # name is part of the profile fingerprint, so v2 artifacts continue to
+    # resolve under their recorded renderer behavior.
+    renderer_recipe_version="advanced-hero-renderer-directed-v3",
     motion_library_version="advanced-motion-clean-v1",
 )
 
@@ -570,6 +573,7 @@ def _render_run(
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
+            motion_graphics=plan.motion_graphics,
             emphasis=plan.emphasis,
             broll=plan.broll,
             sfx=plan.sfx,
@@ -1774,6 +1778,22 @@ def _review_draft(
         }
         for item in plan.diagrams
     ]
+    motion_graphics = [
+        {
+            "component_id": item.event_id,
+            "template": item.template,
+            "display_text": item.display_text,
+            "purpose": item.purpose.value,
+            "source_evidence_ids": item.source_evidence_ids,
+            "output_start_us": item.interval.output_start_us,
+            "output_end_us": item.interval.output_end_us,
+            "x": item.x,
+            "y": item.y,
+            "width": item.width,
+            "height": item.height,
+        }
+        for item in plan.motion_graphics
+    ]
     emphasis = [
         {
             "text": item.text,
@@ -1814,6 +1834,7 @@ def _review_draft(
         "sfx": sfx,
         "typography": typography,
         "diagrams": diagrams,
+        "motion_graphics": motion_graphics,
         "emphasis": emphasis,
         "current_decision": None if effective is None else effective.decision,
         "history": [

@@ -26,6 +26,7 @@ from clipforge.schemas.advanced import (
     CaptionWordTiming,
     DiagramEvent,
     EmphasisEvent,
+    MotionGraphicEvent,
     ReframingWindow,
     TypographyEvent,
     advanced_fingerprint,
@@ -133,6 +134,8 @@ def build_advanced_plan(
     # A diagram is editorial evidence, not a decoration.  Until an operator
     # supplies a source-grounded diagram instruction, the safe plan is none.
     diagrams: list[DiagramEvent] = []
+    motion_graphics = _motion_graphics(direction)
+    typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
     selected_placements = _selected_asset_placements(direction)
     broll_placements = [item for item in selected_placements if item.kind == "graphic"]
@@ -212,6 +215,7 @@ def build_advanced_plan(
         captions=captions,
         typography=typography,
         diagrams=diagrams,
+        motion_graphics=motion_graphics,
         emphasis=emphasis,
         broll=broll,
         sfx=sfx,
@@ -242,6 +246,45 @@ def _selected_asset_placements(direction: DirectionDocument | None) -> list[Dire
         return []
     option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
     return list(option.asset_placements)
+
+
+def _motion_graphics(direction: DirectionDocument | None) -> list[MotionGraphicEvent]:
+    """Convert only validated selected-direction graphics into render events."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return [
+        MotionGraphicEvent(
+            event_id=stable_id("direction-graphic", direction.direction_id, graphic.graphic_id),
+            template=graphic.template,
+            interval=graphic.interval,
+            purpose=graphic.purpose,
+            source_evidence_ids=graphic.source_evidence_ids,
+            display_text=graphic.display_text,
+            x=graphic.x,
+            y=graphic.y,
+            width=graphic.width,
+            height=graphic.height,
+        )
+        for graphic in option.motion_graphics
+    ]
+
+
+def _drop_typography_graphic_collisions(
+    typography: list[TypographyEvent], motion_graphics: list[MotionGraphicEvent]
+) -> list[TypographyEvent]:
+    """A graphic owns its source beat; don't stack a decorative rail over it."""
+    if not motion_graphics:
+        return list(typography)
+    return [
+        item
+        for item in typography
+        if not any(
+            item.interval.output_start_us < graphic.interval.output_end_us
+            and graphic.interval.output_start_us < item.interval.output_end_us
+            for graphic in motion_graphics
+        )
+    ]
 
 
 def _emphasis(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[EmphasisEvent]:

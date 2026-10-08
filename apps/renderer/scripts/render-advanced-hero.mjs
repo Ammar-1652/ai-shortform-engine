@@ -121,6 +121,36 @@ for (const item of batch.items) {
       throw new Error("diagram geometry is outside the production safe area");
     }
   }
+  const motionGraphicTemplates = new Set(["credit_card", "travel_postcard", "business_spotlight"]);
+  for (const graphic of input.motion_graphics ?? []) {
+    if (!graphic || !motionGraphicTemplates.has(graphic.template)) {
+      throw new Error(`unsupported production motion graphic ${String(graphic?.template)}`);
+    }
+    if (
+      !Array.isArray(graphic.source_evidence_ids) ||
+      graphic.source_evidence_ids.length === 0 ||
+      !graphic.source_evidence_ids.every((item) => typeof item === "string" && item.length > 0) ||
+      typeof graphic.display_text !== "string" ||
+      graphic.display_text.trim().length === 0
+    ) {
+      throw new Error("production motion graphic requires source evidence and source text");
+    }
+    const { x, y, width, height } = graphic;
+    if (
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      x < 48 ||
+      y < 120 ||
+      width < 220 ||
+      height < 180 ||
+      x + width > 1032 ||
+      y + height > 1480
+    ) {
+      throw new Error("motion graphic geometry is outside the production graphic region");
+    }
+  }
   if (
     input.reframing_strategy !== "contain" &&
     input.reframing_strategy !== "center_crop" &&

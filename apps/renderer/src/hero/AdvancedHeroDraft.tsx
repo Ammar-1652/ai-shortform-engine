@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { CaptionPlate } from "../captions/CaptionPlate.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
+import { MotionGraphicCard, type MotionGraphic } from "./MotionGraphic.js";
 
 type Interval = { output_start_us?: number; output_end_us?: number };
 
@@ -109,6 +110,7 @@ export type AdvancedHeroInput = {
   captions?: TypeEvent[];
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
+  motion_graphics?: MotionGraphic[];
   broll?: BrollEvent[];
   sfx?: SfxEvent[];
   emphasis?: EmphasisEvent[];
@@ -264,6 +266,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const language = !rawLanguage || rawLanguage === "missing" ? "en-US" : rawLanguage;
   const motionStyle = input.motion_style;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
+  const motionGraphics = (input.motion_graphics ?? []).filter((item) => active(frame, item.interval));
   if (diagram && (diagram.payload?.kind ?? "number_comparison") !== "number_comparison") {
     throw new Error(`unsupported production diagram kind ${String(diagram.payload?.kind)}`);
   }
@@ -414,6 +417,32 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           </div>
         </AbsoluteFill>
       )}
+      {motionGraphics.map((graphic) => {
+        if (
+          graphic.template !== "credit_card" &&
+          graphic.template !== "travel_postcard" &&
+          graphic.template !== "business_spotlight"
+        ) {
+          throw new Error(`unsupported production motion graphic ${String(graphic.template)}`);
+        }
+        if (!graphic.source_evidence_ids?.length || !(graphic.display_text ?? "").trim()) {
+          throw new Error("production motion graphic requires source evidence and source text");
+        }
+        const x = graphic.x ?? 72;
+        const y = graphic.y ?? 760;
+        const width = graphic.width ?? 420;
+        const height = graphic.height ?? 300;
+        if (x < 48 || y < 120 || width < 220 || height < 180 || x + width > 1032 || y + height > 1480) {
+          throw new Error("motion graphic geometry is outside the production graphic region");
+        }
+        return (
+          <MotionGraphicCard
+            key={graphic.event_id ?? `${graphic.template}-${graphic.display_text}`}
+            graphic={graphic}
+            accent={motionStyle?.accent ?? "#64d8ff"}
+          />
+        );
+      })}
       {visibleCaptions.map((item) => (
         (() => {
           const activeWord =

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
-from typing import Any, Literal, Self
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
@@ -156,6 +156,34 @@ class DiagramEvent(Versioned):
         return self
 
 
+class MotionGraphicEvent(Versioned):
+    """One source-grounded native Remotion illustration.
+
+    The template is an allowlisted renderer component, never operator-supplied
+    JSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan
+    so a visual cannot become a free-floating unsupported claim.
+    """
+
+    event_id: EntityId
+    template: Literal["credit_card", "travel_postcard", "business_spotlight"]
+    interval: OutputInterval
+    purpose: MotionPurpose
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    display_text: str = Field(min_length=1, max_length=100)
+    x: int = Field(ge=_SAFE_X, le=812)
+    y: int = Field(ge=120, le=1240)
+    width: int = Field(ge=220, le=840)
+    height: int = Field(ge=180, le=560)
+
+    @model_validator(mode="after")
+    def stays_in_graphic_region(self) -> Self:
+        if self.x + self.width > _FRAME_W - _SAFE_X:
+            raise ValueError("motion graphic extends past the safe area width")
+        if self.y + self.height > 1480:
+            raise ValueError("motion graphic extends into the reserved caption lane")
+        return self
+
+
 class AssetBinding(Versioned):
     """Rights-cleared local asset used by one advanced plan. No filesystem path."""
 
@@ -234,9 +262,13 @@ class AdvancedHeroProfile(Versioned):
     diagram_version: Literal["advanced-diagram-v1", "advanced-diagram-grounded-v1"] = (
         "advanced-diagram-grounded-v1"
     )
+    motion_graphics_version: Literal["advanced-motion-graphics-v1"] = "advanced-motion-graphics-v1"
     renderer_recipe_version: Literal[
-        "advanced-hero-renderer-v1", "advanced-hero-renderer-clean-v1", "advanced-hero-renderer-directed-v2"
-    ] = "advanced-hero-renderer-clean-v1"
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+    ] = "advanced-hero-renderer-directed-v3"
     staging_recipe_version: Literal["time-map-v1-audio-envelope", "time-map-v2-frame-quantized"] = (
         "time-map-v2-frame-quantized"
     )
@@ -290,8 +322,13 @@ class AdvancedHeroProfile(Versioned):
                 "sfx_fade_out_us",
                 "audio_mix_version",
                 "staging_recipe_version",
+                "motion_graphics_version",
             ):
                 payload.pop(key, None)
+        # v2 predates native illustration events.  Its recorded fingerprints
+        # must remain verifiable when a stored profile is read by this build.
+        elif self.renderer_recipe_version == "advanced-hero-renderer-directed-v2":
+            payload.pop("motion_graphics_version", None)
         return advanced_fingerprint(payload)
 
 
@@ -324,6 +361,7 @@ class AdvancedHeroRenderInput(Versioned):
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
+    motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
@@ -432,6 +470,7 @@ class AdvancedHeroPlanDocument(Versioned):
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
+    motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
@@ -446,6 +485,7 @@ class AdvancedHeroPlanDocument(Versioned):
         _reject_overlaps(self.broll, "b-roll")
         _reject_overlaps_typed(self.captions, "captions")
         _reject_overlaps_typed(self.typography, "typography")
+        _reject_overlaps_typed(self.motion_graphics, "motion graphics")
         for event in self.sfx:
             if event.role != "sfx":
                 raise ValueError("advanced Hero audio rejects music")
@@ -535,7 +575,12 @@ def _reject_overlaps(events: list[BrollEvent], label: str) -> None:
         previous_end = event.interval.output_end_us
 
 
-def _reject_overlaps_typed(events: list[TypographyEvent], label: str) -> None:
+class _TimedPlanEvent(Protocol):
+    event_id: str
+    interval: OutputInterval
+
+
+def _reject_overlaps_typed(events: Sequence[_TimedPlanEvent], label: str) -> None:
     ordered = sorted(events, key=lambda item: (item.interval.output_start_us, item.event_id))
     previous_end = -1
     for event in ordered:

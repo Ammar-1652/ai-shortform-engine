@@ -7,6 +7,7 @@ from, and the renderer only accepts the allowlisted style identifiers below.
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -120,6 +121,38 @@ class DirectionAssetPlacement(Versioned):
     gain_db: float | None = Field(default=None, ge=-24, le=6)
 
 
+class DirectionMotionGraphic(Versioned):
+    """A native Remotion illustration tied to exact spoken evidence.
+
+    This is deliberately not an asset placement: it has no downloaded bytes,
+    remote URL, or executable payload. ``template`` selects one audited
+    renderer component and ``display_text`` is copied from the evidence named
+    below.  The lower caption lane is reserved, so an illustration cannot be
+    used as a decorative replacement for readable captions.
+    """
+
+    graphic_id: EntityId
+    template: Literal["credit_card", "travel_postcard", "business_spotlight"]
+    interval: OutputInterval
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    purpose: MotionPurpose
+    display_text: str = Field(min_length=1, max_length=100)
+    x: int = Field(ge=48, le=812)
+    y: int = Field(ge=120, le=1240)
+    width: int = Field(ge=220, le=840)
+    height: int = Field(ge=180, le=560)
+
+    @model_validator(mode="after")
+    def stays_out_of_caption_lane(self) -> Self:
+        if self.x + self.width > 1032:
+            raise ValueError("motion graphic extends past the portrait safe area width")
+        # Captions occupy the lower portrait lane. Native illustrations must
+        # leave it free rather than relying on opacity or layer order.
+        if self.y + self.height > 1480:
+            raise ValueError("motion graphic extends into the reserved caption lane")
+        return self
+
+
 class DirectionOption(Versioned):
     """One source-grounded direction alternative presented to the selector."""
 
@@ -129,6 +162,7 @@ class DirectionOption(Versioned):
     beats: list[DirectionBeat] = Field(min_length=3, max_length=12)
     evidence: list[DirectionEvidence] = Field(min_length=1)
     asset_placements: list[DirectionAssetPlacement] = Field(default_factory=list, max_length=12)
+    motion_graphics: list[DirectionMotionGraphic] = Field(default_factory=list, max_length=4)
     segment_order: list[EntityId] = Field(min_length=1)
     selection_score: float = Field(ge=0, le=1)
     selection_reason: str = Field(min_length=1, max_length=500)
@@ -157,6 +191,20 @@ class DirectionOption(Versioned):
         for placement in self.asset_placements:
             if placement.kind == "graphic" and placement.gain_db is not None:
                 raise ValueError("graphic placement cannot declare an audio gain")
+        graphic_ids = [graphic.graphic_id for graphic in self.motion_graphics]
+        if len(set(graphic_ids)) != len(graphic_ids):
+            raise ValueError("direction motion graphic ids must be unique")
+        if any(
+            evidence_id not in evidence_ids
+            for graphic in self.motion_graphics
+            for evidence_id in graphic.source_evidence_ids
+        ):
+            raise ValueError("every motion graphic evidence id must be declared by the option")
+        graphics = sorted(self.motion_graphics, key=lambda item: item.interval.output_start_us)
+        if any(
+            left.interval.output_end_us > right.interval.output_start_us for left, right in pairwise(graphics)
+        ):
+            raise ValueError("overlapping motion graphics are rejected")
         if len(set(self.segment_order)) != len(self.segment_order):
             raise ValueError("direction segment order cannot repeat a segment")
         return self
