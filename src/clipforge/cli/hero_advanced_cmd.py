@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated, NoReturn
 
 import typer
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
-from clipforge.schemas.advanced import AdvancedHeroProfile, ReframingStrategy
+from clipforge.schemas.advanced import AdvancedHeroProfile, ReframingStrategy, ReframingWindow
 from clipforge.storage import Database
 
 advanced_app = typer.Typer(
@@ -53,19 +54,82 @@ def advanced_plan(
     broll: Annotated[list[str] | None, typer.Option("--broll")] = None,
     sfx: Annotated[list[str] | None, typer.Option("--sfx")] = None,
     reframing: Annotated[
-        str, typer.Option("--reframing", help="contain, center_crop, or face_follow.")
+        str, typer.Option("--reframing", help="contain, center_crop, face_follow, or manual_window.")
     ] = "contain",
+    focus_x: Annotated[
+        int | None, typer.Option("--focus-x", min=0, help="Manual crop focus x in visual pixels.")
+    ] = None,
+    focus_y: Annotated[
+        int | None, typer.Option("--focus-y", min=0, help="Manual crop focus y in visual pixels.")
+    ] = None,
+    manual_windows_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--manual-windows-file",
+            help="JSON array of reviewed ReframingWindow records for a moving subject.",
+        ),
+    ] = None,
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
     from clipforge.hero.advanced_service import _context, default_advanced_profile, plan_advanced_candidate
 
-    profile = _profile(reframing)
     try:
+        profile = _profile(reframing)
         active = profile or default_advanced_profile()
+        database = Database(resolve_db_path(db))
+        root = resolve_work_dir(work_dir)
+        context = None
+        if reframing == "manual_window":
+            if manual_windows_file is not None and (focus_x is not None or focus_y is not None):
+                raise ClipforgeError("choose --manual-windows-file or --focus-x/--focus-y, not both")
+            context = _context(database, source_asset_id, candidate_id, root)
+            visual_width = context.visual.proxy_width
+            visual_height = context.visual.proxy_height
+            if manual_windows_file is not None:
+                if manual_windows_file.is_symlink() or not manual_windows_file.is_file():
+                    raise ClipforgeError("manual window file must be a regular, non-symlink JSON file")
+                try:
+                    payload = json.loads(manual_windows_file.read_text(encoding="utf-8"))
+                    windows = TypeAdapter(list[ReframingWindow]).validate_python(payload)
+                except (OSError, UnicodeError, json.JSONDecodeError, ValidationError) as exc:
+                    raise ClipforgeError(f"invalid manual window file: {exc}") from exc
+                if not windows:
+                    raise ClipforgeError("manual window file must contain at least one reviewed window")
+                active = default_advanced_profile().model_copy(
+                    update={
+                        "reframing": ReframingStrategy(strategy_id="manual_window"),
+                        "manual_windows": windows,
+                    }
+                )
+            else:
+                if focus_x is None or focus_y is None:
+                    raise ClipforgeError("manual_window requires --focus-x/--focus-y or --manual-windows-file")
+                crop_width, crop_height = _portrait_crop_size(visual_width, visual_height)
+                if focus_x >= visual_width or focus_y >= visual_height:
+                    raise ClipforgeError("manual crop focus must fall inside the visual frame")
+                crop_x = min(max(0, focus_x - crop_width // 2), visual_width - crop_width)
+                crop_y = min(max(0, focus_y - crop_height // 2), visual_height - crop_height)
+                end_us = context.hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
+                manual = ReframingWindow(
+                    window_id=f"manual-{candidate_id}",
+                    strategy_id=ReframingStrategy(strategy_id="manual_window"),
+                    output_start_us=0,
+                    output_end_us=end_us,
+                    source_x=crop_x,
+                    source_y=crop_y,
+                    source_width=crop_width,
+                    source_height=crop_height,
+                    frame_width=visual_width,
+                    frame_height=visual_height,
+                )
+                active = default_advanced_profile().model_copy(
+                    update={
+                        "reframing": ReframingStrategy(strategy_id="manual_window"),
+                        "manual_window": manual,
+                    }
+                )
         if active.renderer_recipe_version != "advanced-hero-renderer-v1":
-            context = _context(
-                Database(resolve_db_path(db)), source_asset_id, candidate_id, resolve_work_dir(work_dir)
-            )
+            context = context or _context(database, source_asset_id, candidate_id, root)
             direction_path = context.workspace.direction_file(candidate_id)
             if direction_path.is_symlink() or not direction_path.is_file():
                 raise ClipforgeError(
@@ -73,13 +137,13 @@ def advanced_plan(
                     "run `clipforge hero advanced direction plan` first"
                 )
         plan = plan_advanced_candidate(
-            database=Database(resolve_db_path(db)),
+            database=database,
             source_asset_id=source_asset_id,
             candidate_id=candidate_id,
-            work_root=resolve_work_dir(work_dir),
+            work_root=root,
             broll_asset_ids=broll,
             sfx_asset_ids=sfx,
-            profile=profile,
+            profile=active,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
@@ -87,6 +151,14 @@ def advanced_plan(
     typer.echo(f"reframing: {plan.reframing_strategy}")
     typer.echo(f"applied: {plan.reframing_strategy}")
     typer.echo("blocker: none")
+
+
+def _portrait_crop_size(frame_width: int, frame_height: int) -> tuple[int, int]:
+    """Largest integer multiple of 9:16 that fits inside the source frame."""
+    scale = min(frame_width // 9, frame_height // 16)
+    if scale < 1:
+        raise ClipforgeError("source frame is too small for a portrait crop")
+    return 9 * scale, 16 * scale
 
 
 @direction_app.command("plan")
@@ -319,7 +391,7 @@ def _profile(name: str) -> AdvancedHeroProfile | None:
             update={"reframing": ReframingStrategy(strategy_id="center_crop")}
         )
     if name == "manual_window":
-        raise ClipforgeError("manual_window strategy requires a reframing window")
+        return default_advanced_profile()
     if name in {"visual_safe_window", "multi_face_safe_window", "saliency_window"}:
         raise ClipforgeError(f"reframing strategy {name} is not supported")
     raise ClipforgeError(f"unknown reframing strategy {name}")

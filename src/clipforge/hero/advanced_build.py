@@ -42,6 +42,7 @@ from clipforge.transcription.io import publish_json
 
 _NAMESPACE = uuid.UUID("6f1d5e2a-9c4b-4f1a-8d3e-1a2b3c4d5e6f")
 _SAFE = 48
+_DIRECTION_ACCENT_TOP = 1_280
 
 
 def stable_id(*parts: str) -> str:
@@ -103,6 +104,20 @@ def build_advanced_plan(
         actor,
         tool_version,
     )
+    if profile.reframing.strategy_id == "manual_window":
+        cursor_us = 0
+        for window in windows:
+            if (
+                window.strategy_id.strategy_id != "manual_window"
+                or window.output_start_us != cursor_us
+                or window.frame_width != visual.proxy_width
+                or window.frame_height != visual.proxy_height
+                or window.source_width * 16 != window.source_height * 9
+            ):
+                raise MediaError("manual crop windows must be ordered, contiguous, source-bound, and 9:16")
+            cursor_us = window.output_end_us
+        if cursor_us != duration_us:
+            raise MediaError("manual crop windows must cover the complete output without gaps")
     emphasis = _emphasis(alignment, candidate_id)
     captions = _captions(alignment, candidate_id)
     if direction is not None:
@@ -146,6 +161,7 @@ def build_advanced_plan(
         sfx_placements,
     )
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
+    manual_windows = [item.model_dump(mode="json") for item in profile.manual_windows]
     motion_style = (
         style_for_id(direction.style_id)
         if direction is not None
@@ -153,6 +169,7 @@ def build_advanced_plan(
     )
     config: dict[str, object] = {
         "manual_window": manual,
+        "manual_windows": manual_windows,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
         "motion_style": asdict(motion_style),
@@ -288,8 +305,11 @@ def _directed_typography(
                 purpose=MotionPurpose.KEY_PHRASE,
                 component_id=f"{beat.kind}-card-v1",
                 text=beat.display_text,
-                x=72,
-                y=220 if beat.kind == "hook" else 1450 if beat.kind == "punch" else 360,
+                x=230 if beat.kind == "hook" else 160 if beat.kind == "punch" else 280,
+                # Duplicate text is suppressed in Remotion and represented by
+                # its accent track. Keep that track with the caption stack,
+                # below face space, rather than over a subject's forehead.
+                y=_DIRECTION_ACCENT_TOP + 34 if beat.kind == "punch" else _DIRECTION_ACCENT_TOP - 68,
                 font_size=64,
             )
         )
@@ -395,25 +415,16 @@ def _typography(
 def _drop_caption_duplicates(
     typography: list[TypographyEvent], captions: list[TypographyEvent]
 ) -> list[TypographyEvent]:
-    """Keep optional cards separate from baseline captions.
+    """Retain directed events so Remotion can draw their non-text treatment.
 
-    A direction may use a transcript phrase as evidence without asking for a
-    second painted copy. Exact normalized text and overlapping output timing
-    are sufficient to identify that duplicate deterministically.
+    Directed cards are source-bound to the same words as captions. The
+    renderer therefore suppresses duplicate glyphs while still drawing the
+    declarative card geometry. Dropping the event here discarded the intended
+    motion graphic before the render-input boundary and made a valid direction
+    visually inert.
     """
-    kept: list[TypographyEvent] = []
-    caption_text = [(re.sub(r"\s+", " ", item.text).strip().casefold(), item.interval) for item in captions]
-    for event in typography:
-        normalized = re.sub(r"\s+", " ", event.text).strip().casefold()
-        duplicate = any(
-            (normalized == text or normalized in text or text in normalized)
-            and event.interval.output_start_us < interval.output_end_us
-            and interval.output_start_us < event.interval.output_end_us
-            for text, interval in caption_text
-        )
-        if not duplicate:
-            kept.append(event)
-    return kept
+    del captions
+    return list(typography)
 
 
 def _phrase(words: list[AlignedWord]) -> str:
@@ -491,9 +502,12 @@ def _windows(
     elif strategy == "center_crop":
         box = _center_crop(width, height)
     elif strategy == "manual_window":
-        if profile.manual_window is None:
-            raise MediaError("manual_window strategy requires a reframing window")
-        return [profile.manual_window], None
+        windows = profile.manual_windows
+        if not windows and profile.manual_window is not None:
+            windows = [profile.manual_window]
+        if not windows:
+            raise MediaError("manual_window strategy requires reviewed crop windows")
+        return windows, None
     else:
         boxes = _face_boxes(visual, width, height)
         if strategy == "multi_face_safe_window" and len(boxes) < 2:

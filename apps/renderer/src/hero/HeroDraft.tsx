@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, staticFile, useCurrentFrame, Video } from "remotion";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
 import { emphasisScale, layerOpacity, revealedCaption } from "./motion.js";
@@ -36,7 +36,7 @@ export function HeroDraft(raw: HeroDraftInput) {
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <OffthreadVideo
+          <Video
             src={staticFile(stagedName(input.video_path))}
             trimBefore={input.media_trim_frame}
             durationInFrames={input.duration_in_frames}
@@ -52,7 +52,7 @@ export function HeroDraft(raw: HeroDraftInput) {
               transform: "translateY(-50%)",
             }}
           >
-            <OffthreadVideo
+            <Video
               src={staticFile(stagedName(input.video_path))}
               trimBefore={input.media_trim_frame}
               durationInFrames={input.duration_in_frames}

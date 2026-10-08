@@ -11,12 +11,13 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from clipforge.errors import MediaError
+from clipforge.cli.hero_advanced_cmd import _portrait_crop_size
+from clipforge.errors import ClipforgeError, MediaError
 from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
-from clipforge.hero.advanced_build import _broll, _sfx, _typography
+from clipforge.hero.advanced_build import _broll, _directed_typography, _sfx, _typography
 from clipforge.hero.advanced_service import (
     _require_production_direction,
     default_advanced_profile,
@@ -53,6 +54,76 @@ from tests.candidate_support import PROJECT_ID, SOURCE_ID
 from tests.test_hero_service import CountingAligner, _hero, _reviewed
 
 pytestmark = pytest.mark.hero
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "expected"),
+    [
+        (1280, 720, (405, 720)),
+        (1920, 1080, (603, 1072)),
+        (1080, 1920, (1080, 1920)),
+    ],
+)
+def test_manual_portrait_crop_uses_largest_integer_9_by_16_window(
+    width: int, height: int, expected: tuple[int, int]
+) -> None:
+    crop_width, crop_height = _portrait_crop_size(width, height)
+    assert (crop_width, crop_height) == expected
+    assert crop_width <= width
+    assert crop_height <= height
+    assert crop_width * 16 == crop_height * 9
+
+
+def test_manual_portrait_crop_rejects_empty_frame() -> None:
+    with pytest.raises(ClipforgeError, match="too small"):
+        _portrait_crop_size(0, 720)
+
+
+def test_manual_crop_trajectory_is_typed_and_fingerprinted() -> None:
+    strategy = ReframingStrategy(strategy_id="manual_window")
+    windows = [
+        ReframingWindow(
+            window_id="window-a",
+            strategy_id=strategy,
+            output_start_us=0,
+            output_end_us=1_000_000,
+            source_x=100,
+            source_y=0,
+            source_width=405,
+            source_height=720,
+            frame_width=1280,
+            frame_height=720,
+        ),
+        ReframingWindow(
+            window_id="window-b",
+            strategy_id=strategy,
+            output_start_us=1_000_000,
+            output_end_us=2_000_000,
+            source_x=300,
+            source_y=0,
+            source_width=405,
+            source_height=720,
+            frame_width=1280,
+            frame_height=720,
+        ),
+    ]
+    base = default_advanced_profile()
+    trajectory = AdvancedHeroProfile.model_validate(
+        {
+            **base.model_dump(mode="json"),
+            "reframing": strategy.model_dump(mode="json"),
+            "manual_windows": [item.model_dump(mode="json") for item in windows],
+        }
+    )
+    assert trajectory.fingerprint() != base.fingerprint()
+    assert len(trajectory.manual_windows) == 2
+    with pytest.raises(ValidationError, match="choose the legacy singular crop"):
+        AdvancedHeroProfile.model_validate(
+            {
+                **trajectory.model_dump(mode="json"),
+                "manual_window": windows[0].model_dump(mode="json"),
+            }
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -133,6 +204,39 @@ def test_typography_builds_exact_hook_and_punch_cards() -> None:
     assert [item.component_id for item in events] == ["hook-card-v1", "punch-card-v1"]
     assert events[0].text == "never knew his biological father,"
     assert events[1].text == "biological father, final."
+
+
+def test_direction_accent_tracks_stay_below_face_space_and_above_captions() -> None:
+    words = [
+        SimpleNamespace(
+            word_id=f"word-{index}", output_start_us=index * 1_000_000, output_end_us=(index + 1) * 1_000_000
+        )
+        for index in range(3)
+    ]
+    beats = [
+        SimpleNamespace(
+            beat_id=f"beat-{kind}",
+            kind=kind,
+            display_text=f"source phrase {kind}",
+            evidence_ids=[f"evidence-{kind}"],
+        )
+        for kind in ("hook", "body", "punch")
+    ]
+    evidence = [
+        SimpleNamespace(evidence_id=f"evidence-{kind}", source_word_ids=[f"word-{index}"])
+        for index, kind in enumerate(("hook", "body", "punch"))
+    ]
+    direction = SimpleNamespace(
+        direction_id="direction",
+        selected_option_id="selected",
+        options=[SimpleNamespace(option_id="selected", beats=beats, evidence=evidence)],
+    )
+    events = _directed_typography(direction, SimpleNamespace(words=words), "candidate")
+    line_top = [event.y + (-34 if event.component_id == "punch-card-v1" else 68) for event in events]
+    assert line_top == [1280, 1280, 1280]
+    line_width = {"hook-card-v1": 620, "body-card-v1": 520, "punch-card-v1": 760}
+    assert [event.x + line_width[event.component_id] // 2 for event in events] == [540, 540, 540]
+    assert all(event.y >= 1_212 for event in events)
 
 
 def test_clean_production_requires_direction_before_remotion() -> None:

@@ -253,17 +253,28 @@ class AdvancedHeroProfile(Versioned):
     max_gain_db: Literal[6] = 6
     duration_tolerance_us: Literal[100_000] = 100_000
     manual_window: ReframingWindow | None = None
+    # An explicitly reviewed, ordered crop trajectory. The legacy singular
+    # field remains readable so previously recorded profile fingerprints stay
+    # verifiable; new plans should prefer this when the source subject moves.
+    manual_windows: list[ReframingWindow] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def manual_window_matches_strategy(self) -> Self:
-        if self.reframing.strategy_id == "manual_window" and self.manual_window is None:
-            raise ValueError("manual_window strategy requires a reframing window")
-        if self.reframing.strategy_id != "manual_window" and self.manual_window is not None:
+        if self.reframing.strategy_id == "manual_window":
+            if self.manual_window is None and not self.manual_windows:
+                raise ValueError("manual_window strategy requires reviewed crop window(s)")
+            if self.manual_window is not None and self.manual_windows:
+                raise ValueError("choose the legacy singular crop or manual_windows, not both")
+        elif self.manual_window is not None or self.manual_windows:
             raise ValueError("a manual window is only stored for the manual_window strategy")
         return self
 
     def fingerprint(self) -> str:
         payload = self.model_dump(mode="json")
+        # Keep old profile digests stable when the additive trajectory field
+        # is unused. A populated trajectory is an output-changing dependency.
+        if not self.manual_windows:
+            payload.pop("manual_windows", None)
         # Round-30 profiles predate the explicit audio policy fields.  Keep
         # their recorded fingerprint verifiable without reinterpreting them;
         # every clean-v1 profile includes the complete current payload.

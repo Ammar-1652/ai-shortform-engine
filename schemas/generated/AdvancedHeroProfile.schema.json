@@ -211,6 +211,13 @@
       ],
       "default": null
     },
+    "manual_windows": {
+      "items": {
+        "$ref": "#/$defs/ReframingWindow"
+      },
+      "title": "Manual Windows",
+      "type": "array"
+    },
     "max_broll_events": {
       "default": 4,
       "maximum": 8,

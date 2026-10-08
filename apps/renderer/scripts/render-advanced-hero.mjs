@@ -124,7 +124,8 @@ for (const item of batch.items) {
   if (
     input.reframing_strategy !== "contain" &&
     input.reframing_strategy !== "center_crop" &&
-    input.reframing_strategy !== "face_follow"
+    input.reframing_strategy !== "face_follow" &&
+    input.reframing_strategy !== "manual_window"
   ) {
     throw new Error(
       `advanced render does not support reframing strategy ${input.reframing_strategy}`,
@@ -132,6 +133,35 @@ for (const item of batch.items) {
   }
   if (input.reframing_strategy === "face_follow") {
     assertFaceFollow(input);
+  }
+  if (input.reframing_strategy === "manual_window") {
+    const windows = input.windows ?? [];
+    let cursorUs = 0;
+    if (windows.length === 0) {
+      throw new Error("manual_window requires reviewed crop windows");
+    }
+    for (const window of windows) {
+      if (
+        window.output_start_us !== cursorUs ||
+        window.output_end_us <= window.output_start_us ||
+        window.strategy_id?.strategy_id !== "manual_window" ||
+        window.frame_width !== windows[0].frame_width ||
+        window.frame_height !== windows[0].frame_height ||
+        window.source_width * 16 !== window.source_height * 9 ||
+        window.source_x < 0 ||
+        window.source_y < 0 ||
+        window.source_width < 1 ||
+        window.source_height < 1 ||
+        window.source_x + window.source_width > window.frame_width ||
+        window.source_y + window.source_height > window.frame_height
+      ) {
+        throw new Error("manual_window trajectory must be ordered, contiguous, and safe 9:16 crops");
+      }
+      cursorUs = window.output_end_us;
+    }
+    if (cursorUs !== input.output_duration_us) {
+      throw new Error("manual_window trajectory must cover the complete output duration");
+    }
   }
   for (const event of input.sfx ?? []) {
     if (event && event.role && event.role !== "sfx") {

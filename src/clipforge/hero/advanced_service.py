@@ -28,6 +28,7 @@ from clipforge.hero.reframe import (
 )
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
+from clipforge.media.clock import us_to_seconds_str
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
 from clipforge.media.probe import read_ffprobe_json
@@ -721,7 +722,13 @@ def _normalize_audio(
         raise MediaError("refusing to replace an existing audio normalization output")
     filter_value = (
         f"loudnorm=I={render_input.audio_loudness_lufs}:"
-        f"TP={render_input.audio_true_peak_dbfs}:LRA={render_input.audio_lra_lu}"
+        f"TP={render_input.audio_true_peak_dbfs}:LRA={render_input.audio_lra_lu},"
+        # loudnorm can flush a partial AAC frame at the end of a cut.  The
+        # TimeMap is the sole program clock, so pad before the deterministic
+        # trim and reset timestamps rather than accepting an AV drift that
+        # only appears after normalization.
+        f"apad,atrim=duration={us_to_seconds_str(render_input.output_duration_us)},"
+        "asetpts=PTS-STARTPTS"
     )
     ProcessRunner().run(
         [
@@ -1088,11 +1095,27 @@ def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanD
 
 def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
     """Fail closed when the stored plan no longer matches the current producers."""
-    if plan.reframing_strategy not in {"contain", "center_crop", "face_follow"}:
+    if plan.reframing_strategy not in {"contain", "center_crop", "face_follow", "manual_window"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
     if plan.reframing_strategy == "face_follow":
         _require_face_follow(database, plan, context)
+    elif plan.reframing_strategy == "manual_window":
+        cursor_us = 0
+        if not plan.windows:
+            raise MediaError("manual_window requires reviewed crop windows")
+        for window in plan.windows:
+            if (
+                window.strategy_id.strategy_id != "manual_window"
+                or window.output_start_us != cursor_us
+                or window.frame_width != context.visual.proxy_width
+                or window.frame_height != context.visual.proxy_height
+                or window.source_width * 16 != window.source_height * 9
+            ):
+                raise MediaError("manual_window trajectory has a gap, stale frame, or invalid portrait crop")
+            cursor_us = window.output_end_us
+        if cursor_us != context.duration_us:
+            raise MediaError("manual_window trajectory must cover the full output duration without gaps")
     if plan.motion_style is not None:
         selected_style = style_for_id(plan.style_id)
         if (

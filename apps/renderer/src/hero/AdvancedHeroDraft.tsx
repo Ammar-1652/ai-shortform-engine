@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, interpolate, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
 import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
@@ -241,7 +241,12 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   if (input.debug_overlays === true) {
     throw new Error("production advanced renders reject debug overlays");
   }
-  if (strategy !== "contain" && strategy !== "center_crop" && strategy !== "face_follow") {
+  if (
+    strategy !== "contain" &&
+    strategy !== "center_crop" &&
+    strategy !== "face_follow" &&
+    strategy !== "manual_window"
+  ) {
     throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
@@ -250,17 +255,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const visibleCaptions = captions.filter(
     (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
   );
-  const visibleType = typography.filter((item) => {
-    if (!active(frame, item.interval) || (item.text ?? "").trim().length === 0) {
-      return false;
-    }
-    const text = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-    // A typography event copied from the transcript must not be painted over
-    // the grouped caption that already carries the same words.
-    return !visibleCaptions.some((caption) =>
-      caption.text?.replace(/\s+/g, " ").toLowerCase().includes(text),
-    );
-  });
+  const visibleType = typography.filter(
+    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
+  );
   const rawLanguage = input.language?.trim();
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
   // deterministic without treating the sentinel as a supported locale claim.
@@ -296,19 +293,22 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         transform: "translateY(-50%)",
       }
     : { position: "absolute" as const, inset: 0 };
-  const followed = strategy === "face_follow" || strategy === "center_crop" ? placedVideo(windowAt(frame, input.windows ?? [])) : null;
+  const followed =
+    strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
+      ? placedVideo(windowAt(frame, input.windows ?? []))
+      : null;
   return (
       <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       {followed === null ? (
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <OffthreadVideo
+          <Video
             src={staticFile(picture)}
             durationInFrames={input.duration_in_frames}
             muted
             style={{ ...contained, objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
           />
           <AbsoluteFill style={containBox}>
-            <OffthreadVideo
+            <Video
               src={staticFile(picture)}
               durationInFrames={input.duration_in_frames}
               muted
@@ -318,7 +318,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         </AbsoluteFill>
       ) : (
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <OffthreadVideo
+          <Video
             src={staticFile(picture)}
             durationInFrames={input.duration_in_frames}
             muted
@@ -347,7 +347,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         return (
           <Sequence key={`broll-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
             <AbsoluteFill>
-              <OffthreadVideo
+              <Video
                 src={staticFile(name)}
                 trimBefore={frameAt(item.broll_source_in_us)}
                 durationInFrames={window.duration}
@@ -442,22 +442,65 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           );
         })()
       ))}
-      {visibleType.map((item) => (
-        <AbsoluteFill
-          key={`${item.component_id ?? "type"}-${item.text}`}
-          style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
-        >
-          <CaptionPlate
-            text={item.text ?? ""}
-            language={item.language || language}
-            variant={style !== "legacy-v1" && item.component_id === "hook-card-v1" ? "hook" : style !== "legacy-v1" && item.component_id === "punch-card-v1" ? "punch" : "typography"}
-            emphasisText={style !== "legacy-v1" ? activeEmphasis : undefined}
-            x={item.x}
-            y={item.y}
-            fontSize={item.font_size}
-          />
-        </AbsoluteFill>
-      ))}
+      {visibleType.map((item) => {
+        const text = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+        const duplicatesCaption = visibleCaptions.some((caption) =>
+          (() => {
+            const captionText = caption.text?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
+            return captionText.includes(text) || text.includes(captionText);
+          })(),
+        );
+        const isHook = item.component_id === "hook-card-v1";
+        const isPunch = item.component_id === "punch-card-v1";
+        const left = item.x ?? 72;
+        const top = item.y ?? (isHook ? 220 : isPunch ? 1450 : 360);
+        const accent = motionStyle?.accent ?? "#ffcf4a";
+        return (
+          <AbsoluteFill
+            key={`${item.component_id ?? "type"}-${item.event_id ?? ""}-${item.text}`}
+            style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
+          >
+            {duplicatesCaption ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left,
+                  top: top + (isPunch ? -34 : 68),
+                  width: isPunch ? 760 : isHook ? 620 : 520,
+                  height: 14,
+                  borderRadius: 7,
+                  background: `linear-gradient(90deg, ${accent}, #3ddbd6 72%, transparent)`,
+                  boxShadow: `0 4px 18px ${accent}55`,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    right: -2,
+                    top: -5,
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    border: `3px solid ${accent}`,
+                    background: "rgba(11,18,32,0.9)",
+                  }}
+                />
+              </div>
+            ) : null}
+            {!duplicatesCaption ? (
+              <CaptionPlate
+                text={item.text ?? ""}
+                language={item.language || language}
+                variant={style !== "legacy-v1" && isHook ? "hook" : style !== "legacy-v1" && isPunch ? "punch" : "typography"}
+                emphasisText={style !== "legacy-v1" ? activeEmphasis : undefined}
+                x={item.x}
+                y={item.y}
+                fontSize={item.font_size}
+              />
+            ) : null}
+          </AbsoluteFill>
+        );
+      })}
       {style !== "legacy-v1" ? <AbsoluteFill style={{ pointerEvents: "none" }}>
         <div
           style={{
