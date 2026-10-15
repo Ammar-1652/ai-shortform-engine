@@ -197,6 +197,8 @@ The current Advanced draft is run
 `3e8fd91d-9d4a-46bb-8dce-94ad2aece4aa`:
 `var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/b7b2132c-406f-4d3b-8092-df902dd7c290/advanced-hero/runs/3e8fd91d-9d4a-46bb-8dce-94ad2aece4aa/candidates/b743351c-1cfd-5c07-92d9-efb2de224bab/advanced.mp4`, SHA-256
 `603d6c2add5afabe3956fc47b2b8b4360ef6bc8bfa998555613acf2298b8198b`.
+Its manifest is SHA-256
+`ba71cbff409905a9f62e7aa98f5040df927c9c9d3a23f8b3dd41f15b6dbb8b92`.
 The contact sheet is
 `var/round19/review/advanced-joint-review-v2/contact.jpg` (SHA-256
 `cfd14a1d35ecbd4c52e62a220cceea36712056ad668941bb264b3dd59960a862`).
