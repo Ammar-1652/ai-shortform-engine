@@ -45,6 +45,7 @@ def save_direction_brief(
     work_root: Path,
     brief_path: Path,
     style: str = "auto",
+    allow_unapproved: bool = False,
 ) -> tuple[DirectionDocument, Path, str]:
     """Validate a skill-produced brief against the current Hero evidence."""
 
@@ -57,7 +58,13 @@ def save_direction_brief(
     # creating a module cycle with advanced_service.
     from clipforge.hero.advanced_service import _context
 
-    context = _context(database, source_asset_id, candidate_id, root)
+    context = _context(
+        database,
+        source_asset_id,
+        candidate_id,
+        root,
+        require_hero_approval=not allow_unapproved,
+    )
     if document.project_id != context.project_id:
         raise MediaError("direction brief project does not match the promoted candidate")
     if document.source_asset_id != source_asset_id or document.candidate_id != candidate_id:

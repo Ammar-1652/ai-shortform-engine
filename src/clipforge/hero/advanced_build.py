@@ -87,6 +87,7 @@ def build_advanced_plan(
     editorial_arc_id: str = "",
     editorial_arc_sha256: str = "",
     cut_transition_style: str = "none",
+    allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
         raise MediaError("advanced Hero profile cannot allow music")
@@ -201,6 +202,7 @@ def build_advanced_plan(
         hero_manifest_sha256=hero_manifest_sha256,
         hero_review_id=review_id,
         hero_review_digest=review_digest,
+        hero_review_status="pending" if allow_unapproved else "approved",
         alignment_id=alignment.alignment_id,
         alignment_sha256=alignment_sha256,
         hero_plan_id=hero_plan.plan_id,

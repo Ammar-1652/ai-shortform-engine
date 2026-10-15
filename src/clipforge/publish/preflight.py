@@ -582,6 +582,11 @@ def _advanced_document(
         raise PublishError("advanced Hero manifest could not be read", category="artifact_missing") from exc
     if document.advanced_set_id != record.advanced_set_id or document.project_id != record.project_id:
         raise PublishError("advanced Hero sidecar does not match the manifest", category="artifact_changed")
+    if document.hero_review_status != "approved":
+        raise PublishError(
+            "Advanced Hero is an unapproved review draft; approve the current Hero before delivery",
+            category="approval_missing",
+        )
     with database.connect() as connection:
         row = find_artifact(connection, document.project_id, document.source_asset_id, KIND_ADVANCED)
         if row is None or row.job_id is None:

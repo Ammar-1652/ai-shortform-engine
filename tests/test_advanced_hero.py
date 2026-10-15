@@ -35,6 +35,7 @@ from clipforge.preview.service import default_profile
 from clipforge.review.hero_board import decision_context_for
 from clipforge.review.service import parse_decision_body, record_hero_decision, review_board
 from clipforge.schemas.advanced import (
+    AdvancedHeroDraftSetDocument,
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
@@ -680,6 +681,37 @@ def test_renderer_failure_does_not_publish_a_set(tmp_path: Path) -> None:
             backend=Broken(),
         )
     assert not fixture.workspace.advanced_sidecar().exists()
+
+
+def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        allow_unapproved=True,
+    )
+    assert plan.hero_review_status == "pending"
+    with pytest.raises(MediaError, match="current Hero artifact"):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=FakeAdvancedRenderBackend(),
+        )
+    rendered = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        draft_only=True,
+    )
+    assert rendered.status == "rendered"
+    manifest = fixture.workspace.advanced_run_dir(rendered.advanced_set_id or "") / "manifest.json"
+    document = AdvancedHeroDraftSetDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
+    assert document.hero_review_status == "pending"
 
 
 def test_read_only_commands_leave_the_set_in_place(tmp_path: Path) -> None:

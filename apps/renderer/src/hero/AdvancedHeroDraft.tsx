@@ -125,6 +125,7 @@ export type AdvancedHeroInput = {
   profile_fingerprint?: string;
   alignment_sha256?: string;
   hero_plan_sha256?: string;
+  hero_review_status?: "approved" | "pending";
   advanced_plan_sha256?: string;
   time_map_sha256?: string;
   source_sha256?: string;

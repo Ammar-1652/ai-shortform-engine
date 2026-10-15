@@ -47,6 +47,15 @@
       "title": "Hero Manifest Sha256",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
     "hero_set_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

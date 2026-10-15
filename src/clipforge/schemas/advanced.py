@@ -374,6 +374,7 @@ class AdvancedHeroRenderInput(Versioned):
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     advanced_plan_sha256: str = Field(pattern=_SHA)
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
@@ -421,6 +422,7 @@ class AdvancedHeroDraftOutput(Versioned):
     rank: int = Field(ge=1)
     hero_review_id: EntityId
     hero_review_digest: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     alignment_id: EntityId
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_id: EntityId
@@ -474,6 +476,7 @@ class AdvancedHeroPlanDocument(Versioned):
     hero_manifest_sha256: str = Field(pattern=_SHA)
     hero_review_id: EntityId
     hero_review_digest: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     alignment_id: EntityId
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_id: EntityId
@@ -544,6 +547,7 @@ class AdvancedHeroDraftSetDocument(Versioned):
     hero_artifact_id: EntityId
     hero_set_id: EntityId
     hero_manifest_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
     profile: AdvancedHeroProfile
@@ -567,6 +571,8 @@ class AdvancedHeroDraftSetDocument(Versioned):
             raise ValueError("advanced ranks must be 1..n in list order")
         if self.provenance.inputs_sha256 != self.advanced_input_sha256:
             raise ValueError("provenance input digest must be the advanced input digest")
+        if any(item.hero_review_status != self.hero_review_status for item in self.drafts):
+            raise ValueError("advanced draft review status must match the set status")
         return self
 
 
@@ -585,6 +591,7 @@ class AdvancedHeroCacheRecord(Versioned):
     hero_artifact_id: EntityId
     hero_set_id: EntityId
     hero_manifest_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)

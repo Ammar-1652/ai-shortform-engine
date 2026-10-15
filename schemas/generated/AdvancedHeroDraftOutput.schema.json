@@ -110,6 +110,15 @@
       "title": "Hero Review Id",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
     "output_duration_us": {
       "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
       "maximum": 604800000000,

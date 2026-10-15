@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import uuid
@@ -141,11 +142,18 @@ def plan_advanced_candidate(
     direction: DirectionDocument | None = None,
     editorial_arc: EditorialArcDocument | None = None,
     editorial_arc_sha256: str = "",
+    allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
     """Write one advanced plan. Asset and approval failures happen before a render job."""
     root = work_root.resolve()
     active = profile or default_advanced_profile()
-    context = _context(database, source_asset_id, candidate_id, root)
+    context = _context(
+        database,
+        source_asset_id,
+        candidate_id,
+        root,
+        require_hero_approval=not allow_unapproved,
+    )
     stored_direction = direction
     direction_sha256 = ""
     if stored_direction is None:
@@ -267,6 +275,7 @@ def plan_advanced_candidate(
         editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
         cut_transition_style="none" if editorial_arc is None else editorial_arc.transition_style,
+        allow_unapproved=allow_unapproved,
     )
     destination = context.workspace.advanced_plan_file(candidate_id)
     context.workspace.prepare_advanced_file(destination)
@@ -317,6 +326,7 @@ def render_advanced_drafts(
     backend: AdvancedRenderBackend | None = None,
     created_by: str | None = None,
     narration_artifact_id: str | None = None,
+    draft_only: bool = False,
 ) -> AdvancedRenderResult:
     """Render stored advanced plans. A missing approval writes nothing."""
     root = work_root.resolve()
@@ -349,8 +359,14 @@ def render_advanced_drafts(
         # considering a cache hit.  A stale direction must never be hidden by an
         # otherwise healthy previous package.
         for candidate_id, plan in chosen:
-            context = _context(database, source_asset_id, candidate_id, root)
-            _require_plan_binding(database, plan, context)
+            context = _context(
+                database,
+                source_asset_id,
+                candidate_id,
+                root,
+                require_hero_approval=not draft_only,
+            )
+            _require_plan_binding(database, plan, context, allow_unapproved=draft_only)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
             _require_production_direction(plan, renderer, inputs.pair.workspace)
         if (
@@ -454,7 +470,14 @@ class _Context:
     duration_us: int
 
 
-def _context(database: Database, source_asset_id: str, candidate_id: str, root: Path) -> _Context:
+def _context(
+    database: Database,
+    source_asset_id: str,
+    candidate_id: str,
+    root: Path,
+    *,
+    require_hero_approval: bool = True,
+) -> _Context:
     rough = default_profile()
     inputs = load_preview_inputs(
         database, source_asset_id, root, profile_fingerprint=rough.fingerprint(), create_workspace=True
@@ -465,10 +488,21 @@ def _context(database: Database, source_asset_id: str, candidate_id: str, root: 
         raise MediaError(f"candidate {candidate_id} is not in the current Hero draft")
     reviews = _reviews(database, hero.project_id)
     decision = effective_review(reviews, hero.artifact_id, candidate_id, subject_kind="hero")
-    if decision is None or decision.decision != "approved":
-        raise MediaError("advanced Hero requires an approval of the current Hero artifact")
-    if decision.artifact_id != hero.artifact_id:
-        raise MediaError("advanced Hero refuses an approval of an older Hero artifact")
+    if require_hero_approval:
+        if decision is None or decision.decision != "approved":
+            raise MediaError("advanced Hero requires an approval of the current Hero artifact")
+        if decision.artifact_id != hero.artifact_id:
+            raise MediaError("advanced Hero refuses an approval of an older Hero artifact")
+    review_id = (
+        decision.review_id
+        if decision is not None and decision.decision == "approved"
+        else f"pending-{hero.artifact_id}"
+    )
+    review_digest_value = (
+        review_digest(decision)
+        if decision is not None and decision.decision == "approved"
+        else hashlib.sha256(f"pending:{hero.artifact_id}:{hero.manifest_sha256}".encode()).hexdigest()
+    )
     alignment_path = hero.manifest_path.parent / "candidates" / candidate_id / "alignment.json"
     plan_path = hero.manifest_path.parent / "candidates" / candidate_id / "plan.json"
     alignment = _read_model(alignment_path, ForcedAlignmentDocument, "alignment")
@@ -517,8 +551,8 @@ def _context(database: Database, source_asset_id: str, candidate_id: str, root: 
         hero_artifact_id=hero.artifact_id,
         hero_set_id=hero.document.hero_set_id,
         hero_manifest_sha256=hero.manifest_sha256,
-        review_id=decision.review_id,
-        review_digest=review_digest(decision),
+        review_id=review_id,
+        review_digest=review_digest_value,
         alignment=alignment,
         alignment_sha256=draft.alignment_sha256,
         hero_plan=hero_plan,
@@ -686,6 +720,7 @@ def _render_run(
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
+            hero_review_status=plan.hero_review_status,
             language=_alignment_locale(workspace, plan),
             captions=plan.captions,
             typography=plan.typography,
@@ -771,6 +806,7 @@ def _render_run(
                 rank=rank,
                 hero_review_id=plan.hero_review_id,
                 hero_review_digest=plan.hero_review_digest,
+                hero_review_status=plan.hero_review_status,
                 alignment_id=plan.alignment_id,
                 alignment_sha256=plan.alignment_sha256,
                 hero_plan_id=plan.hero_plan_id,
@@ -811,6 +847,7 @@ def _render_run(
         hero_artifact_id=hero.artifact_id,
         hero_set_id=hero.document.hero_set_id,
         hero_manifest_sha256=hero.manifest_sha256,
+        hero_review_status=chosen[0][1].hero_review_status,
         visual_analysis_id=hero.document.visual_analysis_id,
         visual_analysis_sha256=hero.document.visual_analysis_sha256,
         profile=profile,
@@ -951,11 +988,13 @@ def _input_digest(
                 "advanced_plan_sha256": item.advanced_plan_sha256,
                 "direction_sha256": item.direction_sha256,
                 "style_id": item.style_id,
+                "hero_review_status": item.hero_review_status,
             }
             for item in drafts
         ],
         "hero_artifact_id": hero.artifact_id,
         "hero_manifest_sha256": hero.manifest_sha256,
+        "hero_review_status": drafts[0].hero_review_status if drafts else "approved",
         "profile": profile.fingerprint(),
         "source_sha256": hero.document.source_sha256,
         "visual_analysis_sha256": hero.document.visual_analysis_sha256,
@@ -1019,6 +1058,7 @@ def _cache_record(
         hero_artifact_id=document.hero_artifact_id,
         hero_set_id=document.hero_set_id,
         hero_manifest_sha256=document.hero_manifest_sha256,
+        hero_review_status=document.hero_review_status,
         visual_analysis_id=document.visual_analysis_id,
         visual_analysis_sha256=document.visual_analysis_sha256,
         profile_fingerprint=document.profile_fingerprint,
@@ -1067,6 +1107,8 @@ def _cache_ready(
         return False
     if record.hero_artifact_id != hero.artifact_id or record.hero_manifest_sha256 != hero.manifest_sha256:
         return False
+    if record.hero_review_status != chosen[0][1].hero_review_status:
+        return False
     if record.source_sha256 != hero.document.source_sha256:
         return False
     if record.visual_analysis_sha256 != hero.document.visual_analysis_sha256:
@@ -1087,6 +1129,8 @@ def _cache_ready(
     except (OSError, ValidationError, ValueError):
         return False
     if len(document.drafts) != len(chosen):
+        return False
+    if document.hero_review_status != chosen[0][1].hero_review_status:
         return False
     from clipforge.hero.advanced_assets import confine_work_path
 
@@ -1227,7 +1271,13 @@ def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanD
     return document.trajectory_sha256 == document.trajectory.digest()
 
 
-def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
+def _require_plan_binding(
+    database: Database,
+    plan: AdvancedHeroPlanDocument,
+    context: _Context,
+    *,
+    allow_unapproved: bool = False,
+) -> None:
     """Fail closed when the stored plan no longer matches the current producers."""
     if plan.reframing_strategy not in {"contain", "center_crop", "face_follow", "manual_window"}:
         strategy = plan.reframing_strategy
@@ -1338,8 +1388,11 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
         (plan.hero_artifact_id != context.hero_artifact_id, "Hero artifact"),
         (plan.hero_set_id != context.hero_set_id, "Hero set"),
         (plan.hero_manifest_sha256 != context.hero_manifest_sha256, "Hero manifest"),
-        (plan.hero_review_id != context.review_id, "Hero approval"),
-        (plan.hero_review_digest != context.review_digest, "Hero approval"),
+        (
+            plan.hero_review_status == "approved"
+            and (plan.hero_review_id != context.review_id or plan.hero_review_digest != context.review_digest),
+            "Hero approval",
+        ),
         (not plan.editorial_arc_id and plan.alignment_id != context.alignment.alignment_id, "alignment"),
         (not plan.editorial_arc_id and plan.alignment_sha256 != context.alignment_sha256, "alignment"),
         (plan.hero_plan_id != context.hero_plan.plan_id, "Hero plan"),
@@ -1351,6 +1404,10 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
             "TimeMap",
         ),
     )
+    if plan.hero_review_status == "pending" and not allow_unapproved:
+        raise MediaError("advanced plan has no Hero approval; use --draft-only only for review drafts")
+    if plan.hero_review_status == "pending" and not plan.hero_review_id.startswith("pending-"):
+        raise MediaError("advanced plan pending Hero review binding is invalid")
     for failed, name in checks:
         if failed:
             raise MediaError(f"advanced plan is stale: {name} changed after planning")

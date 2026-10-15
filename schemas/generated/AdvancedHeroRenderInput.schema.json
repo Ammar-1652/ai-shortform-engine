@@ -1143,6 +1143,15 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
     "language": {
       "default": "en-US",
       "title": "Language",

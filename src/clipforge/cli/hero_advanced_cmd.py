@@ -76,6 +76,13 @@ def advanced_plan(
             help="Source-grounded hook/body/punch arc JSON with an ordered TimeMap.",
         ),
     ] = None,
+    draft_only: Annotated[
+        bool,
+        typer.Option(
+            "--draft-only",
+            help="Build an unapproved review draft; delivery remains blocked until Hero approval.",
+        ),
+    ] = False,
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
     from clipforge.hero.advanced_service import _context, default_advanced_profile, plan_advanced_candidate
@@ -90,12 +97,24 @@ def advanced_plan(
         editorial_arc = None
         editorial_arc_sha256 = ""
         if editorial_arc_file is not None:
-            context = _context(database, source_asset_id, candidate_id, root)
+            context = _context(
+                database,
+                source_asset_id,
+                candidate_id,
+                root,
+                require_hero_approval=not draft_only,
+            )
             editorial_arc, editorial_arc_sha256 = load_editorial_arc(editorial_arc_file.resolve())
         if reframing == "manual_window":
             if manual_windows_file is not None and (focus_x is not None or focus_y is not None):
                 raise ClipforgeError("choose --manual-windows-file or --focus-x/--focus-y, not both")
-            context = _context(database, source_asset_id, candidate_id, root)
+            context = _context(
+                database,
+                source_asset_id,
+                candidate_id,
+                root,
+                require_hero_approval=not draft_only,
+            )
             visual_width = context.visual.proxy_width
             visual_height = context.visual.proxy_height
             if manual_windows_file is not None:
@@ -142,7 +161,13 @@ def advanced_plan(
                     }
                 )
         if active.renderer_recipe_version != "advanced-hero-renderer-v1":
-            context = context or _context(database, source_asset_id, candidate_id, root)
+            context = context or _context(
+                database,
+                source_asset_id,
+                candidate_id,
+                root,
+                require_hero_approval=not draft_only,
+            )
             direction_path = context.workspace.direction_file(candidate_id)
             if direction_path.is_symlink() or not direction_path.is_file():
                 raise ClipforgeError(
@@ -159,6 +184,7 @@ def advanced_plan(
             profile=active,
             editorial_arc=editorial_arc,
             editorial_arc_sha256=editorial_arc_sha256,
+            allow_unapproved=draft_only,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
@@ -190,6 +216,13 @@ def direction_plan(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     style: Annotated[str, typer.Option("--style", help="auto or one allowlisted preset id.")] = "auto",
+    draft_only: Annotated[
+        bool,
+        typer.Option(
+            "--draft-only",
+            help="Persist a direction for an unapproved review draft; production delivery remains blocked.",
+        ),
+    ] = False,
 ) -> None:
     """Validate and persist one immutable direction brief."""
     from clipforge.hero.direction_service import save_direction_brief
@@ -202,6 +235,7 @@ def direction_plan(
             work_root=resolve_work_dir(work_dir),
             brief_path=brief.resolve(),
             style=style,
+            allow_unapproved=draft_only,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
@@ -266,6 +300,13 @@ def direction_verify(
     candidate_id: Annotated[str, typer.Argument()],
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    draft_only: Annotated[
+        bool,
+        typer.Option(
+            "--draft-only",
+            help="Verify a direction bound to an unapproved review draft.",
+        ),
+    ] = False,
 ) -> None:
     """Verify direction evidence and binding to the current promoted Hero plan."""
     from clipforge.hero.advanced_service import _context
@@ -275,7 +316,13 @@ def direction_verify(
     try:
         root = resolve_work_dir(work_dir)
         database = Database(resolve_db_path(db))
-        context = _context(database, source_asset_id, candidate_id, root)
+        context = _context(
+            database,
+            source_asset_id,
+            candidate_id,
+            root,
+            require_hero_approval=not draft_only,
+        )
         loaded = load_direction(context.workspace, candidate_id)
         if loaded is None:
             raise ClipforgeError("no direction document for candidate")
@@ -314,6 +361,13 @@ def advanced_render(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     force: Annotated[bool, typer.Option("--force")] = False,
     narration_artifact: Annotated[str | None, typer.Option("--narration-artifact")] = None,
+    draft_only: Annotated[
+        bool,
+        typer.Option(
+            "--draft-only",
+            help="Render an unapproved Advanced draft for joint review; never eligible for delivery.",
+        ),
+    ] = False,
 ) -> None:
     """Render stored advanced plans with the production Remotion backend."""
     from clipforge.hero.advanced_service import render_advanced_drafts
@@ -325,6 +379,7 @@ def advanced_render(
             work_root=resolve_work_dir(work_dir),
             force=force,
             narration_artifact_id=narration_artifact,
+            draft_only=draft_only,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

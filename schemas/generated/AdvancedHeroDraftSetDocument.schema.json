@@ -112,6 +112,15 @@
           "title": "Hero Review Id",
           "type": "string"
         },
+        "hero_review_status": {
+          "default": "approved",
+          "enum": [
+            "approved",
+            "pending"
+          ],
+          "title": "Hero Review Status",
+          "type": "string"
+        },
         "output_duration_us": {
           "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
           "maximum": 604800000000,
@@ -715,6 +724,15 @@
     "hero_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Hero Manifest Sha256",
+      "type": "string"
+    },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
       "type": "string"
     },
     "hero_set_id": {

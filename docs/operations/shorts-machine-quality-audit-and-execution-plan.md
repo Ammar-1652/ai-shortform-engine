@@ -98,12 +98,11 @@ against caption-free baselines. The current Hero artifact was deliberately
 rerendered first, which made the previous Advanced approval stale; the service
 correctly refused to render Advanced until a human re-approves that new Hero
 artifact. The typed `SourceNativeText` annotation and duplicate suppression
-path now exist, but the current campaign direction has not yet supplied a
-reviewed scene annotation or an explicit `reviewed_absent` status for its baked
-opening title, so clean production now fails closed until that collision review
-is recorded. Actual font-file hash verification is now technically verified by
-the staged production render; independent visual acceptance and the
-source-native title collision review remain open.
+path now exist. The joint review draft supplies a reviewed scene annotation for
+the baked opening title, and clean draft rendering carries it through the
+effective TimeMap. Actual font-file hash verification and source-native title
+collision behavior are technically verified by the staged production renders;
+independent visual acceptance remains open.
 
 The post-layout Hero CLI artifact is run
 `1e9ea5a1-57ae-464f-9053-47065f6616d2`,
@@ -136,12 +135,11 @@ substituted.
 
 ### What is still blocking a reviewable short
 
-1. **Source-native text is not part of collision planning.** The opening source
-   already contains a large “DO YOU KNOW…” title while the generated caption
-   repeats the same hook. The system needs source-text evidence (or a reviewed
-   source-native-title annotation) and a policy for changing the generated
-   treatment or reserving a non-overlapping caption lane without hiding source
-   content.
+1. **Source-native collision review is now available but still human-gated.**
+   The current joint draft carries a reviewed opening-title annotation and
+   suppresses duplicate optional typography while retaining speech captions.
+   A human must still decide whether the source title and speech-caption
+   treatment are editorially acceptable before approval.
 2. **Caption geometry is technically present but visually cramped.** The
    current portrait layout wraps short phrases to roughly four narrow lines.
    Declared safe margins, contrast, and font identity are fingerprinted but are
@@ -178,6 +176,39 @@ completed with **753 passed, 2 skipped** in 13:20; schemas matched; renderer
 lint/typecheck passed; renderer Vitest completed with **43 passed**; doctor
 reported **10 pass, 0 warn, 0 fail**. The skipped tests remain the
 repository's documented optional cases.
+
+## 1B. Joint Hero/Advanced review draft proof (2026-10-16)
+
+The operator requested that Hero and Advanced Hero be reviewed together before
+approval. A narrowly scoped `--draft-only` path was added rather than
+manufacturing a Hero review row. It records `hero_review_status: pending` in
+the plan, render input, manifest, and cache identity. Default Advanced commands
+remain approval-gated, and delivery preflight rejects pending sets.
+
+The current source-grounded draft uses direction
+`direction-b743351c-motion-graphic-v4-draft`, an annotated opening source title,
+and the immutable arc `arc-b743351c-hook-body-punch-v1`. The arc keeps three
+complete forced-word ranges in hook/body/punch order, adds two `clean_cut_v1`
+transitions, and remaps the founder/business illustration onto the body beat.
+The illustration was moved to the upper safe rail after decoded-frame review
+showed it covering the PAC-10 source logo at its first placement.
+
+The current Advanced draft is run
+`3e8fd91d-9d4a-46bb-8dce-94ad2aece4aa`:
+`var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/b7b2132c-406f-4d3b-8092-df902dd7c290/advanced-hero/runs/3e8fd91d-9d4a-46bb-8dce-94ad2aece4aa/candidates/b743351c-1cfd-5c07-92d9-efb2de224bab/advanced.mp4`, SHA-256
+`603d6c2add5afabe3956fc47b2b8b4360ef6bc8bfa998555613acf2298b8198b`.
+The contact sheet is
+`var/round19/review/advanced-joint-review-v2/contact.jpg` (SHA-256
+`cfd14a1d35ecbd4c52e62a220cceea36712056ad668941bb264b3dd59960a862`).
+It is 1080x1920, 30 fps, 21.967 s, 659 frames, AAC stereo 48 kHz, -15.6
+LUFS integrated, 3.3 LU LRA, and -4.0 dBFS true peak. `hero advanced verify`
+and `qa verify` pass for the exact artifact. OCR remains unavailable.
+
+The full validation after this integration is **754 passed, 2 skipped** in
+12:24; renderer Vitest remains **43 passed** and doctor remains **10 pass, 0
+warn, 0 fail**. The focused pending-draft regression is included. The draft is
+reviewable but not deliverable until a human approves the current Hero and then
+the resulting Advanced artifact.
 
 ## 2. Root-cause map
 
