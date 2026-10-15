@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from clipforge.errors import MediaError
 from clipforge.hero.direction_service import validate_source_evidence
+from clipforge.hero.editorial_arc import remap_direction_intervals
 from clipforge.hero.motion_style import style_for_id
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
@@ -13,9 +14,10 @@ from clipforge.schemas.direction import (
     DirectionEvidence,
     DirectionMotionGraphic,
     DirectionOption,
+    SourceNativeText,
 )
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
-from clipforge.schemas.hero import AlignedWord
+from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import TimelineSegment, TimeMapDocument
 
@@ -115,6 +117,78 @@ def _aligned_words() -> list[AlignedWord]:
         )
         for index, text in enumerate(("The source", "says this", "today."))
     ]
+
+
+def _provenance() -> ArtifactProvenance:
+    return ArtifactProvenance(
+        created_at=datetime.now(UTC),
+        created_by="test",
+        tool="test",
+        tool_version="1",
+        source_asset_ids=["source-1"],
+    )
+
+
+def test_editorial_arc_moves_direction_intervals_with_forced_words() -> None:
+    direction = _document()
+    source = ForcedAlignmentDocument.model_validate(
+        {
+            "alignment_id": "source-alignment",
+            "project_id": "project-1",
+            "source_asset_id": "source-1",
+            "candidate_id": "candidate-1",
+            "transcript_id": "transcript-1",
+            "transcript_sha256": "1" * 64,
+            "asr_audio_sha256": "2" * 64,
+            "time_map_sha256": "3" * 64,
+            "review_id": "review-1",
+            "review_digest": "4" * 64,
+            "rough_preview_artifact_id": "rough-1",
+            "model_name": "fake-forced-align-v1",
+            "whisperx_version": "test",
+            "device": "cpu",
+            "config_sha256": "5" * 64,
+            "words": [
+                word.model_copy(update={"source_end_us": word.source_start_us + 900_000}).model_dump(
+                    mode="json"
+                )
+                for word in _aligned_words()
+            ],
+            "provenance": _provenance().model_dump(mode="json"),
+            "alignment_status": "available_not_smoked",
+            "binding_sha256": "6" * 64,
+            "checkpoint_sha256": "7" * 64,
+            "manifest_sha256": "8" * 64,
+        }
+    )
+    output = ForcedAlignmentDocument.model_validate(
+        {
+            **source.model_dump(mode="json"),
+            "words": [
+                word.model_copy(
+                    update={
+                        "output_start_us": index * 900_000,
+                        "output_end_us": (index + 1) * 900_000,
+                    }
+                ).model_dump(mode="json")
+                for index, word in enumerate(reversed(source.words))
+            ],
+        }
+    )
+    parent_map = TimeMapDocument(
+        time_map_id="parent",
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+    )
+    output_map = TimeMapDocument(
+        time_map_id="recut",
+        segments=[
+            TimelineSegment(segment_id=f"cut-{index}", source_start_us=start, source_end_us=start + 900_000)
+            for index, start in enumerate((2_000_000, 1_000_000, 0))
+        ],
+    )
+    remapped = remap_direction_intervals(direction, source, output, parent_map, output_map)
+    selected = next(item for item in remapped.options if item.option_id == remapped.selected_option_id)
+    assert [beat.output_start_us for beat in selected.beats] == [1_800_000, 900_000, 0]
 
 
 def test_direction_requires_three_source_grounded_options() -> None:
@@ -275,6 +349,32 @@ def test_motion_graphic_requires_exact_source_text_and_supported_semantics() -> 
     with pytest.raises(MediaError, match="not supported"):
         validate_source_evidence(invalid, words, time_map, set())
 
+    company_options: list[DirectionOption] = []
+    for current in document.options:
+        evidence = current.evidence[0].model_copy(update={"source_text": "company"})
+        beat = current.beats[0].model_copy(update={"display_text": "company"})
+        company_options.append(
+            current.model_copy(
+                update={
+                    "evidence": [evidence, *current.evidence[1:]],
+                    "beats": [beat, *current.beats[1:]],
+                }
+            )
+        )
+    company_words = [words[0].model_copy(update={"text": "company"}), *words[1:]]
+    company_evidence = company_options[0].evidence[0]
+    company_graphic = graphic.model_copy(
+        update={
+            "template": "business_spotlight",
+            "source_evidence_ids": [company_evidence.evidence_id],
+            "display_text": "company",
+        }
+    )
+    company_options[0] = company_options[0].model_copy(update={"motion_graphics": [company_graphic]})
+    company_document = document.model_copy(update={"options": company_options})
+    with pytest.raises(MediaError, match="not supported"):
+        validate_source_evidence(company_document, company_words, time_map, set())
+
 
 def test_motion_graphic_cannot_enter_caption_lane() -> None:
     with pytest.raises(ValidationError, match="caption lane"):
@@ -289,4 +389,30 @@ def test_motion_graphic_cannot_enter_caption_lane() -> None:
             y=1240,
             width=360,
             height=260,
+        )
+
+
+def test_source_native_text_is_reviewed_and_scene_bound() -> None:
+    document = _document()
+    native = SourceNativeText(
+        region_id="native-title-1",
+        interval=OutputInterval(output_start_us=0, output_end_us=900_000),
+        text="The source",
+        visual_scene_ids=["scene-1"],
+        note="Opening title is already burned into the source frame.",
+    )
+    option = document.options[0].model_copy(update={"source_native_text": [native]})
+    document = document.model_copy(update={"options": [option, *document.options[1:]]})
+    words = _aligned_words()
+    time_map = TimeMapDocument(
+        time_map_id="map-1",
+        segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+    )
+    validate_source_evidence(document, words, time_map, {"scene-1"})
+    with pytest.raises(MediaError, match="unknown visual scene"):
+        validate_source_evidence(document, words, time_map, set())
+
+    with pytest.raises(ValidationError, match="requires annotations"):
+        DirectionOption.model_validate(
+            {**document.options[1].model_dump(mode="json"), "source_native_text_status": "annotated"}
         )

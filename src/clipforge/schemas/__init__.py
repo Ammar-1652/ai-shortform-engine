@@ -6,6 +6,7 @@ from clipforge.schemas.analytics import (
     EditorialFeatureSnapshot,
     PerformanceOutcome,
 )
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.common import (
     SCHEMA_VERSION,
@@ -14,6 +15,7 @@ from clipforge.schemas.common import (
     Microseconds,
     Versioned,
 )
+from clipforge.schemas.direction import SourceNativeText
 from clipforge.schemas.editorial import (
     AudioEvent,
     BrollEvent,
@@ -97,6 +99,8 @@ __all__ = [
     "ComplianceStatus",
     "ContractModel",
     "EditPlan",
+    "EditorialArcDocument",
+    "EditorialArcSegment",
     "EditorialFeatureSnapshot",
     "EntityId",
     "EvidenceKind",
@@ -121,6 +125,7 @@ __all__ = [
     "Scene",
     "SegmentDiagnostics",
     "SourceAsset",
+    "SourceNativeText",
     "SourceTimeRange",
     "TimeMapDocument",
     "TimelineSegment",

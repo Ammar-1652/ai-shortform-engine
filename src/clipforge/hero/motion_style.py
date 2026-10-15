@@ -56,6 +56,7 @@ EDITORIAL_CLEAN_V1 = MotionStyleProfile(
     font_sha256=(
         "b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f",
         "faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb",
+        "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
     ),
     accent="#ffcf4a",
     safe_left=64,
@@ -217,6 +218,7 @@ def style_for_renderer_version(version: str) -> MotionStyleProfile:
         "advanced-hero-renderer-clean-v1",
         "advanced-hero-renderer-directed-v2",
         "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4",
     }:
         return EDITORIAL_CLEAN_V1
     return LEGACY_V1

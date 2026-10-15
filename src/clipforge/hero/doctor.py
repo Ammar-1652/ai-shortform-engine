@@ -140,7 +140,8 @@ def _speech_evidence() -> DoctorLine:
         return DoctorLine(
             "WARN",
             "speech_evidence",
-            "not configured; export CLIPFORGE_SPEECH_EVIDENCE_ROOT to the measured WAV directory",
+            "evidence directory is missing or unsafe; install the measured WAV pack under "
+            "~/.local/clipforge-speech-evidence or set CLIPFORGE_SPEECH_EVIDENCE_ROOT",
         )
     status = provider_for("en-US").live_status
     if status == "verified_live":

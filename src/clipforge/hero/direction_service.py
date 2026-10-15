@@ -230,7 +230,10 @@ def validate_source_evidence(
             required_terms = {
                 "credit_card": ("credit", "card"),
                 "travel_postcard": ("philippines", "vacation", "beach", "tropical", "airbnb"),
-                "business_spotlight": ("business", "company", "founder", "enterprise"),
+                # A generic mention of a company is not evidence for a rising
+                # trend chart. The source must name a business, founder, or
+                # enterprise concept that the illustration actually depicts.
+                "business_spotlight": ("business", "founder", "enterprise"),
             }[graphic.template]
             if graphic.template == "credit_card":
                 supported = all(term in evidence_text for term in required_terms)
@@ -238,6 +241,11 @@ def validate_source_evidence(
                 supported = any(term in evidence_text for term in required_terms)
             if not supported:
                 raise MediaError("direction motion graphic template is not supported by its source evidence")
+        for native in option.source_native_text:
+            if native.interval.output_end_us > duration:
+                raise MediaError("source-native text interval extends past the approved TimeMap")
+            if any(scene_id not in scene_ids for scene_id in native.visual_scene_ids):
+                raise MediaError("source-native text names an unknown visual scene")
 
 
 def _normalize(value: str) -> str:

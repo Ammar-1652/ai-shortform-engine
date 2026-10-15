@@ -30,7 +30,7 @@ Owns bytes, clocks, and pictures.
 - AV synchronization: every staged picture/speech pair uses the same ordered TimeMap, starts at output zero, and is rejected when either stream is missing or drifts beyond the project duration tolerance. Approximate ASR timing is not final caption evidence. Hero browser renders consume the exact paired candidate-span stage; Advanced jump cuts reject boundaries inside a forced word and apply only a short deterministic speech envelope at discontinuities. See [ADR 0068](docs/adr/0068-synchronized-review-and-relevant-asset-gate.md) and [ADR 0071](docs/adr/0071-cut-boundary-audio-envelope-and-asset-content-binding.md).
 - Rough preview: `RoughPreviewSetDocument` for the current candidate set. The picture is the analysis proxy and the speech is the ASR FLAC. Captions are provisional. Browser staging preserves the current single-span candidate contract; Advanced Hero staging additionally consumes every range in an explicitly ordered `TimeMap` through `stage_time_map`, preserving jump cuts instead of repeating the first range. See [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md) and [ADR 0067](docs/adr/0067-ordered-time-map-render-staging.md).
 - Rendering and output validation: Remotion composites the rough review at 720×1280 and Hero/Advanced Hero drafts at 1080×1920. Advanced Hero burns grouped captions, typography, diagrams, native source-bound illustrations, B-roll, and approved SFX from typed render input; FFmpeg probes, normalizes, and re-measures the resulting audio against the profile loudness/true-peak policy. Reviewed manual reframing may be a fixed crop or a typed, ordered, hash-bound crop trajectory interpolated by output frame; it cannot silently fall back to contain. Hero drafts are `hero_draft_set_json` and do not replace `rough_preview_set_json`.
-- Motion direction: a promoted candidate may carry an immutable `DirectionDocument` with exactly three source-grounded hook/body/punch alternatives. The selected option uses one of six pinned declarative presets and the project-defined `portrait-safe-v1` region (not a universal platform guarantee). An optional native motion graphic chooses an audited template, copied evidence text, canonical interval, purpose, and geometry above the caption lane; it has no remote asset or operator code payload. Directed accent tracks are plan-positioned on a caption-adjacent rail, away from the portrait face area. Reviewed B-roll/SFX placements carry exact output intervals, asset in-points, source evidence, purpose, and relevance; evenly spaced or unrelated assets are rejected by clean production. Its source, Hero-plan, TimeMap, style, font, placement, native-graphic recipe, and audio-policy hashes flow into the Advanced Hero plan, render input, cache, QA, review, and delivery checks. The direction skill can propose options, but only the typed CLI validator can bind them; it cannot supply executable renderer code. Picture and speech are staged from the same ordered TimeMap before Remotion, with duration and zero-start checks. See [ADR 0069](docs/adr/0069-source-grounded-motion-direction-presets.md), [ADR 0070](docs/adr/0070-source-grounded-asset-timing-and-production-audio-gates.md), and [ADR 0073](docs/adr/0073-source-bound-native-motion-graphics.md).
+- Motion direction: a promoted candidate may carry an immutable `DirectionDocument` with exactly three source-grounded hook/body/punch alternatives. The selected option uses one of six pinned declarative presets and the project-defined `portrait-safe-v1` region (not a universal platform guarantee). An optional native motion graphic chooses an audited template, copied evidence text, canonical interval, purpose, and geometry above the caption lane; template eligibility must match the claim's visual meaning, so a generic “company” mention cannot select a rising business chart. A reviewed `SourceNativeText` annotation can identify text already burned into a scene so duplicate optional typography is suppressed while the speech caption remains. It has no remote asset or operator code payload. Directed accent tracks are plan-positioned on a caption-adjacent rail, away from the portrait face area. Reviewed B-roll/SFX placements carry exact output intervals, asset in-points, source evidence, purpose, and relevance; evenly spaced or unrelated assets are rejected by clean production. Its source, Hero-plan, TimeMap, style, font, placement, native-graphic recipe, and audio-policy hashes flow into the Advanced Hero plan, render input, cache, QA, review, and delivery checks. The direction skill can propose options, but only the typed CLI validator can bind them; it cannot supply executable renderer code. Picture and speech are staged from the same ordered TimeMap before Remotion, with duration and zero-start checks. See [ADR 0069](docs/adr/0069-source-grounded-motion-direction-presets.md), [ADR 0070](docs/adr/0070-source-grounded-asset-timing-and-production-audio-gates.md), [ADR 0073](docs/adr/0073-source-bound-native-motion-graphics.md), [ADR 0079](docs/adr/0079-claim-specific-native-graphics.md), and [ADR 0080](docs/adr/0080-source-native-text-collision-annotations.md).
 
 ### AI decision plane
 
@@ -106,7 +106,26 @@ The following are not stubbed as successful commands:
 
 ## Invariants later rounds must keep
 
+Speech evidence discovery is shared by production and tests: an explicit
+`CLIPFORGE_SPEECH_EVIDENCE_ROOT` takes precedence over the installed
+`~/.local/clipforge-speech-evidence` directory. Invalid overrides do not fall
+back. Discovery does not grant live status; every existing byte, locale, model,
+and artifact binding check still applies. See [ADR 0074](docs/adr/0074-shared-speech-evidence-discovery.md).
+
+Advanced Hero plans persist the exact TimeMap used for staging. New renders
+stage that map; old plans without the field fall back to their immutable Hero
+map. A map digest mismatch fails closed. See [ADR 0075](docs/adr/0075-advanced-time-map-propagation.md).
+
+An Advanced Hero may also bind a source-grounded `EditorialArcDocument` with
+ordered hook/body/punch ranges and forced-word ids. Planning remaps the forced
+alignment to that map; it does not mutate the parent Hero artifact or approval.
+See [ADR 0076](docs/adr/0076-source-grounded-editorial-arcs.md).
+
 - One core, two edit stages, hard compliance gates, human final approval.
 - One time map. Captions, graphics, B-roll, SFX, QA, and reviews consume it.
+- One portrait transform. Hero and Advanced Hero use the shared deterministic
+  `containRect` output-space geometry; explicit contain review backgrounds and
+  reviewed crop trajectories are separate layers and cannot stretch source
+  media. The renderer recipe version is part of profile/cache identity.
 - Failures raise or record `FAILED` with a message. They do not continue.
 - Schema version `1.0.0` is the current contract generation. Bump it when stored JSON changes shape.

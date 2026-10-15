@@ -12,12 +12,14 @@ from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path, require_asset
 from clipforge.hero.advanced_service import _require_usable_audio
 from clipforge.hero.constants import DURATION_TOLERANCE_US, OUTPUT_HEIGHT, OUTPUT_WIDTH
+from clipforge.hero.editorial_arc import remap_direction_intervals
 from clipforge.hero.motion_style import style_for_id
 from clipforge.hero.probe import probe_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument, AdvancedHeroPlanDocument
 from clipforge.schemas.direction import DirectionDocument
+from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import QACheck, QAStatus
 from clipforge.storage import Database
 
@@ -207,6 +209,17 @@ def _intervals(inputs: TechnicalInputs) -> QACheck:
         events.extend(
             ("diagram", item.interval.output_start_us, item.interval.output_end_us) for item in plan.diagrams
         )
+        events.extend(
+            ("motion_graphic", item.interval.output_start_us, item.interval.output_end_us)
+            for item in plan.motion_graphics
+        )
+        events.extend(
+            ("caption", item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
+        )
+        events.extend(
+            ("transition", item.interval.output_start_us, item.interval.output_end_us)
+            for item in plan.transitions
+        )
         for label, start, end in events:
             if start < 0 or end <= start or end > inputs.duration_us:
                 problems.append(
@@ -249,7 +262,15 @@ def _producers(inputs: TechnicalInputs) -> QACheck:
             problems.append(f"candidate {plan.candidate_id} visual analysis is stale")
         alignment = inputs.hero_alignment_sha256.get(plan.candidate_id)
         hero_plan = inputs.hero_plan_sha256.get(plan.candidate_id)
-        if alignment is None or plan.alignment_sha256 != alignment:
+        if plan.editorial_arc_id:
+            advanced_alignment = inputs.workspace.advanced_alignment_file(plan.candidate_id)
+            if (
+                advanced_alignment.is_symlink()
+                or not advanced_alignment.is_file()
+                or sha256_file(advanced_alignment) != plan.alignment_sha256
+            ):
+                problems.append(f"candidate {plan.candidate_id} editorial alignment is stale")
+        elif alignment is None or plan.alignment_sha256 != alignment:
             problems.append(f"candidate {plan.candidate_id} alignment is stale")
         if hero_plan is None or plan.hero_plan_sha256 != hero_plan:
             problems.append(f"candidate {plan.candidate_id} hero plan is stale")
@@ -327,6 +348,7 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
             if inputs.document.profile.renderer_recipe_version in {
                 "advanced-hero-renderer-directed-v2",
                 "advanced-hero-renderer-directed-v3",
+                "advanced-hero-renderer-directed-v4",
             }:
                 return _check(
                     "direction",
@@ -352,6 +374,31 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
             or style.fingerprint() != plan.style_fingerprint
         ):
             return _check("direction", False, f"candidate={plan.candidate_id} blocker=style_stale")
+        if plan.editorial_arc_id:
+            try:
+                if plan.time_map is None:
+                    raise MediaError("editorial arc is missing its effective TimeMap")
+                original_alignment = ForcedAlignmentDocument.model_validate_json(
+                    inputs.workspace.hero_alignment_file(plan.candidate_id).read_text(encoding="utf-8")
+                )
+                editorial_alignment = ForcedAlignmentDocument.model_validate_json(
+                    inputs.workspace.advanced_alignment_file(plan.candidate_id).read_text(encoding="utf-8")
+                )
+                direction = remap_direction_intervals(
+                    direction,
+                    original_alignment,
+                    editorial_alignment,
+                    HeroPlanDocument.model_validate_json(
+                        inputs.workspace.hero_plan_file(plan.candidate_id).read_text(encoding="utf-8")
+                    ).edit_plan.time_map,
+                    plan.time_map,
+                )
+            except (OSError, UnicodeError, ValidationError, ValueError, MediaError):
+                return _check(
+                    "direction",
+                    False,
+                    f"candidate={plan.candidate_id} blocker=editorial_alignment_invalid",
+                )
         selected = next(
             (option for option in direction.options if option.option_id == direction.selected_option_id),
             None,

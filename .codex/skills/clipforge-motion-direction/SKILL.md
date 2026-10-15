@@ -34,7 +34,12 @@ Return a concise direction brief with:
    `paper-explainer-v1`, or `premium-minimal-v1`;
 5. the project-defined `portrait-safe-v1` region (not a universal platform
    guarantee) and collision notes for faces,
-   source-native text, graphics, B-roll, and captions;
+   source-native text, graphics, B-roll, and captions. Record either
+   `source_native_text_status: reviewed_absent` or `annotated`. When a title or
+   quote is already burned into the source, record a reviewed `SourceNativeText`
+   annotation with its exact phrase, interval, visual scene id, and note so
+   duplicate optional typography can be suppressed. `unavailable` cannot enter
+   clean production;
 6. optional diagram facts only when both sides, units, labels, values, and source
    word/span provenance are explicit;
 7. optional native `motion_graphics` only when an allowlisted illustration conveys
@@ -44,7 +49,8 @@ Return a concise direction brief with:
    evidence item, and safe-region geometry above the reserved caption lane.
    Templates are `credit_card` (evidence must contain both “credit” and “card”),
    `travel_postcard` (travel, Philippines, vacation, beach, tropical, or Airbnb),
-   and `business_spotlight` (business, company, founder, or enterprise). Do not
+   and `business_spotlight` (business, founder, or enterprise; a generic
+   mention of “company” is insufficient for a trend chart). Do not
    use a graphic as a generic decoration, replacement caption, or way to invent a
    hook. Graphics must not overlap each other; omission is the correct choice when
    no template fits;
@@ -60,6 +66,16 @@ Return a concise direction brief with:
 9. a validation checklist covering alignment, rights, geometry, stale
    approvals, and complete-word TimeMap boundaries. Reject a cut that
    intersects a spoken word so the picture cannot lose its leading phoneme.
+
+When the operator requests a multi-moment recut, produce a separate typed
+`EditorialArcDocument` for `--editorial-arc-file`. It must name exact forced
+word ids and source ranges for ordered hook/body/punch segments. Do not reuse a
+Hero caption map after changing the TimeMap; the Advanced planner remaps the
+forced words and persists the new alignment. Segment output order may reorder
+source moments, but every segment must carry its own forced speech interval.
+Segments that begin inside an ongoing sentence must explicitly set
+`continuation: true`; otherwise the validator rejects the cut so a visually
+neat recut cannot start speech on a fragment by accident.
 
 Do not write JavaScript, JSX, CSS, HTML, shell commands, or arbitrary effect
 parameters into the brief. Do not fabricate a hook, comparison, chart, speaker,

@@ -1,7 +1,9 @@
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame, Video } from "remotion";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
+import { useCaptionFonts } from "../captions/fonts.js";
 import { emphasisScale, layerOpacity, revealedCaption } from "./motion.js";
+import { containRect } from "./portrait-transform.js";
 import { NEUTRAL_DARK, type HeroDraftInput } from "./types.js";
 import { parseHeroInput } from "./validation.js";
 
@@ -29,9 +31,13 @@ export function HeroDraft(raw: HeroDraftInput) {
   const active = input.captions.find((item) => revealedCaption(item, frame).length > 0);
   const caption = active === undefined ? undefined : revealedCaption(active, frame);
   const language = active?.language || input.language;
+  const foreground = containRect(input.source_width, input.source_height, input.width, input.height);
+  const legacy = input.renderer_recipe_version !== "hero-draft-renderer-v2";
+  const fontsReady = useCaptionFonts(!legacy);
   if (caption !== undefined && !language) {
     throw new Error("hero caption is missing a locale");
   }
+  if (!fontsReady) return null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, opacity }}>
       <AbsoluteFill>
@@ -43,13 +49,16 @@ export function HeroDraft(raw: HeroDraftInput) {
             muted
             style={{ width: "100%", height: "100%", objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
           />
-          <AbsoluteFill
-            style={{
+          {legacy ? (
+            <AbsoluteFill style={{ width: "100%", aspectRatio: `${input.source_width} / ${input.source_height}`, top: "50%", transform: "translateY(-50%)" }}>
+              <Video src={staticFile(stagedName(input.video_path))} trimBefore={input.media_trim_frame} durationInFrames={input.duration_in_frames} muted style={{ width: "100%", height: "100%", objectFit: "fill" }} />
+            </AbsoluteFill>
+          ) : <div style={{
               position: "absolute",
-              width: "100%",
-              aspectRatio: `${input.source_width} / ${input.source_height}`,
-              top: "50%",
-              transform: "translateY(-50%)",
+              left: foreground.left,
+              top: foreground.top,
+              width: foreground.width,
+              height: foreground.height,
             }}
           >
             <Video
@@ -57,9 +66,9 @@ export function HeroDraft(raw: HeroDraftInput) {
               trimBefore={input.media_trim_frame}
               durationInFrames={input.duration_in_frames}
               muted
-              style={{ width: "100%", height: "100%", objectFit: "fill" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
-          </AbsoluteFill>
+          </div>}
         </AbsoluteFill>
         <Audio
           src={staticFile(stagedName(input.audio_path))}
@@ -69,7 +78,7 @@ export function HeroDraft(raw: HeroDraftInput) {
       </AbsoluteFill>
       {caption === undefined ? null : (
         <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
-          <CaptionPlate text={caption} language={language ?? ""} />
+          <CaptionPlate text={caption} language={language ?? ""} layoutVersion={legacy ? "caption-layout-v1" : "caption-layout-v2"} />
         </AbsoluteFill>
       )}
     </AbsoluteFill>

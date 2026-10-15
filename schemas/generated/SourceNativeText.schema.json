@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
+  "properties": {
+    "interval": {
+      "$ref": "#/$defs/OutputInterval"
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Note",
+      "type": "string"
+    },
+    "region_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Region Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "visual_scene_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Visual Scene Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "region_id",
+    "interval",
+    "text",
+    "visual_scene_ids",
+    "note"
+  ],
+  "title": "SourceNativeText",
+  "type": "object"
+}

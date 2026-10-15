@@ -206,6 +206,12 @@ def preflight_delivery(
     )
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
+    input_path = video.parent / "render-input.json"
+    if draft.editorial_arc_id:
+        if input_path.is_symlink() or not input_path.is_file():
+            raise PublishError("editorial render input is missing or unsafe", category="artifact_changed")
+        if sha256_file(input_path) != draft.render_input_sha256:
+            raise PublishError("editorial render input hash changed", category="artifact_changed")
     _reject_render_strategy(video.parent / "render-input.json", workspace, plan, reframe)
     if probe:
         try:
@@ -724,7 +730,11 @@ def _alignment(
     source_asset_id: str,
     source_sha256: str,
 ) -> tuple[str | None, str | None, tuple[tuple[int, int, str], ...]]:
-    path = workspace.hero_alignment_file(draft.candidate_id)
+    path = (
+        workspace.advanced_alignment_file(draft.candidate_id)
+        if draft.editorial_arc_id
+        else workspace.hero_alignment_file(draft.candidate_id)
+    )
     try:
         path = confine_work_path(root, path.relative_to(root).as_posix(), label="alignment")
     except MediaError as exc:

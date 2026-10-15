@@ -151,6 +151,7 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 evidence=evidence,
                 asset_placements=placements,
                 motion_graphics=graphics,
+                source_native_text_status="reviewed_absent",
                 segment_order=segment_order,
                 selection_score=(0.72, 0.91, 0.81)[option_index],
                 selection_reason="Preserves the exact source sequence and uses one relevant opening accent.",

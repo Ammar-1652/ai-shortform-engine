@@ -96,7 +96,15 @@ from clipforge.storage.repository import ArtifactRow
 from clipforge.timeline.framerate import FrameRate
 from clipforge.transcription.io import dump_json, publish_json
 
-_PROFILE = HeroProfile()
+_PROFILE = HeroProfile(
+    renderer_recipe_version="hero-draft-renderer-v2",
+    caption_style_version="hero-caption-style-v2",
+    caption_font_sha256=[
+        "b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f",
+        "faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb",
+        "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
+    ],
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -691,6 +699,7 @@ def _render_input(
     events = [_motion_payload(event, frame_count) for event in plan.edit_plan.motion_events]
     return HeroRenderInput(
         candidate_id=candidate.candidate_id,
+        renderer_recipe_version=profile.renderer_recipe_version,
         hero_set_id=hero_set_id,
         video_path=str(run_dir / "staging" / video_name),
         audio_path=str(run_dir / "staging" / audio_name),
@@ -698,6 +707,7 @@ def _render_input(
         duration_in_frames=frame_count,
         source_width=source_width,
         source_height=source_height,
+        caption_font_sha256=profile.caption_font_sha256,
         alignment_sha256=alignment_sha256,
         edit_plan_sha256=edit_plan_sha256,
         time_map_sha256=digest_time_map(candidate.time_map),
@@ -1051,6 +1061,7 @@ def _document(
         rough_manifest_sha256=rough_manifest_sha256,
         profile=profile,
         profile_fingerprint=profile.fingerprint(),
+        renderer_recipe_version=profile.renderer_recipe_version,
         alignment_model=aligner.model_name,
         whisperx_version=aligner.whisperx_version,
         alignment_config_sha256=config,
@@ -1094,6 +1105,7 @@ def _cache_record(
         rough_manifest_sha256=document.rough_manifest_sha256,
         hero_input_sha256=document.hero_input_sha256,
         profile_fingerprint=document.profile_fingerprint,
+        renderer_recipe_version=document.renderer_recipe_version,
         alignment_model=document.alignment_model,
         whisperx_version=document.whisperx_version,
         alignment_config_sha256=document.alignment_config_sha256,

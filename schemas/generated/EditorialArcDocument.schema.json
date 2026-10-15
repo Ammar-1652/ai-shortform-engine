@@ -1,0 +1,244 @@
+{
+  "$defs": {
+    "EditorialArcSegment": {
+      "additionalProperties": false,
+      "description": "One ordered source range and the exact forced words it carries.",
+      "properties": {
+        "beat": {
+          "enum": [
+            "hook",
+            "body",
+            "punch"
+          ],
+          "title": "Beat",
+          "type": "string"
+        },
+        "continuation": {
+          "default": false,
+          "title": "Continuation",
+          "type": "boolean"
+        },
+        "purpose": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Word Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "segment_id",
+        "source_start_us",
+        "source_end_us",
+        "word_ids",
+        "beat",
+        "purpose"
+      ],
+      "title": "EditorialArcSegment",
+      "type": "object"
+    },
+    "TimeMapDocument": {
+      "additionalProperties": false,
+      "description": "Ordered source ranges. This is the only persisted jump-cut map.\n\nThe JSON Schema title is ``TimeMap``. Output intervals are a pure function\nof this list via ``to_time_map`` and are not stored separately.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/TimelineSegment"
+          },
+          "title": "Segments",
+          "type": "array"
+        },
+        "time_map_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Time Map Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time_map_id",
+        "segments"
+      ],
+      "title": "TimeMap",
+      "type": "object"
+    },
+    "TimelineSegment": {
+      "additionalProperties": false,
+      "description": "One kept source range. Output position is the index of this segment in its time map.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "segment_id",
+        "source_start_us",
+        "source_end_us"
+      ],
+      "title": "TimelineSegment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A reviewed declarative hook/body/punch source assembly.",
+  "properties": {
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "arc_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Arc Id",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "hero_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hero Plan Sha256",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "segments": {
+      "items": {
+        "$ref": "#/$defs/EditorialArcSegment"
+      },
+      "maxItems": 12,
+      "minItems": 3,
+      "title": "Segments",
+      "type": "array"
+    },
+    "selection_mode": {
+      "default": "operator_override",
+      "enum": [
+        "operator_override",
+        "reviewed"
+      ],
+      "title": "Selection Mode",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "time_map": {
+      "$ref": "#/$defs/TimeMapDocument"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "transition_style": {
+      "default": "none",
+      "enum": [
+        "none",
+        "clean_cut_v1"
+      ],
+      "title": "Transition Style",
+      "type": "string"
+    }
+  },
+  "required": [
+    "arc_id",
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "source_sha256",
+    "hero_plan_sha256",
+    "alignment_sha256",
+    "time_map",
+    "time_map_sha256",
+    "segments"
+  ],
+  "title": "EditorialArcDocument",
+  "type": "object"
+}

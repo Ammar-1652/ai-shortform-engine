@@ -8,7 +8,7 @@ from clipforge.hero.doctor import hero_doctor
 
 
 def test_hero_doctor_explains_missing_speech_evidence(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing"))
     lines = hero_doctor(tmp_path)
     evidence = next(item for item in lines if item.name == "speech_evidence")
     assert evidence.status == "WARN"

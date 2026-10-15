@@ -17,6 +17,7 @@ describe("advanced hero composition", () => {
     expect(source).not.toContain("https://");
     expect(source).toContain('objectFit: "cover"');
     expect(source).toContain('objectFit: "contain"');
+    expect(source).toContain("containRect");
     expect(source).toContain("broll_source_in_us");
     expect(source).toContain("linearVolume");
     expect(source).toContain("CaptionPlate");
@@ -34,10 +35,16 @@ describe("advanced hero composition", () => {
     expect(source).toContain("motionFor");
     expect(source).toContain("max_travel_px");
     expect(source).toContain("max_scale_permille");
+    expect(source).toContain("font_identity");
+    expect(source).toContain("safe_left");
+    expect(source).toContain("safe_bottom");
+    expect(source).toContain("source_native_text");
+    expect(source).toContain("duplicatesNativeText");
+    expect(source).toContain("complete caption style dependencies");
     expect(source).toContain("useCurrentFrame");
     expect(source).not.toContain("top: 1720");
     const captionPlate = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../captions/CaptionPlate.tsx"), "utf8");
-    expect(captionPlate).toContain("top: hook || punch || typography");
+    expect(captionPlate).toContain("hook || punch || typography");
     expect(captionPlate).toContain("whole shaped runs");
   });
 

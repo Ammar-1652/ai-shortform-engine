@@ -13,9 +13,10 @@ from typing import Any, Literal, Protocol, Self
 from pydantic import AwareDatetime, Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
-from clipforge.schemas.direction import MotionStyleSpec
+from clipforge.schemas.direction import MotionStyleSpec, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import TimeMapDocument, digest_time_map
 
 _SHA = r"^[0-9a-f]{64}$"
 _SAFE_X = 48
@@ -230,6 +231,15 @@ class EmphasisEvent(Versioned):
     rule_id: Literal["number_or_currency", "terminal_punctuation", "diagram_label"]
 
 
+class TransitionEvent(Versioned):
+    """A short, deterministic bridge at a reviewed TimeMap cut."""
+
+    event_id: EntityId
+    interval: OutputInterval
+    purpose: Literal[MotionPurpose.VISUAL_REVEAL] = MotionPurpose.VISUAL_REVEAL
+    style: Literal["clean_cut_v1"] = "clean_cut_v1"
+
+
 class AdvancedHeroProfile(Versioned):
     """Output-changing advanced Hero settings. This is not hero-draft-v1."""
 
@@ -268,6 +278,7 @@ class AdvancedHeroProfile(Versioned):
         "advanced-hero-renderer-clean-v1",
         "advanced-hero-renderer-directed-v2",
         "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4",
     ] = "advanced-hero-renderer-directed-v3"
     staging_recipe_version: Literal["time-map-v1-audio-envelope", "time-map-v2-frame-quantized"] = (
         "time-map-v2-frame-quantized"
@@ -336,6 +347,13 @@ class AdvancedHeroRenderInput(Versioned):
     """Facts for one advanced composition. Paths are local staging names, not URLs."""
 
     composition_id: Literal["AdvancedHeroDraft"] = "AdvancedHeroDraft"
+    renderer_recipe_version: Literal[
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4",
+    ] = "advanced-hero-renderer-v1"
     candidate_id: EntityId
     advanced_set_id: EntityId
     duration_in_frames: int = Field(ge=1)
@@ -351,6 +369,8 @@ class AdvancedHeroRenderInput(Versioned):
     motion_style: MotionStyleSpec | None = None
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
@@ -362,7 +382,9 @@ class AdvancedHeroRenderInput(Versioned):
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
+    transitions: list[TransitionEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     windows: list[ReframingWindow] = Field(default_factory=list)
@@ -406,6 +428,8 @@ class AdvancedHeroDraftOutput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
@@ -456,7 +480,12 @@ class AdvancedHeroPlanDocument(Versioned):
     hero_plan_sha256: str = Field(pattern=_SHA)
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
+    # New plans persist the exact map used for Advanced staging. ``None``
+    # keeps older immutable plans readable.
+    time_map: TimeMapDocument | None = None
     time_map_sha256: str = Field(pattern=_SHA)
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     profile_fingerprint: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -471,7 +500,9 @@ class AdvancedHeroPlanDocument(Versioned):
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
+    transitions: list[TransitionEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     assets: list[AssetBinding] = Field(default_factory=list)
@@ -482,6 +513,8 @@ class AdvancedHeroPlanDocument(Versioned):
     def events_do_not_overlap_illegally(self) -> Self:
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("advanced plan provenance must include source_asset_id")
+        if self.time_map is not None and digest_time_map(self.time_map) != self.time_map_sha256:
+            raise ValueError("advanced plan time_map_sha256 does not match time_map")
         _reject_overlaps(self.broll, "b-roll")
         _reject_overlaps_typed(self.captions, "captions")
         _reject_overlaps_typed(self.typography, "typography")

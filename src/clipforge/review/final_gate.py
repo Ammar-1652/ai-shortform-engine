@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from clipforge.errors import ClipforgeError, MediaError, StorageError
+from clipforge.media.hashing import sha256_file
 from clipforge.publish.errors import PublishError
 from clipforge.publish.preflight import DeliveryFacts
 from clipforge.review.service import NOTES_MAX, effective_review
@@ -368,7 +369,20 @@ def language_evidence(facts: object) -> dict[str, str]:
         "narration_license": "none",
         "narration_audio_sha256": "none",
     }
-    path = None if workspace is None or not candidate_id else workspace.hero_alignment_file(candidate_id)
+    path = None
+    if workspace is not None and candidate_id:
+        # Advanced editorial arcs carry a remapped alignment beside the
+        # advanced plan.  Prefer it only when it is the exact binding recorded
+        # in DeliveryFacts; otherwise retain the Hero alignment path.
+        advanced = workspace.advanced_alignment_file(candidate_id)
+        if (
+            advanced.is_file()
+            and not advanced.is_symlink()
+            and sha256_file(advanced) == str(getattr(facts, "alignment_sha256", "") or "")
+        ):
+            path = advanced
+        else:
+            path = workspace.hero_alignment_file(candidate_id)
     if path is not None:
         evidence = validate_current_alignment_evidence(
             path,

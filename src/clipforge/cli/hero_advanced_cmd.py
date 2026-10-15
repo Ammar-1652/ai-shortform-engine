@@ -69,9 +69,17 @@ def advanced_plan(
             help="JSON array of reviewed ReframingWindow records for a moving subject.",
         ),
     ] = None,
+    editorial_arc_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--editorial-arc-file",
+            help="Source-grounded hook/body/punch arc JSON with an ordered TimeMap.",
+        ),
+    ] = None,
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
     from clipforge.hero.advanced_service import _context, default_advanced_profile, plan_advanced_candidate
+    from clipforge.hero.editorial_arc import load_editorial_arc
 
     try:
         profile = _profile(reframing)
@@ -79,6 +87,11 @@ def advanced_plan(
         database = Database(resolve_db_path(db))
         root = resolve_work_dir(work_dir)
         context = None
+        editorial_arc = None
+        editorial_arc_sha256 = ""
+        if editorial_arc_file is not None:
+            context = _context(database, source_asset_id, candidate_id, root)
+            editorial_arc, editorial_arc_sha256 = load_editorial_arc(editorial_arc_file.resolve())
         if reframing == "manual_window":
             if manual_windows_file is not None and (focus_x is not None or focus_y is not None):
                 raise ClipforgeError("choose --manual-windows-file or --focus-x/--focus-y, not both")
@@ -144,12 +157,17 @@ def advanced_plan(
             broll_asset_ids=broll,
             sfx_asset_ids=sfx,
             profile=active,
+            editorial_arc=editorial_arc,
+            editorial_arc_sha256=editorial_arc_sha256,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
     typer.echo(f"plan_id: {plan.plan_id}")
     typer.echo(f"reframing: {plan.reframing_strategy}")
     typer.echo(f"applied: {plan.reframing_strategy}")
+    if plan.editorial_arc_id:
+        typer.echo(f"editorial_arc_id: {plan.editorial_arc_id}")
+        typer.echo(f"editorial_arc_sha256: {plan.editorial_arc_sha256}")
     typer.echo("blocker: none")
 
 

@@ -168,8 +168,8 @@ def _built(aligner: FakeForcedAlignment | None = None):
     return document, inputs, backend
 
 
-def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+def test_catalog_constants_are_not_speech_proof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing-evidence"))
     assert provider_for("en-US").live_status != "verified_live"
     assert provider_for("en-GB").live_status != "verified_live"
     assert provider_for("ja").live_status != "verified_live"
@@ -177,11 +177,13 @@ def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch)
     assert alignment_claim("en-US") == "alignment_not_claimed"
 
 
-def test_a_manifest_string_without_audio_does_not_promote(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_manifest_string_without_audio_does_not_promote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = english_checkpoint_file()
     if path is None:
         pytest.skip("english checkpoint is not installed")
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing-evidence"))
     monkeypatch.setattr(
         "clipforge.language.model_manifest.speech_smoke_manifest",
         lambda _locale, evidence_root=None: measure_english_checkpoint(path).manifest_sha256,

@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stageCaptionFonts } from "./caption-fonts.mjs";
 
 const isolationDir = process.argv[4];
 if (typeof isolationDir === "string" && isolationDir.length > 0) {
@@ -66,6 +67,9 @@ for (const item of batch.items) {
   const input = item.input;
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
+  }
+  if (input.renderer_recipe_version === "hero-draft-renderer-v2") {
+    stageCaptionFonts(stagingDir, input.caption_font_sha256);
   }
   if (input.alignment_quality !== "forced") {
     throw new Error("hero render refuses alignment that is not forced");

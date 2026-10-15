@@ -58,13 +58,16 @@ B-roll and SFX are never evenly spaced: a selected option must carry an
 explicit `DirectionAssetPlacement` with source evidence, purpose, relevance
 note, and an output-clock interval. Passing only asset ids creates an explicitly
 marked legacy event that QA and Remotion reject for clean production. A
-direction may omit both asset types when the source does not need them.
+direction may omit both asset types when the source does not need them. Native
+graphic semantics are strict: `business_spotlight` requires evidence for a
+business, founder, or enterprise concept; a generic “company” mention cannot
+select a rising trend chart.
 
 Before a render job is inserted, every stored plan is checked against the current source, candidate set, rough preview, Hero artifact, Hero approval, alignment, Hero plan, visual analysis, TimeMap, asset hashes, and rights. A stale or revoked binding fails closed and does not publish a sidecar.
 
 Asset paths are checked lexically before `Path.resolve()`. A symlink at the file or at a parent directory is rejected, including a symlink whose target has the expected hash. Absolute paths, `..`, backslashes, and file URIs outside the work root are rejected. The same check covers cache validation, staging, rendering, and media serving.
 
-The production composition uses `contain` over a deliberate blurred full-frame background (not accidental black bars) and the neutral-dark fallback `#111111` unless the stored plan is `face_follow` or `center_crop`. `face_follow` places the stored crop and does not use `objectFit: cover`; `center_crop` uses its explicit portrait crop. Other unsupported strategies fail before the job. B-roll keeps its reviewed output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB, trims from its declared asset in-point, and plays on the declared interval. Music is rejected. After rendering, ffmpeg `ebur128=peak=true` must measure within 1.5 LU of the -16 LUFS target and below -1.5 dBTP; near-silent or clipped output fails before an artifact is committed. Picture and speech are staged from identical ordered TimeMap ranges.
+The production composition uses the shared deterministic portrait transform. `contain` places the whole source in an explicit aspect-ratio box over a deliberate blurred full-frame background (not accidental black bars) and the neutral-dark fallback `#111111`; `face_follow`, `center_crop`, and `manual_window` use their explicit portrait geometry. Other unsupported strategies fail before the job. B-roll keeps its reviewed output interval and `broll_source_in_us`. SFX gain converts with `10 ** (gain_db / 20)` inside `-24..6` dB, trims from its declared asset in-point, and plays on the declared interval. Music is rejected. After rendering, ffmpeg `ebur128=peak=true` must measure within 1.5 LU of the -16 LUFS target and below -1.5 dBTP; near-silent or clipped output fails before an artifact is committed. Picture and speech are staged from identical ordered TimeMap ranges. The renderer recipe version is part of profile and cache identity.
 
 ## Review
 

@@ -28,10 +28,11 @@ from clipforge.schemas.advanced import (
     EmphasisEvent,
     MotionGraphicEvent,
     ReframingWindow,
+    TransitionEvent,
     TypographyEvent,
     advanced_fingerprint,
 )
-from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument
+from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -83,6 +84,9 @@ def build_advanced_plan(
     tool_version: str,
     direction: DirectionDocument | None = None,
     direction_sha256: str = "",
+    editorial_arc_id: str = "",
+    editorial_arc_sha256: str = "",
+    cut_transition_style: str = "none",
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
         raise MediaError("advanced Hero profile cannot allow music")
@@ -135,6 +139,8 @@ def build_advanced_plan(
     # supplies a source-grounded diagram instruction, the safe plan is none.
     diagrams: list[DiagramEvent] = []
     motion_graphics = _motion_graphics(direction)
+    source_native_text = _source_native_text(direction)
+    transitions = _transitions(candidate_id, hero_plan.edit_plan.time_map, duration_us, cut_transition_style)
     typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
     selected_placements = _selected_asset_placements(direction)
@@ -201,7 +207,10 @@ def build_advanced_plan(
         hero_plan_sha256=hero_plan_sha256,
         visual_analysis_id=visual.analysis_id,
         visual_analysis_sha256=visual_sha256,
+        time_map=hero_plan.edit_plan.time_map,
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
+        editorial_arc_id=editorial_arc_id,
+        editorial_arc_sha256=editorial_arc_sha256,
         profile_fingerprint=profile.fingerprint(),
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
@@ -216,7 +225,9 @@ def build_advanced_plan(
         typography=typography,
         diagrams=diagrams,
         motion_graphics=motion_graphics,
+        source_native_text=source_native_text,
         emphasis=emphasis,
+        transitions=transitions,
         broll=broll,
         sfx=sfx,
         assets=assets,
@@ -268,6 +279,14 @@ def _motion_graphics(direction: DirectionDocument | None) -> list[MotionGraphicE
         )
         for graphic in option.motion_graphics
     ]
+
+
+def _source_native_text(direction: DirectionDocument | None) -> list[SourceNativeText]:
+    """Carry reviewed source-native title annotations into the plan."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.source_native_text)
 
 
 def _drop_typography_graphic_collisions(
@@ -504,6 +523,35 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                     )
                     for word in piece.words
                 ],
+            )
+        )
+    return events
+
+
+def _transitions(
+    candidate_id: str,
+    time_map: TimeMapDocument,
+    duration_us: int,
+    style: str,
+) -> list[TransitionEvent]:
+    """Create restrained bridges only where the reviewed TimeMap actually cuts."""
+    mapped = time_map.to_time_map().segments
+    events: list[TransitionEvent] = []
+    if style not in {"none", "clean_cut_v1"}:
+        raise MediaError(f"unsupported cut transition style: {style}")
+    if style == "none":
+        return events
+    for index, segment in enumerate(mapped[1:], start=1):
+        if mapped[index - 1].source_end_us == segment.source_start_us:
+            continue
+        start = segment.output_start_us
+        end = min(duration_us, start + 133_333)
+        if end <= start:
+            continue
+        events.append(
+            TransitionEvent(
+                event_id=stable_id("transition", candidate_id, str(index), str(start)),
+                interval=OutputInterval(output_start_us=start, output_end_us=end),
             )
         )
     return events

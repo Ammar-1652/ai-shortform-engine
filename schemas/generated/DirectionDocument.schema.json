@@ -519,6 +519,24 @@
           "title": "Selection Score",
           "type": "number"
         },
+        "source_native_text": {
+          "items": {
+            "$ref": "#/$defs/SourceNativeText"
+          },
+          "maxItems": 8,
+          "title": "Source Native Text",
+          "type": "array"
+        },
+        "source_native_text_status": {
+          "default": "unavailable",
+          "enum": [
+            "reviewed_absent",
+            "annotated",
+            "unavailable"
+          ],
+          "title": "Source Native Text Status",
+          "type": "string"
+        },
         "style_id": {
           "enum": [
             "editorial-clean-v1",
@@ -596,6 +614,58 @@
         "output_end_us"
       ],
       "title": "OutputInterval",
+      "type": "object"
+    },
+    "SourceNativeText": {
+      "additionalProperties": false,
+      "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "region_id",
+        "interval",
+        "text",
+        "visual_scene_ids",
+        "note"
+      ],
+      "title": "SourceNativeText",
       "type": "object"
     }
   },

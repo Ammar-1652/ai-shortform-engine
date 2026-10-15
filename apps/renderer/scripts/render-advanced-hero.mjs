@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stageCaptionFonts } from "./caption-fonts.mjs";
 
 const isolationDir = process.argv[4];
 if (typeof isolationDir === "string" && isolationDir.length > 0) {
@@ -58,6 +59,9 @@ for (const item of batch.items) {
   }
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
+  }
+  if (input.renderer_recipe_version === "advanced-hero-renderer-directed-v4") {
+    stageCaptionFonts(stagingDir, input.motion_style?.font_sha256);
   }
   if (input.debug_overlays === true) {
     throw new Error("production advanced render rejects debug overlays");

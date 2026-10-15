@@ -1,4 +1,5 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { frameAtOrAfter } from "./program-frames.js";
 
 export type MotionGraphic = {
   event_id?: string;
@@ -16,10 +17,8 @@ export type MotionGraphic = {
 type Props = {
   graphic: MotionGraphic;
   accent: string;
+  showLabel?: boolean;
 };
-
-const frameAt = (microseconds: number | undefined, fps: number) =>
-  typeof microseconds === "number" ? Math.floor((microseconds * fps) / 1_000_000) : 0;
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -28,11 +27,12 @@ const clamp = (value: number) => Math.max(0, Math.min(1, value));
  * only a typed template and source-copied text; operator-provided SVG/HTML or
  * effect code never reaches a production composition.
  */
-export function MotionGraphicCard({ graphic, accent }: Props) {
+export function MotionGraphicCard({ graphic, accent, showLabel = true }: Props) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const start = frameAt(graphic.interval?.output_start_us, fps);
-  const end = Math.max(start + 1, frameAt(graphic.interval?.output_end_us, fps));
+  if (fps !== 30) throw new Error("native graphics require the canonical 30/1 program grid");
+  const start = frameAtOrAfter(graphic.interval?.output_start_us);
+  const end = Math.max(start + 1, frameAtOrAfter(graphic.interval?.output_end_us));
   const local = Math.max(0, frame - start);
   const duration = end - start;
   const enter = clamp(local / Math.min(12, Math.max(1, Math.floor(duration / 3))));
@@ -59,15 +59,16 @@ export function MotionGraphicCard({ graphic, accent }: Props) {
     pointerEvents: "none" as const,
   };
   if (graphic.template === "credit_card") {
-    return <CreditCard graphic={graphic} accent={accent} text={text} style={base} local={local} />;
+    return <CreditCard graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
   }
   if (graphic.template === "travel_postcard") {
-    return <TravelPostcard graphic={graphic} accent={accent} text={text} style={base} local={local} />;
+    return <TravelPostcard graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
   }
-  return <BusinessSpotlight graphic={graphic} accent={accent} text={text} style={base} local={local} />;
+  return <BusinessSpotlight graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
 }
 
-function Label({ text, accent }: { text: string; accent: string }) {
+function Label({ text, accent, show = true }: { text: string; accent: string; show?: boolean }) {
+  if (!show) return null;
   return (
     <div
       style={{
@@ -105,12 +106,14 @@ function CreditCard({
   text,
   style,
   local,
+  showLabel,
 }: {
   graphic: MotionGraphic;
   accent: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
+  showLabel: boolean;
 }) {
   const shine = interpolate(clamp(local / 24), [0, 1], [-440, 620]);
   return (
@@ -139,7 +142,7 @@ function CreditCard({
         <circle cx="566" cy="244" r="36" fill="#ffcb5b" opacity=".92" />
         <circle cx="612" cy="244" r="36" fill="#ef5b75" opacity=".9" />
       </svg>
-      <Label text={text} accent={accent} />
+      <Label text={text} accent={accent} show={showLabel} />
     </div>
   );
 }
@@ -149,12 +152,14 @@ function TravelPostcard({
   text,
   style,
   local,
+  showLabel,
 }: {
   graphic: MotionGraphic;
   accent: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
+  showLabel: boolean;
 }) {
   const progress = clamp(local / 28);
   const planeX = 80 + progress * 540;
@@ -174,7 +179,7 @@ function TravelPostcard({
         </g>
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 38%, rgba(2,12,24,.74))" }} />
-      <Label text={text} accent={accent} />
+      <Label text={text} accent={accent} show={showLabel} />
     </div>
   );
 }
@@ -184,12 +189,14 @@ function BusinessSpotlight({
   text,
   style,
   local,
+  showLabel,
 }: {
   graphic: MotionGraphic;
   accent: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
+  showLabel: boolean;
 }) {
   const rise = 34 + clamp(local / 24) * 18;
   return (
@@ -202,7 +209,7 @@ function BusinessSpotlight({
         <path d={`M604 ${rise + 6} L632 ${rise} L618 ${rise + 28}`} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
-      <Label text={text} accent={accent} />
+      <Label text={text} accent={accent} show={showLabel} />
     </div>
   );
 }

@@ -153,6 +153,21 @@ class DirectionMotionGraphic(Versioned):
         return self
 
 
+class SourceNativeText(Versioned):
+    """Reviewed text already present in source footage.
+
+    This annotation never paints or removes source pixels. It only gives the
+    deterministic renderer enough evidence to suppress a duplicate optional
+    typography card when the source itself already displays the same phrase.
+    """
+
+    region_id: EntityId
+    interval: OutputInterval
+    text: str = Field(min_length=1, max_length=200)
+    visual_scene_ids: list[EntityId] = Field(min_length=1)
+    note: str = Field(min_length=1, max_length=500)
+
+
 class DirectionOption(Versioned):
     """One source-grounded direction alternative presented to the selector."""
 
@@ -163,6 +178,8 @@ class DirectionOption(Versioned):
     evidence: list[DirectionEvidence] = Field(min_length=1)
     asset_placements: list[DirectionAssetPlacement] = Field(default_factory=list, max_length=12)
     motion_graphics: list[DirectionMotionGraphic] = Field(default_factory=list, max_length=4)
+    source_native_text: list[SourceNativeText] = Field(default_factory=list, max_length=8)
+    source_native_text_status: Literal["reviewed_absent", "annotated", "unavailable"] = "unavailable"
     segment_order: list[EntityId] = Field(min_length=1)
     selection_score: float = Field(ge=0, le=1)
     selection_reason: str = Field(min_length=1, max_length=500)
@@ -200,6 +217,13 @@ class DirectionOption(Versioned):
             for evidence_id in graphic.source_evidence_ids
         ):
             raise ValueError("every motion graphic evidence id must be declared by the option")
+        native_ids = [item.region_id for item in self.source_native_text]
+        if len(set(native_ids)) != len(native_ids):
+            raise ValueError("source-native text region ids must be unique")
+        if self.source_native_text_status == "annotated" and not self.source_native_text:
+            raise ValueError("annotated source-native text status requires annotations")
+        if self.source_native_text_status == "reviewed_absent" and self.source_native_text:
+            raise ValueError("reviewed_absent source-native text status cannot carry annotations")
         graphics = sorted(self.motion_graphics, key=lambda item: item.interval.output_start_us)
         if any(
             left.interval.output_end_us > right.interval.output_start_us for left, right in pairwise(graphics)

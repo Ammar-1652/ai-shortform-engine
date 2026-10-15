@@ -2,9 +2,12 @@ import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame
 import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
+import { useCaptionFonts } from "../captions/fonts.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
 import { MotionGraphicCard, type MotionGraphic } from "./MotionGraphic.js";
+import { cueWindow, frameAtOrAfter } from "./program-frames.js";
+import { containRect } from "./portrait-transform.js";
 
 type Interval = { output_start_us?: number; output_end_us?: number };
 
@@ -72,6 +75,20 @@ type SfxEvent = {
 
 type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: number };
 
+type TransitionEvent = {
+  event_id?: string;
+  interval?: Interval;
+  style?: "clean_cut_v1";
+};
+
+type SourceNativeText = {
+  region_id?: string;
+  interval?: Interval;
+  text?: string;
+  visual_scene_ids?: string[];
+  note?: string;
+};
+
 type MotionStyle = {
   style_id?: string;
   easing?: string;
@@ -81,10 +98,18 @@ type MotionStyle = {
   max_scale_permille?: number;
   caption_mode?: "phrase_active_word" | "phrase_whole_run";
   contrast?: string;
+  font_identity?: string;
+  font_sha256?: string[];
+  safe_left?: number;
+  safe_right?: number;
+  safe_top?: number;
+  safe_bottom?: number;
+  max_simultaneous_emphasis?: number;
   accent?: string;
 };
 
 export type AdvancedHeroInput = {
+  renderer_recipe_version?: "advanced-hero-renderer-v1" | "advanced-hero-renderer-clean-v1" | "advanced-hero-renderer-directed-v2" | "advanced-hero-renderer-directed-v3" | "advanced-hero-renderer-directed-v4";
   duration_in_frames: number;
   style_id?:
     | "legacy-v1"
@@ -111,9 +136,11 @@ export type AdvancedHeroInput = {
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
   motion_graphics?: MotionGraphic[];
+  source_native_text?: SourceNativeText[];
   broll?: BrollEvent[];
   sfx?: SfxEvent[];
   emphasis?: EmphasisEvent[];
+  transitions?: TransitionEvent[];
   asset_names?: Record<string, string>;
   windows?: CropWindow[];
   language?: string;
@@ -137,18 +164,16 @@ function frameAt(microseconds: number | undefined): number {
 }
 
 function active(frame: number, interval: Interval | undefined): boolean {
-  const start = frameAt(interval?.output_start_us);
+  const start = frameAtOrAfter(interval?.output_start_us);
   // A positive cue shorter than one output frame still owns the frame that
   // contains its start. This preserves the half-open interval while avoiding
   // an invisible one-word caption after integer frame conversion.
-  const end = Math.max(start + 1, frameAt(interval?.output_end_us));
+  const end = Math.max(start + 1, frameAtOrAfter(interval?.output_end_us));
   return frame >= start && frame < end;
 }
 
 function span(interval: Interval | undefined): { from: number; duration: number } {
-  const from = frameAt(interval?.output_start_us);
-  const end = frameAt(interval?.output_end_us);
-  return { from, duration: Math.max(1, end - from) };
+  return cueWindow(interval?.output_start_us, interval?.output_end_us);
 }
 
 function eased(value: number, easing: string | undefined): number {
@@ -166,8 +191,8 @@ function motionFor(frame: number, interval: Interval | undefined, style: MotionS
   if (!style || style.style_id === "legacy-v1") {
     return {};
   }
-  const start = frameAt(interval?.output_start_us);
-  const end = Math.max(start + 1, frameAt(interval?.output_end_us));
+  const start = frameAtOrAfter(interval?.output_start_us);
+  const end = Math.max(start + 1, frameAtOrAfter(interval?.output_end_us));
   const duration = end - start;
   const enter = Math.min(Math.max(0, style.enter_frames ?? 0), Math.floor(duration / 3));
   const exit = Math.min(Math.max(0, style.exit_frames ?? 0), Math.floor(duration / 3));
@@ -194,6 +219,8 @@ function motionFor(frame: number, interval: Interval | undefined, style: MotionS
  */
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
+  const modernLayout = input.renderer_recipe_version === "advanced-hero-renderer-directed-v4";
+  const fontsReady = useCaptionFonts(modernLayout);
   const strategy = input.reframing_strategy ?? "contain";
   const style = input.style_id ?? "legacy-v1";
   const productionStyles = new Set([
@@ -225,6 +252,19 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     }
     if (!input.direction_id || !/^[0-9a-f]{64}$/.test(input.direction_sha256 ?? "")) {
       throw new Error("production advanced render requires a persisted direction binding");
+    }
+    const motionStyle = input.motion_style;
+    if (modernLayout && (
+      !motionStyle ||
+      typeof motionStyle.font_identity !== "string" ||
+      motionStyle.font_identity.trim().length === 0 ||
+      !Array.isArray(motionStyle.font_sha256) ||
+      motionStyle.font_sha256.some((digest) => !/^[0-9a-f]{64}$/.test(digest)) ||
+      ![motionStyle.safe_left, motionStyle.safe_right, motionStyle.safe_top, motionStyle.safe_bottom].every(
+        (value) => typeof value === "number" && Number.isInteger(value) && value >= 0,
+      )
+    )) {
+      throw new Error("production advanced render requires complete caption style dependencies");
     }
     for (const event of input.broll ?? []) {
       if (!event.source_evidence_ids?.length || !event.relevance_note?.trim()) {
@@ -260,6 +300,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const visibleType = typography.filter(
     (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
   );
+  const visibleNativeText = (input.source_native_text ?? []).filter(
+    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
+  );
   const rawLanguage = input.language?.trim();
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
   // deterministic without treating the sentinel as a supported locale claim.
@@ -267,6 +310,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const motionStyle = input.motion_style;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
   const motionGraphics = (input.motion_graphics ?? []).filter((item) => active(frame, item.interval));
+  const transitions = (input.transitions ?? []).filter((item) => active(frame, item.interval));
   if (diagram && (diagram.payload?.kind ?? "number_comparison") !== "number_comparison") {
     throw new Error(`unsupported production diagram kind ${String(diagram.payload?.kind)}`);
   }
@@ -280,26 +324,25 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     }
   }
   const emphasis = (input.emphasis ?? []).filter(
-    (item) => frame >= frameAt(item.output_start_us) && frame < frameAt(item.output_end_us),
+    (item) => frame >= frameAtOrAfter(item.output_start_us) && frame < frameAtOrAfter(item.output_end_us),
   );
   const activeEmphasis = emphasis[0]?.text?.replace(/\s+/g, " ").trim();
   const speech = input.speech_name ?? "asr.flac";
   const picture = input.base_video_name ?? "analysis.mp4";
   const contained = { width: "100%", height: "100%", objectFit: "contain" as const };
   const sourceWindow = input.windows?.[0];
+  const legacyGeometry = input.renderer_recipe_version !== "advanced-hero-renderer-directed-v4";
+  if (!legacyGeometry && !sourceWindow) {
+    throw new Error("portrait transform requires source dimensions in a reframing window");
+  }
   const containBox = sourceWindow
-    ? {
-        position: "absolute" as const,
-        width: "100%",
-        aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`,
-        top: "50%",
-        transform: "translateY(-50%)",
-      }
-    : { position: "absolute" as const, inset: 0 };
+    ? containRect(sourceWindow.frame_width, sourceWindow.frame_height, 1080, 1920)
+    : containRect(1080, 1920, 1080, 1920);
   const followed =
     strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
       ? placedVideo(windowAt(frame, input.windows ?? []))
       : null;
+  if (!fontsReady) return null;
   return (
       <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       {followed === null ? (
@@ -310,14 +353,18 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             muted
             style={{ ...contained, objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
           />
-          <AbsoluteFill style={containBox}>
+          {legacyGeometry ? (
+            <AbsoluteFill style={sourceWindow ? { width: "100%", aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`, top: "50%", transform: "translateY(-50%)" } : { inset: 0 }}>
+              <Video src={staticFile(picture)} durationInFrames={input.duration_in_frames} muted style={{ width: "100%", height: "100%", objectFit: "fill" }} />
+            </AbsoluteFill>
+          ) : <div style={{ position: "absolute", ...containBox }}>
             <Video
               src={staticFile(picture)}
               durationInFrames={input.duration_in_frames}
               muted
-              style={{ width: "100%", height: "100%", objectFit: "fill" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
-          </AbsoluteFill>
+          </div>}
         </AbsoluteFill>
       ) : (
         <AbsoluteFill style={{ overflow: "hidden" }}>
@@ -435,11 +482,37 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         if (x < 48 || y < 120 || width < 220 || height < 180 || x + width > 1032 || y + height > 1480) {
           throw new Error("motion graphic geometry is outside the production graphic region");
         }
+        const graphicText = (graphic.display_text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+        const duplicateCaption = visibleCaptions.some((caption) => {
+          const captionText = (caption.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+          return Boolean(graphicText) && (captionText.includes(graphicText) || graphicText.includes(captionText));
+        });
         return (
           <MotionGraphicCard
             key={graphic.event_id ?? `${graphic.template}-${graphic.display_text}`}
             graphic={graphic}
             accent={motionStyle?.accent ?? "#64d8ff"}
+            showLabel={!duplicateCaption}
+          />
+        );
+      })}
+      {transitions.map((transition) => {
+        if (transition.style !== undefined && transition.style !== "clean_cut_v1") {
+          throw new Error(`unsupported production transition ${String(transition.style)}`);
+        }
+        const start = frameAtOrAfter(transition.interval?.output_start_us);
+        const local = Math.max(0, frame - start);
+        const progress = Math.min(1, local / 4);
+        const opacity = 0.56 * (1 - eased(progress, motionStyle?.easing));
+        return (
+          <AbsoluteFill
+            key={`transition-${transition.event_id ?? start}`}
+            style={{
+              pointerEvents: "none",
+              opacity,
+              background: `linear-gradient(112deg, transparent 0%, ${motionStyle?.accent ?? "#ffcf4a"} 47%, #ffffff 50%, ${motionStyle?.accent ?? "#3ddbd6"} 53%, transparent 100%)`,
+              mixBlendMode: "screen",
+            }}
           />
         );
       })}
@@ -452,8 +525,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             !language.startsWith("ja")
               ? item.words?.find(
                   (word) =>
-                    frame >= Number(word.output_start_frame ?? frameAt(word.output_start_us)) &&
-                    frame < Number(word.output_end_frame_exclusive ?? frameAt(word.output_end_us)),
+                    frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
+                    frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
                 )?.text
               : undefined;
           return (
@@ -466,6 +539,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 language={item.language || language}
                 variant="body"
                 emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
+                style={modernLayout ? motionStyle : undefined}
+                layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
               />
             </AbsoluteFill>
           );
@@ -479,6 +554,10 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             return captionText.includes(text) || text.includes(captionText);
           })(),
         );
+        const duplicatesNativeText = visibleNativeText.some((native) => {
+          const nativeText = (native.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+          return nativeText.length > 0 && (nativeText.includes(text) || text.includes(nativeText));
+        });
         const isHook = item.component_id === "hook-card-v1";
         const isPunch = item.component_id === "punch-card-v1";
         const left = item.x ?? 72;
@@ -489,7 +568,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             key={`${item.component_id ?? "type"}-${item.event_id ?? ""}-${item.text}`}
             style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
           >
-            {duplicatesCaption ? (
+            {duplicatesCaption || duplicatesNativeText ? (
               <div
                 style={{
                   position: "absolute",
@@ -516,7 +595,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 />
               </div>
             ) : null}
-            {!duplicatesCaption ? (
+            {!duplicatesCaption && !duplicatesNativeText ? (
               <CaptionPlate
                 text={item.text ?? ""}
                 language={item.language || language}
@@ -525,6 +604,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 x={item.x}
                 y={item.y}
                 fontSize={item.font_size}
+                style={modernLayout ? motionStyle : undefined}
+                layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
               />
             ) : null}
           </AbsoluteFill>

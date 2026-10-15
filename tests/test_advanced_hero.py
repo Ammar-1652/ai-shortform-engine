@@ -45,10 +45,12 @@ from clipforge.schemas.advanced import (
     ReframingWindow,
     TypographyEvent,
 )
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
 from clipforge.schemas.direction import DirectionAssetPlacement
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.governance import AssetLicenseRecord, RightsStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
 from clipforge.storage import insert_asset_license_record
 from tests.candidate_support import PROJECT_ID, SOURCE_ID
 from tests.test_hero_service import CountingAligner, _hero, _reviewed
@@ -156,6 +158,8 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
         sfx_asset_ids=["sfx-1"],
     )
     assert plan.reframing_strategy == "contain"
+    assert plan.time_map is not None
+    assert plan.time_map_sha256 == digest_time_map(plan.time_map)
     # Clean production does not fabricate cards when no reviewed direction
     # exists. The explicit legacy recipe is the only compatibility path for
     # the old heuristic hook/punch behavior.
@@ -187,6 +191,85 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     render_input = json.loads(before[-1].read_text(encoding="utf-8"))
     with pytest.raises(ValidationError, match="debug_overlays"):
         AdvancedHeroRenderInput.model_validate({**render_input, "debug_overlays": True})
+
+
+def test_editorial_arc_persists_remapped_alignment_and_time_map(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    board = review_board(fixture.database, SOURCE_ID, fixture.work)
+    hero = board["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, ids[0]),
+        decision="approved",
+        reviewer_id="ada",
+        notes="arc",
+    )
+    from clipforge.hero.advanced_service import _context
+
+    context = _context(fixture.database, SOURCE_ID, ids[0], fixture.work)
+    words = context.alignment.words
+    assert len(words) >= 3
+    chosen = [words[0], words[len(words) // 2], words[-1]]
+    mapped = TimeMapDocument(
+        time_map_id="arc-map",
+        segments=[
+            TimelineSegment(
+                segment_id=f"arc-{index}",
+                source_start_us=word.source_start_us,
+                source_end_us=word.source_end_us,
+            )
+            for index, word in enumerate(chosen)
+        ],
+    )
+    arc = EditorialArcDocument(
+        arc_id="arc-test",
+        transition_style="clean_cut_v1",
+        project_id=context.project_id,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        source_sha256=context.source_sha256,
+        hero_plan_sha256=context.hero_plan_sha256,
+        alignment_sha256=context.alignment_sha256,
+        time_map=mapped,
+        time_map_sha256=digest_time_map(mapped),
+        segments=[
+            EditorialArcSegment(
+                segment_id=segment.segment_id,
+                source_start_us=segment.source_start_us,
+                source_end_us=segment.source_end_us,
+                word_ids=[word.word_id],
+                beat=beat,
+                purpose=f"{beat} evidence",
+                continuation=beat != "hook",
+            )
+            for segment, word, beat in zip(mapped.segments, chosen, ("hook", "body", "punch"), strict=True)
+        ],
+    )
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        editorial_arc=arc,
+        editorial_arc_sha256="a" * 64,
+    )
+    assert plan.editorial_arc_id == "arc-test"
+    assert plan.time_map is not None
+    assert len(plan.time_map.segments) == 3
+    assert len(plan.transitions) == 2
+    mapped_runtime = mapped.to_time_map().segments
+    assert [event.interval.output_start_us for event in plan.transitions] == [
+        mapped_runtime[1].output_start_us,
+        mapped_runtime[2].output_start_us,
+    ]
+    advanced_alignment = fixture.workspace.advanced_alignment_file(ids[0])
+    assert advanced_alignment.is_file()
+    assert plan.alignment_sha256 == sha256_file(advanced_alignment)
+    assert plan.alignment_sha256 != context.alignment_sha256
+    assert plan.editorial_arc_sha256 == sha256_file(fixture.workspace.advanced_arc_file(ids[0]))
 
 
 def test_typography_builds_exact_hook_and_punch_cards() -> None:
@@ -505,7 +588,11 @@ def test_remote_url_and_music_are_rejected() -> None:
 def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
     assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
     assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
-    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v3"
+    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v4"
+    prior_geometry_recipe = default_advanced_profile().model_copy(
+        update={"renderer_recipe_version": "advanced-hero-renderer-directed-v3"}
+    )
+    assert prior_geometry_recipe.fingerprint() != default_advanced_profile().fingerprint()
     legacy = default_advanced_profile().model_copy(
         update={
             "caption_algorithm_version": "advanced-caption-v1",

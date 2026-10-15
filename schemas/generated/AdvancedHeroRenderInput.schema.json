@@ -821,6 +821,97 @@
       "title": "ReframingWindow",
       "type": "object"
     },
+    "SourceNativeText": {
+      "additionalProperties": false,
+      "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "region_id",
+        "interval",
+        "text",
+        "visual_scene_ids",
+        "note"
+      ],
+      "title": "SourceNativeText",
+      "type": "object"
+    },
+    "TransitionEvent": {
+      "additionalProperties": false,
+      "description": "A short, deterministic bridge at a reviewed TimeMap cut.",
+      "properties": {
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "const": "visual_reveal",
+          "default": "visual_reveal",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "style": {
+          "const": "clean_cut_v1",
+          "default": "clean_cut_v1",
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval"
+      ],
+      "title": "TransitionEvent",
+      "type": "object"
+    },
     "TypographyEvent": {
       "additionalProperties": false,
       "description": "On-screen text copied from alignment or a validated payload. It is not HTML.",
@@ -1010,6 +1101,18 @@
       "title": "Duration In Frames",
       "type": "integer"
     },
+    "editorial_arc_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Editorial Arc Id",
+      "type": "string"
+    },
+    "editorial_arc_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Sha256",
+      "type": "string"
+    },
     "emphasis": {
       "items": {
         "$ref": "#/$defs/EmphasisEvent"
@@ -1092,6 +1195,18 @@
       "title": "Reframing Strategy",
       "type": "string"
     },
+    "renderer_recipe_version": {
+      "default": "advanced-hero-renderer-v1",
+      "enum": [
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4"
+      ],
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
     "safe_region_id": {
       "default": "portrait-safe-v1",
       "maxLength": 64,
@@ -1118,6 +1233,13 @@
       "minimum": -24,
       "title": "Source Gain Db",
       "type": "number"
+    },
+    "source_native_text": {
+      "items": {
+        "$ref": "#/$defs/SourceNativeText"
+      },
+      "title": "Source Native Text",
+      "type": "array"
     },
     "source_sha256": {
       "default": "",
@@ -1155,6 +1277,13 @@
       "pattern": "^$|^[0-9a-f]{64}$",
       "title": "Trajectory Sha256",
       "type": "string"
+    },
+    "transitions": {
+      "items": {
+        "$ref": "#/$defs/TransitionEvent"
+      },
+      "title": "Transitions",
+      "type": "array"
     },
     "typography": {
       "items": {

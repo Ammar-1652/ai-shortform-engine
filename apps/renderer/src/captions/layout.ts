@@ -9,9 +9,9 @@ export type CaptionLayout = {
   readonly safe: { readonly left: number; readonly right: number; readonly top: number; readonly bottom: number };
 };
 
-const SAFE_MARGIN = 64;
 const FRAME_WIDTH = 1080;
 const FRAME_HEIGHT = 1920;
+const DEFAULT_SAFE = { left: 64, right: 64, top: 64, bottom: 64 };
 const FORBIDDEN_START = new Set(["。", "、", "！", "？", "」", "）", "』"]);
 const FORBIDDEN_END = new Set(["（", "「", "『"]);
 
@@ -24,7 +24,42 @@ function localeFamily(language: string): "en" | "fr" | "ja" | "ar" {
   throw new Error(`unsupported caption locale: ${language}`);
 }
 
-export function layoutCaption(text: string, language: string, maxChars = 12): CaptionLayout {
+export type CaptionSafeMargins = Readonly<{
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}>;
+
+function safeCoordinates(margins: CaptionSafeMargins): CaptionLayout["safe"] {
+  if (
+    !Number.isInteger(margins.left) ||
+    !Number.isInteger(margins.right) ||
+    !Number.isInteger(margins.top) ||
+    !Number.isInteger(margins.bottom) ||
+    margins.left < 0 ||
+    margins.right < 0 ||
+    margins.top < 0 ||
+    margins.bottom < 0 ||
+    margins.left + margins.right >= FRAME_WIDTH ||
+    margins.top + margins.bottom >= FRAME_HEIGHT
+  ) {
+    throw new Error("caption safe margins are invalid");
+  }
+  return {
+    left: margins.left,
+    right: FRAME_WIDTH - margins.right,
+    top: margins.top,
+    bottom: FRAME_HEIGHT - margins.bottom,
+  };
+}
+
+export function layoutCaption(
+  text: string,
+  language: string,
+  maxChars = 12,
+  safeMargins: CaptionSafeMargins = DEFAULT_SAFE,
+): CaptionLayout {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized) {
     throw new Error("caption text is empty");
@@ -40,12 +75,7 @@ export function layoutCaption(text: string, language: string, maxChars = 12): Ca
     text: normalized,
     direction,
     lines,
-    safe: {
-      left: SAFE_MARGIN,
-      right: FRAME_WIDTH - SAFE_MARGIN,
-      top: SAFE_MARGIN,
-      bottom: FRAME_HEIGHT - SAFE_MARGIN,
-    },
+    safe: safeCoordinates(safeMargins),
   };
 }
 
@@ -107,10 +137,10 @@ export function wrapCjk(text: string, width: number): string[] {
 
 export function plateInsideSafeArea(layout: CaptionLayout): boolean {
   return (
-    layout.safe.left >= SAFE_MARGIN &&
-    layout.safe.right <= FRAME_WIDTH - SAFE_MARGIN &&
-    layout.safe.top >= SAFE_MARGIN &&
-    layout.safe.bottom <= FRAME_HEIGHT - SAFE_MARGIN &&
+    layout.safe.left >= 0 &&
+    layout.safe.right <= FRAME_WIDTH &&
+    layout.safe.top >= 0 &&
+    layout.safe.bottom <= FRAME_HEIGHT &&
     layout.lines.every((line) => line.length > 0)
   );
 }

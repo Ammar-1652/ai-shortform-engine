@@ -16,9 +16,15 @@ from pydantic import ValidationError
 from clipforge import __version__
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
-from clipforge.hero.advanced_build import build_advanced_plan
+from clipforge.hero.advanced_build import _transitions, build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.direction_service import load_direction
+from clipforge.hero.editorial_arc import (
+    load_editorial_arc,
+    remap_alignment,
+    remap_direction_intervals,
+    validate_editorial_arc,
+)
 from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.probe import probe_hero
 from clipforge.hero.reframe import (
@@ -59,13 +65,14 @@ from clipforge.schemas.advanced import (
     ReframingStrategy,
     advanced_fingerprint,
 )
+from clipforge.schemas.arc import EditorialArcDocument
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
-from clipforge.schemas.time import TimeMapDocument
+from clipforge.schemas.time import TimeMapDocument, digest_time_map
 from clipforge.schemas.vision import VisualAnalysisDocument
 from clipforge.storage import (
     ArtifactRow,
@@ -89,10 +96,10 @@ _PROFILE = AdvancedHeroProfile(
     caption_algorithm_version="advanced-caption-clean-v1",
     typography_version="advanced-typography-clean-v1",
     diagram_version="advanced-diagram-grounded-v1",
-    # v3 adds source-bound native Remotion illustration events.  Its recipe
-    # name is part of the profile fingerprint, so v2 artifacts continue to
-    # resolve under their recorded renderer behavior.
-    renderer_recipe_version="advanced-hero-renderer-directed-v3",
+    # v4 makes the shared portrait transform explicit. Its recipe name is part
+    # of the profile fingerprint, so older artifacts remain immutable and
+    # newly planned renders cannot reuse the stretched geometry.
+    renderer_recipe_version="advanced-hero-renderer-directed-v4",
     motion_library_version="advanced-motion-clean-v1",
 )
 
@@ -132,6 +139,8 @@ def plan_advanced_candidate(
     profile: AdvancedHeroProfile | None = None,
     created_by: str | None = None,
     direction: DirectionDocument | None = None,
+    editorial_arc: EditorialArcDocument | None = None,
+    editorial_arc_sha256: str = "",
 ) -> AdvancedHeroPlanDocument:
     """Write one advanced plan. Asset and approval failures happen before a render job."""
     root = work_root.resolve()
@@ -168,6 +177,41 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+    render_alignment = context.alignment
+    render_hero_plan = context.hero_plan
+    render_direction = stored_direction
+    if editorial_arc is not None:
+        validate_editorial_arc(
+            editorial_arc,
+            source_sha256=context.source_sha256,
+            hero_plan=context.hero_plan,
+            hero_plan_sha256=context.hero_plan_sha256,
+            alignment=context.alignment,
+            alignment_sha256=context.alignment_sha256,
+        )
+        render_alignment = remap_alignment(
+            context.alignment,
+            editorial_arc,
+            source_sha256=context.source_sha256,
+        )
+        render_hero_plan = context.hero_plan.model_copy(
+            update={
+                "edit_plan": context.hero_plan.edit_plan.model_copy(
+                    update={
+                        "time_map": editorial_arc.time_map,
+                        "time_map_sha256": editorial_arc.time_map_sha256,
+                    }
+                )
+            }
+        )
+        if stored_direction is not None:
+            render_direction = remap_direction_intervals(
+                stored_direction,
+                context.alignment,
+                render_alignment,
+                context.hero_plan.edit_plan.time_map,
+                editorial_arc.time_map,
+            )
     directed_broll_ids: list[str] = []
     directed_sfx_ids: list[str] = []
     if stored_direction is not None:
@@ -183,6 +227,11 @@ def plan_advanced_candidate(
         if sfx_asset_ids is not None and sfx_asset_ids != directed_sfx_ids:
             raise MediaError("SFX ids must match the selected direction placements")
     actor = _actor(created_by)
+    effective_duration_us = render_hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
+    # Build the plan before publishing sidecars so validation errors leave no
+    # claim of a usable render.  The effective alignment hash for an arc is
+    # replaced below with the hash of the immutable advanced alignment file;
+    # it must never be a model/content digest masquerading as a file hash.
     plan = build_advanced_plan(
         database=database,
         workspace=context.workspace,
@@ -202,22 +251,58 @@ def plan_advanced_candidate(
         hero_manifest_sha256=context.hero_manifest_sha256,
         review_id=context.review_id,
         review_digest=context.review_digest,
-        alignment=context.alignment,
+        alignment=render_alignment,
         alignment_sha256=context.alignment_sha256,
-        hero_plan=context.hero_plan,
+        hero_plan=render_hero_plan,
         hero_plan_sha256=context.hero_plan_sha256,
         visual=context.visual,
         visual_sha256=context.visual_sha256,
-        duration_us=context.duration_us,
+        duration_us=effective_duration_us,
         broll_asset_ids=directed_broll_ids if stored_direction is not None else list(broll_asset_ids or []),
         sfx_asset_ids=directed_sfx_ids if stored_direction is not None else list(sfx_asset_ids or []),
         actor=actor,
         tool_version=__version__,
-        direction=stored_direction,
+        direction=render_direction,
         direction_sha256=direction_sha256,
+        editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
+        editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
+        cut_transition_style="none" if editorial_arc is None else editorial_arc.transition_style,
     )
     destination = context.workspace.advanced_plan_file(candidate_id)
     context.workspace.prepare_advanced_file(destination)
+    if editorial_arc is not None:
+        archive = destination.parent / "arcs" / f"{editorial_arc.arc_id}.json"
+        context.workspace.prepare_advanced_file(archive)
+        if archive.exists():
+            recorded_arc, _ = load_editorial_arc(archive)
+            if recorded_arc != editorial_arc:
+                raise MediaError("editorial arc id is immutable; use a new arc_id for a changed arc")
+        else:
+            publish_json(archive, editorial_arc, root, context.workspace.partial_for(archive))
+        arc_destination = context.workspace.advanced_arc_file(candidate_id)
+        context.workspace.prepare_advanced_file(arc_destination)
+        arc_sha256, _ = publish_json(
+            arc_destination, editorial_arc, root, context.workspace.partial_for(arc_destination)
+        )
+        alignment_destination = context.workspace.advanced_alignment_file(candidate_id)
+        context.workspace.prepare_advanced_file(alignment_destination)
+        alignment_sha256, _ = publish_json(
+            alignment_destination,
+            render_alignment,
+            root,
+            context.workspace.partial_for(alignment_destination),
+        )
+        # Re-validate the final document after binding the sidecar bytes.  The
+        # remapped alignment id comes from the arc, while its SHA is the exact
+        # persisted JSON consumed by QA, review, and delivery.
+        plan = AdvancedHeroPlanDocument.model_validate(
+            {
+                **plan.model_dump(mode="json"),
+                "alignment_id": render_alignment.alignment_id,
+                "alignment_sha256": alignment_sha256,
+                "editorial_arc_sha256": arc_sha256,
+            }
+        )
     publish_json(destination, plan, root, context.workspace.partial_for(destination))
     return plan
 
@@ -471,12 +556,41 @@ def _require_production_direction(
             raise MediaError(f"clean Advanced Hero production direction is invalid: {exc}") from exc
         if direction.direction_id != plan.direction_id or direction.style_id != plan.style_id:
             raise MediaError("clean Advanced Hero production direction does not match the plan")
+        effective_direction = direction
+        if plan.editorial_arc_id:
+            if plan.time_map is None:
+                raise MediaError("editorial arc plan is missing its effective TimeMap")
+            original_alignment = _read_model(
+                workspace.hero_alignment_file(plan.candidate_id),
+                ForcedAlignmentDocument,
+                "alignment",
+            )
+            editorial_alignment = _read_model(
+                workspace.advanced_alignment_file(plan.candidate_id),
+                ForcedAlignmentDocument,
+                "editorial alignment",
+            )
+            effective_direction = remap_direction_intervals(
+                direction,
+                original_alignment,
+                editorial_alignment,
+                _read_model(
+                    workspace.hero_plan_file(plan.candidate_id), HeroPlanDocument, "Hero plan"
+                ).edit_plan.time_map,
+                plan.time_map,
+            )
         selected = next(
-            (option for option in direction.options if option.option_id == direction.selected_option_id),
+            (
+                option
+                for option in effective_direction.options
+                if option.option_id == effective_direction.selected_option_id
+            ),
             None,
         )
         if selected is None:
             raise MediaError("clean Advanced Hero production direction selection is missing")
+        if selected.source_native_text_status == "unavailable":
+            raise MediaError("clean Advanced Hero production requires a reviewed source-native text status")
         expected_broll = [item for item in selected.asset_placements if item.kind == "graphic"]
         expected_sfx = [item for item in selected.asset_placements if item.kind == "audio"]
         if len(plan.broll) != len(expected_broll) or any(
@@ -555,6 +669,7 @@ def _render_run(
         )
         render_input = AdvancedHeroRenderInput(
             candidate_id=candidate_id,
+            renderer_recipe_version=profile.renderer_recipe_version,
             advanced_set_id=advanced_set_id,
             duration_in_frames=frame_count_for_duration(_output_end_us(plan)),
             reframing_strategy=plan.reframing_strategy,
@@ -565,16 +680,20 @@ def _render_run(
             motion_style=selected_style.contract(),
             direction_id=plan.direction_id,
             direction_sha256=plan.direction_sha256,
+            editorial_arc_id=plan.editorial_arc_id,
+            editorial_arc_sha256=plan.editorial_arc_sha256,
             safe_region_id=plan.safe_region_id,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
-            language=_alignment_locale(workspace, candidate_id),
+            language=_alignment_locale(workspace, plan),
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
             motion_graphics=plan.motion_graphics,
+            source_native_text=plan.source_native_text,
             emphasis=plan.emphasis,
+            transitions=plan.transitions,
             broll=plan.broll,
             sfx=plan.sfx,
             windows=plan.windows,
@@ -602,17 +721,22 @@ def _render_run(
         prepared.append((rank, candidate_id, plan, render_input, output))
     batch = run_dir / "batch.json"
     if renderer.requires_browser:
-        for item, (_rank, candidate_id, _plan, render_input, _output) in zip(items, prepared, strict=True):
-            hero_plan = _read_model(
-                hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
-                HeroPlanDocument,
-                "hero plan",
-            )
+        for item, (_rank, candidate_id, plan, render_input, _output) in zip(items, prepared, strict=True):
+            # New plans carry the exact reviewed map. Older immutable plans
+            # fall back to their Hero plan for backward compatibility.
+            staging_map = plan.time_map
+            if staging_map is None:
+                hero_plan = _read_model(
+                    hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
+                    HeroPlanDocument,
+                    "hero plan",
+                )
+                staging_map = hero_plan.edit_plan.time_map
             _stage_candidate_base(
                 inputs,
                 staging,
                 candidate_id,
-                hero_plan.edit_plan.time_map,
+                staging_map,
                 render_input.duration_in_frames,
                 root,
                 run_dir / "logs" / f"{candidate_id}.trim.log",
@@ -654,6 +778,8 @@ def _render_run(
                 advanced_plan_sha256=sha256_file(workspace.advanced_plan_file(candidate_id)),
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
+                editorial_arc_id=plan.editorial_arc_id,
+                editorial_arc_sha256=plan.editorial_arc_sha256,
                 style_id=(
                     style_for_id(plan.style_id).style_id
                     if plan.style_id != "legacy-v1"
@@ -1040,11 +1166,15 @@ def _plan_trajectory_sha256(workspace: SourceWorkspace, plan: AdvancedHeroPlanDo
     return _sidecar_trajectory(workspace, plan)
 
 
-def _alignment_locale(workspace: object, candidate_id: str) -> str:
+def _alignment_locale(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
     """Locale stored on the selected-clip alignment. Missing evidence is not English."""
     from clipforge.schemas.hero import ForcedAlignmentDocument
 
-    path = workspace.hero_alignment_file(candidate_id)  # type: ignore[attr-defined]
+    path = (
+        workspace.advanced_alignment_file(plan.candidate_id)
+        if plan.editorial_arc_id
+        else workspace.hero_alignment_file(plan.candidate_id)
+    )
     if not path.is_file() or path.is_symlink():
         return "missing"
     try:
@@ -1102,10 +1232,17 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
     if plan.reframing_strategy not in {"contain", "center_crop", "face_follow", "manual_window"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
+    if plan.editorial_arc_id and plan.reframing_strategy == "face_follow":
+        raise MediaError("editorial arc requires a reviewed crop trajectory; face_follow is stale")
     if plan.reframing_strategy == "face_follow":
         _require_face_follow(database, plan, context)
     elif plan.reframing_strategy == "manual_window":
         cursor_us = 0
+        expected_duration = (
+            plan.time_map.to_time_map().total_output_duration()
+            if plan.time_map is not None
+            else context.duration_us
+        )
         if not plan.windows:
             raise MediaError("manual_window requires reviewed crop windows")
         for window in plan.windows:
@@ -1118,7 +1255,7 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
             ):
                 raise MediaError("manual_window trajectory has a gap, stale frame, or invalid portrait crop")
             cursor_us = window.output_end_us
-        if cursor_us != context.duration_us:
+        if cursor_us != expected_duration:
             raise MediaError("manual_window trajectory must cover the full output duration without gaps")
     if plan.motion_style is not None:
         selected_style = style_for_id(plan.style_id)
@@ -1127,6 +1264,53 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
             or plan.motion_style != selected_style.contract()
         ):
             raise MediaError("advanced plan is stale: motion recipe changed after planning")
+    if plan.time_map is not None and digest_time_map(plan.time_map) != plan.time_map_sha256:
+        raise MediaError("advanced plan is stale: TimeMap digest does not match stored map")
+    arc_alignment: ForcedAlignmentDocument | None = None
+    expected_transition_style = "none"
+    if plan.editorial_arc_id:
+        arc_path = context.workspace.advanced_arc_file(plan.candidate_id)
+        arc_loaded, arc_sha256 = load_editorial_arc(arc_path)
+        if arc_loaded.arc_id != plan.editorial_arc_id or arc_sha256 != plan.editorial_arc_sha256:
+            raise MediaError("advanced plan is stale: editorial arc changed")
+        validate_editorial_arc(
+            arc_loaded,
+            source_sha256=context.source_sha256,
+            hero_plan=context.hero_plan,
+            hero_plan_sha256=context.hero_plan_sha256,
+            alignment=context.alignment,
+            alignment_sha256=context.alignment_sha256,
+        )
+        expected_transition_style = arc_loaded.transition_style
+        alignment_path = context.workspace.advanced_alignment_file(plan.candidate_id)
+        if alignment_path.is_symlink() or not alignment_path.is_file():
+            raise MediaError("advanced plan editorial alignment is missing")
+        try:
+            arc_alignment = ForcedAlignmentDocument.model_validate_json(
+                alignment_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError("advanced plan editorial alignment is invalid") from exc
+        if sha256_file(alignment_path) != plan.alignment_sha256:
+            raise MediaError("advanced plan is stale: editorial alignment changed")
+        if arc_alignment.alignment_id != plan.alignment_id:
+            raise MediaError("advanced plan is stale: editorial alignment id changed")
+        if arc_alignment.time_map_sha256 != plan.time_map_sha256:
+            raise MediaError("advanced plan is stale: editorial alignment TimeMap changed")
+        expected_alignment = remap_alignment(context.alignment, arc_loaded, source_sha256=context.source_sha256)
+        if arc_alignment != expected_alignment:
+            raise MediaError("advanced plan editorial alignment differs from the approved forced words")
+        if arc_alignment.alignment_status == "verified_live":
+            from clipforge.language.evidence import validate_current_alignment_evidence
+
+            evidence = validate_current_alignment_evidence(
+                document=arc_alignment,
+                candidate_id=plan.candidate_id,
+                source_asset_id=plan.source_asset_id,
+                source_sha256=context.source_sha256,
+            )
+            if evidence.status != "verified_live":
+                raise MediaError(evidence.blocker or evidence.status)
     if plan.direction_id:
         loaded_direction = load_direction(context.workspace, plan.candidate_id)
         if loaded_direction is None:
@@ -1138,12 +1322,13 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
             raise MediaError("advanced plan is stale: selected motion style changed")
         from clipforge.hero.direction_service import validate_source_evidence
 
-        validate_source_evidence(
-            direction,
-            context.alignment.words,
-            context.hero_plan.edit_plan.time_map,
-            {scene.scene_id for scene in context.visual.scenes},
-        )
+        if not plan.editorial_arc_id:
+            validate_source_evidence(
+                direction,
+                context.alignment.words,
+                context.hero_plan.edit_plan.time_map,
+                {scene.scene_id for scene in context.visual.scenes},
+            )
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),
@@ -1155,21 +1340,38 @@ def _require_plan_binding(database: Database, plan: AdvancedHeroPlanDocument, co
         (plan.hero_manifest_sha256 != context.hero_manifest_sha256, "Hero manifest"),
         (plan.hero_review_id != context.review_id, "Hero approval"),
         (plan.hero_review_digest != context.review_digest, "Hero approval"),
-        (plan.alignment_id != context.alignment.alignment_id, "alignment"),
-        (plan.alignment_sha256 != context.alignment_sha256, "alignment"),
+        (not plan.editorial_arc_id and plan.alignment_id != context.alignment.alignment_id, "alignment"),
+        (not plan.editorial_arc_id and plan.alignment_sha256 != context.alignment_sha256, "alignment"),
         (plan.hero_plan_id != context.hero_plan.plan_id, "Hero plan"),
         (plan.hero_plan_sha256 != context.hero_plan_sha256, "Hero plan"),
         (plan.visual_analysis_id != context.visual.analysis_id, "visual analysis"),
         (plan.visual_analysis_sha256 != context.visual_sha256, "visual analysis"),
-        (plan.time_map_sha256 != context.hero_plan.edit_plan.time_map_sha256, "TimeMap"),
+        (
+            not plan.editorial_arc_id and plan.time_map_sha256 != context.hero_plan.edit_plan.time_map_sha256,
+            "TimeMap",
+        ),
     )
     for failed, name in checks:
         if failed:
             raise MediaError(f"advanced plan is stale: {name} changed after planning")
     if plan.windows:
         end = max(window.output_end_us for window in plan.windows)
-        if end != context.duration_us:
+        expected_duration = (
+            plan.time_map.to_time_map().total_output_duration()
+            if plan.time_map is not None
+            else context.duration_us
+        )
+        if end != expected_duration:
             raise MediaError("advanced plan is stale: TimeMap duration changed after planning")
+    if plan.time_map is not None:
+        expected_transitions = _transitions(
+            plan.candidate_id,
+            plan.time_map,
+            plan.time_map.to_time_map().total_output_duration(),
+            expected_transition_style,
+        )
+        if plan.transitions != expected_transitions:
+            raise MediaError("advanced plan is stale: cut transition recipe changed")
 
 
 def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
@@ -1573,8 +1775,17 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
             raise MediaError("advanced output is missing or a symlink")
         if sha256_file(video) != draft.preview_sha256:
             raise MediaError("advanced output hash does not match the manifest")
+        render_input_path = video.parent / "render-input.json"
+        if render_input_path.is_symlink() or not render_input_path.is_file():
+            raise MediaError("advanced render input is missing or a symlink")
+        if sha256_file(render_input_path) != draft.render_input_sha256:
+            raise MediaError("advanced render input hash does not match the draft")
 
-        alignment_path = hero.manifest_path.parent / "candidates" / draft.candidate_id / "alignment.json"
+        alignment_path = (
+            workspace.advanced_alignment_file(draft.candidate_id)
+            if draft.editorial_arc_id
+            else hero.manifest_path.parent / "candidates" / draft.candidate_id / "alignment.json"
+        )
         alignment_path = confine_work_path(
             root,
             alignment_path.relative_to(root).as_posix(),

@@ -34,6 +34,7 @@ from clipforge.schemas.advanced import (
     MotionGraphicEvent,
     ReframingStrategy,
     ReframingWindow,
+    TransitionEvent,
     TypographyEvent,
 )
 from clipforge.schemas.analytics import (
@@ -54,6 +55,7 @@ from clipforge.schemas.analytics import (
     PerformanceMetrics,
     PerformanceOutcome,
 )
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
 from clipforge.schemas.assets import AssetDownloadRequest, AssetSearchHit
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
@@ -100,6 +102,7 @@ from clipforge.schemas.direction import (
     DirectionMotionGraphic,
     DirectionOption,
     MotionStyleSpec,
+    SourceNativeText,
 )
 from clipforge.schemas.editorial import (
     AudioEvent,
@@ -321,16 +324,20 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AudioMixEvent,
     CaptionWordTiming,
     EmphasisEvent,
+    TransitionEvent,
     AdvancedHeroRenderInput,
     AdvancedHeroDraftOutput,
     AdvancedHeroDraftSetDocument,
     AdvancedHeroCacheRecord,
     AdvancedHeroPlanDocument,
+    EditorialArcSegment,
+    EditorialArcDocument,
     MotionStyleSpec,
     DirectionEvidence,
     DirectionBeat,
     DirectionAssetPlacement,
     DirectionMotionGraphic,
+    SourceNativeText,
     DirectionOption,
     DirectionDocument,
     CandidateEvidence,

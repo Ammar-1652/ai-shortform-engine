@@ -163,6 +163,12 @@ class SourceWorkspace:
     def advanced_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "plan.json")
 
+    def advanced_alignment_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "alignment.json")
+
+    def advanced_arc_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "editorial-arc.json")
+
     def direction_file(self, candidate_id: str) -> Path:
         """Validated editorial direction for one promoted candidate."""
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "direction.json")

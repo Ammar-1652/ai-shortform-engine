@@ -34,6 +34,7 @@ export type HeroMotionEvent = {
 export type HeroDraftInput = {
   readonly schema_version?: "1.0.0";
   readonly composition_id: "HeroDraft";
+  readonly renderer_recipe_version?: "hero-draft-renderer-v1" | "hero-draft-renderer-v2";
   readonly candidate_id: string;
   readonly hero_set_id: string;
   readonly video_path: string;
@@ -46,6 +47,7 @@ export type HeroDraftInput = {
   readonly height: 1920;
   readonly source_width: number;
   readonly source_height: number;
+  readonly caption_font_sha256?: readonly string[];
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
   readonly language?: string;
