@@ -14,9 +14,9 @@ pipeline blockers from editorial-quality improvements and optional polish.
 | Fact | Current evidence |
 |---|---|
 | Branch | `feature/motion-craft-production-quality` |
-| HEAD | `5cb0d7b0b64376ade30e54647ccd575c8745cd2b` |
+| HEAD | `e345543b77ef5cc43e719479b7c9cedb41904ca1` |
 | Merge baseline | `origin/main` = `989bf5d6ec27878d46505dc09becedfc848cd749` |
-| Branch state | 11 commits ahead of `origin/main`; not merged. The worktree also contains the user-owned untracked `envato/` directory, which was not changed. |
+| Branch state | The feature branch is stacked on the still-open draft PR #32 (`round-31-portrait-production-repair`) and is not merged. Draft PR #33 targets that branch. The worktree also contains the user-owned untracked `envato/` directory, which was not changed. |
 | Current official American Advanced Hero | `var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/51a6b349-103f-4bab-88d7-4f90aa18b31f/advanced-hero/runs/2b47121e-7156-465e-85b3-bd5117d2b5db/candidates/1fc57d0d-a82d-5e31-879a-f43189f5bc99/advanced.mp4` |
 | Current official American render facts | 1080×1920, 30 fps, 36.833 s, H.264/AAC stereo 48 kHz, 1,105 frames, -17.3 LUFS integrated. |
 | Current American render input | `kinetic-caption-v1`, `manual_window` with 13 windows, 19 caption cues, 3 typography events, **0** motion graphics, **0** B-roll events, **0** SFX events. |
@@ -45,7 +45,7 @@ remaining defects are fixed.
 
 | Check | Result and evidence |
 |---|---|
-| Exact code under review | `feature/motion-craft-production-quality` at `5cb0d7b0b64376ade30e54647ccd575c8745cd2b`; merge baseline `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`; draft PR #33 is not merged. |
+| Exact code under review | `feature/motion-craft-production-quality` at `e345543b77ef5cc43e719479b7c9cedb41904ca1`; merge baseline `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`; draft PR #33 is open and stacked on draft PR #32, neither merged. |
 | Full local validation | `./scripts/validate.sh`: **752 passed, 2 skipped** in 11:41; schemas match; renderer lint/typecheck passed; renderer Vitest **38 passed**; doctor **10 pass, 0 warn, 0 fail**. This is technical evidence only. |
 | Advanced verification and QA | Current credit arc returns `PASS` for Advanced verify and QA on the exact encoded artifact. Cache lookup returns a hit for the unchanged render. |
 | Current encoded artifact | [`advanced-credit-graphic-v2.mp4`](../../var/round19/review/arc-credit-v2/advanced-credit-graphic-v2.mp4) is 1080×1920, 30 fps, 10.533 s, SHA-256 `13468994906bd73fd7933aa97293605b9b9b8d8e3b67267a0029d4325ea984`. The input declares `contain`, 7 captions, 2 typography events, 1 graphic, 2 transitions, 0 B-roll, and 0 SFX. |
