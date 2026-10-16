@@ -91,6 +91,7 @@ from clipforge.transcription.io import publish_json
 
 _ModelT = TypeVar("_ModelT")
 KIND_ADVANCED = "advanced_hero_draft_set_json"
+KIND_ADVANCED_REVIEW = "advanced_hero_review_draft_set_json"
 JOB_ADVANCED = "advanced_hero_render"
 _PROFILE = AdvancedHeroProfile(
     reframing=ReframingStrategy(strategy_id="contain"),
@@ -116,6 +117,46 @@ class AdvancedRenderResult:
     manifest_sha256: str | None
     cache_hit: bool
     runtime_seconds: float
+
+
+def _advanced_plan_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: bool) -> Path:
+    return (
+        workspace.advanced_review_plan_file(candidate_id)
+        if review_only
+        else workspace.advanced_plan_file(candidate_id)
+    )
+
+
+def _advanced_alignment_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: bool) -> Path:
+    return (
+        workspace.advanced_review_alignment_file(candidate_id)
+        if review_only
+        else workspace.advanced_alignment_file(candidate_id)
+    )
+
+
+def _advanced_arc_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: bool) -> Path:
+    return (
+        workspace.advanced_review_arc_file(candidate_id)
+        if review_only
+        else workspace.advanced_arc_file(candidate_id)
+    )
+
+
+def _advanced_sidecar(workspace: SourceWorkspace, *, review_only: bool) -> Path:
+    return workspace.advanced_review_sidecar() if review_only else workspace.advanced_sidecar()
+
+
+def _advanced_direction_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: bool) -> Path:
+    return (
+        workspace.advanced_review_direction_file(candidate_id)
+        if review_only
+        else workspace.direction_file(candidate_id)
+    )
+
+
+def _advanced_kind(*, review_only: bool) -> str:
+    return KIND_ADVANCED_REVIEW if review_only else KIND_ADVANCED
 
 
 def default_advanced_profile() -> AdvancedHeroProfile:
@@ -157,11 +198,11 @@ def plan_advanced_candidate(
     stored_direction = direction
     direction_sha256 = ""
     if stored_direction is None:
-        loaded_direction = load_direction(context.workspace, candidate_id)
+        loaded_direction = load_direction(context.workspace, candidate_id, review_only=allow_unapproved)
         if loaded_direction is not None:
             stored_direction, direction_sha256 = loaded_direction
     elif stored_direction.direction_id:
-        loaded_direction = load_direction(context.workspace, candidate_id)
+        loaded_direction = load_direction(context.workspace, candidate_id, review_only=allow_unapproved)
         if loaded_direction is None or loaded_direction[0] != stored_direction:
             raise MediaError("direction must be validated and persisted before planning")
         direction_sha256 = loaded_direction[1]
@@ -277,24 +318,32 @@ def plan_advanced_candidate(
         cut_transition_style="none" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
-    destination = context.workspace.advanced_plan_file(candidate_id)
-    context.workspace.prepare_advanced_file(destination)
+    review_only = allow_unapproved
+    destination = _advanced_plan_path(context.workspace, candidate_id, review_only=review_only)
+    prepare = (
+        context.workspace.prepare_advanced_review_file
+        if review_only
+        else context.workspace.prepare_advanced_file
+    )
+    prepare(destination)
     if editorial_arc is not None:
         archive = destination.parent / "arcs" / f"{editorial_arc.arc_id}.json"
-        context.workspace.prepare_advanced_file(archive)
+        prepare(archive)
         if archive.exists():
             recorded_arc, _ = load_editorial_arc(archive)
             if recorded_arc != editorial_arc:
                 raise MediaError("editorial arc id is immutable; use a new arc_id for a changed arc")
         else:
             publish_json(archive, editorial_arc, root, context.workspace.partial_for(archive))
-        arc_destination = context.workspace.advanced_arc_file(candidate_id)
-        context.workspace.prepare_advanced_file(arc_destination)
+        arc_destination = _advanced_arc_path(context.workspace, candidate_id, review_only=review_only)
+        prepare(arc_destination)
         arc_sha256, _ = publish_json(
             arc_destination, editorial_arc, root, context.workspace.partial_for(arc_destination)
         )
-        alignment_destination = context.workspace.advanced_alignment_file(candidate_id)
-        context.workspace.prepare_advanced_file(alignment_destination)
+        alignment_destination = _advanced_alignment_path(
+            context.workspace, candidate_id, review_only=review_only
+        )
+        prepare(alignment_destination)
         alignment_sha256, _ = publish_json(
             alignment_destination,
             render_alignment,
@@ -350,7 +399,15 @@ def render_advanced_drafts(
         _validate_workspace(inputs.pair.workspace)
         _fail_stale(database, inputs.pair.source.project_id, source)
         hero = load_current_hero(database, source_asset_id, root)
-        chosen = _approved_with_plans(database, inputs.pair.workspace, hero, source_asset_id, root, active)
+        chosen = _approved_with_plans(
+            database,
+            inputs.pair.workspace,
+            hero,
+            source_asset_id,
+            root,
+            active,
+            review_only=draft_only,
+        )
         if not chosen:
             return AdvancedRenderResult(
                 "noop", source_asset_id, None, None, 0, None, None, False, perf_counter() - started
@@ -372,14 +429,14 @@ def render_advanced_drafts(
         if (
             narration_artifact_id is None
             and not force
-            and _cache_ready(database, inputs.pair.workspace, hero, chosen, root)
+            and _cache_ready(database, inputs.pair.workspace, hero, chosen, root, review_only=draft_only)
         ):
-            current = _current_manifest(inputs.pair.workspace)
+            current = _current_manifest(inputs.pair.workspace, review_only=draft_only)
             return AdvancedRenderResult(
                 "cached",
                 source_asset_id,
                 None,
-                hero.document.hero_set_id and _sidecar_set_id(inputs.pair.workspace),
+                hero.document.hero_set_id and _sidecar_set_id(inputs.pair.workspace, review_only=draft_only),
                 len(chosen),
                 current,
                 sha256_file(current) if current else None,
@@ -408,7 +465,11 @@ def render_advanced_drafts(
         advanced_set_id = str(uuid.uuid4())
         run_dir: Path | None = None
         try:
-            run_dir = inputs.pair.workspace.make_advanced_run(advanced_set_id)
+            run_dir = (
+                inputs.pair.workspace.make_advanced_review_run(advanced_set_id)
+                if draft_only
+                else inputs.pair.workspace.make_advanced_run(advanced_set_id)
+            )
             document, manifest = _render_run(
                 database,
                 inputs.pair.workspace,
@@ -424,10 +485,20 @@ def render_advanced_drafts(
                 run_dir,
                 source_asset_id,
                 narration,
+                review_only=draft_only,
             )
             digest = sha256_file(manifest)
             record = _cache_record(document, job.job_id, digest, manifest.stat().st_size)
-            _commit(database, inputs.pair.workspace, job, document, manifest, record, root)
+            _commit(
+                database,
+                inputs.pair.workspace,
+                job,
+                document,
+                manifest,
+                record,
+                root,
+                review_only=draft_only,
+            )
         except KeyboardInterrupt:
             _abandon(database, job, JobStatus.CANCELLED, "advanced Hero render cancelled", run_dir, root)
             raise
@@ -579,7 +650,8 @@ def _require_production_direction(
     if not plan.direction_id or not plan.direction_sha256:
         raise MediaError("clean Advanced Hero production requires a persisted source-grounded direction brief")
     if workspace is not None:
-        direction_path = workspace.direction_file(plan.candidate_id)
+        review_only = plan.hero_review_status == "pending"
+        direction_path = _advanced_direction_path(workspace, plan.candidate_id, review_only=review_only)
         if direction_path.is_symlink() or not direction_path.is_file():
             raise MediaError("clean Advanced Hero production direction is missing or unsafe")
         if sha256_file(direction_path) != plan.direction_sha256:
@@ -592,6 +664,7 @@ def _require_production_direction(
             raise MediaError("clean Advanced Hero production direction does not match the plan")
         effective_direction = direction
         if plan.editorial_arc_id:
+            review_only = plan.hero_review_status == "pending"
             if plan.time_map is None:
                 raise MediaError("editorial arc plan is missing its effective TimeMap")
             original_alignment = _read_model(
@@ -600,7 +673,7 @@ def _require_production_direction(
                 "alignment",
             )
             editorial_alignment = _read_model(
-                workspace.advanced_alignment_file(plan.candidate_id),
+                _advanced_alignment_path(workspace, plan.candidate_id, review_only=review_only),
                 ForcedAlignmentDocument,
                 "editorial alignment",
             )
@@ -673,6 +746,8 @@ def _render_run(
     run_dir: Path,
     source_asset_id: str,
     narration: tuple[str, Path] | None = None,
+    *,
+    review_only: bool = False,
 ) -> tuple[AdvancedHeroDraftSetDocument, Path]:
     if not isinstance(hero, CurrentHero):
         raise MediaError("current Hero draft is missing")
@@ -721,7 +796,7 @@ def _render_run(
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
             hero_review_status=plan.hero_review_status,
-            language=_alignment_locale(workspace, plan),
+            language=_alignment_locale(workspace, plan, review_only=review_only),
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
@@ -811,7 +886,9 @@ def _render_run(
                 alignment_sha256=plan.alignment_sha256,
                 hero_plan_id=plan.hero_plan_id,
                 hero_plan_sha256=plan.hero_plan_sha256,
-                advanced_plan_sha256=sha256_file(workspace.advanced_plan_file(candidate_id)),
+                advanced_plan_sha256=sha256_file(
+                    _advanced_plan_path(workspace, candidate_id, review_only=review_only)
+                ),
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
                 editorial_arc_id=plan.editorial_arc_id,
@@ -1010,8 +1087,11 @@ def _commit(
     manifest: Path,
     record: AdvancedHeroCacheRecord,
     root: Path,
+    *,
+    review_only: bool = False,
 ) -> None:
-    previous = _snapshot(database, document.project_id, document.source_asset_id)
+    kind = _advanced_kind(review_only=review_only)
+    previous = _snapshot(database, document.project_id, document.source_asset_id, kind=kind)
     provenance = document.provenance
     succeeded = job.model_copy(
         update={
@@ -1027,16 +1107,16 @@ def _commit(
             project_id=document.project_id,
             job_id=job.job_id,
             source_asset_id=document.source_asset_id,
-            kind=KIND_ADVANCED,
+            kind=kind,
             uri=path_to_file_uri(manifest),
             provenance=provenance,
         )
         update_job(connection, succeeded)
     try:
-        sidecar = workspace.advanced_sidecar()
+        sidecar = _advanced_sidecar(workspace, review_only=review_only)
         publish_json(sidecar, record, root, workspace.partial_for(sidecar))
     except (OSError, MediaError) as exc:
-        _revert(database, document, previous, job, str(exc))
+        _revert(database, document, previous, job, str(exc), kind=kind)
         raise MediaError(
             f"advanced sidecar was not published: {exc}. The previous set remains current."
         ) from exc
@@ -1081,11 +1161,13 @@ def _approved_with_plans(
     source_asset_id: str,
     root: Path,
     profile: AdvancedHeroProfile,
+    *,
+    review_only: bool = False,
 ) -> list[tuple[str, AdvancedHeroPlanDocument]]:
     del profile, source_asset_id, root, database
     found = []
     for draft in hero.document.drafts:
-        path = workspace.advanced_plan_file(draft.candidate_id)
+        path = _advanced_plan_path(workspace, draft.candidate_id, review_only=review_only)
         if path.is_file() and not path.is_symlink():
             found.append((draft.candidate_id, _read_model(path, AdvancedHeroPlanDocument, "advanced plan")))
     return found
@@ -1097,8 +1179,10 @@ def _cache_ready(
     hero: CurrentHero,
     chosen: list[tuple[str, AdvancedHeroPlanDocument]],
     root: Path,
+    *,
+    review_only: bool = False,
 ) -> bool:
-    sidecar = workspace.advanced_sidecar()
+    sidecar = _advanced_sidecar(workspace, review_only=review_only)
     if not sidecar.is_file() or sidecar.is_symlink():
         return False
     try:
@@ -1115,7 +1199,11 @@ def _cache_ready(
         return False
     from clipforge.hero.advanced_assets import confine_work_path
 
-    manifest = workspace.advanced_run_dir(record.advanced_set_id) / "manifest.json"
+    manifest = (
+        workspace.advanced_review_run_dir(record.advanced_set_id)
+        if review_only
+        else workspace.advanced_run_dir(record.advanced_set_id)
+    ) / "manifest.json"
     try:
         manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
     except (MediaError, ValueError):
@@ -1145,7 +1233,7 @@ def _cache_ready(
         if sha256_file(video) != draft.preview_sha256 or video.stat().st_size != draft.preview_size_bytes:
             return False
     for candidate_id, plan in chosen:
-        plan_path = workspace.advanced_plan_file(candidate_id)
+        plan_path = _advanced_plan_path(workspace, candidate_id, review_only=review_only)
         matched = next((item for item in document.drafts if item.candidate_id == candidate_id), None)
         if matched is None or not plan_path.is_file() or plan_path.is_symlink():
             return False
@@ -1161,7 +1249,12 @@ def _cache_ready(
             if not path.is_file() or sha256_file(path) != binding.sha256:
                 return False
     with database.connect() as connection:
-        row = find_artifact(connection, record.project_id, record.source_asset_id, KIND_ADVANCED)
+        row = find_artifact(
+            connection,
+            record.project_id,
+            record.source_asset_id,
+            _advanced_kind(review_only=review_only),
+        )
     return row is not None and path_to_file_uri(manifest) == row.uri
 
 
@@ -1210,12 +1303,14 @@ def _plan_trajectory_sha256(workspace: SourceWorkspace, plan: AdvancedHeroPlanDo
     return _sidecar_trajectory(workspace, plan)
 
 
-def _alignment_locale(workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument) -> str:
+def _alignment_locale(
+    workspace: SourceWorkspace, plan: AdvancedHeroPlanDocument, *, review_only: bool = False
+) -> str:
     """Locale stored on the selected-clip alignment. Missing evidence is not English."""
     from clipforge.schemas.hero import ForcedAlignmentDocument
 
     path = (
-        workspace.advanced_alignment_file(plan.candidate_id)
+        _advanced_alignment_path(workspace, plan.candidate_id, review_only=review_only)
         if plan.editorial_arc_id
         else workspace.hero_alignment_file(plan.candidate_id)
     )
@@ -1318,8 +1413,9 @@ def _require_plan_binding(
         raise MediaError("advanced plan is stale: TimeMap digest does not match stored map")
     arc_alignment: ForcedAlignmentDocument | None = None
     expected_transition_style = "none"
+    review_only = plan.hero_review_status == "pending"
     if plan.editorial_arc_id:
-        arc_path = context.workspace.advanced_arc_file(plan.candidate_id)
+        arc_path = _advanced_arc_path(context.workspace, plan.candidate_id, review_only=review_only)
         arc_loaded, arc_sha256 = load_editorial_arc(arc_path)
         if arc_loaded.arc_id != plan.editorial_arc_id or arc_sha256 != plan.editorial_arc_sha256:
             raise MediaError("advanced plan is stale: editorial arc changed")
@@ -1332,7 +1428,7 @@ def _require_plan_binding(
             alignment_sha256=context.alignment_sha256,
         )
         expected_transition_style = arc_loaded.transition_style
-        alignment_path = context.workspace.advanced_alignment_file(plan.candidate_id)
+        alignment_path = _advanced_alignment_path(context.workspace, plan.candidate_id, review_only=review_only)
         if alignment_path.is_symlink() or not alignment_path.is_file():
             raise MediaError("advanced plan editorial alignment is missing")
         try:
@@ -1362,7 +1458,11 @@ def _require_plan_binding(
             if evidence.status != "verified_live":
                 raise MediaError(evidence.blocker or evidence.status)
     if plan.direction_id:
-        loaded_direction = load_direction(context.workspace, plan.candidate_id)
+        loaded_direction = load_direction(
+            context.workspace,
+            plan.candidate_id,
+            review_only=plan.hero_review_status == "pending",
+        )
         if loaded_direction is None:
             raise MediaError("advanced plan is stale: direction document is missing")
         direction, direction_sha256 = loaded_direction
@@ -1677,9 +1777,11 @@ def _abandon(
         update_job(connection, updated)
 
 
-def _snapshot(database: Database, project_id: str, source_asset_id: str) -> ArtifactRow | None:
+def _snapshot(
+    database: Database, project_id: str, source_asset_id: str, *, kind: str = KIND_ADVANCED
+) -> ArtifactRow | None:
     with database.connect() as connection:
-        return find_artifact(connection, project_id, source_asset_id, KIND_ADVANCED)
+        return find_artifact(connection, project_id, source_asset_id, kind)
 
 
 def _revert(
@@ -1688,6 +1790,8 @@ def _revert(
     previous: ArtifactRow | None,
     job: JobRecord,
     reason: str,
+    *,
+    kind: str = KIND_ADVANCED,
 ) -> None:
     failed = job.model_copy(
         update={
@@ -1704,27 +1808,32 @@ def _revert(
                 project_id=document.project_id,
                 job_id=previous.job_id,
                 source_asset_id=document.source_asset_id,
-                kind=KIND_ADVANCED,
+                kind=kind,
                 uri=previous.uri,
                 provenance=previous.provenance,
             )
         connection.execute(
             "DELETE FROM artifacts WHERE project_id = ? AND source_asset_id = ? AND kind = ? AND job_id = ?",
-            (document.project_id, document.source_asset_id, KIND_ADVANCED, job.job_id),
+            (document.project_id, document.source_asset_id, kind, job.job_id),
         )
         update_job(connection, failed)
 
 
-def _current_manifest(workspace: SourceWorkspace) -> Path | None:
-    sidecar = workspace.advanced_sidecar()
+def _current_manifest(workspace: SourceWorkspace, *, review_only: bool = False) -> Path | None:
+    sidecar = _advanced_sidecar(workspace, review_only=review_only)
     if not sidecar.is_file():
         return None
     record = AdvancedHeroCacheRecord.model_validate_json(sidecar.read_text(encoding="utf-8"))
-    return workspace.advanced_run_dir(record.advanced_set_id) / "manifest.json"
+    run = (
+        workspace.advanced_review_run_dir(record.advanced_set_id)
+        if review_only
+        else workspace.advanced_run_dir(record.advanced_set_id)
+    )
+    return run / "manifest.json"
 
 
-def _sidecar_set_id(workspace: SourceWorkspace) -> str | None:
-    path = _current_manifest(workspace)
+def _sidecar_set_id(workspace: SourceWorkspace, *, review_only: bool = False) -> str | None:
+    path = _current_manifest(workspace, review_only=review_only)
     return None if path is None else path.parent.name
 
 
@@ -1800,8 +1909,10 @@ def _show_blocker(workspace: SourceWorkspace, candidate_id: str, strategy: str) 
     return "none"
 
 
-def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -> None:
-    document = _load_current_document(database, source_asset_id, work_root)
+def verify_advanced(
+    database: Database, source_asset_id: str, work_root: Path, *, review_only: bool = False
+) -> None:
+    document = _load_current_document(database, source_asset_id, work_root, review_only=review_only)
     if document is None:
         raise MediaError("no current advanced Hero draft")
     root = work_root.resolve()
@@ -1817,9 +1928,11 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
 
     workspace = loaded.pair.workspace
     hero = load_current_hero(database, source_asset_id, root)
-    manifest = workspace.advanced_run_dir(document.advanced_set_id) / "manifest.json"
+    manifest = _current_manifest(workspace, review_only=review_only)
+    if manifest is None:
+        raise MediaError("advanced manifest is missing")
     manifest = confine_work_path(root, manifest.relative_to(root).as_posix(), label="advanced manifest")
-    if sha256_file(manifest) != _sidecar_digest(workspace):
+    if sha256_file(manifest) != _sidecar_digest(workspace, review_only=review_only):
         raise MediaError("advanced manifest hash does not match the sidecar")
 
     from clipforge.language.evidence import validate_current_alignment_evidence
@@ -1839,7 +1952,7 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
             raise MediaError("advanced render input hash does not match the draft")
 
         alignment_path = (
-            workspace.advanced_alignment_file(draft.candidate_id)
+            _advanced_alignment_path(workspace, draft.candidate_id, review_only=review_only)
             if draft.editorial_arc_id
             else hero.manifest_path.parent / "candidates" / draft.candidate_id / "alignment.json"
         )
@@ -1870,7 +1983,7 @@ def verify_advanced(database: Database, source_asset_id: str, work_root: Path) -
 
 
 def _load_current_document(
-    database: Database, source_asset_id: str, work_root: Path
+    database: Database, source_asset_id: str, work_root: Path, *, review_only: bool = False
 ) -> AdvancedHeroDraftSetDocument | None:
     root = work_root.resolve()
     fingerprint = default_profile().fingerprint()
@@ -1881,14 +1994,14 @@ def _load_current_document(
         profile_fingerprint=fingerprint,
         create_workspace=False,
     )
-    path = _current_manifest(inputs.pair.workspace)
+    path = _current_manifest(inputs.pair.workspace, review_only=review_only)
     if path is None or not path.is_file():
         return None
     return AdvancedHeroDraftSetDocument.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def _sidecar_digest(workspace: SourceWorkspace) -> str:
-    raw = workspace.advanced_sidecar().read_text(encoding="utf-8")
+def _sidecar_digest(workspace: SourceWorkspace, *, review_only: bool = False) -> str:
+    raw = _advanced_sidecar(workspace, review_only=review_only).read_text(encoding="utf-8")
     record = AdvancedHeroCacheRecord.model_validate_json(raw)
     return record.manifest_sha256
 

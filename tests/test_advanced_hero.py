@@ -244,7 +244,8 @@ def test_editorial_arc_persists_remapped_alignment_and_time_map(tmp_path: Path) 
                 word_ids=[word.word_id],
                 beat=beat,
                 purpose=f"{beat} evidence",
-                continuation=beat != "hook",
+                continuation=True,
+                claim_closure="complete",
             )
             for segment, word, beat in zip(mapped.segments, chosen, ("hook", "body", "punch"), strict=True)
         ],
@@ -694,13 +695,15 @@ def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable
         allow_unapproved=True,
     )
     assert plan.hero_review_status == "pending"
-    with pytest.raises(MediaError, match="current Hero artifact"):
-        render_advanced_drafts(
-            database=fixture.database,
-            source_asset_id=SOURCE_ID,
-            work_root=fixture.work,
-            backend=FakeAdvancedRenderBackend(),
-        )
+    default_render = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    assert default_render.status == "noop"
+    assert not fixture.workspace.advanced_plan_file(ids[0]).exists()
+    assert not fixture.workspace.advanced_sidecar().exists()
     rendered = render_advanced_drafts(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
@@ -709,9 +712,67 @@ def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable
         draft_only=True,
     )
     assert rendered.status == "rendered"
-    manifest = fixture.workspace.advanced_run_dir(rendered.advanced_set_id or "") / "manifest.json"
+    manifest = fixture.workspace.advanced_review_run_dir(rendered.advanced_set_id or "") / "manifest.json"
     document = AdvancedHeroDraftSetDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
     assert document.hero_review_status == "pending"
+    assert fixture.workspace.advanced_review_sidecar().is_file()
+    assert fixture.workspace.advanced_review_plan_file(ids[0]).is_file()
+
+
+def test_pending_review_render_preserves_approved_advanced_namespace(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    board = review_board(fixture.database, SOURCE_ID, fixture.work)
+    hero = board["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, ids[0]),
+        decision="approved",
+        reviewer_id="ada",
+        notes="approved baseline",
+    )
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    approved_sidecar = fixture.workspace.advanced_sidecar().read_bytes()
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        allow_unapproved=True,
+    )
+    pending = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        draft_only=True,
+    )
+    assert pending.status == "rendered"
+    assert fixture.workspace.advanced_sidecar().read_bytes() == approved_sidecar
+    assert fixture.workspace.advanced_review_sidecar().is_file()
+    with fixture.database.connect() as connection:
+        kinds = [
+            str(row["kind"])
+            for row in connection.execute(
+                "SELECT kind FROM artifacts WHERE project_id = ? AND source_asset_id = ? ORDER BY created_at",
+                (PROJECT_ID, SOURCE_ID),
+            ).fetchall()
+        ]
+    assert "advanced_hero_draft_set_json" in kinds
+    assert "advanced_hero_review_draft_set_json" in kinds
 
 
 def test_read_only_commands_leave_the_set_in_place(tmp_path: Path) -> None:

@@ -125,7 +125,12 @@ for (const item of batch.items) {
       throw new Error("diagram geometry is outside the production safe area");
     }
   }
-  const motionGraphicTemplates = new Set(["credit_card", "travel_postcard", "business_spotlight"]);
+  const motionGraphicTemplates = new Set([
+    "credit_card",
+    "travel_postcard",
+    "business_identity",
+    "business_spotlight",
+  ]);
   for (const graphic of input.motion_graphics ?? []) {
     if (!graphic || !motionGraphicTemplates.has(graphic.template)) {
       throw new Error(`unsupported production motion graphic ${String(graphic?.template)}`);

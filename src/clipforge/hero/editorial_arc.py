@@ -73,6 +73,10 @@ def validate_editorial_arc(
     positions = {word.word_id: index for index, word in enumerate(alignment.words)}
     punctuation = frozenset(".?!:\u3002\uff1f\uff01")
     for arc_segment in arc.segments:
+        if arc_segment.claim_closure != "complete":
+            raise MediaError(
+                f"editorial arc {arc_segment.segment_id} requires claim-closure review before rendering"
+            )
         covered = [
             word.word_id
             for word in alignment.words
@@ -89,6 +93,11 @@ def validate_editorial_arc(
             raise MediaError("editorial arc names an unknown forced word")
         if indexes != list(range(min(indexes), max(indexes) + 1)):
             raise MediaError("editorial arc words must be contiguous in the approved transcript")
+        last_word = alignment.words[indexes[-1]]
+        if not arc_segment.continuation and not last_word.text.rstrip().endswith(tuple(punctuation)):
+            raise MediaError(
+                "editorial arc beat must end at source punctuation or be explicitly marked continuation"
+            )
         first_index = indexes[0]
         if first_index > 0:
             previous = alignment.words[first_index - 1]

@@ -128,8 +128,11 @@ See [ADR 0076](docs/adr/0076-source-grounded-editorial-arcs.md).
   reviewed crop trajectories are separate layers and cannot stretch source
   media. The renderer recipe version is part of profile/cache identity.
 - Advanced Hero also has an explicit `--draft-only` review-bundle path. It
-  records `hero_review_status: pending` through plan, render input, manifest,
-  and cache identity, and delivery rejects it. The default Advanced path still
-  requires current human Hero approval; draft-only does not manufacture one.
+  records `hero_review_status: pending` through an isolated review-draft
+  namespace, plan, render input, manifest, cache identity, and artifact kind;
+  delivery rejects it. The default Advanced path still requires current human
+  Hero approval; draft-only does not manufacture one. Editorial arcs also
+  require an explicit complete-claim decision before rendering. See
+  [ADR 0082](docs/adr/0082-isolated-advanced-review-drafts-and-claim-closure.md).
 - Failures raise or record `FAILED` with a message. They do not continue.
 - Schema version `1.0.0` is the current contract generation. Bump it when stored JSON changes shape.

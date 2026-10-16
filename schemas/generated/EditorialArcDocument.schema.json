@@ -13,6 +13,15 @@
           "title": "Beat",
           "type": "string"
         },
+        "claim_closure": {
+          "default": "requires_review",
+          "enum": [
+            "complete",
+            "requires_review"
+          ],
+          "title": "Claim Closure",
+          "type": "string"
+        },
         "continuation": {
           "default": false,
           "title": "Continuation",

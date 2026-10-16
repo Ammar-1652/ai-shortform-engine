@@ -339,6 +339,55 @@ useful timing, geometry, caption, and approval protections, but the current
 encoded draft does not yet demonstrate a coherent, semantically supported,
 viewer-ready portrait short.
 
+## 1D. Execution progress after the re-audit (2026-10-16)
+
+The first three repair slices from the re-audit are now implemented on the
+feature branch. They were exercised with focused tests and real Remotion
+renders; the outputs remain unapproved review drafts.
+
+**Contract integrity landed.** Pending direction, plan, editorial-arc,
+remapped-alignment, run, sidecar, cache, and artifact records now use
+`advanced-hero/review-drafts/` and a separate artifact kind. Default Advanced
+commands see only the approved namespace. `advanced verify --draft-only`
+verifies the isolated set. A regression proves that rendering a pending draft
+does not change an existing approved Advanced sidecar. Pending review bindings
+are regenerated even when the Hero already has an approval.
+
+**Claim closure landed.** Every arc segment now carries
+`claim_closure: complete|requires_review`; rendering rejects the latter. A
+non-continuation beat must end at source punctuation. The real review arc was
+rebuilt to include “He now lives with him full-time.” after the value/family
+statement. This prevents the previous open-clause body from reaching Remotion.
+
+**Graphic semantics landed.** `business_identity` is a native Remotion card
+for founder/company identity. `business_spotlight` now requires numeric
+evidence and remains appropriate only for a quantitative trend/value claim.
+The real draft was rerendered with the identity card; the generic rising chart
+is no longer selected. The encoded draft at
+`var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/b7b2132c-406f-4d3b-8092-df902dd7c290/advanced-hero/review-drafts/runs/28813734-3d61-49b5-a474-ce198dbb1946/candidates/b743351c-1cfd-5c07-92d9-efb2de224bab/advanced.mp4`
+has SHA-256 `9037924eb8dd79bb9eb9ce63e1e2c7e560332125e6cf30c3166557ec7ee35f03`.
+Its contact sheet is
+`var/round19/review/advanced-native-collision-v2/contact.jpg`, SHA-256
+`41affc9ae607a6abb4117249d624a39ed6e3401545d27942ce6e0b25faf93dda`.
+
+**Source-native collision landed for the opening.** When a reviewed native
+title covers the same spoken phrase, the renderer suppresses the duplicate
+baseline caption and optional hook card while retaining the source pixels.
+The decoded v2 contact sheet shows the opening title without the earlier
+duplicate generated card. This needs multilingual and interval-boundary tests
+before it can be treated as complete.
+
+**Portrait-fill remains unresolved.** An explicit `center_crop` render fills
+the portrait canvas, but the decoded proof crops important source-native
+article and logo text. The current source therefore still needs a reviewed
+manual/face-safe trajectory or an intentional contained treatment for delivery;
+the crop is not accepted merely because it removes rails.
+
+**Audio and semantic QA remain unresolved.** The new identity render still has
+no SFX event, so event-level effect comfort is untested. File-level loudness
+passes, but cut-level PTS/phoneme proof and a decoded semantic review bundle
+are still required.
+
 ## 2. Root-cause map
 
 ### A. Production cannot currently prove selected-clip timing

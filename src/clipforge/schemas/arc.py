@@ -22,6 +22,7 @@ class EditorialArcSegment(Versioned):
     beat: Literal["hook", "body", "punch"]
     purpose: str = Field(min_length=1, max_length=240)
     continuation: bool = False
+    claim_closure: Literal["complete", "requires_review"] = "requires_review"
 
     @model_validator(mode="after")
     def range_is_positive(self) -> Self:

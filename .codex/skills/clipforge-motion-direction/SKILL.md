@@ -49,8 +49,10 @@ Return a concise direction brief with:
    evidence item, and safe-region geometry above the reserved caption lane.
    Templates are `credit_card` (evidence must contain both “credit” and “card”),
    `travel_postcard` (travel, Philippines, vacation, beach, tropical, or Airbnb),
-   and `business_spotlight` (business, founder, or enterprise; a generic
-   mention of “company” is insufficient for a trend chart). Do not
+   `business_identity` (business, founder, or enterprise identity), and
+   `business_spotlight` (a quantitative trend or value claim with explicit
+   numeric evidence such as an amount, unit, or change). A generic mention of
+   “company” is insufficient for a trend chart. Do not
    use a graphic as a generic decoration, replacement caption, or way to invent a
    hook. Graphics must not overlap each other; omission is the correct choice when
    no template fits;

@@ -168,7 +168,11 @@ def advanced_plan(
                 root,
                 require_hero_approval=not draft_only,
             )
-            direction_path = context.workspace.direction_file(candidate_id)
+            direction_path = (
+                context.workspace.advanced_review_direction_file(candidate_id)
+                if draft_only
+                else context.workspace.direction_file(candidate_id)
+            )
             if direction_path.is_symlink() or not direction_path.is_file():
                 raise ClipforgeError(
                     "clean Advanced Hero planning requires a validated direction brief; "
@@ -323,7 +327,7 @@ def direction_verify(
             root,
             require_hero_approval=not draft_only,
         )
-        loaded = load_direction(context.workspace, candidate_id)
+        loaded = load_direction(context.workspace, candidate_id, review_only=draft_only)
         if loaded is None:
             raise ClipforgeError("no direction document for candidate")
         document, digest = loaded
@@ -439,12 +443,24 @@ def advanced_verify(
     source_asset_id: Annotated[str, typer.Argument()],
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    draft_only: Annotated[
+        bool,
+        typer.Option(
+            "--draft-only",
+            help="Verify the isolated review-only Advanced draft namespace.",
+        ),
+    ] = False,
 ) -> None:
     """Check the current advanced set. Does not write."""
     from clipforge.hero.advanced_service import verify_advanced
 
     try:
-        verify_advanced(Database(resolve_db_path(db)), source_asset_id, resolve_work_dir(work_dir))
+        verify_advanced(
+            Database(resolve_db_path(db)),
+            source_asset_id,
+            resolve_work_dir(work_dir),
+            review_only=draft_only,
+        )
     except ClipforgeError as exc:
         _fail(exc)
     typer.echo("PASS advanced_hero")

@@ -59,9 +59,10 @@ explicit `DirectionAssetPlacement` with source evidence, purpose, relevance
 note, and an output-clock interval. Passing only asset ids creates an explicitly
 marked legacy event that QA and Remotion reject for clean production. A
 direction may omit both asset types when the source does not need them. Native
-graphic semantics are strict: `business_spotlight` requires evidence for a
-business, founder, or enterprise concept; a generic “company” mention cannot
-select a rising trend chart.
+graphic semantics are strict: `business_identity` requires evidence for a
+business, founder, or enterprise identity. `business_spotlight` is reserved
+for quantitative trend or value claims with explicit numeric evidence; a
+generic “company” mention cannot select a rising trend chart.
 
 Before a render job is inserted, every stored plan is checked against the current source, candidate set, rough preview, Hero artifact, Hero approval, alignment, Hero plan, visual analysis, TimeMap, asset hashes, and rights. A stale or revoked binding fails closed and does not publish a sidecar.
 

@@ -166,7 +166,12 @@ class MotionGraphicEvent(Versioned):
     """
 
     event_id: EntityId
-    template: Literal["credit_card", "travel_postcard", "business_spotlight"]
+    template: Literal[
+        "credit_card",
+        "travel_postcard",
+        "business_identity",
+        "business_spotlight",
+    ]
     interval: OutputInterval
     purpose: MotionPurpose
     source_evidence_ids: list[EntityId] = Field(min_length=1)

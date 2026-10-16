@@ -25,8 +25,14 @@ from clipforge.storage import Database
 from clipforge.transcription.io import publish_json
 
 
-def load_direction(workspace: SourceWorkspace, candidate_id: str) -> tuple[DirectionDocument, str] | None:
-    path = workspace.direction_file(candidate_id)
+def load_direction(
+    workspace: SourceWorkspace, candidate_id: str, *, review_only: bool = False
+) -> tuple[DirectionDocument, str] | None:
+    path = (
+        workspace.advanced_review_direction_file(candidate_id)
+        if review_only
+        else workspace.direction_file(candidate_id)
+    )
     path = confine_work_path(workspace.root, path.relative_to(workspace.root).as_posix(), label="direction")
     if not path.exists():
         return None
@@ -97,10 +103,19 @@ def save_direction_brief(
         style_fingerprint=profile.fingerprint(),
     )
     document = DirectionDocument.model_validate(payload)
-    destination = context.workspace.direction_file(candidate_id)
-    context.workspace.prepare_advanced_file(destination)
+    destination = (
+        context.workspace.advanced_review_direction_file(candidate_id)
+        if allow_unapproved
+        else context.workspace.direction_file(candidate_id)
+    )
+    prepare = (
+        context.workspace.prepare_advanced_review_file
+        if allow_unapproved
+        else context.workspace.prepare_advanced_file
+    )
+    prepare(destination)
     archive = destination.parent / "directions" / f"{document.direction_id}.json"
-    context.workspace.prepare_advanced_file(archive)
+    prepare(archive)
     archive = confine_work_path(root, archive.relative_to(root).as_posix(), label="direction archive")
     if archive.exists():
         stored = DirectionDocument.model_validate_json(archive.read_text(encoding="utf-8"))
@@ -237,13 +252,16 @@ def validate_source_evidence(
             required_terms = {
                 "credit_card": ("credit", "card"),
                 "travel_postcard": ("philippines", "vacation", "beach", "tropical", "airbnb"),
-                # A generic mention of a company is not evidence for a rising
-                # trend chart. The source must name a business, founder, or
-                # enterprise concept that the illustration actually depicts.
-                "business_spotlight": ("business", "founder", "enterprise"),
+                "business_identity": ("business", "founder", "enterprise"),
+                # A rising chart requires quantitative evidence. A founder or
+                # company mention alone supports an identity card, never a
+                # trend visualization.
+                "business_spotlight": ("$", "million", "valued", "growth", "increase", "%"),
             }[graphic.template]
             if graphic.template == "credit_card":
                 supported = all(term in evidence_text for term in required_terms)
+            elif graphic.template == "business_spotlight":
+                supported = sum(term in evidence_text for term in required_terms) >= 2
             else:
                 supported = any(term in evidence_text for term in required_terms)
             if not supported:

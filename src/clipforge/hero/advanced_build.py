@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from dataclasses import asdict
@@ -187,6 +188,13 @@ def build_advanced_plan(
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
+    bound_review_id = review_id
+    bound_review_digest = review_digest
+    if allow_unapproved:
+        bound_review_id = f"pending-{hero_artifact_id}"
+        bound_review_digest = hashlib.sha256(
+            f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
+        ).hexdigest()
     document = AdvancedHeroPlanDocument(
         plan_id=plan_id,
         project_id=project_id,
@@ -200,8 +208,8 @@ def build_advanced_plan(
         hero_artifact_id=hero_artifact_id,
         hero_set_id=hero_set_id,
         hero_manifest_sha256=hero_manifest_sha256,
-        hero_review_id=review_id,
-        hero_review_digest=review_digest,
+        hero_review_id=bound_review_id,
+        hero_review_digest=bound_review_digest,
         hero_review_status="pending" if allow_unapproved else "approved",
         alignment_id=alignment.alignment_id,
         alignment_sha256=alignment_sha256,

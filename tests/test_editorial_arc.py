@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from clipforge.hero.editorial_arc import remap_alignment
+from clipforge.errors import MediaError
+from clipforge.hero.editorial_arc import remap_alignment, validate_editorial_arc
 from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -49,6 +50,7 @@ def _arc() -> EditorialArcDocument:
                 word_ids=["word-1"],
                 beat="hook",
                 purpose="open with the source question",
+                claim_closure="complete",
             ),
             EditorialArcSegment(
                 segment_id="arc-body",
@@ -57,6 +59,7 @@ def _arc() -> EditorialArcDocument:
                 word_ids=["word-2"],
                 beat="body",
                 purpose="explain the mechanism",
+                claim_closure="complete",
             ),
             EditorialArcSegment(
                 segment_id="arc-punch",
@@ -65,6 +68,7 @@ def _arc() -> EditorialArcDocument:
                 word_ids=["word-3"],
                 beat="punch",
                 purpose="land the consequence",
+                claim_closure="complete",
             ),
         ],
     )
@@ -124,6 +128,31 @@ def test_arc_requires_ordered_hook_body_punch_and_exact_map() -> None:
                     arc.segments[1].model_dump(mode="json"),
                 ],
             }
+        )
+
+
+def test_arc_requires_explicit_claim_closure_review() -> None:
+    base = _arc()
+    arc = base.model_copy(
+        update={
+            "segments": [
+                base.segments[0].model_copy(update={"claim_closure": "requires_review"}),
+                *base.segments[1:],
+            ]
+        }
+    )
+    alignment = _alignment()
+    from types import SimpleNamespace
+
+    hero_plan = SimpleNamespace(edit_plan=SimpleNamespace(time_map=arc.time_map))
+    with pytest.raises(MediaError, match="claim-closure review"):
+        validate_editorial_arc(
+            arc,
+            source_sha256="a" * 64,
+            hero_plan=hero_plan,  # type: ignore[arg-type]
+            hero_plan_sha256="b" * 64,
+            alignment=alignment,
+            alignment_sha256="c" * 64,
         )
 
 

@@ -3,7 +3,7 @@ import { frameAtOrAfter } from "./program-frames.js";
 
 export type MotionGraphic = {
   event_id?: string;
-  template?: "credit_card" | "travel_postcard" | "business_spotlight";
+  template?: "credit_card" | "travel_postcard" | "business_identity" | "business_spotlight";
   interval?: { output_start_us?: number; output_end_us?: number };
   purpose?: string;
   source_evidence_ids?: string[];
@@ -63,6 +63,9 @@ export function MotionGraphicCard({ graphic, accent, showLabel = true }: Props) 
   }
   if (graphic.template === "travel_postcard") {
     return <TravelPostcard graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
+  }
+  if (graphic.template === "business_identity") {
+    return <BusinessIdentity graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
   }
   return <BusinessSpotlight graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
 }
@@ -207,6 +210,51 @@ function BusinessSpotlight({
         {[110, 250, 418, 570].map((x, index) => <rect key={x} x={x} y={150 + index * 15} width="32" height="50" rx="6" fill={accent} opacity={0.3 + (index + 1) * 0.12} />)}
         <path d={`M86 310 C190 260 270 302 350 226 S515 166 632 ${rise}`} fill="none" stroke={accent} strokeWidth="13" strokeLinecap="round" />
         <path d={`M604 ${rise + 6} L632 ${rise} L618 ${rise + 28}`} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
+      <Label text={text} accent={accent} show={showLabel} />
+    </div>
+  );
+}
+
+function BusinessIdentity({
+  accent,
+  text,
+  style,
+  local,
+  showLabel,
+}: {
+  graphic: MotionGraphic;
+  accent: string;
+  text: string;
+  style: Record<string, string | number>;
+  local: number;
+  showLabel: boolean;
+}) {
+  const reveal = clamp(local / 18);
+  const easedReveal = 1 - Math.pow(1 - reveal, 3);
+  return (
+    <div style={{ ...style, borderRadius: 28, overflow: "hidden", background: "linear-gradient(135deg,#10192f,#263a69)", border: `2px solid ${accent}aa` }}>
+      <svg viewBox="0 0 720 440" width="100%" height="100%" aria-label="Animated business identity illustration">
+        <defs>
+          <linearGradient id="identity-bg" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#15244b" />
+            <stop offset="1" stopColor="#0a1024" />
+          </linearGradient>
+        </defs>
+        <rect width="720" height="440" fill="url(#identity-bg)" />
+        <circle cx="126" cy="138" r="70" fill={accent} opacity=".18" />
+        <circle cx="126" cy="138" r="47" fill={accent} opacity={0.3 + easedReveal * 0.5} />
+        <path d="M101 166c9-22 41-22 50 0M113 126h26" stroke="#fff" strokeWidth="9" strokeLinecap="round" opacity={easedReveal} />
+        <path d="M214 98H634M214 176H634" stroke="#fff" strokeWidth="3" opacity=".16" />
+        <g transform={`translate(${(1 - easedReveal) * 46} 0)`} opacity={easedReveal}>
+          <rect x="214" y="116" width="300" height="42" rx="21" fill={accent} opacity=".88" />
+          <rect x="214" y="194" width="392" height="42" rx="21" fill="#fff" opacity=".16" />
+          <text x="236" y="145" fill="#07101f" fontFamily="'DejaVu Sans', sans-serif" fontSize="22" fontWeight="800">PAC-10 ENTERPRISE</text>
+          <text x="236" y="223" fill="#fff" fontFamily="'DejaVu Sans', sans-serif" fontSize="22" fontWeight="700">RAPID CREDIT BOOSTERS</text>
+        </g>
+        <path d="M84 310H636" stroke="#fff" strokeWidth="3" opacity=".16" />
+        <path d={`M84 310H${84 + easedReveal * 432}`} stroke={accent} strokeWidth="8" strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
       <Label text={text} accent={accent} show={showLabel} />

@@ -173,6 +173,28 @@ function active(frame: number, interval: Interval | undefined): boolean {
   return frame >= start && frame < end;
 }
 
+function normalizedCaptionTokens(value: string): string[] {
+  return value
+    .toLocaleLowerCase()
+    .replace(/you're/g, "you are")
+    .replace(/\u2019re/g, " you are")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function nativeCaptionDuplicate(caption: TypeEvent, native: SourceNativeText): boolean {
+  const captionStart = caption.interval?.output_start_us ?? 0;
+  const captionEnd = caption.interval?.output_end_us ?? captionStart;
+  const nativeStart = native.interval?.output_start_us ?? 0;
+  const nativeEnd = native.interval?.output_end_us ?? nativeStart;
+  if (captionEnd <= nativeStart || nativeEnd <= captionStart) return false;
+  const captionTokens = normalizedCaptionTokens(caption.text ?? "");
+  const nativeTokens = new Set(normalizedCaptionTokens(native.text ?? ""));
+  return captionTokens.length >= 4 && captionTokens.every((token) => nativeTokens.has(token));
+}
+
 function span(interval: Interval | undefined): { from: number; duration: number } {
   return cueWindow(interval?.output_start_us, interval?.output_end_us);
 }
@@ -295,14 +317,17 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const names = input.asset_names ?? {};
   const captions = input.captions ?? [];
   const typography = input.typography ?? [];
-  const visibleCaptions = captions.filter(
-    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
-  );
   const visibleType = typography.filter(
     (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
   );
   const visibleNativeText = (input.source_native_text ?? []).filter(
     (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
+  );
+  const visibleCaptions = captions.filter(
+    (item) =>
+      active(frame, item.interval) &&
+      (item.text ?? "").trim().length > 0 &&
+      !visibleNativeText.some((native) => nativeCaptionDuplicate(item, native)),
   );
   const rawLanguage = input.language?.trim();
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
@@ -469,6 +494,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         if (
           graphic.template !== "credit_card" &&
           graphic.template !== "travel_postcard" &&
+          graphic.template !== "business_identity" &&
           graphic.template !== "business_spotlight"
         ) {
           throw new Error(`unsupported production motion graphic ${String(graphic.template)}`);
@@ -555,10 +581,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             return captionText.includes(text) || text.includes(captionText);
           })(),
         );
-        const duplicatesNativeText = visibleNativeText.some((native) => {
-          const nativeText = (native.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-          return nativeText.length > 0 && (nativeText.includes(text) || text.includes(nativeText));
-        });
+        const duplicatesNativeText = visibleNativeText.some((native) =>
+          nativeCaptionDuplicate(item, native),
+        );
         const isHook = item.component_id === "hook-card-v1";
         const isPunch = item.component_id === "punch-card-v1";
         const left = item.x ?? 72;

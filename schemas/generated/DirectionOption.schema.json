@@ -321,6 +321,7 @@
           "enum": [
             "credit_card",
             "travel_postcard",
+            "business_identity",
             "business_spotlight"
           ],
           "title": "Template",
