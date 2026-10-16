@@ -388,6 +388,33 @@ no SFX event, so event-level effect comfort is untested. File-level loudness
 passes, but cut-level PTS/phoneme proof and a decoded semantic review bundle
 are still required.
 
+## 1E. Post-execution status (2026-10-16)
+
+The implementation at HEAD `253252a` passes the repository-wide validation:
+**756 passed, 2 skipped in 778.24 seconds**; schemas match; renderer lint and
+typecheck pass; renderer Vitest reports 43 passed; doctor reports 10 pass, 0
+warn, 0 fail.
+
+The last successful real Remotion identity-card draft remains available at
+`var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/b7b2132c-406f-4d3b-8092-df902dd7c290/advanced-hero/review-drafts/runs/28813734-3d61-49b5-a474-ce198dbb1946/candidates/b743351c-1cfd-5c07-92d9-efb2de224bab/advanced.mp4`
+with SHA-256 `9037924eb8dd79bb9eb9ce63e1e2c7e560332125e6cf30c3166557ec7ee35f03`.
+Its decoded contact sheet is
+`var/round19/review/advanced-native-collision-v2/contact.jpg`, SHA-256
+`41affc9ae607a6abb4117249d624a39ed6e3401545d27942ce6e0b25faf93dda`.
+
+Two subsequent production renders using the same source-grounded plan were
+terminated by the bounded Remotion process deadline after Chrome crashed near
+frames 606 and 608. No renderer child processes remain. The failed attempts
+leave the pending review namespace stale against the newly written plan, which
+is the intended fail-closed behavior; a fresh production render is required
+when sufficient host memory is available. The last successful MP4 remains
+immutable and reviewable.
+
+The machine therefore remains **BLOCKED / NOT READY**. Technical contracts and
+semantic direction protections have landed, but a human visual decision,
+delivery-fill proof, event-level audio proof, semantic QA bundle, and a clean
+post-change Remotion render are still outstanding.
+
 ## 2. Root-cause map
 
 ### A. Production cannot currently prove selected-clip timing
