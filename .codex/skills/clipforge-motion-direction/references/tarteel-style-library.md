@@ -164,6 +164,77 @@ their editorial purpose. External content cannot replace a weak source moment.
   coverage, no unintended bars, no debug graphics, sync at every cut, safe-area
   bounds, and audio loudness/true peak.
 
+## Brand identity from the supplied account logo
+
+The operator supplied `../campaigns/Elegant Tartil Calligraphy Emblem.png`
+(1254×1254 RGB PNG; SHA-256
+`f1b4b31b2d895dfabf2f31ece011ee1d5e4637c70fd88d01c9ea0d8f70d58a95`). Verify
+the file and hash at production intake; do not copy campaign media into Git.
+The lockup is a gold Arabic calligraphic emblem with a crescent, star, arch,
+and circular border on a deep emerald background. It is an opaque RGB image,
+not a transparent logo file.
+
+Use this as the official identity layer unless the campaign policy says
+otherwise:
+
+- deep emerald: `#02291D` (primary background);
+- dark emerald: `#003C2D` (secondary surface);
+- antique gold: `#DCA95A` (border/accent);
+- warm gold: `#F6C875` (active highlight);
+- parchment cream: `#FFF3D1` (light card/text surface);
+- charcoal: `#101815` (fallback text/background).
+
+The orange `عيال كيدز`, purple, and blue frames seen in several references are
+clipper treatments or sub-brand treatments. Do not copy them as the official
+palette without evidence. They can be used only when the exact source-native
+mark or campaign rule requires them.
+
+### Layout system
+
+- Use full-bleed portrait footage or a deliberate emerald/blurred background;
+  never accidental black bars.
+- Keep a small brand bug in the upper-left safe corner by default (roughly
+  6–8% of frame width). Reserve the upper-right lane for a hook pill when one
+  exists. Use the full emblem only for a brief opening/closing card or a
+  restrained reveal—not as a large watermark over faces.
+- Build cards with a thin gold hairline, modest corner radius, and emerald or
+  parchment surfaces. The emblem's ornamental ring is a cue for restraint, not
+  a reason to add gold borders everywhere.
+- Keep the face, app proof, headline, and caption lanes separate. The logo is
+  never allowed to cover a face, Quran/app text, or a caption.
+
+### Typography system
+
+- Captions: locally installed, RTL-safe `Noto Sans Arabic` SemiBold/Bold;
+  phrase-level grouping, stable line geometry, and no per-letter animation.
+- Short hook cards: `Noto Kufi Arabic` Bold/ExtraBold may be used for a compact
+  geometric headline; use `Noto Sans Arabic` for anything longer than one short
+  line.
+- Default caption treatment is warm white/cream text on a restrained dark
+  emerald plate or outline. Gold is reserved for active-word emphasis and
+  verified campaign accents; do not make every word gold.
+- Use muted terracotta only for a source-proven wrong/correction state and sage
+  only for a source-proven success state. Never invent red/green results.
+
+### Motion and sound identity
+
+- Logo reveal: a deterministic 8–12-frame opacity/ring draw or a single soft
+  gold shimmer. No glitter, emoji, or rotating 3D emblem.
+- Hook card: short fade/slide with a 2–4-frame settle; the source reaction or
+  line remains the visual focus.
+- App proof: gentle inset reveal or masked crop; avoid bounce and elastic UI
+  motion unless the source itself has it.
+- Prefer hard semantic cuts and tiny deterministic audio boundary fades over
+  generic transition packs.
+- All 22 references contain one mixed audio stream, so their files cannot prove
+  which transient came from an SFX versus the source mix. Do not claim a
+  specific SFX recipe from waveform peaks alone. In production, use SFX only
+  when it has a source-grounded purpose: a quiet tap for a demonstrated app
+  action, a restrained tick for a verified challenge state, or a short soft
+  accent at a real reveal. Keep speech dominant, duck under dialogue, and use
+  the existing bounded gain/true-peak policy. Music remains prohibited unless
+  campaign policy explicitly changes.
+
 ## Evidence and platform references
 
 Use these as high-level guidance, not as campaign policy or performance
