@@ -212,6 +212,133 @@ warn, 0 fail**. The focused pending-draft regression is included. The draft is
 reviewable but not deliverable until a human approves the current Hero and then
 the resulting Advanced artifact.
 
+## 1C. Current re-audit after the joint-draft implementation (2026-10-16)
+
+This pass supersedes the older status tables above for the current checkout at
+`9ab8fd3e98f707a8607373462a5a4653704cb2ff`. It compares the production
+render-input, encoded MP4, decoded contact sheet, manifests, and approval and
+delivery paths. PR #33 is still a draft stacked on draft PR #32; neither branch
+is merged into `main`. The user-owned untracked `envato/` directory was not
+modified.
+
+### What landed
+
+| Area | Evidence | Status |
+|---|---|---|
+| Single output clock and multi-cut staging | The current Advanced render uses the persisted three-segment arc and two interior `clean_cut_v1` transitions. It does not repeat a source range to reach a target duration. | Landed; technically verified |
+| Portrait geometry | The 16:9 source is undistorted inside the 9:16 output. The foreground is contained over an intentional blurred review background. | Landed for review `contain`; delivery fill still unproved |
+| Caption production | The exact encoded input contains 12 complete grouped cues, a pinned style/profile, and the current locale-safe renderer. No debug marker layer is present. | Landed; decoded English coverage is visible |
+| Review safety | `hero advanced render` remains approval-gated by default. `--draft-only` marks the set `hero_review_status: pending`; publish preflight rejects it. No review decision row was fabricated. | Landed; technical gate verified |
+| File-level audio | The MP4 is 1080x1920, 30 fps, 21.966667 s video and 21.952000 s AAC, -15.6 LUFS integrated, 3.3 LU LRA, and -4.0 dBTP. | Landed for loudness measurement; perceptual cut sync unproved |
+| Automated checks | The last full validation completed with 754 passed and 2 skipped; renderer Vitest reported 43 passed; doctor reported 10 pass, 0 warn, 0 fail. | Technical evidence only |
+
+Current artifact paths and hashes:
+
+- MP4: `var/round19/work/projects/24875a39-fcfe-433f-9cb0-a29a541917f5/sources/b7b2132c-406f-4d3b-8092-df902dd7c290/advanced-hero/runs/3e8fd91d-9d4a-46bb-8dce-94ad2aece4aa/candidates/b743351c-1cfd-5c07-92d9-efb2de224bab/advanced.mp4`, SHA-256 `603d6c2add5afabe3956fc47b2b8b4360ef6bc8bfa998555613acf2298b8198b`.
+- Manifest: the same run's `manifest.json`, SHA-256 `ba71cbff409905a9f62e7aa98f5040df927c9c9d3a23f8b3dd41f15b6dbb8b92`; it records `hero_review_status: pending`.
+- Contact sheet: `var/round19/review/advanced-joint-review-v2/contact.jpg`, SHA-256 `cfd14a1d35ecbd4c52e62a220cceea36712056ad668941bb264b3dd59960a862`.
+
+### What still blocks a reviewable shorts machine
+
+1. **The arc is word-complete but not editorially claim-complete.** The body
+   ends with the ASR phrase “will his son Antoine Jr.” and omits the following
+   completion “He now lives with him full-time.” The validator checks forced-word
+   boundaries but cannot identify an unfinished clause or a premise whose
+   consequence is missing. Add a claim-closure contract based on punctuation,
+   continuation spans, and a reviewed beat purpose; reject or require review of
+   an arc that ends on an open dependency.
+
+2. **The selected graphic overstates the evidence.** `business_spotlight`
+   draws a rising trend chart for the sentence that identifies a founder and
+   companies. The source does not provide a time series or growth claim. The
+   current keyword guard permits “founder” or “enterprise”, which is sufficient
+   for a business identity card but not for a chart. Split the template grammar
+   into identity/brand and quantitative-trend variants, and require numeric
+   evidence plus a declared measure for the latter. If no truthful visual
+   grammar exists, select restraint.
+
+3. **Source-native text still competes with generated captions.** The decoded
+   opening contains the baked question card and a generated caption that repeats
+   the same spoken question. The optional typography layer is suppressed, but
+   ordinary captions remain unaware of a reviewed source-native phrase. Add a
+   source-native caption collision policy: delay or reposition the first cue, or
+   explicitly mark the native phrase as the visible caption for that interval.
+   The policy must be language- and region-aware and proven on decoded frames.
+
+4. **The current draft proves only review `contain`, not an attractive final
+   portrait composition.** The foreground is correctly undistorted, but blurred
+   rails consume much of the portrait frame. No current artifact proves an
+   explicit `center_crop`, valid `face_follow`, or reviewed manual trajectory
+   with caption, face, and source-text collision checks. The delivery profile
+   must choose a fill strategy explicitly and render and audit it before a short
+   can be considered viewer-ready.
+
+5. **Motion is still a capability demo rather than a finished visual direction.**
+   The output has two clean cuts and one small chart, but no relevant B-roll or
+   event-level sound design. This is acceptable for a restraint alternative, but
+   the current selector chooses the chart without proving that it improves
+   comprehension. Direction scoring needs a visual-purpose decision and a
+   human-review checklist for each graphic, cutaway, and transition. Effects
+   must remain optional and source-grounded; adding them by count would recreate
+   the earlier unrelated-asset problem.
+
+6. **Audio proof stops at the file level.** The AAC stream is about 14.7 ms
+   shorter than the video stream and there is no current decoded boundary report
+   proving that the first phoneme survives either interior cut. The current draft
+   has no SFX, so the reported sharp-effect failure is not exercised. Add per-cut
+   audio/video PTS and word-onset checks, and event-window peak/RMS plus
+   speech-masking checks whenever SFX is present.
+
+7. **Draft-only state is not isolated from the canonical Advanced pointer.** The
+   pending path avoids inserting an approval row, but it writes the normal plan,
+   current artifact, and sidecar locations. A pending review experiment can
+   therefore replace the path that an older approved package expects. Give review
+   drafts an explicit namespace or artifact kind and make cache, QA, final-review,
+   and delivery resolve approved and pending sets independently. Existing
+   approved artifacts must remain verifiable after a draft render.
+
+8. **Technical QA does not yet gate viewer-facing meaning.** Advanced verify and
+   QA pass while the chart/claim mismatch, open body clause, native-text
+   duplication, and contain-only composition remain. Generate a decoded review
+   bundle from the exact MP4 and make semantic findings visible to final review;
+   delivery must require a human decision on that exact hash. OCR remains
+   optional and unavailable in this environment.
+
+### Next execution order
+
+The repairs should be executed in this order, with a new encoded proof bundle
+after each boundary:
+
+1. **Contract integrity:** isolate pending drafts, preserve legacy approved
+   pointers, and include draft kind/status in every cache and stale-evidence
+   binding. Add tests for approved artifact verification after a pending render.
+2. **Editorial closure:** add claim-complete hook/body/punch validation and
+   update the current arc so the body either includes its consequence or ends at
+   a defensible complete claim. Do not invent missing words; if ASR is wrong,
+   re-align the selected clip or mark the source evidence for human review.
+3. **Source-native collision:** implement the reviewed native-text lane for
+   captions and typography, then decode the first cue and opening title at frame
+   boundaries.
+4. **Purposeful graphics:** replace the generic chart with an identity graphic
+   or restraint for this source. Add quantitative graphics only when exact
+   values, units, and comparison semantics are present. Add B-roll only after
+   local registration, rights evidence, tags, and relevance review.
+5. **Portrait delivery:** render and inspect explicit center-crop/face-follow
+   candidates, choose one from the profile, and prove safe bounds through the
+   complete arc. Retain `contain` as an intentional review derivative.
+6. **Cut/audio proof:** measure encoded PTS and word onset at every cut; add
+   bounded audio envelopes and event-window checks for any SFX. Reject drift,
+   truncated phonemes, clipping, harsh effects, and near-silence.
+7. **Semantic review gate:** require the decoded bundle, caption coverage,
+   repeated-range report, graphic-purpose evidence, asset rights, and a human
+   final decision before delivery. Re-run the complete Hero and Advanced pair
+   and record separate technical verification and human visual acceptance.
+
+This re-audit remains **BLOCKED / NOT READY**. The implementation has landed
+useful timing, geometry, caption, and approval protections, but the current
+encoded draft does not yet demonstrate a coherent, semantically supported,
+viewer-ready portrait short.
+
 ## 2. Root-cause map
 
 ### A. Production cannot currently prove selected-clip timing
