@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One source-grounded native Remotion illustration.\n\nThe template is an allowlisted renderer component, never operator-supplied\nJSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan\nso a visual cannot become a free-floating unsupported claim.",
+  "properties": {
+    "display_text": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Display Text",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "height": {
+      "maximum": 560,
+      "minimum": 180,
+      "title": "Height",
+      "type": "integer"
+    },
+    "interval": {
+      "$ref": "#/$defs/OutputInterval"
+    },
+    "purpose": {
+      "$ref": "#/$defs/MotionPurpose"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "template": {
+      "enum": [
+        "credit_card",
+        "travel_postcard",
+        "business_identity",
+        "business_spotlight"
+      ],
+      "title": "Template",
+      "type": "string"
+    },
+    "width": {
+      "maximum": 840,
+      "minimum": 220,
+      "title": "Width",
+      "type": "integer"
+    },
+    "x": {
+      "maximum": 812,
+      "minimum": 48,
+      "title": "X",
+      "type": "integer"
+    },
+    "y": {
+      "maximum": 1240,
+      "minimum": 120,
+      "title": "Y",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "event_id",
+    "template",
+    "interval",
+    "purpose",
+    "source_evidence_ids",
+    "display_text",
+    "x",
+    "y",
+    "width",
+    "height"
+  ],
+  "title": "MotionGraphicEvent",
+  "type": "object"
+}

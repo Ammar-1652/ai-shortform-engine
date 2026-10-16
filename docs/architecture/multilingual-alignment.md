@@ -1,6 +1,6 @@
 # Multilingual alignment and narration
 
-en-US, fr-FR, and ja alignment are `verified_live` only when an external speech file under `CLIPFORGE_SPEECH_EVIDENCE_ROOT` matches the packaged record and the measured model. Clipforge checks the artifact SHA-256 and the WAV facts. Model identity and speech identity are both required. A missing file, a tone, a sine wave, a catalog constant, or a metadata-only row stays non-live. en-GB is not verified unless it has its own speech record. en-US KittenTTS remains the only verified narration. See [ADR 0061](../adr/0061-multilingual-alignment-and-narration.md) and [ADR 0066](../adr/0066-multilingual-alignment-production.md).
+en-US, fr-FR, and ja alignment are `verified_live` only when an external speech file discovered from the explicit `CLIPFORGE_SPEECH_EVIDENCE_ROOT` or the installed `~/.local/clipforge-speech-evidence` directory matches the packaged record and the measured model. Clipforge checks the artifact SHA-256 and the WAV facts. Model identity and speech identity are both required. A missing file, a tone, a sine wave, a catalog constant, or a metadata-only row stays non-live. en-GB is not verified unless it has its own speech record. en-US KittenTTS remains the only verified narration. See [ADR 0061](../adr/0061-multilingual-alignment-and-narration.md), [ADR 0066](../adr/0066-multilingual-alignment-production.md), and [ADR 0074](../adr/0074-shared-speech-evidence-discovery.md).
 
 SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. The new records are sidecars.
 
@@ -58,7 +58,7 @@ Narration cache identity is the locale, script SHA-256, source SHA-256, transcri
 
 ## Captions
 
-Arabic layout is `rtl` and does not reverse characters, transliterate, or rewrite Arabic-Indic digits. Japanese layout wraps by Unicode character, does not insert spaces, and does not leave `。` or similar closing marks at the start of a line. Latin captions wrap on spaces and keep tokens such as `$12.50` intact. Plates use React text nodes. The safe area is the 64-pixel margin of a 1080×1920 frame. There is no `innerHTML`, remote font, or CDN request.
+Arabic layout is `rtl` and does not reverse characters, transliterate, or rewrite Arabic-Indic digits. Japanese layout wraps by Unicode character, does not insert spaces, and does not leave `。` or similar closing marks at the start of a line. Latin captions wrap on spaces and keep tokens such as `$12.50` intact. Plates use React text nodes. Advanced styles provide explicit safe margins (the clean defaults are 64px left/right, 120px top, and 300px bottom) and the renderer consumes those values. The clean recipe stages hashed local DejaVu, Noto CJK, and Noto Arabic fonts; their license evidence is [caption-fonts.md](caption-fonts.md). There is no `innerHTML`, remote font, or CDN request.
 
 ## Board
 

@@ -29,6 +29,13 @@
       "title": "Created At",
       "type": "string"
     },
+    "direction_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Direction Sha256S",
+      "type": "array"
+    },
     "hero_artifact_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -38,6 +45,15 @@
     "hero_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Hero Manifest Sha256",
+      "type": "string"
+    },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
       "type": "string"
     },
     "hero_set_id": {
@@ -88,6 +104,12 @@
       "minimum": 1,
       "title": "Rendered Count",
       "type": "integer"
+    },
+    "renderer_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
+      "type": "string"
     },
     "rough_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",

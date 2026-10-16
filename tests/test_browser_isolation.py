@@ -23,6 +23,7 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
         recorded["argv"] = argv
         recorded["env"] = kwargs.get("env")
         recorded["reap_group"] = kwargs.get("reap_group")
+        recorded["timeout_s"] = kwargs.get("timeout_s")
         env = kwargs.get("env")
         assert isinstance(env, dict)
         private = str(env["TMPDIR"])
@@ -36,7 +37,7 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr("clipforge.preview.isolation.resolve_browser", lambda: browser)
     monkeypatch.setattr("clipforge.preview.isolation.resolve_executable", lambda *_args: "node")
     batch = tmp_path / "batch.json"
-    batch.write_text("{}", encoding="utf-8")
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
     before = os.environ.get("TMPDIR")
     RemotionHeroRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
     RemotionHeroRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
@@ -52,6 +53,7 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
     assert isinstance(argv, list)
     assert argv[-1] == str(private)
     assert recorded["reap_group"] is True
+    assert recorded["timeout_s"] == 120.0
     assert os.environ.get("TMPDIR") == before
     script = Path("apps/renderer/scripts/render-hero.mjs").read_text(encoding="utf-8")
     assert "process.env.TMPDIR" in script
@@ -117,3 +119,15 @@ def test_node_failure_includes_the_renderer_log() -> None:
     )
     assert "renderer log" in message
     assert "Page crashed" in message
+
+
+def test_remotion_deadline_scales_with_declared_frames(tmp_path: Path) -> None:
+    from clipforge.preview.isolation import _remotion_process_deadline_s
+
+    batch = tmp_path / "batch.json"
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 120.0
+    batch.write_text('{"items":[{"input":{"duration_in_frames":1800}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 450.0
+    batch.write_text('{"items":[{"input":{"duration_in_frames":9000}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 600.0

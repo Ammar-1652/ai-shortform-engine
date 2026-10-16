@@ -54,9 +54,33 @@
       "title": "Detected Video Codec",
       "type": "string"
     },
+    "direction_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
     "duration_error_us": {
       "title": "Duration Error Us",
       "type": "integer"
+    },
+    "editorial_arc_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Editorial Arc Id",
+      "type": "string"
+    },
+    "editorial_arc_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Sha256",
+      "type": "string"
     },
     "height": {
       "const": 1920,
@@ -84,6 +108,15 @@
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Hero Review Id",
+      "type": "string"
+    },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
       "type": "string"
     },
     "output_duration_us": {
@@ -135,6 +168,13 @@
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
+      "type": "string"
+    },
+    "style_id": {
+      "default": "legacy-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Style Id",
       "type": "string"
     },
     "width": {

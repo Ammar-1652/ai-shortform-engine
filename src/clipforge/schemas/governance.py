@@ -100,7 +100,26 @@ class AssetReference(Versioned):
     uri: str = Field(min_length=1, max_length=2048)
     kind: AssetKind
     license_record_id: EntityId
+    # Operator-confirmed content labels are part of the editorial asset
+    # contract.  A license proves that a file may be used; it does not prove
+    # that it is relevant to the spoken source.  Advanced Hero binds the
+    # reviewed placement to these labels before a B-roll layer is rendered.
+    content_tags: list[str] = Field(default_factory=list, max_length=24)
     provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def tags_are_plain(self) -> Self:
+        import re
+
+        cleaned: list[str] = []
+        for tag in self.content_tags:
+            value = " ".join(tag.split()).strip().casefold()
+            if not value or len(value) > 80 or re.search(r"[^\w\s%$'.-]", value):
+                raise ValueError("asset content tags must be short plain labels")
+            if value not in cleaned:
+                cleaned.append(value)
+        self.content_tags = cleaned
+        return self
 
 
 class ReviewDecision(Versioned):

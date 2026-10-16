@@ -7,14 +7,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
-from typing import Any, Literal, Self
+import re
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.direction import MotionStyleSpec, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import TimeMapDocument, digest_time_map
 
 _SHA = r"^[0-9a-f]{64}$"
 _SAFE_X = 48
@@ -67,6 +70,25 @@ class ReframingWindow(Versioned):
         return self
 
 
+class CaptionWordTiming(Versioned):
+    """One forced word inside a grouped Advanced Hero caption."""
+
+    word_id: EntityId
+    text: str = Field(min_length=1, max_length=200)
+    output_start_us: Microseconds
+    output_end_us: Microseconds
+    output_start_frame: int = Field(ge=0)
+    output_end_frame_exclusive: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.output_end_us <= self.output_start_us:
+            raise ValueError("caption word microsecond interval must be positive")
+        if self.output_end_frame_exclusive <= self.output_start_frame:
+            raise ValueError("caption word frame interval must be positive and half-open")
+        return self
+
+
 class TypographyEvent(Versioned):
     """On-screen text copied from alignment or a validated payload. It is not HTML."""
 
@@ -79,6 +101,7 @@ class TypographyEvent(Versioned):
     y: int = Field(ge=_SAFE_Y, le=_FRAME_H - _SAFE_Y)
     font_size: int = Field(ge=24, le=96)
     color: Literal["#ffffff"] = "#ffffff"
+    words: list[CaptionWordTiming] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def box_stays_in_safe_area(self) -> Self:
@@ -86,6 +109,13 @@ class TypographyEvent(Versioned):
             raise ValueError("typography component id must be plain text")
         if self.y + self.font_size > _FRAME_H - _SAFE_Y:
             raise ValueError("typography extends below the safe area")
+        if self.component_id.startswith("caption-") and not self.words:
+            raise ValueError("advanced captions require forced word timing")
+        for word in self.words:
+            if word.output_start_us < self.interval.output_start_us:
+                raise ValueError("caption word starts before its cue")
+            if word.output_end_us > self.interval.output_end_us:
+                raise ValueError("caption word ends after its cue")
         return self
 
 
@@ -97,6 +127,11 @@ class DiagramPayload(Versioned):
     right_label: str = Field(min_length=1, max_length=40)
     left_value: int = Field(ge=0, le=1_000_000_000)
     right_value: int = Field(ge=0, le=1_000_000_000)
+    # Optional exact display strings preserve currency, decimal, and unit text.
+    # Numeric magnitudes remain for proportional geometry when a grounded
+    # comparison is explicitly supplied.
+    left_display: str | None = Field(default=None, min_length=1, max_length=40)
+    right_display: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class DiagramEvent(Versioned):
@@ -114,10 +149,45 @@ class DiagramEvent(Versioned):
 
     @model_validator(mode="after")
     def box_stays_in_safe_area(self) -> Self:
+        if self.payload.kind != "number_comparison":
+            raise ValueError(f"unsupported production diagram kind: {self.payload.kind}")
         if self.x + self.width > _FRAME_W - _SAFE_X:
             raise ValueError("diagram extends past the safe area width")
         if self.y + self.height > _FRAME_H - _SAFE_Y:
             raise ValueError("diagram extends past the safe area height")
+        return self
+
+
+class MotionGraphicEvent(Versioned):
+    """One source-grounded native Remotion illustration.
+
+    The template is an allowlisted renderer component, never operator-supplied
+    JSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan
+    so a visual cannot become a free-floating unsupported claim.
+    """
+
+    event_id: EntityId
+    template: Literal[
+        "credit_card",
+        "travel_postcard",
+        "business_identity",
+        "business_spotlight",
+    ]
+    interval: OutputInterval
+    purpose: MotionPurpose
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    display_text: str = Field(min_length=1, max_length=100)
+    x: int = Field(ge=_SAFE_X, le=812)
+    y: int = Field(ge=120, le=1240)
+    width: int = Field(ge=220, le=840)
+    height: int = Field(ge=180, le=560)
+
+    @model_validator(mode="after")
+    def stays_in_graphic_region(self) -> Self:
+        if self.x + self.width > _FRAME_W - _SAFE_X:
+            raise ValueError("motion graphic extends past the safe area width")
+        if self.y + self.height > 1480:
+            raise ValueError("motion graphic extends into the reserved caption lane")
         return self
 
 
@@ -142,6 +212,15 @@ class AudioMixEvent(Versioned):
     asset_id: EntityId
     role: Literal["sfx"] = "sfx"
     gain_db: float = Field(ge=-24, le=6)
+    sfx_source_in_us: Microseconds = Field(default=0, ge=0)
+    fade_in_us: Microseconds = Field(default=20_000, ge=0, le=100_000)
+    fade_out_us: Microseconds = Field(default=60_000, ge=0, le=200_000)
+    # A clean production plan must bind a sound effect to source-grounded
+    # evidence. Empty values are retained only so older immutable plans remain
+    # readable; the production render gate rejects them.
+    source_evidence_ids: list[EntityId] = Field(default_factory=list)
+    purpose: MotionPurpose | None = None
+    relevance_note: str = Field(default="", max_length=500)
 
 
 class EmphasisEvent(Versioned):
@@ -156,6 +235,15 @@ class EmphasisEvent(Versioned):
     output_end_frame_exclusive: int = Field(ge=1)
     purpose: MotionPurpose
     rule_id: Literal["number_or_currency", "terminal_punctuation", "diagram_label"]
+
+
+class TransitionEvent(Versioned):
+    """A short, deterministic bridge at a reviewed TimeMap cut."""
+
+    event_id: EntityId
+    interval: OutputInterval
+    purpose: Literal[MotionPurpose.VISUAL_REVEAL] = MotionPurpose.VISUAL_REVEAL
+    style: Literal["clean_cut_v1"] = "clean_cut_v1"
 
 
 class AdvancedHeroProfile(Versioned):
@@ -174,13 +262,36 @@ class AdvancedHeroProfile(Versioned):
     audio_true_peak_dbfs: float = -1.5
     audio_lra_lu: float = 11
     narration_duck_db: float = -12
+    # SFX are accents under speech, never competing foreground audio.
+    sfx_default_gain_db: float = Field(default=-18, ge=-24, le=0)
+    sfx_max_gain_db: Literal[-18] = -18
+    sfx_fade_in_us: Microseconds = Field(default=20_000, ge=0, le=100_000)
+    sfx_fade_out_us: Microseconds = Field(default=60_000, ge=0, le=200_000)
     audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
-    caption_algorithm_version: Literal["advanced-caption-v1"] = "advanced-caption-v1"
-    typography_version: Literal["advanced-typography-v1"] = "advanced-typography-v1"
-    diagram_version: Literal["advanced-diagram-v1"] = "advanced-diagram-v1"
-    renderer_recipe_version: Literal["advanced-hero-renderer-v1"] = "advanced-hero-renderer-v1"
-    motion_library_version: Literal["advanced-motion-v1"] = "advanced-motion-v1"
+    caption_algorithm_version: Literal["advanced-caption-v1", "advanced-caption-clean-v1"] = (
+        "advanced-caption-clean-v1"
+    )
+    typography_version: Literal["advanced-typography-v1", "advanced-typography-clean-v1"] = (
+        "advanced-typography-clean-v1"
+    )
+    diagram_version: Literal["advanced-diagram-v1", "advanced-diagram-grounded-v1"] = (
+        "advanced-diagram-grounded-v1"
+    )
+    motion_graphics_version: Literal["advanced-motion-graphics-v1"] = "advanced-motion-graphics-v1"
+    renderer_recipe_version: Literal[
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4",
+    ] = "advanced-hero-renderer-directed-v3"
+    staging_recipe_version: Literal["time-map-v1-audio-envelope", "time-map-v2-frame-quantized"] = (
+        "time-map-v2-frame-quantized"
+    )
+    motion_library_version: Literal["advanced-motion-v1", "advanced-motion-clean-v1"] = (
+        "advanced-motion-clean-v1"
+    )
     reframing: ReframingStrategy
     broll_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
     sfx_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
@@ -191,23 +302,64 @@ class AdvancedHeroProfile(Versioned):
     max_gain_db: Literal[6] = 6
     duration_tolerance_us: Literal[100_000] = 100_000
     manual_window: ReframingWindow | None = None
+    # An explicitly reviewed, ordered crop trajectory. The legacy singular
+    # field remains readable so previously recorded profile fingerprints stay
+    # verifiable; new plans should prefer this when the source subject moves.
+    manual_windows: list[ReframingWindow] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def manual_window_matches_strategy(self) -> Self:
-        if self.reframing.strategy_id == "manual_window" and self.manual_window is None:
-            raise ValueError("manual_window strategy requires a reframing window")
-        if self.reframing.strategy_id != "manual_window" and self.manual_window is not None:
+        if self.reframing.strategy_id == "manual_window":
+            if self.manual_window is None and not self.manual_windows:
+                raise ValueError("manual_window strategy requires reviewed crop window(s)")
+            if self.manual_window is not None and self.manual_windows:
+                raise ValueError("choose the legacy singular crop or manual_windows, not both")
+        elif self.manual_window is not None or self.manual_windows:
             raise ValueError("a manual window is only stored for the manual_window strategy")
         return self
 
     def fingerprint(self) -> str:
-        return advanced_fingerprint(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        # Keep old profile digests stable when the additive trajectory field
+        # is unused. A populated trajectory is an output-changing dependency.
+        if not self.manual_windows:
+            payload.pop("manual_windows", None)
+        # Round-30 profiles predate the explicit audio policy fields.  Keep
+        # their recorded fingerprint verifiable without reinterpreting them;
+        # every clean-v1 profile includes the complete current payload.
+        if self.renderer_recipe_version == "advanced-hero-renderer-v1":
+            for key in (
+                "audio_loudness_lufs",
+                "audio_true_peak_dbfs",
+                "audio_lra_lu",
+                "narration_duck_db",
+                "sfx_default_gain_db",
+                "sfx_max_gain_db",
+                "sfx_fade_in_us",
+                "sfx_fade_out_us",
+                "audio_mix_version",
+                "staging_recipe_version",
+                "motion_graphics_version",
+            ):
+                payload.pop(key, None)
+        # v2 predates native illustration events.  Its recorded fingerprints
+        # must remain verifiable when a stored profile is read by this build.
+        elif self.renderer_recipe_version == "advanced-hero-renderer-directed-v2":
+            payload.pop("motion_graphics_version", None)
+        return advanced_fingerprint(payload)
 
 
 class AdvancedHeroRenderInput(Versioned):
     """Facts for one advanced composition. Paths are local staging names, not URLs."""
 
     composition_id: Literal["AdvancedHeroDraft"] = "AdvancedHeroDraft"
+    renderer_recipe_version: Literal[
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4",
+    ] = "advanced-hero-renderer-v1"
     candidate_id: EntityId
     advanced_set_id: EntityId
     duration_in_frames: int = Field(ge=1)
@@ -218,8 +370,17 @@ class AdvancedHeroRenderInput(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
+    style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    motion_style: MotionStyleSpec | None = None
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     advanced_plan_sha256: str = Field(pattern=_SHA)
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
@@ -227,7 +388,10 @@ class AdvancedHeroRenderInput(Versioned):
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
+    motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
+    transitions: list[TransitionEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     windows: list[ReframingWindow] = Field(default_factory=list)
@@ -246,6 +410,10 @@ class AdvancedHeroRenderInput(Versioned):
 
     @model_validator(mode="after")
     def local_names_only(self) -> Self:
+        if self.motion_style is not None and self.motion_style.style_id != self.style_id:
+            raise ValueError("render input motion style does not match style_id")
+        if self.style_id != "legacy-v1" and not self.style_fingerprint:
+            raise ValueError("production motion style requires a fingerprint")
         for name in self.asset_names.values():
             lowered = name.lower()
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
@@ -260,11 +428,17 @@ class AdvancedHeroDraftOutput(Versioned):
     rank: int = Field(ge=1)
     hero_review_id: EntityId
     hero_review_digest: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     alignment_id: EntityId
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_id: EntityId
     hero_plan_sha256: str = Field(pattern=_SHA)
     advanced_plan_sha256: str = Field(pattern=_SHA)
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
     preview_sha256: str = Field(pattern=_SHA)
@@ -308,21 +482,36 @@ class AdvancedHeroPlanDocument(Versioned):
     hero_manifest_sha256: str = Field(pattern=_SHA)
     hero_review_id: EntityId
     hero_review_digest: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     alignment_id: EntityId
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_id: EntityId
     hero_plan_sha256: str = Field(pattern=_SHA)
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
+    # New plans persist the exact map used for Advanced staging. ``None``
+    # keeps older immutable plans readable.
+    time_map: TimeMapDocument | None = None
     time_map_sha256: str = Field(pattern=_SHA)
+    editorial_arc_id: str = Field(default="", max_length=128)
+    editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     profile_fingerprint: str = Field(pattern=_SHA)
+    direction_id: str = Field(default="", max_length=128)
+    direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
+    style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
+    motion_style: MotionStyleSpec | None = None
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     windows: list[ReframingWindow] = Field(default_factory=list)
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
+    motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
+    transitions: list[TransitionEvent] = Field(default_factory=list)
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     assets: list[AssetBinding] = Field(default_factory=list)
@@ -333,12 +522,20 @@ class AdvancedHeroPlanDocument(Versioned):
     def events_do_not_overlap_illegally(self) -> Self:
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("advanced plan provenance must include source_asset_id")
+        if self.time_map is not None and digest_time_map(self.time_map) != self.time_map_sha256:
+            raise ValueError("advanced plan time_map_sha256 does not match time_map")
         _reject_overlaps(self.broll, "b-roll")
         _reject_overlaps_typed(self.captions, "captions")
         _reject_overlaps_typed(self.typography, "typography")
+        _reject_overlaps_typed(self.motion_graphics, "motion graphics")
         for event in self.sfx:
             if event.role != "sfx":
                 raise ValueError("advanced Hero audio rejects music")
+        if self.motion_style is not None:
+            if self.motion_style.style_id != self.style_id:
+                raise ValueError("advanced plan motion style does not match style_id")
+            if self.style_fingerprint == "":
+                raise ValueError("advanced plan motion style requires a fingerprint")
         return self
 
 
@@ -356,6 +553,7 @@ class AdvancedHeroDraftSetDocument(Versioned):
     hero_artifact_id: EntityId
     hero_set_id: EntityId
     hero_manifest_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
     profile: AdvancedHeroProfile
@@ -363,6 +561,12 @@ class AdvancedHeroDraftSetDocument(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    # Empty keeps pre-checkpoint manifests readable; new browser renders bind
+    # the exact local Remotion worker recipe so a changed renderer cannot hit
+    # an old cache entry.
+    renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    direction_sha256s: list[str] = Field(default_factory=list)
+    style_ids: list[str] = Field(default_factory=list)
     drafts: list[AdvancedHeroDraftOutput] = Field(min_length=1)
     provenance: ArtifactProvenance
 
@@ -377,6 +581,8 @@ class AdvancedHeroDraftSetDocument(Versioned):
             raise ValueError("advanced ranks must be 1..n in list order")
         if self.provenance.inputs_sha256 != self.advanced_input_sha256:
             raise ValueError("provenance input digest must be the advanced input digest")
+        if any(item.hero_review_status != self.hero_review_status for item in self.drafts):
+            raise ValueError("advanced draft review status must match the set status")
         return self
 
 
@@ -395,17 +601,50 @@ class AdvancedHeroCacheRecord(Versioned):
     hero_artifact_id: EntityId
     hero_set_id: EntityId
     hero_manifest_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"] = "approved"
     visual_analysis_id: EntityId
     visual_analysis_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    direction_sha256s: list[str] = Field(default_factory=list)
     manifest_sha256: str = Field(pattern=_SHA)
     manifest_size_bytes: int = Field(ge=1)
     rendered_count: int = Field(ge=1)
     validation_status: Literal["passed"]
     created_at: AwareDatetime
+
+
+class AdvancedRenderProgress(Versioned):
+    """Checkpoint for a resumable Advanced Remotion run."""
+
+    advanced_set_id: EntityId
+    source_asset_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"]
+    candidate_ids: list[EntityId] = Field(min_length=1)
+    completed_candidate_ids: list[EntityId] = Field(default_factory=list)
+    completed_media_sha256: dict[EntityId, str] = Field(default_factory=dict)
+    batch_sha256: str = Field(pattern=_SHA)
+    renderer_dependency_sha256: str = Field(pattern=_SHA)
+    state: Literal["running", "failed", "complete"] = "running"
+    updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def completed_candidates_are_known(self) -> Self:
+        if len(set(self.candidate_ids)) != len(self.candidate_ids):
+            raise ValueError("render progress candidate ids must be unique")
+        if any(item not in self.candidate_ids for item in self.completed_candidate_ids):
+            raise ValueError("render progress contains an unknown completed candidate")
+        if set(self.completed_candidate_ids) != set(self.completed_media_sha256):
+            raise ValueError("completed candidates require media hash receipts")
+        if any(re.fullmatch(_SHA, value) is None for value in self.completed_media_sha256.values()):
+            raise ValueError("completed media hashes must be sha256")
+        if self.state == "complete" and set(self.completed_candidate_ids) != set(self.candidate_ids):
+            raise ValueError("a complete render progress record must include every candidate")
+        return self
 
 
 def _reject_overlaps(events: list[BrollEvent], label: str) -> None:
@@ -417,7 +656,12 @@ def _reject_overlaps(events: list[BrollEvent], label: str) -> None:
         previous_end = event.interval.output_end_us
 
 
-def _reject_overlaps_typed(events: list[TypographyEvent], label: str) -> None:
+class _TimedPlanEvent(Protocol):
+    event_id: str
+    interval: OutputInterval
+
+
+def _reject_overlaps_typed(events: Sequence[_TimedPlanEvent], label: str) -> None:
     ordered = sorted(events, key=lambda item: (item.interval.output_start_us, item.event_id))
     previous_end = -1
     for event in ordered:

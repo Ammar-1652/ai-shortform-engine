@@ -25,13 +25,17 @@ from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
+    AdvancedRenderProgress,
     AssetBinding,
     AudioMixEvent,
+    CaptionWordTiming,
     DiagramEvent,
     DiagramPayload,
     EmphasisEvent,
+    MotionGraphicEvent,
     ReframingStrategy,
     ReframingWindow,
+    TransitionEvent,
     TypographyEvent,
 )
 from clipforge.schemas.analytics import (
@@ -52,6 +56,7 @@ from clipforge.schemas.analytics import (
     PerformanceMetrics,
     PerformanceOutcome,
 )
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
 from clipforge.schemas.assets import AssetDownloadRequest, AssetSearchHit
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
@@ -89,6 +94,16 @@ from clipforge.schemas.candidates import (
     CandidateScoreBreakdown,
     EditOpportunityWeights,
     QualityWeights,
+)
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionBeat,
+    DirectionDocument,
+    DirectionEvidence,
+    DirectionMotionGraphic,
+    DirectionOption,
+    MotionStyleSpec,
+    SourceNativeText,
 )
 from clipforge.schemas.editorial import (
     AudioEvent,
@@ -206,6 +221,7 @@ from clipforge.schemas.reframe import (
     ReframeEvidenceDigest,
     ReframePlanDocument,
 )
+from clipforge.schemas.render_checkpoint import CandidateRenderCheckpoint, RenderUnitReceipt
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 from clipforge.schemas.vision import (
@@ -305,14 +321,30 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TypographyEvent,
     DiagramPayload,
     DiagramEvent,
+    MotionGraphicEvent,
     AssetBinding,
     AudioMixEvent,
+    CaptionWordTiming,
     EmphasisEvent,
+    TransitionEvent,
     AdvancedHeroRenderInput,
     AdvancedHeroDraftOutput,
     AdvancedHeroDraftSetDocument,
     AdvancedHeroCacheRecord,
     AdvancedHeroPlanDocument,
+    EditorialArcSegment,
+    AdvancedRenderProgress,
+    CandidateRenderCheckpoint,
+    RenderUnitReceipt,
+    EditorialArcDocument,
+    MotionStyleSpec,
+    DirectionEvidence,
+    DirectionBeat,
+    DirectionAssetPlacement,
+    DirectionMotionGraphic,
+    SourceNativeText,
+    DirectionOption,
+    DirectionDocument,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,

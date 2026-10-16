@@ -99,7 +99,7 @@ class EnvatoAssetRequest(Versioned):
 
 
 class EnvatoAssetRegistration(Versioned):
-    """One manually supplied file after confinement, hash, probe, and rights checks."""
+    """One verified file after confinement, hash, probe, rights, and license checks."""
 
     asset_id: EntityId
     request_id: EntityId
@@ -107,6 +107,8 @@ class EnvatoAssetRegistration(Versioned):
     project_id: EntityId
     item_page_url: str | None = Field(default=None, max_length=300)
     item_id: str | None = Field(default=None, max_length=80)
+    portal_item_uuid: str | None = Field(default=None, max_length=80)
+    portal_license_id: str | None = Field(default=None, max_length=120)
     relative_path: str | None = None
     byte_size: int = Field(ge=0)
     sha256: str | None = Field(default=None, pattern=_SHA)
@@ -118,19 +120,34 @@ class EnvatoAssetRegistration(Versioned):
     producer_job_id: EntityId
     policy_fingerprint: str = Field(pattern=_SHA)
     media_kind: MediaKind
-    download_status: Literal["manual_download_required"] = "manual_download_required"
+    # Tags are operator-confirmed editorial metadata, separate from rights.
+    # They are required when a downloaded file is selected as B-roll.
+    content_tags: list[str] = Field(default_factory=list, max_length=24)
+    download_status: Literal["manual_download_required", "portal_download_verified"] = (
+        "manual_download_required"
+    )
     direct_download_url: str | None = Field(default=None, max_length=300)
     cache_status: Literal["hit", "miss"] = "miss"
     failure_code: str | None = None
     incoming_relative: str | None = None
     created_at: AwareDatetime
 
-    @field_validator("provider_version", "item_id", "failure_code")
+    @field_validator("provider_version", "item_id", "portal_item_uuid", "portal_license_id", "failure_code")
     @classmethod
     def labels_are_plain(cls, value: str | None) -> str | None:
         if value is None:
             return None
         return _plain(value, label="envato registration")
+
+    @field_validator("content_tags")
+    @classmethod
+    def tags_are_plain(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for value in values:
+            item = _plain(" ".join(value.split()).strip(), label="envato content tag").casefold()
+            if item and item not in cleaned:
+                cleaned.append(item)
+        return cleaned
 
     @field_validator("item_page_url", "direct_download_url")
     @classmethod

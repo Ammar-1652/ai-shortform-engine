@@ -39,4 +39,4 @@ The rough-preview page can still show a short Hero card. The Hero review surface
 
 ## Still deferred
 
-Publishing, external media URLs, dynamic reframing, B-roll, music, sound effects, analytics, automatic approval, and full-source WhisperX.
+Publishing, external media URLs, automatic Envato download, music, analytics, automatic approval, and full-source WhisperX. Local B-roll and rights-cleared SFX are supported only when an operator has registered the files and evidence under the existing asset contract. Typography uses transcript-backed hook/body/punch cards and never invents editorial copy; transition washes are derived from those purpose-bearing events and do not alter the TimeMap. Advanced presentation direction is the pinned, declarative `editorial-clean-v1` profile. Its exact numeric motion, font, contrast, and safe-region choices are hashed into the style/render identity. No comparison diagram is emitted by default: a diagram requires explicit source-grounded facts with exact display text and a supported kind.

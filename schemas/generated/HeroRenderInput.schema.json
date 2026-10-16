@@ -31,6 +31,13 @@
       "title": "Candidate Id",
       "type": "string"
     },
+    "caption_font_sha256": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Caption Font Sha256",
+      "type": "array"
+    },
     "captions": {
       "items": {
         "additionalProperties": true,
@@ -106,6 +113,15 @@
     "profile_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "renderer_recipe_version": {
+      "default": "hero-draft-renderer-v1",
+      "enum": [
+        "hero-draft-renderer-v1",
+        "hero-draft-renderer-v2"
+      ],
+      "title": "Renderer Recipe Version",
       "type": "string"
     },
     "review_digest": {

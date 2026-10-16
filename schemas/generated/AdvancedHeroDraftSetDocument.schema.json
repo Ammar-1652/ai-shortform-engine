@@ -56,9 +56,33 @@
           "title": "Detected Video Codec",
           "type": "string"
         },
+        "direction_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Direction Id",
+          "type": "string"
+        },
+        "direction_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Direction Sha256",
+          "type": "string"
+        },
         "duration_error_us": {
           "title": "Duration Error Us",
           "type": "integer"
+        },
+        "editorial_arc_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Editorial Arc Id",
+          "type": "string"
+        },
+        "editorial_arc_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Editorial Arc Sha256",
+          "type": "string"
         },
         "height": {
           "const": 1920,
@@ -86,6 +110,15 @@
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Hero Review Id",
+          "type": "string"
+        },
+        "hero_review_status": {
+          "default": "approved",
+          "enum": [
+            "approved",
+            "pending"
+          ],
+          "title": "Hero Review Status",
           "type": "string"
         },
         "output_duration_us": {
@@ -137,6 +170,13 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "style_id": {
+          "default": "legacy-v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
           "type": "string"
         },
         "width": {
@@ -221,14 +261,20 @@
           "type": "string"
         },
         "caption_algorithm_version": {
-          "const": "advanced-caption-v1",
-          "default": "advanced-caption-v1",
+          "default": "advanced-caption-clean-v1",
+          "enum": [
+            "advanced-caption-v1",
+            "advanced-caption-clean-v1"
+          ],
           "title": "Caption Algorithm Version",
           "type": "string"
         },
         "diagram_version": {
-          "const": "advanced-diagram-v1",
-          "default": "advanced-diagram-v1",
+          "default": "advanced-diagram-grounded-v1",
+          "enum": [
+            "advanced-diagram-v1",
+            "advanced-diagram-grounded-v1"
+          ],
           "title": "Diagram Version",
           "type": "string"
         },
@@ -267,6 +313,13 @@
           ],
           "default": null
         },
+        "manual_windows": {
+          "items": {
+            "$ref": "#/$defs/ReframingWindow"
+          },
+          "title": "Manual Windows",
+          "type": "array"
+        },
         "max_broll_events": {
           "default": 4,
           "maximum": 8,
@@ -293,9 +346,18 @@
           "title": "Min Gain Db",
           "type": "integer"
         },
+        "motion_graphics_version": {
+          "const": "advanced-motion-graphics-v1",
+          "default": "advanced-motion-graphics-v1",
+          "title": "Motion Graphics Version",
+          "type": "string"
+        },
         "motion_library_version": {
-          "const": "advanced-motion-v1",
-          "default": "advanced-motion-v1",
+          "default": "advanced-motion-clean-v1",
+          "enum": [
+            "advanced-motion-v1",
+            "advanced-motion-clean-v1"
+          ],
           "title": "Motion Library Version",
           "type": "string"
         },
@@ -326,8 +388,14 @@
           "$ref": "#/$defs/ReframingStrategy"
         },
         "renderer_recipe_version": {
-          "const": "advanced-hero-renderer-v1",
-          "default": "advanced-hero-renderer-v1",
+          "default": "advanced-hero-renderer-directed-v3",
+          "enum": [
+            "advanced-hero-renderer-v1",
+            "advanced-hero-renderer-clean-v1",
+            "advanced-hero-renderer-directed-v2",
+            "advanced-hero-renderer-directed-v3",
+            "advanced-hero-renderer-directed-v4"
+          ],
           "title": "Renderer Recipe Version",
           "type": "string"
         },
@@ -337,15 +405,56 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "sfx_default_gain_db": {
+          "default": -18,
+          "maximum": 0,
+          "minimum": -24,
+          "title": "Sfx Default Gain Db",
+          "type": "number"
+        },
+        "sfx_fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade In Us",
+          "type": "integer"
+        },
+        "sfx_fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade Out Us",
+          "type": "integer"
+        },
+        "sfx_max_gain_db": {
+          "const": -18,
+          "default": -18,
+          "title": "Sfx Max Gain Db",
+          "type": "integer"
+        },
         "sfx_policy": {
           "const": "rights_cleared_local",
           "default": "rights_cleared_local",
           "title": "Sfx Policy",
           "type": "string"
         },
+        "staging_recipe_version": {
+          "default": "time-map-v2-frame-quantized",
+          "enum": [
+            "time-map-v1-audio-envelope",
+            "time-map-v2-frame-quantized"
+          ],
+          "title": "Staging Recipe Version",
+          "type": "string"
+        },
         "typography_version": {
-          "const": "advanced-typography-v1",
-          "default": "advanced-typography-v1",
+          "default": "advanced-typography-clean-v1",
+          "enum": [
+            "advanced-typography-v1",
+            "advanced-typography-clean-v1"
+          ],
           "title": "Typography Version",
           "type": "string"
         },
@@ -591,6 +700,13 @@
       "title": "Candidate Set Sha256",
       "type": "string"
     },
+    "direction_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Direction Sha256S",
+      "type": "array"
+    },
     "drafts": {
       "items": {
         "$ref": "#/$defs/AdvancedHeroDraftOutput"
@@ -608,6 +724,15 @@
     "hero_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Hero Manifest Sha256",
+      "type": "string"
+    },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
       "type": "string"
     },
     "hero_set_id": {
@@ -644,6 +769,12 @@
       "title": "Reframing Strategy",
       "type": "string"
     },
+    "renderer_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
+      "type": "string"
+    },
     "rough_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Rough Manifest Sha256",
@@ -671,6 +802,13 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Source Sha256",
       "type": "string"
+    },
+    "style_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Style Ids",
+      "type": "array"
     },
     "visual_analysis_id": {
       "description": "Stable id. UUID text is the usual value.",

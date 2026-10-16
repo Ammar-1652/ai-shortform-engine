@@ -14,10 +14,12 @@ import {
   type HeroMotionEvent,
   type HeroWord,
 } from "./types.js";
+import { PINNED_CAPTION_FONT_HASHES } from "../captions/fonts.js";
 
 const TOP_KEYS = new Set([
   "schema_version",
   "composition_id",
+  "renderer_recipe_version",
   "candidate_id",
   "hero_set_id",
   "video_path",
@@ -30,6 +32,7 @@ const TOP_KEYS = new Set([
   "height",
   "source_width",
   "source_height",
+  "caption_font_sha256",
   "video_fit",
   "background",
   "language",
@@ -87,6 +90,13 @@ export function parseHeroInput(raw: unknown): HeroDraftInput {
   const sourceHeight = record.source_height ?? 1080;
   requirePositiveInt(sourceWidth, "source_width");
   requirePositiveInt(sourceHeight, "source_height");
+  const recipe = record.renderer_recipe_version ?? "hero-draft-renderer-v1";
+  if (recipe !== "hero-draft-renderer-v1" && recipe !== "hero-draft-renderer-v2") {
+    throw new Error("unsupported Hero renderer recipe");
+  }
+  if (recipe === "hero-draft-renderer-v2" && JSON.stringify(record.caption_font_sha256) !== JSON.stringify(PINNED_CAPTION_FONT_HASHES)) {
+    throw new Error("Hero renderer v2 requires pinned caption font hashes");
+  }
   if (record.fps_numerator !== 30 || record.fps_denominator !== 1) {
     throw new Error("hero render input fps must be 30/1");
   }
@@ -125,6 +135,8 @@ export function parseHeroInput(raw: unknown): HeroDraftInput {
   return {
     ...(record.schema_version === undefined ? {} : { schema_version: "1.0.0" }),
     composition_id: "HeroDraft",
+    renderer_recipe_version: recipe,
+    ...(recipe === "hero-draft-renderer-v2" ? { caption_font_sha256: PINNED_CAPTION_FONT_HASHES } : {}),
     candidate_id: String(record.candidate_id),
     hero_set_id: String(record.hero_set_id),
     video_path: String(record.video_path),

@@ -43,10 +43,11 @@ from clipforge.hero.integrity import hero_problems
 from clipforge.hero.plan import build_hero_plan
 from clipforge.hero.probe import probe_hero
 from clipforge.hero.selection import approved_candidates, review_digest
-from clipforge.media.clock import us_to_seconds_str
+from clipforge.media.clock import seconds_text_to_us, us_to_seconds_str
 from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
+from clipforge.media.probe import read_ffprobe_json
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.media.workspace import (
@@ -95,7 +96,15 @@ from clipforge.storage.repository import ArtifactRow
 from clipforge.timeline.framerate import FrameRate
 from clipforge.transcription.io import dump_json, publish_json
 
-_PROFILE = HeroProfile()
+_PROFILE = HeroProfile(
+    renderer_recipe_version="hero-draft-renderer-v2",
+    caption_style_version="hero-caption-style-v2",
+    caption_font_sha256=[
+        "b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f",
+        "faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb",
+        "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
+    ],
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -550,9 +559,6 @@ def _render_one(
     if renderer.requires_browser:
         from clipforge.preview.trim import stage_candidate_span
 
-        audio_path = staging / f"{candidate.candidate_id}.flac"
-        if not audio_path.is_file():
-            _trim_asr(inputs.asr_path, audio_path, segment.source_start_us, segment.source_end_us, root)
         staged = stage_candidate_span(
             inputs.proxy_path,
             inputs.asr_path,
@@ -567,7 +573,11 @@ def _render_one(
             log_path=run_dir / "logs" / f"{candidate.candidate_id}.trim.log",
         )
         video_name = staged.video_path.name
-        audio_name = audio_path.name
+        # The staged pair is one canonical trim transaction. Do not render a
+        # picture from ``stage_candidate_span`` beside a separately trimmed
+        # audio file: a second ffmpeg recipe can start on a different sample
+        # and reintroduce the reported AV drift at the first cut.
+        audio_name = staged.audio_path.name
         trim_frame = 0
     rendered = _render_input(
         candidate,
@@ -689,6 +699,7 @@ def _render_input(
     events = [_motion_payload(event, frame_count) for event in plan.edit_plan.motion_events]
     return HeroRenderInput(
         candidate_id=candidate.candidate_id,
+        renderer_recipe_version=profile.renderer_recipe_version,
         hero_set_id=hero_set_id,
         video_path=str(run_dir / "staging" / video_name),
         audio_path=str(run_dir / "staging" / audio_name),
@@ -696,6 +707,7 @@ def _render_input(
         duration_in_frames=frame_count,
         source_width=source_width,
         source_height=source_height,
+        caption_font_sha256=profile.caption_font_sha256,
         alignment_sha256=alignment_sha256,
         edit_plan_sha256=edit_plan_sha256,
         time_map_sha256=digest_time_map(candidate.time_map),
@@ -839,8 +851,8 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
             str(source),
             "-ss",
             us_to_seconds_str(start_us),
-            "-to",
-            us_to_seconds_str(end_us),
+            "-t",
+            us_to_seconds_str(end_us - start_us),
             "-c:a",
             "flac",
             str(destination),
@@ -848,6 +860,23 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
         log_path=None,
         check=True,
     )
+    probe = read_ffprobe_json(destination, ProcessRunner(), None)
+    streams = probe.get("streams")
+    audio = (
+        next(
+            (item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"),
+            None,
+        )
+        if isinstance(streams, list)
+        else None
+    )
+    duration = seconds_text_to_us(audio.get("duration")) if isinstance(audio, dict) else None
+    expected = end_us - start_us
+    if duration is None or abs(duration - expected) > 100_000:
+        raise MediaError(
+            f"staged alignment speech duration {duration} us differs from {expected} us; "
+            "refusing a separately clocked Hero render"
+        )
 
 
 def _require_fresh_alignment(
@@ -1032,6 +1061,7 @@ def _document(
         rough_manifest_sha256=rough_manifest_sha256,
         profile=profile,
         profile_fingerprint=profile.fingerprint(),
+        renderer_recipe_version=profile.renderer_recipe_version,
         alignment_model=aligner.model_name,
         whisperx_version=aligner.whisperx_version,
         alignment_config_sha256=config,
@@ -1075,6 +1105,7 @@ def _cache_record(
         rough_manifest_sha256=document.rough_manifest_sha256,
         hero_input_sha256=document.hero_input_sha256,
         profile_fingerprint=document.profile_fingerprint,
+        renderer_recipe_version=document.renderer_recipe_version,
         alignment_model=document.alignment_model,
         whisperx_version=document.whisperx_version,
         alignment_config_sha256=document.alignment_config_sha256,

@@ -40,6 +40,14 @@ describe("multilingual caption plates", () => {
     expect(layout.lines.some((line) => line.startsWith("。"))).toBe(false);
   });
 
+  it("uses the wider readable default and accepts style safe margins", () => {
+    const layout = layoutCaption("Today, his company is currently valued at", "en-US", 22);
+    expect(layout.lines).toEqual(["Today, his company is", "currently valued at"]);
+    const styled = layoutCaption("Safe", "en-US", 22, { left: 80, right: 80, top: 140, bottom: 320 });
+    expect(styled.safe).toEqual({ left: 80, right: 1000, top: 140, bottom: 1600 });
+    expect(plateInsideSafeArea(styled)).toBe(true);
+  });
+
   it("wraps Latin currency and numbers on word boundaries", () => {
     const text = "Café costs $12.50 today.";
     const lines = wrapWords(text, 12);

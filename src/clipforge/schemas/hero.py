@@ -35,8 +35,11 @@ class HeroProfile(Versioned):
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     caption_algorithm_version: Literal["hero-caption-v1"] = "hero-caption-v1"
-    caption_style_version: Literal["hero-caption-style-v1"] = "hero-caption-style-v1"
-    renderer_recipe_version: Literal["hero-draft-renderer-v1"] = "hero-draft-renderer-v1"
+    caption_style_version: Literal["hero-caption-style-v1", "hero-caption-style-v2"] = "hero-caption-style-v1"
+    caption_font_sha256: list[str] = Field(default_factory=list)
+    renderer_recipe_version: Literal["hero-draft-renderer-v1", "hero-draft-renderer-v2"] = (
+        "hero-draft-renderer-v1"
+    )
     motion_library_version: Literal["motion-library-v1"] = "motion-library-v1"
     video_codec: Literal["h264"] = "h264"
     pixel_format: Literal["yuv420p"] = "yuv420p"
@@ -45,7 +48,10 @@ class HeroProfile(Versioned):
     h264_crf: int = Field(default=23, ge=0, le=51)
 
     def fingerprint(self) -> str:
-        return hero_fingerprint(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        if not self.caption_font_sha256:
+            payload.pop("caption_font_sha256", None)
+        return hero_fingerprint(payload)
 
 
 class AlignedWord(Versioned):
@@ -146,6 +152,9 @@ class HeroRenderInput(Versioned):
     """Facts for one Hero composition. Python already checked approval and alignment."""
 
     composition_id: Literal["HeroDraft"] = "HeroDraft"
+    renderer_recipe_version: Literal["hero-draft-renderer-v1", "hero-draft-renderer-v2"] = (
+        "hero-draft-renderer-v1"
+    )
     candidate_id: EntityId
     hero_set_id: EntityId
     video_path: str = Field(min_length=1, max_length=4096)
@@ -158,6 +167,7 @@ class HeroRenderInput(Versioned):
     height: Literal[1920] = 1920
     source_width: int = Field(default=1920, ge=1)
     source_height: int = Field(default=1080, ge=1)
+    caption_font_sha256: list[str] = Field(default_factory=list)
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     language: str = "en-US"
@@ -242,7 +252,9 @@ class HeroDraftSetDocument(Versioned):
     profile: HeroProfile
     profile_fingerprint: str = Field(pattern=_SHA)
     motion_library_version: Literal["motion-library-v1"] = "motion-library-v1"
-    renderer_recipe_version: Literal["hero-draft-renderer-v1"] = "hero-draft-renderer-v1"
+    renderer_recipe_version: Literal["hero-draft-renderer-v1", "hero-draft-renderer-v2"] = (
+        "hero-draft-renderer-v1"
+    )
     caption_algorithm_version: Literal["hero-caption-v1"] = "hero-caption-v1"
     alignment_model: str = Field(min_length=1, max_length=80)
     whisperx_version: str = Field(min_length=1, max_length=40)
@@ -259,6 +271,8 @@ class HeroDraftSetDocument(Versioned):
             raise ValueError("provenance input digest must be the Hero input digest")
         if self.profile.fingerprint() != self.profile_fingerprint:
             raise ValueError("Hero profile fingerprint does not match the stored profile")
+        if self.renderer_recipe_version != self.profile.renderer_recipe_version:
+            raise ValueError("Hero renderer recipe must match its stored profile")
         ids = [item.candidate_id for item in self.drafts]
         if len(set(ids)) != len(ids):
             raise ValueError("Hero candidate ids must be unique")
@@ -290,7 +304,9 @@ class HeroCacheRecord(Versioned):
     hero_input_sha256: str = Field(pattern=_SHA)
     profile_fingerprint: str = Field(pattern=_SHA)
     motion_library_version: Literal["motion-library-v1"] = "motion-library-v1"
-    renderer_recipe_version: Literal["hero-draft-renderer-v1"] = "hero-draft-renderer-v1"
+    renderer_recipe_version: Literal["hero-draft-renderer-v1", "hero-draft-renderer-v2"] = (
+        "hero-draft-renderer-v1"
+    )
     caption_algorithm_version: Literal["hero-caption-v1"] = "hero-caption-v1"
     alignment_model: str = Field(min_length=1, max_length=80)
     whisperx_version: str = Field(min_length=1, max_length=40)

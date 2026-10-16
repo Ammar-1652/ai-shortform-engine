@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "end_frame_exclusive": {
+      "minimum": 1,
+      "title": "End Frame Exclusive",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "start_frame": {
+      "minimum": 0,
+      "title": "Start Frame",
+      "type": "integer"
+    },
+    "unit_id": {
+      "pattern": "^(video-[0-9]{6}|audio)$",
+      "title": "Unit Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unit_id",
+    "start_frame",
+    "end_frame_exclusive",
+    "sha256",
+    "size_bytes"
+  ],
+  "title": "RenderUnitReceipt",
+  "type": "object"
+}

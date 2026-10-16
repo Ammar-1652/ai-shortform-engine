@@ -16,6 +16,22 @@
           "title": "Event Id",
           "type": "string"
         },
+        "fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade In Us",
+          "type": "integer"
+        },
+        "fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade Out Us",
+          "type": "integer"
+        },
         "gain_db": {
           "maximum": 6,
           "minimum": -24,
@@ -24,6 +40,23 @@
         },
         "interval": {
           "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
         },
         "role": {
           "const": "sfx",
@@ -36,6 +69,23 @@
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "sfx_source_in_us": {
+          "default": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Source In Us",
+          "type": "integer"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -73,11 +123,26 @@
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
+        },
         "schema_version": {
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -87,6 +152,64 @@
         "broll_source_in_us"
       ],
       "title": "BrollEvent",
+      "type": "object"
+    },
+    "CaptionWordTiming": {
+      "additionalProperties": false,
+      "description": "One forced word inside a grouped Advanced Hero caption.",
+      "properties": {
+        "output_end_frame_exclusive": {
+          "minimum": 1,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "word_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Word Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word_id",
+        "text",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive"
+      ],
+      "title": "CaptionWordTiming",
       "type": "object"
     },
     "DiagramEvent": {
@@ -170,6 +293,20 @@
           "title": "Kind",
           "type": "string"
         },
+        "left_display": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left Display"
+        },
         "left_label": {
           "maxLength": 40,
           "minLength": 1,
@@ -181,6 +318,20 @@
           "minimum": 0,
           "title": "Left Value",
           "type": "integer"
+        },
+        "right_display": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right Display"
         },
         "right_label": {
           "maxLength": 40,
@@ -290,6 +441,94 @@
       "title": "EmphasisEvent",
       "type": "object"
     },
+    "MotionGraphicEvent": {
+      "additionalProperties": false,
+      "description": "One source-grounded native Remotion illustration.\n\nThe template is an allowlisted renderer component, never operator-supplied\nJSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan\nso a visual cannot become a free-floating unsupported claim.",
+      "properties": {
+        "display_text": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Display Text",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "height": {
+          "maximum": 560,
+          "minimum": 180,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "template": {
+          "enum": [
+            "credit_card",
+            "travel_postcard",
+            "business_identity",
+            "business_spotlight"
+          ],
+          "title": "Template",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 840,
+          "minimum": 220,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 812,
+          "minimum": 48,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1240,
+          "minimum": 120,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "template",
+        "interval",
+        "purpose",
+        "source_evidence_ids",
+        "display_text",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "MotionGraphicEvent",
+      "type": "object"
+    },
     "MotionPurpose": {
       "enum": [
         "number",
@@ -304,6 +543,143 @@
       ],
       "title": "MotionPurpose",
       "type": "string"
+    },
+    "MotionStyleSpec": {
+      "additionalProperties": false,
+      "description": "Serializable numeric style choices consumed by Python and Remotion.",
+      "properties": {
+        "accent": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Accent",
+          "type": "string"
+        },
+        "caption_mode": {
+          "enum": [
+            "phrase_active_word",
+            "phrase_whole_run"
+          ],
+          "title": "Caption Mode",
+          "type": "string"
+        },
+        "contrast": {
+          "enum": [
+            "legacy",
+            "outline_shadow_backplate",
+            "soft_backplate",
+            "minimal_outline"
+          ],
+          "title": "Contrast",
+          "type": "string"
+        },
+        "easing": {
+          "enum": [
+            "linear",
+            "ease_out_cubic",
+            "ease_in_out_cubic"
+          ],
+          "title": "Easing",
+          "type": "string"
+        },
+        "enter_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Enter Frames",
+          "type": "integer"
+        },
+        "exit_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Exit Frames",
+          "type": "integer"
+        },
+        "font_identity": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Font Identity",
+          "type": "string"
+        },
+        "font_sha256": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Font Sha256",
+          "type": "array"
+        },
+        "max_scale_permille": {
+          "maximum": 1100,
+          "minimum": 1000,
+          "title": "Max Scale Permille",
+          "type": "integer"
+        },
+        "max_simultaneous_emphasis": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Simultaneous Emphasis",
+          "type": "integer"
+        },
+        "max_travel_px": {
+          "maximum": 80,
+          "minimum": 0,
+          "title": "Max Travel Px",
+          "type": "integer"
+        },
+        "safe_bottom": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Safe Bottom",
+          "type": "integer"
+        },
+        "safe_left": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Left",
+          "type": "integer"
+        },
+        "safe_right": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Right",
+          "type": "integer"
+        },
+        "safe_top": {
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Safe Top",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "style_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "style_id",
+        "easing",
+        "enter_frames",
+        "exit_frames",
+        "max_travel_px",
+        "max_scale_permille",
+        "caption_mode",
+        "contrast",
+        "font_identity",
+        "accent",
+        "safe_left",
+        "safe_right",
+        "safe_top",
+        "safe_bottom",
+        "max_simultaneous_emphasis"
+      ],
+      "title": "MotionStyleSpec",
+      "type": "object"
     },
     "OutputInterval": {
       "additionalProperties": false,
@@ -446,6 +822,97 @@
       "title": "ReframingWindow",
       "type": "object"
     },
+    "SourceNativeText": {
+      "additionalProperties": false,
+      "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "region_id",
+        "interval",
+        "text",
+        "visual_scene_ids",
+        "note"
+      ],
+      "title": "SourceNativeText",
+      "type": "object"
+    },
+    "TransitionEvent": {
+      "additionalProperties": false,
+      "description": "A short, deterministic bridge at a reviewed TimeMap cut.",
+      "properties": {
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "const": "visual_reveal",
+          "default": "visual_reveal",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "style": {
+          "const": "clean_cut_v1",
+          "default": "clean_cut_v1",
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval"
+      ],
+      "title": "TransitionEvent",
+      "type": "object"
+    },
     "TypographyEvent": {
       "additionalProperties": false,
       "description": "On-screen text copied from alignment or a validated payload. It is not HTML.",
@@ -491,6 +958,13 @@
           "minLength": 1,
           "title": "Text",
           "type": "string"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/CaptionWordTiming"
+          },
+          "title": "Words",
+          "type": "array"
         },
         "x": {
           "maximum": 1032,
@@ -611,10 +1085,34 @@
       "title": "Diagrams",
       "type": "array"
     },
+    "direction_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
     "duration_in_frames": {
       "minimum": 1,
       "title": "Duration In Frames",
       "type": "integer"
+    },
+    "editorial_arc_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Editorial Arc Id",
+      "type": "string"
+    },
+    "editorial_arc_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Sha256",
+      "type": "string"
     },
     "emphasis": {
       "items": {
@@ -646,10 +1144,37 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
     "language": {
       "default": "en-US",
       "title": "Language",
       "type": "string"
+    },
+    "motion_graphics": {
+      "items": {
+        "$ref": "#/$defs/MotionGraphicEvent"
+      },
+      "title": "Motion Graphics",
+      "type": "array"
+    },
+    "motion_style": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MotionStyleSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "narration_gain_db": {
       "default": 0,
@@ -680,6 +1205,25 @@
       "title": "Reframing Strategy",
       "type": "string"
     },
+    "renderer_recipe_version": {
+      "default": "advanced-hero-renderer-v1",
+      "enum": [
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4"
+      ],
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "safe_region_id": {
+      "default": "portrait-safe-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Safe Region Id",
+      "type": "string"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
@@ -700,6 +1244,13 @@
       "title": "Source Gain Db",
       "type": "number"
     },
+    "source_native_text": {
+      "items": {
+        "$ref": "#/$defs/SourceNativeText"
+      },
+      "title": "Source Native Text",
+      "type": "array"
+    },
     "source_sha256": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",
@@ -710,6 +1261,19 @@
       "const": "asr.flac",
       "default": "asr.flac",
       "title": "Speech Name",
+      "type": "string"
+    },
+    "style_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Style Fingerprint",
+      "type": "string"
+    },
+    "style_id": {
+      "default": "legacy-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Style Id",
       "type": "string"
     },
     "time_map_sha256": {
@@ -723,6 +1287,13 @@
       "pattern": "^$|^[0-9a-f]{64}$",
       "title": "Trajectory Sha256",
       "type": "string"
+    },
+    "transitions": {
+      "items": {
+        "$ref": "#/$defs/TransitionEvent"
+      },
+      "title": "Transitions",
+      "type": "array"
     },
     "typography": {
       "items": {

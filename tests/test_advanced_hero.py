@@ -6,21 +6,27 @@ import json
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
-from clipforge.errors import MediaError
+from clipforge.cli.hero_advanced_cmd import _portrait_crop_size
+from clipforge.errors import ClipforgeError, MediaError
 from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
+from clipforge.hero.advanced_build import _broll, _directed_typography, _sfx, _typography
 from clipforge.hero.advanced_service import (
+    _require_production_direction,
+    default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
     select_advanced_backend,
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
+from clipforge.hero.motion_style import EDITORIAL_CLEAN_V1, LEGACY_V1
 from clipforge.hero.show import load_current_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
@@ -29,6 +35,7 @@ from clipforge.preview.service import default_profile
 from clipforge.review.hero_board import decision_context_for
 from clipforge.review.service import parse_decision_body, record_hero_decision, review_board
 from clipforge.schemas.advanced import (
+    AdvancedHeroDraftSetDocument,
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
@@ -39,9 +46,12 @@ from clipforge.schemas.advanced import (
     ReframingWindow,
     TypographyEvent,
 )
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
+from clipforge.schemas.direction import DirectionAssetPlacement
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.governance import AssetLicenseRecord, RightsStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
 from clipforge.storage import insert_asset_license_record
 from tests.candidate_support import PROJECT_ID, SOURCE_ID
 from tests.test_hero_service import CountingAligner, _hero, _reviewed
@@ -49,12 +59,82 @@ from tests.test_hero_service import CountingAligner, _hero, _reviewed
 pytestmark = pytest.mark.hero
 
 
+@pytest.mark.parametrize(
+    ("width", "height", "expected"),
+    [
+        (1280, 720, (405, 720)),
+        (1920, 1080, (603, 1072)),
+        (1080, 1920, (1080, 1920)),
+    ],
+)
+def test_manual_portrait_crop_uses_largest_integer_9_by_16_window(
+    width: int, height: int, expected: tuple[int, int]
+) -> None:
+    crop_width, crop_height = _portrait_crop_size(width, height)
+    assert (crop_width, crop_height) == expected
+    assert crop_width <= width
+    assert crop_height <= height
+    assert crop_width * 16 == crop_height * 9
+
+
+def test_manual_portrait_crop_rejects_empty_frame() -> None:
+    with pytest.raises(ClipforgeError, match="too small"):
+        _portrait_crop_size(0, 720)
+
+
+def test_manual_crop_trajectory_is_typed_and_fingerprinted() -> None:
+    strategy = ReframingStrategy(strategy_id="manual_window")
+    windows = [
+        ReframingWindow(
+            window_id="window-a",
+            strategy_id=strategy,
+            output_start_us=0,
+            output_end_us=1_000_000,
+            source_x=100,
+            source_y=0,
+            source_width=405,
+            source_height=720,
+            frame_width=1280,
+            frame_height=720,
+        ),
+        ReframingWindow(
+            window_id="window-b",
+            strategy_id=strategy,
+            output_start_us=1_000_000,
+            output_end_us=2_000_000,
+            source_x=300,
+            source_y=0,
+            source_width=405,
+            source_height=720,
+            frame_width=1280,
+            frame_height=720,
+        ),
+    ]
+    base = default_advanced_profile()
+    trajectory = AdvancedHeroProfile.model_validate(
+        {
+            **base.model_dump(mode="json"),
+            "reframing": strategy.model_dump(mode="json"),
+            "manual_windows": [item.model_dump(mode="json") for item in windows],
+        }
+    )
+    assert trajectory.fingerprint() != base.fingerprint()
+    assert len(trajectory.manual_windows) == 2
+    with pytest.raises(ValidationError, match="choose the legacy singular crop"):
+        AdvancedHeroProfile.model_validate(
+            {
+                **trajectory.model_dump(mode="json"),
+                "manual_window": windows[0].model_dump(mode="json"),
+            }
+        )
+
+
 @pytest.fixture(autouse=True)
 def _reserve(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
 
 
-def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
+def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
     _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
     board = review_board(fixture.database, SOURCE_ID, fixture.work)
@@ -79,7 +159,13 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
         sfx_asset_ids=["sfx-1"],
     )
     assert plan.reframing_strategy == "contain"
-    assert any("$" in item.text or item.text.strip() for item in plan.typography)
+    assert plan.time_map is not None
+    assert plan.time_map_sha256 == digest_time_map(plan.time_map)
+    # Clean production does not fabricate cards when no reviewed direction
+    # exists. The explicit legacy recipe is the only compatibility path for
+    # the old heuristic hook/punch behavior.
+    assert plan.typography == []
+    assert plan.captions and all(item.words for item in plan.captions)
     backend = FakeAdvancedRenderBackend()
     result = render_advanced_drafts(
         database=fixture.database,
@@ -99,6 +185,15 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     )
     assert again.cache_hit is True
     assert backend.calls == 1
+    monkeypatch.setattr("clipforge.hero.advanced_service.renderer_dependency_sha256", lambda: "a" * 64)
+    changed_renderer = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=backend,
+    )
+    assert changed_renderer.cache_hit is False
+    assert backend.calls == 2
     assert fixture.workspace.hero_sidecar().read_bytes() == hero_manifest
     before = sorted(fixture.work.rglob("render-input.json"))
     assert before
@@ -106,6 +201,279 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     render_input = json.loads(before[-1].read_text(encoding="utf-8"))
     with pytest.raises(ValidationError, match="debug_overlays"):
         AdvancedHeroRenderInput.model_validate({**render_input, "debug_overlays": True})
+
+
+def test_editorial_arc_persists_remapped_alignment_and_time_map(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    board = review_board(fixture.database, SOURCE_ID, fixture.work)
+    hero = board["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, ids[0]),
+        decision="approved",
+        reviewer_id="ada",
+        notes="arc",
+    )
+    from clipforge.hero.advanced_service import _context
+
+    context = _context(fixture.database, SOURCE_ID, ids[0], fixture.work)
+    words = context.alignment.words
+    assert len(words) >= 3
+    chosen = [words[0], words[len(words) // 2], words[-1]]
+    mapped = TimeMapDocument(
+        time_map_id="arc-map",
+        segments=[
+            TimelineSegment(
+                segment_id=f"arc-{index}",
+                source_start_us=word.source_start_us,
+                source_end_us=word.source_end_us,
+            )
+            for index, word in enumerate(chosen)
+        ],
+    )
+    arc = EditorialArcDocument(
+        arc_id="arc-test",
+        transition_style="clean_cut_v1",
+        project_id=context.project_id,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        source_sha256=context.source_sha256,
+        hero_plan_sha256=context.hero_plan_sha256,
+        alignment_sha256=context.alignment_sha256,
+        time_map=mapped,
+        time_map_sha256=digest_time_map(mapped),
+        segments=[
+            EditorialArcSegment(
+                segment_id=segment.segment_id,
+                source_start_us=segment.source_start_us,
+                source_end_us=segment.source_end_us,
+                word_ids=[word.word_id],
+                beat=beat,
+                purpose=f"{beat} evidence",
+                continuation=True,
+                claim_closure="complete",
+            )
+            for segment, word, beat in zip(mapped.segments, chosen, ("hook", "body", "punch"), strict=True)
+        ],
+    )
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        editorial_arc=arc,
+        editorial_arc_sha256="a" * 64,
+    )
+    assert plan.editorial_arc_id == "arc-test"
+    assert plan.time_map is not None
+    assert len(plan.time_map.segments) == 3
+    assert len(plan.transitions) == 2
+    mapped_runtime = mapped.to_time_map().segments
+    assert [event.interval.output_start_us for event in plan.transitions] == [
+        mapped_runtime[1].output_start_us,
+        mapped_runtime[2].output_start_us,
+    ]
+    advanced_alignment = fixture.workspace.advanced_alignment_file(ids[0])
+    assert advanced_alignment.is_file()
+    assert plan.alignment_sha256 == sha256_file(advanced_alignment)
+    assert plan.alignment_sha256 != context.alignment_sha256
+    assert plan.editorial_arc_sha256 == sha256_file(fixture.workspace.advanced_arc_file(ids[0]))
+
+
+def test_typography_builds_exact_hook_and_punch_cards() -> None:
+    words = []
+    for index, text in enumerate(("Intro", "line", "never", "knew", "his", "biological", "father,", "final.")):
+        start = index * 1_000_000
+        words.append(
+            SimpleNamespace(
+                text=text,
+                output_start_us=start,
+                output_end_us=start + 900_000,
+            )
+        )
+    events = _typography(SimpleNamespace(words=words), [], "candidate")
+    assert [item.component_id for item in events] == ["hook-card-v1", "punch-card-v1"]
+    assert events[0].text == "never knew his biological father,"
+    assert events[1].text == "biological father, final."
+
+
+def test_direction_accent_tracks_stay_below_face_space_and_above_captions() -> None:
+    words = [
+        SimpleNamespace(
+            word_id=f"word-{index}", output_start_us=index * 1_000_000, output_end_us=(index + 1) * 1_000_000
+        )
+        for index in range(3)
+    ]
+    beats = [
+        SimpleNamespace(
+            beat_id=f"beat-{kind}",
+            kind=kind,
+            display_text=f"source phrase {kind}",
+            evidence_ids=[f"evidence-{kind}"],
+        )
+        for kind in ("hook", "body", "punch")
+    ]
+    evidence = [
+        SimpleNamespace(evidence_id=f"evidence-{kind}", source_word_ids=[f"word-{index}"])
+        for index, kind in enumerate(("hook", "body", "punch"))
+    ]
+    direction = SimpleNamespace(
+        direction_id="direction",
+        selected_option_id="selected",
+        options=[SimpleNamespace(option_id="selected", beats=beats, evidence=evidence)],
+    )
+    events = _directed_typography(direction, SimpleNamespace(words=words), "candidate")
+    line_top = [event.y + (-34 if event.component_id == "punch-card-v1" else 68) for event in events]
+    assert line_top == [1280, 1280, 1280]
+    line_width = {"hook-card-v1": 620, "body-card-v1": 520, "punch-card-v1": 760}
+    assert [event.x + line_width[event.component_id] // 2 for event in events] == [540, 540, 540]
+    assert all(event.y >= 1_212 for event in events)
+
+
+def test_clean_production_requires_direction_before_remotion() -> None:
+    plan = SimpleNamespace(
+        style_id="editorial-clean-v1",
+        direction_id="",
+        direction_sha256="",
+        broll=[],
+        sfx=[],
+    )
+    with pytest.raises(MediaError, match="requires a persisted source-grounded direction"):
+        _require_production_direction(plan, RemotionAdvancedRenderBackend())  # type: ignore[arg-type]
+
+
+def test_clean_production_rejects_unbound_asset_timing() -> None:
+    plan = SimpleNamespace(
+        style_id="editorial-clean-v1",
+        direction_id="direction-1",
+        direction_sha256="a" * 64,
+        broll=[SimpleNamespace(source_evidence_ids=[], relevance_note="")],
+        sfx=[],
+    )
+    with pytest.raises(MediaError, match="B-roll requires source evidence"):
+        _require_production_direction(plan, RemotionAdvancedRenderBackend())  # type: ignore[arg-type]
+
+
+def test_reviewed_repeated_asset_placements_keep_order_and_inpoints(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Reusing one asset must not collapse later placements onto the first cue."""
+    entry = SimpleNamespace(
+        asset_id="asset-1", file_sha256="a" * 64, reference=SimpleNamespace(content_tags=["phrase"])
+    )
+    license_record = SimpleNamespace(license_record_id="license-1", status=SimpleNamespace(value="licensed"))
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.require_asset",
+        lambda *args, **kwargs: (entry, license_record, tmp_path / "asset"),
+    )
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.binding_for",
+        lambda entry, license_record, slot: SimpleNamespace(asset_id=entry.asset_id),
+    )
+    placements = [
+        DirectionAssetPlacement(
+            placement_id="placement-a",
+            asset_id="asset-1",
+            kind="graphic",
+            interval=OutputInterval(output_start_us=100_000, output_end_us=400_000),
+            source_in_us=2_000_000,
+            source_evidence_ids=["evidence-a"],
+            purpose=MotionPurpose.CONCEPT,
+            relevance_note="The first phrase is illustrated here.",
+            asset_tags=["phrase"],
+        ),
+        DirectionAssetPlacement(
+            placement_id="placement-b",
+            asset_id="asset-1",
+            kind="graphic",
+            interval=OutputInterval(output_start_us=1_100_000, output_end_us=1_500_000),
+            source_in_us=7_000_000,
+            source_evidence_ids=["evidence-b"],
+            purpose=MotionPurpose.VISUAL_REVEAL,
+            relevance_note="The later phrase gets a deliberate return.",
+            asset_tags=["phrase"],
+        ),
+    ]
+    assets: list[object] = []
+    events = _broll(
+        None,
+        None,
+        tmp_path,
+        "project-1",
+        "candidate-1",
+        2_000_000,
+        ["asset-1", "asset-1"],
+        assets,
+        placements,
+    )  # type: ignore[arg-type]
+    assert [event.interval.output_start_us for event in events] == [100_000, 1_100_000]
+    assert [event.broll_source_in_us for event in events] == [2_000_000, 7_000_000]
+    assert events[0].event_id != events[1].event_id
+    assert len(assets) == 1
+
+    sfx_placements = [item.model_copy(update={"kind": "audio"}) for item in placements]
+    audio_assets: list[object] = []
+    sfx = _sfx(
+        None,
+        None,
+        tmp_path,
+        "project-1",
+        "candidate-1",
+        2_000_000,
+        ["asset-1", "asset-1"],
+        audio_assets,
+        default_advanced_profile(),
+        sfx_placements,
+    )  # type: ignore[arg-type]
+    assert [event.sfx_source_in_us for event in sfx] == [2_000_000, 7_000_000]
+    assert [event.gain_db for event in sfx] == [-18, -18]
+    assert [(event.fade_in_us, event.fade_out_us) for event in sfx] == [
+        (20_000, 60_000),
+        (20_000, 60_000),
+    ]
+    assert len(audio_assets) == 1
+
+
+def test_clean_broll_rejects_placement_tags_that_do_not_match_catalog(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    entry = SimpleNamespace(
+        asset_id="asset-1", file_sha256="a" * 64, reference=SimpleNamespace(content_tags=["concept"])
+    )
+    license_record = SimpleNamespace(license_record_id="license-1", status=SimpleNamespace(value="licensed"))
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.require_asset",
+        lambda *args, **kwargs: (entry, license_record, tmp_path / "asset"),
+    )
+    monkeypatch.setattr(
+        "clipforge.hero.advanced_build.binding_for",
+        lambda entry, license_record, slot: SimpleNamespace(asset_id=entry.asset_id),
+    )
+    placement = DirectionAssetPlacement(
+        placement_id="placement-a",
+        asset_id="asset-1",
+        kind="graphic",
+        interval=OutputInterval(output_start_us=100_000, output_end_us=400_000),
+        source_evidence_ids=["evidence-a"],
+        purpose=MotionPurpose.CONCEPT,
+        relevance_note="An unrelated insert.",
+        asset_tags=["unrelated"],
+    )
+    with pytest.raises(MediaError, match="placement tags do not match"):
+        _broll(
+            None,
+            None,
+            tmp_path,
+            "project-1",
+            "candidate-1",
+            2_000_000,
+            ["asset-1"],
+            [],
+            [placement],
+        )  # type: ignore[arg-type]
 
 
 def test_advanced_render_can_bind_narration_without_changing_the_plain_path(tmp_path: Path) -> None:
@@ -228,7 +596,27 @@ def test_remote_url_and_music_are_rejected() -> None:
         )
 
 
-def test_overlap_typography_and_unsafe_diagram_box() -> None:
+def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
+    assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
+    assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
+    assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v4"
+    prior_geometry_recipe = default_advanced_profile().model_copy(
+        update={"renderer_recipe_version": "advanced-hero-renderer-directed-v3"}
+    )
+    assert prior_geometry_recipe.fingerprint() != default_advanced_profile().fingerprint()
+    legacy = default_advanced_profile().model_copy(
+        update={
+            "caption_algorithm_version": "advanced-caption-v1",
+            "typography_version": "advanced-typography-v1",
+            "diagram_version": "advanced-diagram-v1",
+            "renderer_recipe_version": "advanced-hero-renderer-v1",
+            "motion_library_version": "advanced-motion-v1",
+        }
+    )
+    assert legacy.fingerprint() != default_advanced_profile().fingerprint()
+
+
+def test_overlap_typography_and_unsupported_diagram_box() -> None:
     interval = OutputInterval(output_start_us=0, output_end_us=100)
     text = TypographyEvent(
         event_id="t1",
@@ -243,7 +631,7 @@ def test_overlap_typography_and_unsafe_diagram_box() -> None:
     other = text.model_copy(update={"event_id": "t2"})
     with pytest.raises(ValidationError, match="overlapping"):
         AdvancedHeroPlanDocument.model_validate(_minimum_plan(typography=[text, other]))
-    with pytest.raises(ValidationError, match="safe area"):
+    with pytest.raises(ValidationError, match="unsupported production diagram kind"):
         DiagramEvent(
             event_id="d",
             interval=interval,
@@ -303,6 +691,151 @@ def test_renderer_failure_does_not_publish_a_set(tmp_path: Path) -> None:
             backend=Broken(),
         )
     assert not fixture.workspace.advanced_sidecar().exists()
+
+
+def test_failed_run_writes_checkpoint_and_can_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    monkeypatch.setattr("clipforge.hero.advanced_service._stage_candidate_base", lambda *args, **kwargs: None)
+
+    class Broken(FakeAdvancedRenderBackend):
+        def render_batch(self, batch_path: Path, *, log_path: Path) -> None:
+            self.calls += 1
+            raise MediaError("simulated browser crash")
+
+    with pytest.raises(MediaError):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=Broken(),
+        )
+    runs = sorted(fixture.workspace.advanced_root().joinpath("runs").iterdir())
+    assert len(runs) == 1
+    progress = json.loads((runs[0] / "progress.json").read_text(encoding="utf-8"))
+    assert progress["state"] == "failed"
+    resumed = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        resume_advanced_set_id=runs[0].name,
+    )
+    assert resumed.status == "rendered"
+    final_progress = json.loads((runs[0] / "progress.json").read_text(encoding="utf-8"))
+    assert final_progress["state"] == "complete"
+    assert final_progress["completed_candidate_ids"] == [candidate_id]
+    # Explicit resume must bypass the normal current-set cache lookup: a
+    # completed run can still have a missing final file after an interrupted
+    # copy or operator cleanup, and its verified worker receipts are the
+    # recovery source.
+    output = runs[0] / "candidates" / candidate_id / "advanced.mp4"
+    output.unlink()
+    repaired = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        resume_advanced_set_id=runs[0].name,
+    )
+    assert repaired.status == "rendered"
+    assert output.is_file()
+
+
+def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        allow_unapproved=True,
+    )
+    assert plan.hero_review_status == "pending"
+    default_render = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    assert default_render.status == "noop"
+    assert not fixture.workspace.advanced_plan_file(ids[0]).exists()
+    assert not fixture.workspace.advanced_sidecar().exists()
+    rendered = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        draft_only=True,
+    )
+    assert rendered.status == "rendered"
+    manifest = fixture.workspace.advanced_review_run_dir(rendered.advanced_set_id or "") / "manifest.json"
+    document = AdvancedHeroDraftSetDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
+    assert document.hero_review_status == "pending"
+    assert fixture.workspace.advanced_review_sidecar().is_file()
+    assert fixture.workspace.advanced_review_plan_file(ids[0]).is_file()
+
+
+def test_pending_review_render_preserves_approved_advanced_namespace(tmp_path: Path) -> None:
+    fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
+    _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
+    board = review_board(fixture.database, SOURCE_ID, fixture.work)
+    hero = board["hero"]
+    assert isinstance(hero, dict)
+    record_hero_decision(
+        database=fixture.database,
+        work_root=fixture.work,
+        context=decision_context_for(hero, ids[0]),
+        decision="approved",
+        reviewer_id="ada",
+        notes="approved baseline",
+    )
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+    )
+    render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+    )
+    approved_sidecar = fixture.workspace.advanced_sidecar().read_bytes()
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=ids[0],
+        work_root=fixture.work,
+        allow_unapproved=True,
+    )
+    pending = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        draft_only=True,
+    )
+    assert pending.status == "rendered"
+    assert fixture.workspace.advanced_sidecar().read_bytes() == approved_sidecar
+    assert fixture.workspace.advanced_review_sidecar().is_file()
+    with fixture.database.connect() as connection:
+        kinds = [
+            str(row["kind"])
+            for row in connection.execute(
+                "SELECT kind FROM artifacts WHERE project_id = ? AND source_asset_id = ? ORDER BY created_at",
+                (PROJECT_ID, SOURCE_ID),
+            ).fetchall()
+        ]
+    assert "advanced_hero_draft_set_json" in kinds
+    assert "advanced_hero_review_draft_set_json" in kinds
 
 
 def test_read_only_commands_leave_the_set_in_place(tmp_path: Path) -> None:
@@ -468,8 +1001,8 @@ def test_changed_sfx_hash_and_review_payload_are_safe(tmp_path: Path) -> None:
     assert draft["broll"][0]["rights_status"] == "owned"
     assert draft["sfx"][0]["role"] == "sfx"
     assert "gain_db" in draft["sfx"][0]
-    assert draft["typography"]
-    assert draft["diagrams"][0]["kind"] == "number_comparison"
+    assert draft["typography"] == []
+    assert draft["diagrams"] == []
     assert draft["emphasis"]
     fixture.workspace.advanced_asset_file("sfx-1").write_bytes(b"changed-sfx")
     with pytest.raises(MediaError, match="hash"):
@@ -526,11 +1059,10 @@ def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> N
     plan_path = fixture.workspace.advanced_plan_file(candidate_id)
     stored = json.loads(plan_path.read_text(encoding="utf-8"))
     hostile_name = "<img src=x onerror=alert(1)>"
-    hostile_label = "<script>alert(1)</script>"
     for asset in stored["assets"]:
         if asset["asset_id"] == "broll-1":
             asset["display_name"] = hostile_name
-    stored["diagrams"][0]["payload"]["left_label"] = hostile_label
+    stored["diagrams"] = []
     plan_path.write_text(json.dumps(stored), encoding="utf-8")
     from clipforge.hero.advanced_service import advanced_review_board, advanced_review_card
 
@@ -538,9 +1070,8 @@ def test_html_text_and_remote_evidence_do_not_become_markup(tmp_path: Path) -> N
     draft = advanced_review_card(fixture.database, SOURCE_ID, candidate_id, fixture.work)
     broll = next(item for item in draft["broll"] if item["asset_id"] == "broll-1")
     assert broll["display_name"] == hostile_name
-    assert draft["diagrams"][0]["left_label"] == hostile_label
     encoded = json.dumps(board)
-    assert json.loads(encoded)["drafts"][0]["diagrams"][0]["left_label"] == hostile_label
+    assert json.loads(encoded)["drafts"][0]["diagrams"] == []
     assert "/home/" not in encoded
     assert "/tmp/" not in encoded
     page = (Path(__file__).parents[1] / "src/clipforge/review/static/advanced-review.js").read_text(
@@ -879,6 +1410,24 @@ def test_profile_disallows_music() -> None:
     assert profile.fingerprint() == again.fingerprint()
 
 
+def test_profile_fingerprint_binds_time_map_staging_recipe() -> None:
+    current = default_advanced_profile()
+    legacy = current.model_copy(update={"staging_recipe_version": "time-map-v1-audio-envelope"})
+    assert current.staging_recipe_version == "time-map-v2-frame-quantized"
+    assert current.fingerprint() != legacy.fingerprint()
+
+
+def test_directed_v2_profile_remains_verifiable_without_native_graphics_field() -> None:
+    v2 = default_advanced_profile().model_copy(
+        update={"renderer_recipe_version": "advanced-hero-renderer-directed-v2"}
+    )
+    old_payload = v2.model_dump(mode="json")
+    old_payload.pop("motion_graphics_version")
+    loaded_old = AdvancedHeroProfile.model_validate(old_payload)
+    assert loaded_old.fingerprint() == v2.fingerprint()
+    assert default_advanced_profile().fingerprint() != v2.fingerprint()
+
+
 def _advanced_jobs(fixture) -> list[object]:
     from clipforge.storage import list_jobs
 
@@ -1013,6 +1562,7 @@ def _register_asset(
             "kind": kind,
             "license_record_id": license_id,
             "provenance": provenance.model_dump(mode="json"),
+            "content_tags": ["concept"] if kind == "graphic" else [],
             "relative_path": relative,
             "file_sha256": digest,
         }

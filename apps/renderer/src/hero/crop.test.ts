@@ -40,6 +40,21 @@ describe("face-follow crop", () => {
     }
   });
 
+  it("interpolates reviewed manual crop keyframes deterministically", () => {
+    const first: CropWindow = {
+      ...frame(0, 40),
+      output_end_us: 1_000_000,
+    };
+    const second: CropWindow = {
+      ...frame(30, 200),
+      output_start_us: 1_000_000,
+      output_end_us: 2_000_000,
+    };
+    expect(windowAt(0, [first, second]).source_x).toBe(40);
+    expect(windowAt(15, [first, second]).source_x).toBe(120);
+    expect(windowAt(30, [first, second]).source_x).toBe(200);
+  });
+
   it("counts partial frames the same way as the Python time map", () => {
     expect(outputFrameCount(1_000_000)).toBe(30);
     expect(outputFrameCount(1_000_001)).toBe(31);

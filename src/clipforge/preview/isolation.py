@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -60,12 +61,14 @@ def run_remotion_script(script: Path, batch_path: Path, *, log_path: Path) -> No
         env["TMPDIR"] = str(isolation)
         env["TMP"] = str(isolation)
         env["TEMP"] = str(isolation)
+        deadline_s = _remotion_process_deadline_s(batch_path)
         with browser_render_lock():
             ProcessRunner().run(
                 [node, str(script), str(batch_path), str(browser), str(isolation)],
                 log_path=log_path,
                 env=env,
                 reap_group=True,
+                timeout_s=deadline_s,
                 check=True,
             )
     except BaseException as exc:
@@ -85,6 +88,34 @@ def _temp_base() -> Path:
     if base.is_symlink() or not base.is_dir():
         return Path(tempfile.gettempdir())
     return base
+
+
+def _remotion_process_deadline_s(batch_path: Path) -> float:
+    """Bound bundle + browser lifetime from the declared output-frame budget.
+
+    Remotion's media timeout does not cover a stalled Node bundle or Chrome
+    launch. The outer child must therefore have its own deterministic deadline
+    and be reaped as one process group. The cap is deliberately generous for a
+    60-second portrait draft while ensuring a tiny smoke render cannot wait
+    forever.
+    """
+    try:
+        payload = json.loads(batch_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise MediaError("renderer batch could not be read for its process deadline") from exc
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list) or not items:
+        raise MediaError("renderer batch has no items for its process deadline")
+    frames = 0
+    for item in items:
+        rendered = item.get("input") if isinstance(item, dict) else None
+        duration = rendered.get("duration_in_frames") if isinstance(rendered, dict) else None
+        if isinstance(duration, bool) or not isinstance(duration, int) or duration < 1:
+            raise MediaError("renderer batch has an invalid duration for its process deadline")
+        frames += duration
+    # 90s covers cold bundling; budget 0.2s per frame thereafter. The upper
+    # bound keeps a failed browser process from holding the shared lock forever.
+    return float(min(600, max(120, 90 + frames // 5)))
 
 
 def _browser_temp_dir() -> Path:

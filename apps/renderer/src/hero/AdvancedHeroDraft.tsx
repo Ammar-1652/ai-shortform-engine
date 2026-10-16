@@ -1,8 +1,13 @@
-import { AbsoluteFill, Audio, OffthreadVideo, Sequence, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
+import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
+import { useCaptionFonts } from "../captions/fonts.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
+import { MotionGraphicCard, type MotionGraphic } from "./MotionGraphic.js";
+import { cueWindow, frameAtOrAfter } from "./program-frames.js";
+import { containRect } from "./portrait-transform.js";
 
 type Interval = { output_start_us?: number; output_end_us?: number };
 
@@ -13,16 +18,37 @@ type TypeEvent = {
   component_id?: string;
   purpose?: string;
   language?: string;
+  x?: number;
+  y?: number;
+  font_size?: number;
+  color?: string;
+  words?: readonly {
+    word_id?: string;
+    text?: string;
+    output_start_us?: number;
+    output_end_us?: number;
+    output_start_frame?: number;
+    output_end_frame_exclusive?: number;
+  }[];
 };
 
 type DiagramEvent = {
+  event_id?: string;
   component_id?: string;
   interval?: Interval;
+  kind?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
   payload?: {
+    kind?: string;
     left_label?: string;
     right_label?: string;
     left_value?: number;
     right_value?: number;
+    left_display?: string;
+    right_display?: string;
   };
 };
 
@@ -30,28 +56,92 @@ type BrollEvent = {
   asset_id?: string;
   interval?: Interval;
   broll_source_in_us?: number;
+  source_evidence_ids?: string[];
+  relevance_note?: string;
 };
 
 type SfxEvent = {
   asset_id?: string;
   interval?: Interval;
   gain_db?: number;
+  fade_in_us?: number;
+  fade_out_us?: number;
+  sfx_source_in_us?: number;
   role?: string;
+  source_evidence_ids?: string[];
+  purpose?: string;
+  relevance_note?: string;
 };
 
 type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: number };
 
+type TransitionEvent = {
+  event_id?: string;
+  interval?: Interval;
+  style?: "clean_cut_v1";
+};
+
+type SourceNativeText = {
+  region_id?: string;
+  interval?: Interval;
+  text?: string;
+  visual_scene_ids?: string[];
+  note?: string;
+};
+
+type MotionStyle = {
+  style_id?: string;
+  easing?: string;
+  enter_frames?: number;
+  exit_frames?: number;
+  max_travel_px?: number;
+  max_scale_permille?: number;
+  caption_mode?: "phrase_active_word" | "phrase_whole_run";
+  contrast?: string;
+  font_identity?: string;
+  font_sha256?: string[];
+  safe_left?: number;
+  safe_right?: number;
+  safe_top?: number;
+  safe_bottom?: number;
+  max_simultaneous_emphasis?: number;
+  accent?: string;
+};
+
 export type AdvancedHeroInput = {
+  renderer_recipe_version?: "advanced-hero-renderer-v1" | "advanced-hero-renderer-clean-v1" | "advanced-hero-renderer-directed-v2" | "advanced-hero-renderer-directed-v3" | "advanced-hero-renderer-directed-v4";
   duration_in_frames: number;
+  style_id?:
+    | "legacy-v1"
+    | "editorial-clean-v1"
+    | "kinetic-caption-v1"
+    | "documentary-broll-v1"
+    | "data-explainer-v1"
+    | "paper-explainer-v1"
+    | "premium-minimal-v1";
+  style_fingerprint?: string;
+  direction_id?: string;
+  direction_sha256?: string;
+  profile_fingerprint?: string;
+  alignment_sha256?: string;
+  hero_plan_sha256?: string;
+  hero_review_status?: "approved" | "pending";
+  advanced_plan_sha256?: string;
+  time_map_sha256?: string;
+  source_sha256?: string;
+  motion_style?: MotionStyle;
   reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
   captions?: TypeEvent[];
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
+  motion_graphics?: MotionGraphic[];
+  source_native_text?: SourceNativeText[];
   broll?: BrollEvent[];
   sfx?: SfxEvent[];
   emphasis?: EmphasisEvent[];
+  transitions?: TransitionEvent[];
   asset_names?: Record<string, string>;
   windows?: CropWindow[];
   language?: string;
@@ -75,15 +165,75 @@ function frameAt(microseconds: number | undefined): number {
 }
 
 function active(frame: number, interval: Interval | undefined): boolean {
-  const start = frameAt(interval?.output_start_us);
-  const end = frameAt(interval?.output_end_us);
+  const start = frameAtOrAfter(interval?.output_start_us);
+  // A positive cue shorter than one output frame still owns the frame that
+  // contains its start. This preserves the half-open interval while avoiding
+  // an invisible one-word caption after integer frame conversion.
+  const end = Math.max(start + 1, frameAtOrAfter(interval?.output_end_us));
   return frame >= start && frame < end;
 }
 
+function normalizedCaptionTokens(value: string): string[] {
+  return value
+    .toLocaleLowerCase()
+    .replace(/you're/g, "you are")
+    .replace(/\u2019re/g, " you are")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function nativeCaptionDuplicate(caption: TypeEvent, native: SourceNativeText): boolean {
+  const captionStart = caption.interval?.output_start_us ?? 0;
+  const captionEnd = caption.interval?.output_end_us ?? captionStart;
+  const nativeStart = native.interval?.output_start_us ?? 0;
+  const nativeEnd = native.interval?.output_end_us ?? nativeStart;
+  if (captionEnd <= nativeStart || nativeEnd <= captionStart) return false;
+  const captionTokens = normalizedCaptionTokens(caption.text ?? "");
+  const nativeTokens = new Set(normalizedCaptionTokens(native.text ?? ""));
+  return captionTokens.length >= 4 && captionTokens.every((token) => nativeTokens.has(token));
+}
+
 function span(interval: Interval | undefined): { from: number; duration: number } {
-  const from = frameAt(interval?.output_start_us);
-  const end = frameAt(interval?.output_end_us);
-  return { from, duration: Math.max(1, end - from) };
+  return cueWindow(interval?.output_start_us, interval?.output_end_us);
+}
+
+function eased(value: number, easing: string | undefined): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  if (easing === "ease_in_out_cubic") {
+    return clamped < 0.5 ? 4 * clamped * clamped * clamped : 1 - Math.pow(-2 * clamped + 2, 3) / 2;
+  }
+  if (easing === "ease_out_cubic") {
+    return 1 - Math.pow(1 - clamped, 3);
+  }
+  return clamped;
+}
+
+function motionFor(frame: number, interval: Interval | undefined, style: MotionStyle | undefined): CSSProperties {
+  if (!style || style.style_id === "legacy-v1") {
+    return {};
+  }
+  const start = frameAtOrAfter(interval?.output_start_us);
+  const end = Math.max(start + 1, frameAtOrAfter(interval?.output_end_us));
+  const duration = end - start;
+  const enter = Math.min(Math.max(0, style.enter_frames ?? 0), Math.floor(duration / 3));
+  const exit = Math.min(Math.max(0, style.exit_frames ?? 0), Math.floor(duration / 3));
+  const enterProgress = enter === 0 ? 1 : eased((frame - start) / enter, style.easing);
+  const exitProgress = exit === 0 ? 1 : eased((end - frame) / exit, style.easing);
+  // Captions must be readable on their first/last owned frame. Motion never
+  // turns a short forced cue into an invisible fade.
+  const opacity = 0.85 + 0.15 * Math.min(1, enterProgress, exitProgress);
+  const travel = Math.max(0, style.max_travel_px ?? 0);
+  const entranceOffset = (1 - enterProgress) * travel;
+  const exitOffset = (1 - exitProgress) * -travel * 0.5;
+  const scaleMax = Math.max(1000, style.max_scale_permille ?? 1000) / 1000;
+  const scale = 1 + (scaleMax - 1) * enterProgress * (1 - exitProgress);
+  return {
+    opacity,
+    transform: `translate3d(0, ${entranceOffset + exitOffset}px, 0) scale(${scale})`,
+    transformOrigin: "center center",
+  };
 }
 
 /**
@@ -92,72 +242,159 @@ function span(interval: Interval | undefined): { from: number; duration: number 
  */
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
+  const modernLayout = input.renderer_recipe_version === "advanced-hero-renderer-directed-v4";
+  const fontsReady = useCaptionFonts(modernLayout);
   const strategy = input.reframing_strategy ?? "contain";
+  const style = input.style_id ?? "legacy-v1";
+  const productionStyles = new Set([
+    "editorial-clean-v1",
+    "kinetic-caption-v1",
+    "documentary-broll-v1",
+    "data-explainer-v1",
+    "paper-explainer-v1",
+    "premium-minimal-v1",
+  ]);
+  if (style !== "legacy-v1" && !productionStyles.has(style)) {
+    throw new Error(`unsupported motion style ${String(style)}`);
+  }
+  if (style !== "legacy-v1" && !/^[0-9a-f]{64}$/.test(input.style_fingerprint ?? "")) {
+    throw new Error(`${style} requires a style fingerprint`);
+  }
+  if (style !== "legacy-v1") {
+    for (const [key, value] of Object.entries({
+      profile_fingerprint: input.profile_fingerprint,
+      alignment_sha256: input.alignment_sha256,
+      hero_plan_sha256: input.hero_plan_sha256,
+      advanced_plan_sha256: input.advanced_plan_sha256,
+      time_map_sha256: input.time_map_sha256,
+      source_sha256: input.source_sha256,
+    })) {
+      if (!/^[0-9a-f]{64}$/.test(value ?? "")) {
+        throw new Error(`production advanced render requires ${key}`);
+      }
+    }
+    if (!input.direction_id || !/^[0-9a-f]{64}$/.test(input.direction_sha256 ?? "")) {
+      throw new Error("production advanced render requires a persisted direction binding");
+    }
+    const motionStyle = input.motion_style;
+    if (modernLayout && (
+      !motionStyle ||
+      typeof motionStyle.font_identity !== "string" ||
+      motionStyle.font_identity.trim().length === 0 ||
+      !Array.isArray(motionStyle.font_sha256) ||
+      motionStyle.font_sha256.some((digest) => !/^[0-9a-f]{64}$/.test(digest)) ||
+      ![motionStyle.safe_left, motionStyle.safe_right, motionStyle.safe_top, motionStyle.safe_bottom].every(
+        (value) => typeof value === "number" && Number.isInteger(value) && value >= 0,
+      )
+    )) {
+      throw new Error("production advanced render requires complete caption style dependencies");
+    }
+    for (const event of input.broll ?? []) {
+      if (!event.source_evidence_ids?.length || !event.relevance_note?.trim()) {
+        throw new Error("production B-roll requires source evidence and relevance");
+      }
+    }
+    for (const event of input.sfx ?? []) {
+      if (!event.source_evidence_ids?.length || !event.relevance_note?.trim() || !event.purpose) {
+        throw new Error("production SFX requires source evidence, purpose, and relevance");
+      }
+    }
+  }
+  if (input.motion_style && input.motion_style.style_id !== style) {
+    throw new Error("motion style payload does not match style_id");
+  }
   if (input.debug_overlays === true) {
     throw new Error("production advanced renders reject debug overlays");
   }
-  if (strategy !== "contain" && strategy !== "center_crop" && strategy !== "face_follow") {
+  if (
+    strategy !== "contain" &&
+    strategy !== "center_crop" &&
+    strategy !== "face_follow" &&
+    strategy !== "manual_window"
+  ) {
     throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
   const captions = input.captions ?? [];
   const typography = input.typography ?? [];
-  const visibleCaptions = captions.filter((item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0);
-  const visibleType = typography.filter((item) => {
-    if (!active(frame, item.interval) || (item.text ?? "").trim().length === 0) {
-      return false;
-    }
-    const text = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-    // A typography event copied from the transcript must not be painted over
-    // the grouped caption that already carries the same words.
-    return !visibleCaptions.some((caption) =>
-      caption.text?.replace(/\s+/g, " ").toLowerCase().includes(text),
-    );
-  });
+  const visibleType = typography.filter(
+    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
+  );
+  const visibleNativeText = (input.source_native_text ?? []).filter(
+    (item) => active(frame, item.interval) && (item.text ?? "").trim().length > 0,
+  );
+  const visibleCaptions = captions.filter(
+    (item) =>
+      active(frame, item.interval) &&
+      (item.text ?? "").trim().length > 0 &&
+      !visibleNativeText.some((native) => nativeCaptionDuplicate(item, native)),
+  );
   const rawLanguage = input.language?.trim();
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
   // deterministic without treating the sentinel as a supported locale claim.
   const language = !rawLanguage || rawLanguage === "missing" ? "en-US" : rawLanguage;
+  const motionStyle = input.motion_style;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
+  const motionGraphics = (input.motion_graphics ?? []).filter((item) => active(frame, item.interval));
+  const transitions = (input.transitions ?? []).filter((item) => active(frame, item.interval));
+  if (diagram && (diagram.payload?.kind ?? "number_comparison") !== "number_comparison") {
+    throw new Error(`unsupported production diagram kind ${String(diagram.payload?.kind)}`);
+  }
+  if (diagram) {
+    const x = diagram.x ?? 120;
+    const y = diagram.y ?? 280;
+    const width = diagram.width ?? 840;
+    const height = diagram.height ?? 360;
+    if (x < 48 || y < 48 || width < 80 || height < 80 || x + width > 1032 || y + height > 1872) {
+      throw new Error("diagram geometry is outside the production safe area");
+    }
+  }
   const emphasis = (input.emphasis ?? []).filter(
-    (item) => frame >= frameAt(item.output_start_us) && frame < frameAt(item.output_end_us),
+    (item) => frame >= frameAtOrAfter(item.output_start_us) && frame < frameAtOrAfter(item.output_end_us),
   );
+  const activeEmphasis = emphasis[0]?.text?.replace(/\s+/g, " ").trim();
   const speech = input.speech_name ?? "asr.flac";
   const picture = input.base_video_name ?? "analysis.mp4";
   const contained = { width: "100%", height: "100%", objectFit: "contain" as const };
   const sourceWindow = input.windows?.[0];
+  const legacyGeometry = input.renderer_recipe_version !== "advanced-hero-renderer-directed-v4";
+  if (!legacyGeometry && !sourceWindow) {
+    throw new Error("portrait transform requires source dimensions in a reframing window");
+  }
   const containBox = sourceWindow
-    ? {
-        position: "absolute" as const,
-        width: "100%",
-        aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`,
-        top: "50%",
-        transform: "translateY(-50%)",
-      }
-    : { position: "absolute" as const, inset: 0 };
-  const followed = strategy === "face_follow" || strategy === "center_crop" ? placedVideo(windowAt(frame, input.windows ?? [])) : null;
+    ? containRect(sourceWindow.frame_width, sourceWindow.frame_height, 1080, 1920)
+    : containRect(1080, 1920, 1080, 1920);
+  const followed =
+    strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
+      ? placedVideo(windowAt(frame, input.windows ?? []))
+      : null;
+  if (!fontsReady) return null;
   return (
-    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
+      <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       {followed === null ? (
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <OffthreadVideo
+          <Video
             src={staticFile(picture)}
             durationInFrames={input.duration_in_frames}
             muted
             style={{ ...contained, objectFit: "cover", filter: "blur(24px)", transform: "scale(1.08)", opacity: 0.72 }}
           />
-          <AbsoluteFill style={containBox}>
-            <OffthreadVideo
+          {legacyGeometry ? (
+            <AbsoluteFill style={sourceWindow ? { width: "100%", aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`, top: "50%", transform: "translateY(-50%)" } : { inset: 0 }}>
+              <Video src={staticFile(picture)} durationInFrames={input.duration_in_frames} muted style={{ width: "100%", height: "100%", objectFit: "fill" }} />
+            </AbsoluteFill>
+          ) : <div style={{ position: "absolute", ...containBox }}>
+            <Video
               src={staticFile(picture)}
               durationInFrames={input.duration_in_frames}
               muted
-              style={{ width: "100%", height: "100%", objectFit: "fill" }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
-          </AbsoluteFill>
+          </div>}
         </AbsoluteFill>
       ) : (
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <OffthreadVideo
+          <Video
             src={staticFile(picture)}
             durationInFrames={input.duration_in_frames}
             muted
@@ -186,7 +423,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         return (
           <Sequence key={`broll-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
             <AbsoluteFill>
-              <OffthreadVideo
+              <Video
                 src={staticFile(name)}
                 trimBefore={frameAt(item.broll_source_in_us)}
                 durationInFrames={window.duration}
@@ -203,64 +440,240 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           return null;
         }
         const window = span(item.interval);
+        const fadeIn = Math.max(0, Math.round((item.fade_in_us ?? 20_000) * FPS / 1_000_000));
+        const fadeOut = Math.max(0, Math.round((item.fade_out_us ?? 60_000) * FPS / 1_000_000));
+        const baseGain = linearVolume(item.gain_db ?? -18);
         return (
           <Sequence key={`sfx-${name}-${window.from}`} from={window.from} durationInFrames={window.duration}>
-            <Audio src={staticFile(name)} volume={linearVolume(item.gain_db ?? 0)} />
+            <Audio
+              src={staticFile(name)}
+              trimBefore={frameAt(item.sfx_source_in_us)}
+              volume={(localFrame) => {
+                const remaining = window.duration - localFrame;
+                const inScale = fadeIn > 0 ? Math.min(1, (localFrame + 1) / fadeIn) : 1;
+                const outScale = fadeOut > 0 ? Math.min(1, Math.max(0, remaining / fadeOut)) : 1;
+                return baseGain * Math.min(inScale, outScale);
+              }}
+            />
           </Sequence>
         );
       })}
       {diagram === undefined ? null : (
-        <AbsoluteFill style={{ left: 72, right: 72, top: 280, height: 360, display: "flex", justifyContent: "center" }}>
+        <AbsoluteFill style={{ left: diagram.x ?? 120, top: diagram.y ?? 280, width: diagram.width ?? 840, height: diagram.height ?? 360, display: "flex", justifyContent: "center" }}>
           <div
             style={{
-              width: 840,
-              height: 360,
+              width: "100%",
+              height: "100%",
               borderRadius: 28,
-              backgroundColor: "rgba(17,17,17,0.88)",
-              border: "2px solid rgba(255,255,255,0.22)",
+              background: "linear-gradient(135deg, rgba(8,14,28,0.95), rgba(21,48,59,0.9))",
+              border: "2px solid rgba(255,207,74,0.78)",
               color: "#ffffff",
-              fontFamily: "sans-serif",
+              fontFamily: "'Arial Black', 'Liberation Sans Narrow', 'DejaVu Sans', sans-serif",
               fontSize: 36,
+              fontWeight: 800,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-evenly",
               textAlign: "center",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.4)",
             }}
           >
             <div>
               <div>{diagram.payload?.left_label}</div>
-              <strong>{diagram.payload?.left_value}</strong>
+              <strong>{diagram.payload?.left_display ?? diagram.payload?.left_value}</strong>
             </div>
             <div style={{ opacity: 0.6 }}>vs</div>
             <div>
               <div>{diagram.payload?.right_label}</div>
-              <strong>{diagram.payload?.right_value}</strong>
+              <strong>{diagram.payload?.right_display ?? diagram.payload?.right_value}</strong>
             </div>
           </div>
         </AbsoluteFill>
       )}
+      {motionGraphics.map((graphic) => {
+        if (
+          graphic.template !== "credit_card" &&
+          graphic.template !== "travel_postcard" &&
+          graphic.template !== "business_identity" &&
+          graphic.template !== "business_spotlight"
+        ) {
+          throw new Error(`unsupported production motion graphic ${String(graphic.template)}`);
+        }
+        if (!graphic.source_evidence_ids?.length || !(graphic.display_text ?? "").trim()) {
+          throw new Error("production motion graphic requires source evidence and source text");
+        }
+        const x = graphic.x ?? 72;
+        const y = graphic.y ?? 760;
+        const width = graphic.width ?? 420;
+        const height = graphic.height ?? 300;
+        if (x < 48 || y < 120 || width < 220 || height < 180 || x + width > 1032 || y + height > 1480) {
+          throw new Error("motion graphic geometry is outside the production graphic region");
+        }
+        const graphicText = (graphic.display_text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+        const duplicateCaption = visibleCaptions.some((caption) => {
+          const captionText = (caption.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+          return Boolean(graphicText) && (captionText.includes(graphicText) || graphicText.includes(captionText));
+        });
+        return (
+          <MotionGraphicCard
+            key={graphic.event_id ?? `${graphic.template}-${graphic.display_text}`}
+            graphic={graphic}
+            accent={motionStyle?.accent ?? "#64d8ff"}
+            showLabel={!duplicateCaption}
+          />
+        );
+      })}
+      {transitions.map((transition) => {
+        if (transition.style !== undefined && transition.style !== "clean_cut_v1") {
+          throw new Error(`unsupported production transition ${String(transition.style)}`);
+        }
+        const start = frameAtOrAfter(transition.interval?.output_start_us);
+        const local = Math.max(0, frame - start);
+        const progress = Math.min(1, local / 4);
+        const opacity = 0.56 * (1 - eased(progress, motionStyle?.easing));
+        return (
+          <AbsoluteFill
+            key={`transition-${transition.event_id ?? start}`}
+            style={{
+              pointerEvents: "none",
+              opacity,
+              background: `linear-gradient(112deg, transparent 0%, ${motionStyle?.accent ?? "#ffcf4a"} 47%, #ffffff 50%, ${motionStyle?.accent ?? "#3ddbd6"} 53%, transparent 100%)`,
+              mixBlendMode: "screen",
+            }}
+          />
+        );
+      })}
       {visibleCaptions.map((item) => (
-        <CaptionPlate
-          key={`${item.component_id ?? "caption"}-${item.event_id ?? ""}-${item.text}`}
-          text={(item.text ?? "").trim()}
-          language={item.language || language}
-        />
+        (() => {
+          const activeWord =
+            style !== "legacy-v1" &&
+            motionStyle?.caption_mode === "phrase_active_word" &&
+            !language.startsWith("ar") &&
+            !language.startsWith("ja")
+              ? item.words?.find(
+                  (word) =>
+                    frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
+                    frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
+                )?.text
+              : undefined;
+          return (
+            <AbsoluteFill
+              key={`${item.component_id ?? "caption"}-${item.event_id ?? ""}-${item.text}`}
+              style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
+            >
+              <CaptionPlate
+                text={(item.text ?? "").trim()}
+                language={item.language || language}
+                variant="body"
+                emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
+                style={modernLayout ? motionStyle : undefined}
+                layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
+              />
+            </AbsoluteFill>
+          );
+        })()
       ))}
-      {visibleType.map((item) => (
-        <CaptionPlate
-          key={`${item.component_id ?? "type"}-${item.text}`}
-          text={item.text ?? ""}
-          language={item.language || language}
-        />
-      ))}
-      {emphasis.map((item) => (
+      {visibleType.map((item) => {
+        const text = (item.text ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+        const duplicatesCaption = visibleCaptions.some((caption) =>
+          (() => {
+            const captionText = caption.text?.replace(/\s+/g, " ").trim().toLowerCase() ?? "";
+            return captionText.includes(text) || text.includes(captionText);
+          })(),
+        );
+        const duplicatesNativeText = visibleNativeText.some((native) =>
+          nativeCaptionDuplicate(item, native),
+        );
+        const isHook = item.component_id === "hook-card-v1";
+        const isPunch = item.component_id === "punch-card-v1";
+        const left = item.x ?? 72;
+        const top = item.y ?? (isHook ? 220 : isPunch ? 1450 : 360);
+        const accent = motionStyle?.accent ?? "#ffcf4a";
+        return (
+          <AbsoluteFill
+            key={`${item.component_id ?? "type"}-${item.event_id ?? ""}-${item.text}`}
+            style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
+          >
+            {duplicatesCaption || duplicatesNativeText ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left,
+                  top: top + (isPunch ? -34 : 68),
+                  width: isPunch ? 760 : isHook ? 620 : 520,
+                  height: 14,
+                  borderRadius: 7,
+                  background: `linear-gradient(90deg, ${accent}, #3ddbd6 72%, transparent)`,
+                  boxShadow: `0 4px 18px ${accent}55`,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    right: -2,
+                    top: -5,
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    border: `3px solid ${accent}`,
+                    background: "rgba(11,18,32,0.9)",
+                  }}
+                />
+              </div>
+            ) : null}
+            {!duplicatesCaption && !duplicatesNativeText ? (
+              <CaptionPlate
+                text={item.text ?? ""}
+                language={item.language || language}
+                variant={style !== "legacy-v1" && isHook ? "hook" : style !== "legacy-v1" && isPunch ? "punch" : "typography"}
+                emphasisText={style !== "legacy-v1" ? activeEmphasis : undefined}
+                x={item.x}
+                y={item.y}
+                fontSize={item.font_size}
+                style={modernLayout ? motionStyle : undefined}
+                layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
+              />
+            ) : null}
+          </AbsoluteFill>
+        );
+      })}
+      {style !== "legacy-v1" ? <AbsoluteFill style={{ pointerEvents: "none" }}>
         <div
-          key={`emphasis-${item.text ?? ""}-${item.output_start_us ?? 0}`}
-          style={{ position: "absolute", left: 72, top: 1720, color: "#ffffff", fontFamily: "sans-serif", fontSize: 28 }}
-        >
-          {item.text ?? ""}
-        </div>
-      ))}
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(115deg, rgba(255,207,74,0.18), transparent 24%, transparent 76%, rgba(61,219,214,0.16))",
+            opacity: interpolate(frame, [0, 10, 24], [0.9, 0.22, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 12,
+            background: `linear-gradient(90deg, ${motionStyle?.accent ?? "#ffcf4a"}, #3ddbd6, ${motionStyle?.accent ?? "#ffcf4a"})`,
+            opacity: interpolate(frame, [0, 8, 18], [1, 0.7, 0.18], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 10,
+            background: `linear-gradient(90deg, #3ddbd6, ${motionStyle?.accent ?? "#ffcf4a"})`,
+            opacity: interpolate(
+              frame,
+              [Math.max(0, input.duration_in_frames - 18), Math.max(1, input.duration_in_frames - 6), input.duration_in_frames - 1],
+              [0.12, 0.6, 1],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+            ),
+          }}
+        />
+      </AbsoluteFill> : null}
     </AbsoluteFill>
   );
 }

@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stageCaptionFonts } from "./caption-fonts.mjs";
 
 const isolationDir = process.argv[4];
 if (typeof isolationDir === "string" && isolationDir.length > 0) {
@@ -52,15 +53,66 @@ for (const item of batch.items) {
     throw new Error("hero render batch item was not an object");
   }
   contained(item.outputPath, runDir);
+  if (item.renderMode !== undefined && !["video", "audio"].includes(item.renderMode)) {
+    throw new Error("unsupported render unit mode");
+  }
   const input = item.input;
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
   }
+  if (item.frameRange !== undefined && (
+    !Array.isArray(item.frameRange) || item.frameRange.length !== 2 ||
+    !item.frameRange.every(Number.isSafeInteger) || item.frameRange[0] < 0 ||
+    item.frameRange[1] < item.frameRange[0] || item.frameRange[1] >= input.duration_in_frames
+  )) throw new Error("render unit frame range is invalid");
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
+  if (input.renderer_recipe_version === "advanced-hero-renderer-directed-v4") {
+    stageCaptionFonts(stagingDir, input.motion_style?.font_sha256);
+  }
   if (input.debug_overlays === true) {
     throw new Error("production advanced render rejects debug overlays");
+  }
+  const productionStyles = new Set([
+    "editorial-clean-v1",
+    "kinetic-caption-v1",
+    "documentary-broll-v1",
+    "data-explainer-v1",
+    "paper-explainer-v1",
+    "premium-minimal-v1",
+  ]);
+  if (input.style_id !== undefined && input.style_id !== "legacy-v1" && !productionStyles.has(input.style_id)) {
+    throw new Error(`unsupported motion style ${input.style_id}`);
+  }
+  if (input.style_id !== undefined && input.style_id !== "legacy-v1") {
+    if (typeof input.style_fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(input.style_fingerprint)) {
+      throw new Error(`motion style ${input.style_id} requires a fingerprint`);
+    }
+    if (input.motion_style && input.motion_style.style_id !== input.style_id) {
+      throw new Error("motion style payload does not match style_id");
+    }
+    const sha = /^[0-9a-f]{64}$/;
+    for (const key of [
+      "profile_fingerprint",
+      "alignment_sha256",
+      "hero_plan_sha256",
+      "advanced_plan_sha256",
+      "time_map_sha256",
+      "source_sha256",
+    ]) {
+      if (typeof input[key] !== "string" || !sha.test(input[key])) {
+        throw new Error(`production advanced render requires ${key}`);
+      }
+    }
+    if (
+      typeof input.direction_id !== "string" ||
+      input.direction_id.length === 0 ||
+      typeof input.direction_sha256 !== "string" ||
+      !sha.test(input.direction_sha256)
+    ) {
+      throw new Error("production advanced render requires a persisted direction binding");
+    }
   }
   for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
     const component = typeof event?.component_id === "string" ? event.component_id.toLowerCase() : "";
@@ -68,10 +120,59 @@ for (const item of batch.items) {
       throw new Error("production advanced render rejects diagnostic-only events");
     }
   }
+  for (const diagram of input.diagrams ?? []) {
+    const kind = diagram?.payload?.kind ?? "number_comparison";
+    if (kind !== "number_comparison") {
+      throw new Error(`unsupported production diagram kind ${kind}`);
+    }
+    const x = diagram.x ?? 120;
+    const y = diagram.y ?? 280;
+    const width = diagram.width ?? 840;
+    const height = diagram.height ?? 360;
+    if (x < 48 || y < 48 || width < 80 || height < 80 || x + width > 1032 || y + height > 1872) {
+      throw new Error("diagram geometry is outside the production safe area");
+    }
+  }
+  const motionGraphicTemplates = new Set([
+    "credit_card",
+    "travel_postcard",
+    "business_identity",
+    "business_spotlight",
+  ]);
+  for (const graphic of input.motion_graphics ?? []) {
+    if (!graphic || !motionGraphicTemplates.has(graphic.template)) {
+      throw new Error(`unsupported production motion graphic ${String(graphic?.template)}`);
+    }
+    if (
+      !Array.isArray(graphic.source_evidence_ids) ||
+      graphic.source_evidence_ids.length === 0 ||
+      !graphic.source_evidence_ids.every((item) => typeof item === "string" && item.length > 0) ||
+      typeof graphic.display_text !== "string" ||
+      graphic.display_text.trim().length === 0
+    ) {
+      throw new Error("production motion graphic requires source evidence and source text");
+    }
+    const { x, y, width, height } = graphic;
+    if (
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      x < 48 ||
+      y < 120 ||
+      width < 220 ||
+      height < 180 ||
+      x + width > 1032 ||
+      y + height > 1480
+    ) {
+      throw new Error("motion graphic geometry is outside the production graphic region");
+    }
+  }
   if (
     input.reframing_strategy !== "contain" &&
     input.reframing_strategy !== "center_crop" &&
-    input.reframing_strategy !== "face_follow"
+    input.reframing_strategy !== "face_follow" &&
+    input.reframing_strategy !== "manual_window"
   ) {
     throw new Error(
       `advanced render does not support reframing strategy ${input.reframing_strategy}`,
@@ -79,6 +180,35 @@ for (const item of batch.items) {
   }
   if (input.reframing_strategy === "face_follow") {
     assertFaceFollow(input);
+  }
+  if (input.reframing_strategy === "manual_window") {
+    const windows = input.windows ?? [];
+    let cursorUs = 0;
+    if (windows.length === 0) {
+      throw new Error("manual_window requires reviewed crop windows");
+    }
+    for (const window of windows) {
+      if (
+        window.output_start_us !== cursorUs ||
+        window.output_end_us <= window.output_start_us ||
+        window.strategy_id?.strategy_id !== "manual_window" ||
+        window.frame_width !== windows[0].frame_width ||
+        window.frame_height !== windows[0].frame_height ||
+        window.source_width * 16 !== window.source_height * 9 ||
+        window.source_x < 0 ||
+        window.source_y < 0 ||
+        window.source_width < 1 ||
+        window.source_height < 1 ||
+        window.source_x + window.source_width > window.frame_width ||
+        window.source_y + window.source_height > window.frame_height
+      ) {
+        throw new Error("manual_window trajectory must be ordered, contiguous, and safe 9:16 crops");
+      }
+      cursorUs = window.output_end_us;
+    }
+    if (cursorUs !== input.output_duration_us) {
+      throw new Error("manual_window trajectory must cover the complete output duration");
+    }
   }
   for (const event of input.sfx ?? []) {
     if (event && event.role && event.role !== "sfx") {
@@ -90,6 +220,27 @@ for (const item of batch.items) {
       (event.gain_db < -24 || event.gain_db > 6)
     ) {
       throw new Error("SFX gain_db must be between -24 and 6");
+    }
+    if (input.style_id !== "legacy-v1") {
+      if (!Array.isArray(event?.source_evidence_ids) || event.source_evidence_ids.length === 0) {
+        throw new Error("production SFX requires source evidence");
+      }
+      if (typeof event?.relevance_note !== "string" || event.relevance_note.trim().length === 0) {
+        throw new Error("production SFX requires a relevance note");
+      }
+      if (typeof event?.purpose !== "string" || event.purpose.length === 0) {
+        throw new Error("production SFX requires a motion purpose");
+      }
+    }
+  }
+  for (const event of input.broll ?? []) {
+    if (input.style_id !== "legacy-v1") {
+      if (!Array.isArray(event?.source_evidence_ids) || event.source_evidence_ids.length === 0) {
+        throw new Error("production B-roll requires source evidence");
+      }
+      if (typeof event?.relevance_note !== "string" || event.relevance_note.trim().length === 0) {
+        throw new Error("production B-roll requires a relevance note");
+      }
     }
   }
   const raw = JSON.stringify(input);
@@ -207,20 +358,23 @@ for (const item of batch.items) {
   if (composition.width !== 1080 || composition.height !== 1920) {
     throw new Error(`composition size ${composition.width}x${composition.height} is not 1080x1920`);
   }
+  const audioOnly = item.renderMode === "audio";
   await renderMedia({
     composition,
     serveUrl,
-    codec: "h264",
+    codec: audioOnly ? "wav" : "h264",
     outputLocation: path.resolve(item.outputPath),
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
     concurrency: 1,
-    crf: item.h264Crf,
-    pixelFormat: "yuv420p",
-    audioCodec: "aac",
+    crf: audioOnly ? undefined : item.h264Crf,
+    pixelFormat: audioOnly ? undefined : "yuv420p",
+    audioCodec: audioOnly ? "pcm-16" : "aac",
+    sampleRate: 48000,
+    frameRange: item.frameRange,
     overwrite: true,
-    muted: false,
+    muted: item.renderMode === "video",
   });
   renderSeconds += (Date.now() - started) / 1000;
 }

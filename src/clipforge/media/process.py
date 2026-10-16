@@ -49,9 +49,12 @@ class ProcessRunner:
         check: bool = True,
         env: dict[str, str] | None = None,
         reap_group: bool = False,
+        timeout_s: float | None = None,
     ) -> ProcessResult:
         if not argv or any(not isinstance(part, str) or part == "" for part in argv):
             raise MediaError("refusing to run a command with an empty argument. The shell was not used.")
+        if timeout_s is not None and timeout_s <= 0:
+            raise MediaError("process timeout must be greater than zero")
         if is_transcode(argv):
             self.transcode_count += 1
         started = time.monotonic()
@@ -88,10 +91,15 @@ class ProcessRunner:
             stdout_thread.start()
             stderr_thread.start()
             cancelled = False
+            timed_out = False
             try:
                 while process.poll() is None:
                     if cancel_event is not None and cancel_event.is_set():
                         cancelled = True
+                        terminate_process(process)
+                        break
+                    if timeout_s is not None and time.monotonic() - started >= timeout_s:
+                        timed_out = True
                         terminate_process(process)
                         break
                     if capture.stdout_overflow:
@@ -118,6 +126,12 @@ class ProcessRunner:
             if cancelled or (cancel_event is not None and cancel_event.is_set()):
                 raise MediaCancelled(
                     f"cancelled {Path(argv[0]).name}. The child process was terminated. "
+                    f"Log: {log_path if log_path is not None else 'not requested'}."
+                )
+            if timed_out:
+                raise MediaError(
+                    f"{Path(argv[0]).name} exceeded the {timeout_s:.1f}s process deadline. "
+                    f"The child process group was terminated. "
                     f"Log: {log_path if log_path is not None else 'not requested'}."
                 )
             if capture.stdout_overflow:

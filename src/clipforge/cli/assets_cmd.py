@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Annotated, NoReturn
+from uuid import UUID
 
 import typer
 
@@ -20,20 +22,27 @@ from clipforge.assets.handoff import (
     verify_envato_asset,
 )
 from clipforge.assets.mcp_client import AssetError
+from clipforge.assets.portal_bridge import EnvatoPortalBridge, extract_media_archive
 from clipforge.assets.provider import (
     DryRunAssetDiscoveryProvider,
     EnvatoMcpDiscoveryProvider,
     FakeAssetDiscoveryProvider,
 )
 from clipforge.assets.service import acquire_local, doctor_text, search_assets, verify_asset, write_requests
+from clipforge.campaign.policy_fingerprint import campaign_blocks_outside_media
+from clipforge.cli.envato_auth_cmd import envato_auth_app
 from clipforge.errors import ClipforgeError
+from clipforge.media.workspace import mkdir_contained
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.schemas.assets import AssetSearchHit
 from clipforge.storage import Database
 
-assets_app = typer.Typer(no_args_is_help=True, help="Discover external assets. Files stay manual.")
-envato_app = typer.Typer(no_args_is_help=True, help="Query the Envato MCP catalogue.")
+assets_app = typer.Typer(no_args_is_help=True, help="Discover and register external assets.")
+envato_app = typer.Typer(
+    no_args_is_help=True, help="Query Envato and fetch explicitly selected licensed items."
+)
 assets_app.add_typer(envato_app, name="envato")
+envato_app.add_typer(envato_auth_app, name="auth")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -49,6 +58,34 @@ def _provider_names(name: str) -> tuple[str, str]:
     if name == "envato":
         return "envato_mcp", "envato_mcp"
     _fail(ClipforgeError("asset provider must be fake, dry-run, or envato"))
+
+
+_PORTAL_ITEM_TYPES = {
+    "audio": "music",
+    "video": "video",
+    "image": "photo",
+    "graphic": "graphics",
+}
+
+
+def _portal_item_type(media_kind: str) -> str:
+    try:
+        return _PORTAL_ITEM_TYPES[media_kind]
+    except KeyError as exc:
+        raise AssetError(
+            f"portal download is not supported for media kind {media_kind!r}",
+            code="unsupported_media",
+        ) from exc
+
+
+def _canonical_portal_uuid(value: str) -> str:
+    try:
+        parsed = UUID(value)
+    except ValueError as exc:
+        raise AssetError(
+            "portal item UUID is required and must be a UUID", code="portal_protocol_error"
+        ) from exc
+    return str(parsed)
 
 
 def _provider(
@@ -230,6 +267,113 @@ def envato_import(
     typer.echo(str(len(hits)))
 
 
+@envato_app.command("fetch")
+def envato_fetch(
+    request_id: Annotated[str, typer.Option("--request")],
+    project_id: Annotated[str, typer.Option("--project")],
+    portal_item_uuid: Annotated[
+        str | None,
+        typer.Option(
+            "--portal-item-uuid", help="Optional UUID assertion; the MCP item page is resolved automatically."
+        ),
+    ] = None,
+    license_name: Annotated[
+        str | None, typer.Option("--license-name", help="Project name recorded on the Envato certificate.")
+    ] = None,
+    source_asset_id: Annotated[str | None, typer.Option("--source")] = None,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Authenticate through the saved portal login, fetch, license, and register one MCP result.
+
+    The MCP supplies catalogue metadata; portal page resolution binds that
+    metadata to the item downloaded from the operator's subscription bridge.
+    Signed URLs and cookies never appear in command output or artifacts.
+    """
+    root = resolve_work_dir(work_dir).resolve()
+    try:
+        requests = [item for item in list_envato_requests(root) if item.request_id == request_id]
+        if len(requests) != 1:
+            raise AssetError("envato request was not found", code="stale_request")
+        request = requests[0]
+        if request.provider != "envato_mcp":
+            raise AssetError("portal fetch requires an Envato MCP request", code="invalid_document")
+        if campaign_blocks_outside_media(request.campaign_id):
+            raise AssetError("outside media is prohibited by campaign policy", code="policy_blocked")
+        requested_uuid = _canonical_portal_uuid(portal_item_uuid) if portal_item_uuid else None
+        if request.media_kind not in _PORTAL_ITEM_TYPES:
+            raise AssetError(
+                "request media kind has no portal item-type mapping",
+                code="unsupported_media",
+            )
+        project_name = license_name or f"clipforge-{request.request_id[:24]}"
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{1,100}", project_name):
+            raise AssetError("license name contains unsupported characters", code="invalid_document")
+        session_root = root.joinpath("campaigns", "envato-requests", request.request_id, "portal")
+        incoming_root = root.joinpath("incoming", "envato-portal", request.request_id)
+        mkdir_contained(root, session_root)
+        mkdir_contained(root, incoming_root)
+        archive = session_root / "download.zip"
+        media_staging = incoming_root / "media"
+        license_staging = incoming_root / "license.pdf"
+        bridge = EnvatoPortalBridge()
+        bridge.authenticate()
+        if request.item_page_url is None:
+            raise AssetError("MCP request has no item page URL to bind", code="missing_item_identity")
+        identity = bridge.resolve_item(request.item_page_url)
+        expected_type = _portal_item_type(request.media_kind)
+        if requested_uuid is not None and identity.item_uuid != requested_uuid:
+            raise AssetError("portal UUID does not match the MCP item page", code="portal_item_mismatch")
+        if identity.item_type != expected_type:
+            raise AssetError("portal item type does not match the MCP request", code="portal_item_mismatch")
+        if request.item_id is not None and request.item_id not in {identity.item_id, identity.item_uuid}:
+            raise AssetError("portal item identity does not match MCP metadata", code="portal_item_mismatch")
+        item_uuid = identity.item_uuid
+        downloaded = bridge.fetch_item(
+            item_uuid=item_uuid,
+            item_type=_portal_item_type(request.media_kind),
+            project_name=project_name,
+            media_path=archive,
+            license_path=license_staging,
+        )
+        media_path, media_bytes, media_hash = extract_media_archive(
+            downloaded.media_path,
+            media_staging,
+            media_kind=request.media_kind,
+            max_bytes=request.max_bytes,
+        )
+        relative_media = media_path.resolve().relative_to(root).as_posix()
+        relative_license = license_staging.resolve().relative_to(root).as_posix()
+        registration = register_envato_asset(
+            root,
+            Database(resolve_db_path(db)),
+            request.request_id,
+            relative_file=relative_media,
+            project_id=project_id,
+            license_relative=relative_license,
+            rights="allowed",
+            source_asset_id=source_asset_id,
+            expect_size=media_bytes,
+            content_tags=content_tags,
+            download_status="portal_download_verified",
+            portal_item_uuid=item_uuid,
+            portal_license_id=downloaded.license.license_id,
+        )
+    except (AssetError, ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"request_id: {request.request_id}")
+    typer.echo(f"portal_item_uuid: {item_uuid}")
+    typer.echo(f"media: {relative_media}")
+    typer.echo(f"media_bytes: {media_bytes}")
+    typer.echo(f"media_sha256: {media_hash}")
+    typer.echo(f"license: {relative_license}")
+    typer.echo(f"license_sha256: {downloaded.license_sha256}")
+    typer.echo(f"asset_id: {registration.asset_id}")
+    typer.echo(f"acquisition_status: {registration.acquisition_status}")
+    typer.echo(f"download_status: {registration.download_status}")
+
+
 @assets_app.command("acquire")
 def assets_acquire(
     request_path: Annotated[Path, typer.Argument()],
@@ -290,6 +434,7 @@ def envato_register(
     force: Annotated[bool, typer.Option("--force")] = False,
     asset_id: Annotated[str | None, typer.Option("--asset-id")] = None,
     cancel: Annotated[bool, typer.Option("--cancel")] = False,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
@@ -308,6 +453,7 @@ def envato_register(
             force=force,
             asset_id=asset_id,
             cancel=cancel,
+            content_tags=content_tags,
         )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
