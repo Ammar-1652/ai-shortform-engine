@@ -156,7 +156,7 @@ class PortalCredentialStore:
 
 
 def require_portal_credentials() -> PortalCredentials:
-    """Single retrieval boundary for a future audited portal downloader."""
+    """Single retrieval boundary for the audited portal downloader."""
     credentials = PortalCredentialStore().load()
     if credentials is None:
         raise AssetError(
@@ -177,7 +177,7 @@ def credential_doctor_text() -> str:
             f"desktop_session: {'available' if session else 'missing'}",
             "credential_lookup: not_run",
             "portal_login: not_verified",
-            "portal_download: not_implemented",
+            "portal_download: available_after_auth",
             "mcp_authentication: delegated",
         )
     )
@@ -192,7 +192,7 @@ def credential_status_text() -> str:
             f"credentials: {'configured' if configured else 'missing'}",
             "portal_login: not_verified",
             "portal_session: not_created",
-            "portal_download: not_implemented",
+            "portal_download: available_after_auth",
             "mcp_authentication: delegated",
         )
     )

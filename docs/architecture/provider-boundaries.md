@@ -47,9 +47,10 @@ CLI option, and never writes credentials, cookies, or browser profiles to the
 repository, work root, SQLite, logs, or artifacts. `auth doctor` checks local
 prerequisites without unlocking the keyring; `auth status` reports presence
 only; `auth forget --yes` removes the local entry without claiming remote
-logout. This does not claim portal login or implement downloads. The future
-bridge must remain a separate, reviewed adapter and still pass every existing
-hash, probe, license, policy, provenance, and path-confinement gate.
+logout. This does not claim portal login. The reviewed bridge downloader is
+invoked explicitly by `assets envato fetch`; it uses a short-lived in-memory
+session and passes media, certificate, policy, rights, hash, probe, and
+provenance through the normal registration gates. See [ADR 0085](../adr/0085-envato-portal-download-bridge.md).
 
 ## Advanced Hero
 
@@ -71,7 +72,7 @@ GET /api/envato-assets/<asset_id>
 GET /api/campaigns/<campaign_id>/assets
 ```
 
-Pages show provenance, import status, the snapshot fingerprint, policy, deferred filters, item-page URLs, a direct download URL only when the provider returned one, manual download status, hash, size, probe facts, license evidence, rights, whether the asset can be used, the failure reason, and relative paths. Strings use `textContent`.
+Pages show provenance, import status, the snapshot fingerprint, policy, deferred filters, item-page URLs, resolved portal item/license ids when a bridge fetch was used, a direct download URL only when the provider returned one, handoff/download status, hash, size, probe facts, license evidence, rights, whether the asset can be used, the failure reason, and relative paths. Strings use `textContent`.
 
 ## Commands
 
@@ -90,6 +91,8 @@ clipforge assets envato auth doctor
 clipforge assets envato auth setup
 clipforge assets envato auth status
 clipforge assets envato auth forget --yes
+clipforge assets envato fetch --request REQUEST_ID --project PROJECT_ID \
+  [--portal-item-uuid PORTAL_UUID]
 clipforge assets envato requests
 clipforge assets envato register
 clipforge assets envato show ASSET_ID
@@ -103,8 +106,11 @@ clipforge assets envato list
 
 - No TikTok, Instagram, YouTube, or Whop publishing.
 - No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or `discover` without `--live`. A loopback fixture is not a live Whop pass.
-- No automatic Envato download or portal login; OS-keyring setup is only a
-  credential boundary for a future reviewed bridge.
+- `assets envato fetch` is the only automatic portal download path. It resolves
+  the MCP item page to a portal UUID and type (an optional UUID assertion must
+  match), refuses blocked campaigns, stores no session material, and produces
+  no renderable asset without a returned license certificate and successful
+  local registration.
 - English WhisperX alignment is verified only when a real alignment artifact exists.
 - Arabic and Japanese alignment stay `alignment_not_claimed`.
 - KittenTTS stays English-only. en-GB narration stays `locale_not_smoked`.

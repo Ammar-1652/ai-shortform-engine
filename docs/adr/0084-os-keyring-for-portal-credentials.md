@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted for local operator setup. Portal login and downloading remain separate
-integration work.
+Accepted for local operator setup. Portal login is intentionally separate from
+catalog discovery; the reviewed downloader is recorded in ADR 0085.
 
 ## Context
 
@@ -27,18 +27,17 @@ not claim to log out remotely.
 
 `auth doctor` reports local keyring prerequisites without lookup. `auth status`
 reports only whether an entry exists; it does not claim the portal session is
-authenticated. The future bridge downloader may call the credential store in
-memory, but it must validate a documented portal/bridge protocol, keep browser
-profiles outside the repository, and pass downloaded media and license files
-through the existing Envato registration gates. A credential save is never
-treated as MCP authentication, successful portal login, download, or license
-evidence.
+authenticated. The bridge downloader calls the credential store in memory,
+validates the documented portal protocol, keeps browser profiles outside the
+repository, and passes downloaded media and license files through the existing
+Envato registration gates. A credential save is never treated as MCP
+authentication, successful portal login, download, or license evidence.
 
 ## Consequences
 
 - The operator has one-time local setup and automatic credential retrieval for
-  a future audited bridge without putting a secret in Clipforge artifacts.
+  the audited bridge without putting a secret in Clipforge artifacts.
 - Headless CI, doctor, and tests do not need a keyring or account credentials.
 - A desktop Secret Service and a logged-in user session are required.
-- The current checkout still does not scrape the portal or download Envato
-  bytes; the bridge API and its browser flow need a separate reviewed ADR.
+- Each fetch creates a short-lived in-memory session; a credential presence
+  check is never a live-session claim.

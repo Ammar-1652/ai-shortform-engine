@@ -8,7 +8,7 @@ import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -17,9 +17,10 @@ from clipforge.assets.filters import SUPPORTED_ENVATO_FIELDS, search_arguments
 from clipforge.assets.mcp_client import AssetError
 from clipforge.campaign.policy_fingerprint import campaign_blocks_outside_media, current_policy_fingerprint
 from clipforge.errors import MediaError, StorageError
+from clipforge.media.clock import seconds_text_to_us
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
-from clipforge.media.probe import probe_file
+from clipforge.media.probe import probe_file, read_ffprobe_json
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.media.workspace import SourceWorkspace, ensure_within, mkdir_contained
@@ -68,6 +69,22 @@ _STOCK_SPEC: dict[str, Any] = {
         },
         "required": ["searchTerms"],
     },
+}
+_ALLOWED_AUDIO_CODECS = {
+    "aac",
+    "flac",
+    "mp2",
+    "mp3",
+    "opus",
+    "pcm_f32be",
+    "pcm_f32le",
+    "pcm_s16be",
+    "pcm_s16le",
+    "pcm_s24be",
+    "pcm_s24le",
+    "pcm_s32be",
+    "pcm_s32le",
+    "vorbis",
 }
 
 
@@ -198,6 +215,11 @@ def register_envato_asset(
     asset_id: str | None = None,
     cancel: bool = False,
     content_tags: list[str] | None = None,
+    download_status: Literal[
+        "manual_download_required", "portal_download_verified"
+    ] = "manual_download_required",
+    portal_item_uuid: str | None = None,
+    portal_license_id: str | None = None,
     promotion_hook: Callable[[str], None] | None = None,
 ) -> EnvatoAssetRegistration:
     """Promote a file the operator already placed under incoming."""
@@ -219,10 +241,14 @@ def register_envato_asset(
         raise AssetError("file exceeds the campaign byte limit", code="file_size_limit")
     requested_tags = None if content_tags is None else list(_normalize_content_tags(content_tags))
     if not force and asset_id is None and not cancel:
-        cached = _cache_hit(root, request, project_id, digest, size, requested_tags)
+        cached = _cache_hit(root, request, project_id, digest, size, requested_tags, portal_item_uuid)
         if cached is not None:
             return cached.model_copy(update={"cache_status": "hit"})
-    chosen = asset_id if asset_id is not None and not force else _asset_id(digest, force, requested_tags)
+    chosen = (
+        asset_id
+        if asset_id is not None and not force
+        else _asset_id(digest, force, requested_tags, portal_item_uuid)
+    )
     stored_tags = list(requested_tags or [])
     if cancel:
         return _write_cancelled(
@@ -252,6 +278,9 @@ def register_envato_asset(
         relative_file,
         promotion_hook,
         stored_tags,
+        download_status,
+        portal_item_uuid,
+        portal_license_id,
     )
 
 
@@ -279,6 +308,9 @@ def resume_envato_asset(
         rights="allowed",
         asset_id=asset_id,
         content_tags=current.content_tags,
+        download_status=current.download_status,
+        portal_item_uuid=current.portal_item_uuid,
+        portal_license_id=current.portal_license_id,
         promotion_hook=promotion_hook,
     )
 
@@ -440,6 +472,9 @@ def _promote(
     incoming_relative: str,
     hook: Callable[[str], None] | None,
     content_tags: list[str],
+    download_status: Literal["manual_download_required", "portal_download_verified"],
+    portal_item_uuid: str | None,
+    portal_license_id: str | None,
 ) -> EnvatoAssetRegistration:
     final = root.joinpath(*_ASSETS, asset_id, "media", incoming.name)
     manifest = _manifest_path(root, asset_id)
@@ -472,6 +507,8 @@ def _promote(
             project_id=project_id,
             item_page_url=request.item_page_url,
             item_id=request.item_id,
+            portal_item_uuid=portal_item_uuid,
+            portal_license_id=portal_license_id,
             relative_path=relative,
             byte_size=size,
             sha256=digest,
@@ -485,6 +522,7 @@ def _promote(
             media_kind=request.media_kind,
             content_tags=content_tags,
             direct_download_url=request.direct_download_url,
+            download_status=download_status,
             cache_status="miss",
             incoming_relative=incoming_relative,
             created_at=now,
@@ -609,6 +647,8 @@ def _write_failure(
 
 def _inspect(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
     _confine(root, path.resolve().relative_to(root).as_posix(), require_incoming=False)
+    if request.media_kind == "audio":
+        return _inspect_audio_asset(root, path, request)
     try:
         _raw, normalized = probe_file(
             path, ProcessRunner(), video_override=None, audio_override=None, log_path=None
@@ -627,13 +667,11 @@ def _inspect(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
     audio = normalized.audio_streams[0] if normalized.audio_streams else None
     if request.media_kind in {"video", "graphic", "image"} and video is None:
         raise AssetError("video stream is missing", code="unsupported_media")
-    if request.media_kind == "audio" and audio is None:
-        raise AssetError("audio stream is missing", code="unsupported_media")
     video_codec = None if video is None else video.codec_name
     audio_codec = None if audio is None else audio.codec_name
     if request.media_kind in {"video", "graphic", "image"} and video_codec != "h264":
         raise AssetError("video codec is not allowed", code="unsupported_codec")
-    if audio is not None and audio_codec != "aac":
+    if audio is not None and audio_codec not in _ALLOWED_AUDIO_CODECS:
         raise AssetError("audio codec is not allowed", code="unsupported_codec")
     if request.expected_codec not in {None, video_codec, audio_codec}:
         raise AssetError("codec does not match the request", code="unsupported_codec")
@@ -662,6 +700,56 @@ def _inspect(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
             frame_rate=frame_rate,
             sample_rate=None if audio is None else audio.sample_rate,
             format_name=format_name,
+        )
+    except ValidationError as exc:
+        raise AssetError("probe facts were rejected", code="corrupt_media") from exc
+
+
+def _inspect_audio_asset(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
+    """Probe a standalone SFX/music file without forcing it through video ingest."""
+    try:
+        payload = read_ffprobe_json(path, ProcessRunner(), log_path=None)
+    except MediaError as exc:
+        raise AssetError("media could not be probed", code="corrupt_media") from exc
+    streams = payload.get("streams")
+    audio_streams = (
+        [item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"]
+        if isinstance(streams, list)
+        else []
+    )
+    if not audio_streams:
+        raise AssetError("audio stream is missing", code="unsupported_media")
+    audio = audio_streams[0]
+    codec = audio.get("codec_name")
+    if not isinstance(codec, str) or codec not in _ALLOWED_AUDIO_CODECS:
+        raise AssetError("audio codec is not allowed", code="unsupported_codec")
+    duration = seconds_text_to_us(audio.get("duration"))
+    if duration is None or duration <= 0:
+        fmt = payload.get("format")
+        duration = seconds_text_to_us(fmt.get("duration")) if isinstance(fmt, dict) else None
+    if duration is None or duration <= 0:
+        raise AssetError("audio duration is missing", code="corrupt_media")
+    try:
+        sample_rate = int(audio["sample_rate"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AssetError("audio sample rate is missing", code="corrupt_media") from exc
+    if sample_rate <= 0:
+        raise AssetError("audio sample rate is invalid", code="corrupt_media")
+    if request.expected_codec not in {None, codec}:
+        raise AssetError("codec does not match the request", code="unsupported_codec")
+    _expect_duration(request.requested_duration, duration)
+    fmt = payload.get("format")
+    format_name = fmt.get("format_name") if isinstance(fmt, dict) else None
+    try:
+        return ProbeFacts(
+            duration_us=duration,
+            width=None,
+            height=None,
+            video_codec=None,
+            audio_codec=codec,
+            frame_rate=None,
+            sample_rate=sample_rate,
+            format_name=format_name.split(",")[0] if isinstance(format_name, str) else None,
         )
     except ValidationError as exc:
         raise AssetError("probe facts were rejected", code="corrupt_media") from exc
@@ -752,6 +840,7 @@ def _cache_hit(
     digest: str,
     size: int,
     content_tags: list[str] | None,
+    portal_item_uuid: str | None,
 ) -> EnvatoAssetRegistration | None:
     for item in list_envato_assets(root, request.campaign_id):
         if item.acquisition_status != "verified" or item.project_id != project_id:
@@ -759,6 +848,8 @@ def _cache_hit(
         if item.sha256 != digest or item.byte_size != size:
             continue
         if item.item_id != request.item_id or item.item_page_url != request.item_page_url:
+            continue
+        if item.portal_item_uuid != portal_item_uuid:
             continue
         if item.policy_fingerprint != request.policy_fingerprint or item.relative_path is None:
             continue
@@ -771,13 +862,21 @@ def _cache_hit(
     return None
 
 
-def _asset_id(digest: str, force: bool, content_tags: list[str] | None) -> str:
+def _asset_id(
+    digest: str,
+    force: bool,
+    content_tags: list[str] | None,
+    portal_item_uuid: str | None,
+) -> str:
     if force:
         return f"env-{digest[:12]}-{uuid4().hex[:8]}"
+    portal_suffix = ""
+    if portal_item_uuid is not None:
+        portal_suffix = "-portal-" + hashlib.sha256(portal_item_uuid.encode("utf-8")).hexdigest()[:12]
     if content_tags:
         tag_digest = hashlib.sha256("\x1f".join(content_tags).encode("utf-8")).hexdigest()[:8]
-        return f"env-{digest[:20]}-tag-{tag_digest}"
-    return f"env-{digest[:20]}"
+        return f"env-{digest[:20]}{portal_suffix}-tag-{tag_digest}"
+    return f"env-{digest[:20]}{portal_suffix}"
 
 
 def _normalize_content_tags(tags: list[str]) -> tuple[str, ...]:
@@ -1200,6 +1299,8 @@ def _asset_public(
         "project_id": registration.project_id,
         "item_page_url": registration.item_page_url,
         "item_id": registration.item_id,
+        "portal_item_uuid": registration.portal_item_uuid,
+        "portal_license_id": registration.portal_license_id,
         "direct_download_url": registration.direct_download_url,
         "download_status": registration.download_status,
         "relative_path": registration.relative_path,

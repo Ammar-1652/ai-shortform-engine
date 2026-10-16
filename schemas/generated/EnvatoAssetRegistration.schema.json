@@ -112,7 +112,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "One manually supplied file after confinement, hash, probe, and rights checks.",
+  "description": "One verified file after confinement, hash, probe, rights, and license checks.",
   "properties": {
     "acquisition_status": {
       "enum": [
@@ -176,8 +176,11 @@
       "title": "Direct Download Url"
     },
     "download_status": {
-      "const": "manual_download_required",
       "default": "manual_download_required",
+      "enum": [
+        "manual_download_required",
+        "portal_download_verified"
+      ],
       "title": "Download Status",
       "type": "string"
     },
@@ -258,6 +261,32 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Policy Fingerprint",
       "type": "string"
+    },
+    "portal_item_uuid": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Portal Item Uuid"
+    },
+    "portal_license_id": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Portal License Id"
     },
     "probe": {
       "anyOf": [
