@@ -34,6 +34,8 @@ data/renders/
 data/proxies/
 data/audio/
 data/envato/
+# Operator-downloaded Envato media and license files stay outside Git.
+/envato/
 data/models/
 data/transcripts/
 models/

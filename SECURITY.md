@@ -43,7 +43,7 @@ Mining reads the local transcript and visual-analysis JSON. It does not upload e
 
 ## Downloaded assets
 
-Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. Envato integration is not implemented. Do not drop downloaded zips into the tree.
+Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evidence URI before an edit may use them. `unknown` is not permission. A version-1 database that stored a license id without a rights row is migrated to an `unknown` record written by `clipforge-migration-2`. That row stays blocked. The migration does not mark it owned, licensed, or campaign-provided. The Envato portal download bridge is not implemented; catalog discovery and manual registration remain available. Do not drop downloaded zips into the tree.
 
 ## Dependencies
 
@@ -56,6 +56,13 @@ Campaign files, stock, fonts, and music need an `AssetLicenseRecord` and an evid
 ## Credentials at runtime
 
 Round 1 needs no network credential to run tests, doctor, or the database. Future Envato or publishing credentials, if an ADR adds them, must come from the environment or a user-level secret store, never from a tracked file.
+
+The optional Envato portal setup uses the user-level OS Secret Service, not an
+ignored repository file. The setup command is interactive, does not print or
+accept passwords as arguments, and its status output cannot claim a portal
+login. Portal cookies and profiles remain outside Clipforge; media and license
+files still require the existing manual registration gates until a bridge
+protocol is independently reviewed.
 
 ## Reporting
 

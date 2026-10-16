@@ -39,6 +39,18 @@ Antoine's outside-media rule blocks registration for that campaign. Other campai
 
 A cache hit returns the same asset id and does not copy again. Changed bytes are a new asset. `--force` keeps the previous directory. A failed promotion restores the previous media and manifest. `cancel` leaves an unverified registration. `resume` continues it. `verify` reads and does not write.
 
+### Optional portal credential setup
+
+`clipforge assets envato auth setup` stores a portal login only in the user
+account's OS Secret Service. It prompts on a TTY, never accepts a password as a
+CLI option, and never writes credentials, cookies, or browser profiles to the
+repository, work root, SQLite, logs, or artifacts. `auth doctor` checks local
+prerequisites without unlocking the keyring; `auth status` reports presence
+only; `auth forget --yes` removes the local entry without claiming remote
+logout. This does not claim portal login or implement downloads. The future
+bridge must remain a separate, reviewed adapter and still pass every existing
+hash, probe, license, policy, provenance, and path-confinement gate.
+
 ## Advanced Hero
 
 `require_asset` checks an Envato catalog entry against the registration before planning continues. The asset must still match its hash, stay inside the work root, keep allowed rights and license evidence, have a succeeded producer job, and match the campaign, project, and current policy fingerprint. A failure raises before a render job is inserted. Graphic and audio assets that are not Envato are unchanged.
@@ -74,6 +86,10 @@ clipforge campaign operator whop show CAMPAIGN_ID
 clipforge campaign operator whop verify IMPORT_ID
 clipforge campaign operator whop select CAMPAIGN_ID --import IMPORT_ID --project PROJECT_ID --source SOURCE_ID
 clipforge assets envato request
+clipforge assets envato auth doctor
+clipforge assets envato auth setup
+clipforge assets envato auth status
+clipforge assets envato auth forget --yes
 clipforge assets envato requests
 clipforge assets envato register
 clipforge assets envato show ASSET_ID
@@ -87,7 +103,8 @@ clipforge assets envato list
 
 - No TikTok, Instagram, YouTube, or Whop publishing.
 - No server-side Whop scrape, no stored browser cookies, and no live Whop session from doctor or `discover` without `--live`. A loopback fixture is not a live Whop pass.
-- No automatic Envato download.
+- No automatic Envato download or portal login; OS-keyring setup is only a
+  credential boundary for a future reviewed bridge.
 - English WhisperX alignment is verified only when a real alignment artifact exists.
 - Arabic and Japanese alignment stay `alignment_not_claimed`.
 - KittenTTS stays English-only. en-GB narration stays `locale_not_smoked`.

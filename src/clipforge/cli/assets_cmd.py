@@ -26,6 +26,7 @@ from clipforge.assets.provider import (
     FakeAssetDiscoveryProvider,
 )
 from clipforge.assets.service import acquire_local, doctor_text, search_assets, verify_asset, write_requests
+from clipforge.cli.envato_auth_cmd import envato_auth_app
 from clipforge.errors import ClipforgeError
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.schemas.assets import AssetSearchHit
@@ -34,6 +35,7 @@ from clipforge.storage import Database
 assets_app = typer.Typer(no_args_is_help=True, help="Discover external assets. Files stay manual.")
 envato_app = typer.Typer(no_args_is_help=True, help="Query the Envato MCP catalogue.")
 assets_app.add_typer(envato_app, name="envato")
+envato_app.add_typer(envato_auth_app, name="auth")
 
 
 def _fail(exc: BaseException) -> NoReturn:
