@@ -108,6 +108,12 @@ Use the audited upstream references recorded in
 `docs/third_party/motion-skills.lock.json` for composition vocabulary only. The
 packs are not downloaded at production time and are not a pipeline dependency.
 
+For the Tarteel campaign, read
+`references/tarteel-style-library.md` after the campaign policy and before
+choosing a direction. It contains a bounded style library derived from the
+operator-supplied reference clips and official platform guidance. The library
+is a routing aid, not evidence that any format guarantees reach or retention.
+
 ## Operator invocation
 
 Invoke this skill before planning when presentation quality needs review. Save
