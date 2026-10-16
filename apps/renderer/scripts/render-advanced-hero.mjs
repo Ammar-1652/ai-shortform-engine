@@ -53,10 +53,18 @@ for (const item of batch.items) {
     throw new Error("hero render batch item was not an object");
   }
   contained(item.outputPath, runDir);
+  if (item.renderMode !== undefined && !["video", "audio"].includes(item.renderMode)) {
+    throw new Error("unsupported render unit mode");
+  }
   const input = item.input;
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
   }
+  if (item.frameRange !== undefined && (
+    !Array.isArray(item.frameRange) || item.frameRange.length !== 2 ||
+    !item.frameRange.every(Number.isSafeInteger) || item.frameRange[0] < 0 ||
+    item.frameRange[1] < item.frameRange[0] || item.frameRange[1] >= input.duration_in_frames
+  )) throw new Error("render unit frame range is invalid");
   if (input.composition_id !== "AdvancedHeroDraft") {
     throw new Error("advanced render refuses a composition other than AdvancedHeroDraft");
   }
@@ -350,20 +358,23 @@ for (const item of batch.items) {
   if (composition.width !== 1080 || composition.height !== 1920) {
     throw new Error(`composition size ${composition.width}x${composition.height} is not 1080x1920`);
   }
+  const audioOnly = item.renderMode === "audio";
   await renderMedia({
     composition,
     serveUrl,
-    codec: "h264",
+    codec: audioOnly ? "wav" : "h264",
     outputLocation: path.resolve(item.outputPath),
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
     concurrency: 1,
-    crf: item.h264Crf,
-    pixelFormat: "yuv420p",
-    audioCodec: "aac",
+    crf: audioOnly ? undefined : item.h264Crf,
+    pixelFormat: audioOnly ? undefined : "yuv420p",
+    audioCodec: audioOnly ? "pcm-16" : "aac",
+    sampleRate: 48000,
+    frameRange: item.frameRange,
     overwrite: true,
-    muted: false,
+    muted: item.renderMode === "video",
   });
   renderSeconds += (Date.now() - started) / 1000;
 }

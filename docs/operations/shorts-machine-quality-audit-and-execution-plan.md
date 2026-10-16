@@ -1115,3 +1115,26 @@ cannot be promoted without a human decision on the exact encoded artifact.
 coverage, semantic arc, graphic relevance, audio event quality, decoded proof,
 rights/provenance, cache invalidation, and human review all pass for the exact
 artifact being delivered.
+
+### Current implementation note — resumability, automatic framing, and viewer QA
+
+The current repair branch implements the first machine-level blockers from this
+plan. Advanced browser renders now persist `progress.json` plus per-candidate
+`checkpoints/checkpoint.json` receipts. Video is rendered in global 120-frame
+chunks, audio is rendered once for the full composition, and the final MP4 is
+assembled only after every receipt is valid. A crash reports the
+`advanced_set_id`; `clipforge hero advanced render --resume RUN_ID` validates
+all source/plan/style/font/renderer hashes and fills only missing or corrupt
+units. The run never promotes a partial manifest.
+
+`--reframing auto` now consults reviewed source-native text and frame-level
+face analysis before selecting an explicit face-follow or contain strategy.
+An incomplete trajectory is not silently cropped. The applied strategy and
+trajectory remain hash-bound to the plan and downstream evidence.
+
+Technical QA now includes `viewer-quality-contract` in addition to media,
+audio, provenance, rights, and alignment checks. It rejects missing clean
+caption coverage, duplicate forced-word ids, repeated source ranges,
+unsupported quantitative graphics, and reviewed native-text/crop collisions.
+This is a deterministic contract gate, not a claim that decoded frames or
+human editorial review are unnecessary; those remain the final visual proof.

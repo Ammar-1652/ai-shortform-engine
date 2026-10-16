@@ -129,13 +129,32 @@ def save_direction_brief(
 
 def _select(document: DirectionDocument, style: str) -> DirectionOption:
     if style == "auto":
-        return sorted(document.options, key=lambda option: (-option.selection_score, option.option_id))[0]
+        return sorted(document.options, key=lambda option: (-_editorial_score(option), option.option_id))[0]
     if style not in production_style_ids():
         raise MediaError(f"unsupported direction style {style}")
     matches = [option for option in document.options if option.style_id == style]
     if not matches:
         raise MediaError(f"direction brief has no option for style {style}")
     return sorted(matches, key=lambda option: (-option.selection_score, option.option_id))[0]
+
+
+def _editorial_score(option: DirectionOption) -> float:
+    """Prefer source-complete, restrained options over decoration counts.
+
+    The submitted score remains an editorial input, but deterministic penalties
+    prevent an attractive preset from overpowering incomplete evidence or a
+    pile of optional layers. These are heuristics, never retention guarantees.
+    """
+    evidence_by_id = {item.evidence_id: item for item in option.evidence}
+    punctuation = (".", "?", "!", "\u3002", "\uff1f", "\uff01")
+    complete = sum(
+        any(evidence_by_id[item].source_text.rstrip().endswith(punctuation) for item in beat.evidence_ids)
+        for beat in option.beats
+    )
+    layer_count = len(option.motion_graphics) + len(option.asset_placements)
+    clutter_penalty = max(0, layer_count - 2) * 0.04
+    native_penalty = 0.0 if option.source_native_text_status != "unavailable" else 0.15
+    return option.selection_score + complete * 0.02 - clutter_penalty - native_penalty
 
 
 def validate_source_evidence(

@@ -30,6 +30,7 @@ Owns bytes, clocks, and pictures.
 - AV synchronization: every staged picture/speech pair uses the same ordered TimeMap, starts at output zero, and is rejected when either stream is missing or drifts beyond the project duration tolerance. Approximate ASR timing is not final caption evidence. Hero browser renders consume the exact paired candidate-span stage; Advanced jump cuts reject boundaries inside a forced word and apply only a short deterministic speech envelope at discontinuities. See [ADR 0068](docs/adr/0068-synchronized-review-and-relevant-asset-gate.md) and [ADR 0071](docs/adr/0071-cut-boundary-audio-envelope-and-asset-content-binding.md).
 - Rough preview: `RoughPreviewSetDocument` for the current candidate set. The picture is the analysis proxy and the speech is the ASR FLAC. Captions are provisional. Browser staging preserves the current single-span candidate contract; Advanced Hero staging additionally consumes every range in an explicitly ordered `TimeMap` through `stage_time_map`, preserving jump cuts instead of repeating the first range. See [docs/architecture/rough-preview-rendering.md](docs/architecture/rough-preview-rendering.md) and [ADR 0067](docs/adr/0067-ordered-time-map-render-staging.md).
 - Rendering and output validation: Remotion composites the rough review at 720×1280 and Hero/Advanced Hero drafts at 1080×1920. Advanced Hero burns grouped captions, typography, diagrams, native source-bound illustrations, B-roll, and approved SFX from typed render input; FFmpeg probes, normalizes, and re-measures the resulting audio against the profile loudness/true-peak policy. Reviewed manual reframing may be a fixed crop or a typed, ordered, hash-bound crop trajectory interpolated by output frame; it cannot silently fall back to contain. Hero drafts are `hero_draft_set_json` and do not replace `rough_preview_set_json`.
+- Resumable Advanced rendering: browser renders use global 120-frame video chunks plus one complete PCM16 audio render. Each unit is atomically checkpointed with input/dependency hashes, byte size, and SHA-256 before assembly. `progress.json` is written after every candidate; `--resume RUN_ID` validates the exact source, plan, style, font, batch, and renderer bindings and reuses only verified units. No partial manifest or stale unit is promoted. See [ADR 0083](docs/adr/0083-resumable-render-units-auto-reframing-and-viewer-qa.md).
 - Motion direction: a promoted candidate may carry an immutable `DirectionDocument` with exactly three source-grounded hook/body/punch alternatives. The selected option uses one of six pinned declarative presets and the project-defined `portrait-safe-v1` region (not a universal platform guarantee). An optional native motion graphic chooses an audited template, copied evidence text, canonical interval, purpose, and geometry above the caption lane; template eligibility must match the claim's visual meaning, so a generic “company” mention cannot select a rising business chart. A reviewed `SourceNativeText` annotation can identify text already burned into a scene so duplicate optional typography is suppressed while the speech caption remains. It has no remote asset or operator code payload. Directed accent tracks are plan-positioned on a caption-adjacent rail, away from the portrait face area. Reviewed B-roll/SFX placements carry exact output intervals, asset in-points, source evidence, purpose, and relevance; evenly spaced or unrelated assets are rejected by clean production. Its source, Hero-plan, TimeMap, style, font, placement, native-graphic recipe, and audio-policy hashes flow into the Advanced Hero plan, render input, cache, QA, review, and delivery checks. The direction skill can propose options, but only the typed CLI validator can bind them; it cannot supply executable renderer code. Picture and speech are staged from the same ordered TimeMap before Remotion, with duration and zero-start checks. See [ADR 0069](docs/adr/0069-source-grounded-motion-direction-presets.md), [ADR 0070](docs/adr/0070-source-grounded-asset-timing-and-production-audio-gates.md), [ADR 0073](docs/adr/0073-source-bound-native-motion-graphics.md), [ADR 0079](docs/adr/0079-claim-specific-native-graphics.md), and [ADR 0080](docs/adr/0080-source-native-text-collision-annotations.md).
 
 ### AI decision plane
@@ -40,7 +41,7 @@ Owns judgment that is not a deterministic media tool. Agents orchestrate. They d
 - Candidate discovery: `clipforge candidate mine` writes one `CandidateMiningDocument` per source. Each selected `CandidateClip` has one source range, transcript evidence, and visual evidence. See [docs/architecture/candidate-mining.md](docs/architecture/candidate-mining.md).
 - Scoring: `creative_score` is the quality heuristic in `[0, 1]`. `edit_opportunity_score` is stored beside it and is not added in. Neither score is compliance or a virality probability.
 - Edit planning: `EditPlan` for stage `rough` or `hero`, bound to a time-map digest. The map must have a positive output duration. `Scene` and `FaceObservation` provenance must include their own `source_asset_id`. A face is still not a speaker.
-- QA assistance: `QASetDocument` binds a technical `QAResult` and a campaign `QAResult` to the current advanced Hero artifact. The aggregate status cannot be stronger than the worst check. `clipforge qa gate` is the deterministic prerequisite for any later publishing work.
+- QA assistance: `QASetDocument` binds a technical `QAResult` and a campaign `QAResult` to the current advanced Hero artifact. Technical QA includes a named viewer-quality contract for caption coverage, forced-word uniqueness, source-range repetition, graphic evidence, and native-text/crop collisions; the aggregate status cannot be stronger than the worst check. This contract does not replace decoded-frame inspection or human final review. `clipforge qa gate` is the deterministic prerequisite for any later publishing work.
 
 ### Asset plane
 
@@ -121,6 +122,14 @@ ordered hook/body/punch ranges and forced-word ids. Planning remaps the forced
 alignment to that map; it does not mutate the parent Hero artifact or approval.
 See [ADR 0076](docs/adr/0076-source-grounded-editorial-arcs.md).
 
+Advanced browser renders persist candidate/chunk receipts and one continuous
+audio receipt under the run directory. A failed run is resumable only when its
+source, plan, style/font dependencies, batch input, and renderer dependency
+hashes still match. `--reframing auto` selects a reviewed face-follow
+trajectory when complete frame-level evidence exists and otherwise chooses an
+explicit contain view when a crop is unsafe. Viewer-quality contract failures
+block QA even when media probes pass. See [ADR 0083](docs/adr/0083-resumable-render-units-auto-reframing-and-viewer-qa.md).
+
 - One core, two edit stages, hard compliance gates, human final approval.
 - One time map. Captions, graphics, B-roll, SFX, QA, and reviews consume it.
 - One portrait transform. Hero and Advanced Hero use the shared deterministic
@@ -134,5 +143,7 @@ See [ADR 0076](docs/adr/0076-source-grounded-editorial-arcs.md).
   Hero approval; draft-only does not manufacture one. Editorial arcs also
   require an explicit complete-claim decision before rendering. See
   [ADR 0082](docs/adr/0082-isolated-advanced-review-drafts-and-claim-closure.md).
-- Failures raise or record `FAILED` with a message. They do not continue.
+- Failures raise or record `FAILED` with a message and never promote partial
+  output. Advanced browser runs may continue only through an explicit,
+  hash-validated `--resume RUN_ID` that reuses verified render receipts.
 - Schema version `1.0.0` is the current contract generation. Bump it when stored JSON changes shape.

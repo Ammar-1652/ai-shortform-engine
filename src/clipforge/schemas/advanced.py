@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Protocol, Self
 
@@ -560,6 +561,10 @@ class AdvancedHeroDraftSetDocument(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    # Empty keeps pre-checkpoint manifests readable; new browser renders bind
+    # the exact local Remotion worker recipe so a changed renderer cannot hit
+    # an old cache entry.
+    renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     direction_sha256s: list[str] = Field(default_factory=list)
     style_ids: list[str] = Field(default_factory=list)
     drafts: list[AdvancedHeroDraftOutput] = Field(min_length=1)
@@ -603,12 +608,43 @@ class AdvancedHeroCacheRecord(Versioned):
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     advanced_input_sha256: str = Field(pattern=_SHA)
+    renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     direction_sha256s: list[str] = Field(default_factory=list)
     manifest_sha256: str = Field(pattern=_SHA)
     manifest_size_bytes: int = Field(ge=1)
     rendered_count: int = Field(ge=1)
     validation_status: Literal["passed"]
     created_at: AwareDatetime
+
+
+class AdvancedRenderProgress(Versioned):
+    """Checkpoint for a resumable Advanced Remotion run."""
+
+    advanced_set_id: EntityId
+    source_asset_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    hero_review_status: Literal["approved", "pending"]
+    candidate_ids: list[EntityId] = Field(min_length=1)
+    completed_candidate_ids: list[EntityId] = Field(default_factory=list)
+    completed_media_sha256: dict[EntityId, str] = Field(default_factory=dict)
+    batch_sha256: str = Field(pattern=_SHA)
+    renderer_dependency_sha256: str = Field(pattern=_SHA)
+    state: Literal["running", "failed", "complete"] = "running"
+    updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def completed_candidates_are_known(self) -> Self:
+        if len(set(self.candidate_ids)) != len(self.candidate_ids):
+            raise ValueError("render progress candidate ids must be unique")
+        if any(item not in self.candidate_ids for item in self.completed_candidate_ids):
+            raise ValueError("render progress contains an unknown completed candidate")
+        if set(self.completed_candidate_ids) != set(self.completed_media_sha256):
+            raise ValueError("completed candidates require media hash receipts")
+        if any(re.fullmatch(_SHA, value) is None for value in self.completed_media_sha256.values()):
+            raise ValueError("completed media hashes must be sha256")
+        if self.state == "complete" and set(self.completed_candidate_ids) != set(self.candidate_ids):
+            raise ValueError("a complete render progress record must include every candidate")
+        return self
 
 
 def _reject_overlaps(events: list[BrollEvent], label: str) -> None:

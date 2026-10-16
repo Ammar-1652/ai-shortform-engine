@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from clipforge import __version__
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
-from clipforge.hero.advanced_build import _transitions, build_advanced_plan
+from clipforge.hero.advanced_build import _face_follow_windows, _transitions, build_advanced_plan
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.direction_service import load_direction
 from clipforge.hero.editorial_arc import (
@@ -33,6 +33,7 @@ from clipforge.hero.reframe import (
     frame_period_tolerance_us,
     windows_follow_trajectory,
 )
+from clipforge.hero.render_checkpoint import render_checkpointed_candidate, renderer_dependency_sha256
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
 from clipforge.media.clock import us_to_seconds_str
@@ -62,6 +63,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
+    AdvancedRenderProgress,
     AssetBinding,
     ReframingStrategy,
     advanced_fingerprint,
@@ -161,6 +163,48 @@ def _advanced_kind(*, review_only: bool) -> str:
 
 def default_advanced_profile() -> AdvancedHeroProfile:
     return _PROFILE
+
+
+def choose_auto_reframing_strategy(
+    *,
+    database: Database,
+    context: _Context,
+    candidate_id: str,
+    review_only: bool,
+    actor: str,
+) -> str:
+    """Choose a safe applied strategy from frame-level evidence.
+
+    A valid single face track gets the per-output-frame trajectory. If the
+    source contains reviewed native text or the track cannot cover the whole
+    TimeMap, contain is selected deliberately so text is not silently cropped.
+    """
+    loaded_direction = load_direction(context.workspace, candidate_id, review_only=review_only)
+    if loaded_direction is not None:
+        direction, _digest = loaded_direction
+        selected = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+        if selected.source_native_text:
+            return "contain"
+    profile = default_advanced_profile().model_copy(
+        update={"reframing": ReframingStrategy(strategy_id="face_follow")}
+    )
+    try:
+        _face_follow_windows(
+            context.visual,
+            candidate_id,
+            context.hero_plan.edit_plan.time_map,
+            context.hero_plan.edit_plan.time_map_sha256,
+            context.source_sha256,
+            context.alignment.source_asset_id,
+            context.visual_sha256,
+            database,
+            profile,
+            actor,
+            __version__,
+        )
+    except MediaError:
+        return "contain"
+    return "face_follow"
 
 
 def select_advanced_backend(backend: AdvancedRenderBackend | None) -> AdvancedRenderBackend:
@@ -376,6 +420,7 @@ def render_advanced_drafts(
     created_by: str | None = None,
     narration_artifact_id: str | None = None,
     draft_only: bool = False,
+    resume_advanced_set_id: str | None = None,
 ) -> AdvancedRenderResult:
     """Render stored advanced plans. A missing approval writes nothing."""
     root = work_root.resolve()
@@ -429,6 +474,7 @@ def render_advanced_drafts(
         if (
             narration_artifact_id is None
             and not force
+            and resume_advanced_set_id is None
             and _cache_ready(database, inputs.pair.workspace, hero, chosen, root, review_only=draft_only)
         ):
             current = _current_manifest(inputs.pair.workspace, review_only=draft_only)
@@ -462,14 +508,23 @@ def render_advanced_drafts(
             job = job.model_copy(update={"payload": {**job.payload, "narration_sha256": narration[0]}})
         with database.transaction() as connection:
             insert_job(connection, job)
-        advanced_set_id = str(uuid.uuid4())
+        advanced_set_id = resume_advanced_set_id or str(uuid.uuid4())
         run_dir: Path | None = None
         try:
-            run_dir = (
-                inputs.pair.workspace.make_advanced_review_run(advanced_set_id)
-                if draft_only
-                else inputs.pair.workspace.make_advanced_run(advanced_set_id)
-            )
+            if resume_advanced_set_id is not None:
+                run_dir = (
+                    inputs.pair.workspace.advanced_review_run_dir(advanced_set_id)
+                    if draft_only
+                    else inputs.pair.workspace.advanced_run_dir(advanced_set_id)
+                )
+                if run_dir.is_symlink() or not run_dir.is_dir():
+                    raise MediaError(f"advanced render resume run {advanced_set_id} is missing")
+            else:
+                run_dir = (
+                    inputs.pair.workspace.make_advanced_review_run(advanced_set_id)
+                    if draft_only
+                    else inputs.pair.workspace.make_advanced_run(advanced_set_id)
+                )
             document, manifest = _render_run(
                 database,
                 inputs.pair.workspace,
@@ -486,6 +541,7 @@ def render_advanced_drafts(
                 source_asset_id,
                 narration,
                 review_only=draft_only,
+                resume_only=resume_advanced_set_id is not None,
             )
             digest = sha256_file(manifest)
             record = _cache_record(document, job.job_id, digest, manifest.stat().st_size)
@@ -503,7 +559,10 @@ def render_advanced_drafts(
             _abandon(database, job, JobStatus.CANCELLED, "advanced Hero render cancelled", run_dir, root)
             raise
         except (MediaError, StorageError, OSError, ValidationError, ValueError) as exc:
-            _abandon(database, job, JobStatus.FAILED, str(exc), run_dir, root)
+            message = f"{exc}; resumable advanced_set_id={advanced_set_id}"
+            _abandon(database, job, JobStatus.FAILED, message, run_dir, root)
+            if isinstance(exc, MediaError):
+                raise MediaError(message) from exc
             raise
     return AdvancedRenderResult(
         "rendered",
@@ -731,6 +790,30 @@ def _require_production_direction(
             )
 
 
+def _render_progress_path(run_dir: Path) -> Path:
+    return run_dir / "progress.json"
+
+
+def _load_render_progress(run_dir: Path) -> AdvancedRenderProgress | None:
+    path = _render_progress_path(run_dir)
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        return AdvancedRenderProgress.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+        raise MediaError(f"advanced render progress is invalid: {exc}") from exc
+
+
+def _write_render_progress(
+    workspace: SourceWorkspace,
+    run_dir: Path,
+    progress: AdvancedRenderProgress,
+    root: Path,
+) -> None:
+    path = _render_progress_path(run_dir)
+    publish_json(path, progress, root, workspace.partial_for(path))
+
+
 def _render_run(
     database: Database,
     workspace: SourceWorkspace,
@@ -748,6 +831,7 @@ def _render_run(
     narration: tuple[str, Path] | None = None,
     *,
     review_only: bool = False,
+    resume_only: bool = False,
 ) -> tuple[AdvancedHeroDraftSetDocument, Path]:
     if not isinstance(hero, CurrentHero):
         raise MediaError("current Hero draft is missing")
@@ -756,6 +840,7 @@ def _render_run(
         database, source_asset_id, root, profile_fingerprint=rough.fingerprint(), create_workspace=False
     )
     staging = run_dir / "staging"
+    renderer_dependency = renderer_dependency_sha256()
     if renderer.requires_browser:
         staging.mkdir(parents=True, exist_ok=True)
     else:
@@ -830,18 +915,63 @@ def _render_run(
         )
         prepared.append((rank, candidate_id, plan, render_input, output))
     batch = run_dir / "batch.json"
-    if renderer.requires_browser:
-        for item, (_rank, candidate_id, plan, render_input, _output) in zip(items, prepared, strict=True):
-            # New plans carry the exact reviewed map. Older immutable plans
-            # fall back to their Hero plan for backward compatibility.
-            staging_map = plan.time_map
-            if staging_map is None:
-                hero_plan = _read_model(
-                    hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
-                    HeroPlanDocument,
-                    "hero plan",
-                )
-                staging_map = hero_plan.edit_plan.time_map
+    batch_input = run_dir / "batch-input.json"
+    batch_input.write_text(json_dumps({"items": items}), encoding="utf-8")
+    batch_sha256 = sha256_file(batch_input)
+    candidate_ids = [candidate_id for _rank, candidate_id, _plan, _input, _output in prepared]
+    progress = _load_render_progress(run_dir)
+    if resume_only and progress is None:
+        raise MediaError("advanced render resume run has no progress checkpoint")
+    if progress is not None:
+        if (
+            not resume_only
+            or progress.advanced_set_id != advanced_set_id
+            or progress.source_asset_id != source_asset_id
+            or progress.source_sha256 != hero.document.source_sha256
+            or progress.hero_review_status != chosen[0][1].hero_review_status
+            or progress.candidate_ids != candidate_ids
+            or progress.batch_sha256 != batch_sha256
+            or progress.renderer_dependency_sha256 != renderer_dependency
+        ):
+            raise MediaError("advanced render progress does not match the requested resume state")
+        # A previous process may have marked the run complete just before a
+        # worker crash or an operator removed one output. Re-open the
+        # checkpoint as running; the candidate receipts below still decide
+        # which work is actually reusable.
+        if progress.state != "running":
+            progress = progress.model_copy(update={"state": "running", "updated_at": datetime.now(UTC)})
+            _write_render_progress(workspace, run_dir, progress, root)
+    else:
+        progress = AdvancedRenderProgress(
+            advanced_set_id=advanced_set_id,
+            source_asset_id=source_asset_id,
+            source_sha256=hero.document.source_sha256,
+            hero_review_status=chosen[0][1].hero_review_status,
+            candidate_ids=candidate_ids,
+            completed_media_sha256={},
+            batch_sha256=batch_sha256,
+            renderer_dependency_sha256=renderer_dependency,
+            updated_at=datetime.now(UTC),
+        )
+        _write_render_progress(workspace, run_dir, progress, root)
+    completed = set(progress.completed_candidate_ids)
+    for item, (_rank, candidate_id, plan, render_input, output) in zip(items, prepared, strict=True):
+        if candidate_id in completed:
+            expected_media = progress.completed_media_sha256.get(candidate_id, "")
+            if output.is_file() and not output.is_symlink() and sha256_file(output) == expected_media:
+                continue
+            completed.remove(candidate_id)
+        # New plans carry the exact reviewed map. Older immutable plans fall
+        # back to their Hero plan for backward compatibility.
+        staging_map = plan.time_map
+        if staging_map is None:
+            hero_plan = _read_model(
+                hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
+                HeroPlanDocument,
+                "hero plan",
+            )
+            staging_map = hero_plan.edit_plan.time_map
+        if renderer.requires_browser:
             _stage_candidate_base(
                 inputs,
                 staging,
@@ -851,18 +981,38 @@ def _render_run(
                 root,
                 run_dir / "logs" / f"{candidate_id}.trim.log",
             )
+        if renderer.requires_browser:
+            render_checkpointed_candidate(
+                workspace=workspace,
+                root=root,
+                run_dir=run_dir,
+                renderer=renderer,
+                render_input=render_input,
+                output=output,
+                dependency_sha256=renderer_dependency,
+            )
+        else:
             batch.write_text(json_dumps({"items": [item]}), encoding="utf-8")
             renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
-    else:
-        batch.write_text(json_dumps({"items": items}), encoding="utf-8")
-        renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
-    for _rank, candidate_id, _plan, render_input, output in prepared:
         _normalize_audio(
             output,
             render_input,
             root,
             run_dir / "logs" / f"{candidate_id}.audio-normalize.log",
         )
+        probe_hero(output, expected_duration_us=_output_end_us(plan))
+        completed.add(candidate_id)
+        progress = progress.model_copy(
+            update={
+                "completed_candidate_ids": sorted(completed),
+                "completed_media_sha256": {
+                    **progress.completed_media_sha256,
+                    candidate_id: sha256_file(output),
+                },
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        _write_render_progress(workspace, run_dir, progress, root)
     _cleanup_dir(staging, root)
     outputs: list[AdvancedHeroDraftOutput] = []
     for rank, candidate_id, plan, render_input, output in prepared:
@@ -932,6 +1082,7 @@ def _render_run(
         reframing_strategy=_applied_strategy(chosen, profile),
         reframing_config_sha256=outputs[0].advanced_plan_sha256,
         advanced_input_sha256=identity,
+        renderer_dependency_sha256=renderer_dependency,
         direction_sha256s=sorted({item.direction_sha256 for item in outputs if item.direction_sha256}),
         style_ids=sorted({item.style_id for item in outputs}),
         drafts=outputs,
@@ -947,6 +1098,8 @@ def _render_run(
     )
     manifest = run_dir / "manifest.json"
     publish_json(manifest, document, root, workspace.partial_for(manifest))
+    progress = progress.model_copy(update={"state": "complete", "updated_at": datetime.now(UTC)})
+    _write_render_progress(workspace, run_dir, progress, root)
     return document, manifest
 
 
@@ -960,10 +1113,16 @@ def _normalize_audio(
     ensure_within(root, output)
     if output.is_symlink() or not output.is_file() or output.stat().st_size < 1:
         raise MediaError("advanced output is missing before audio normalization")
-    normalized = output.with_name("advanced.audio-normalized.mp4")
+    # Keep the transcode itself outside the published filename.  A killed
+    # ffmpeg process may leave a partial file behind; the next resume must be
+    # able to replace that transient worker output after validating the final
+    # MP4, rather than treating the stale partial as a successful artifact.
+    normalized = output.with_name("advanced.audio-normalized.partial.mp4")
     ensure_within(root, normalized)
-    if normalized.exists() or normalized.is_symlink():
-        raise MediaError("refusing to replace an existing audio normalization output")
+    if normalized.is_symlink():
+        raise MediaError("refusing to use a symlinked audio normalization output")
+    if normalized.exists():
+        normalized.unlink()
     filter_value = (
         f"loudnorm=I={render_input.audio_loudness_lufs}:"
         f"TP={render_input.audio_true_peak_dbfs}:LRA={render_input.audio_lra_lu},"
@@ -1145,6 +1304,7 @@ def _cache_record(
         reframing_strategy=document.reframing_strategy,
         reframing_config_sha256=document.reframing_config_sha256,
         advanced_input_sha256=document.advanced_input_sha256,
+        renderer_dependency_sha256=document.renderer_dependency_sha256,
         direction_sha256s=document.direction_sha256s,
         manifest_sha256=digest,
         manifest_size_bytes=size,
@@ -1197,6 +1357,9 @@ def _cache_ready(
         return False
     if record.visual_analysis_sha256 != hero.document.visual_analysis_sha256:
         return False
+    current_renderer_dependency = renderer_dependency_sha256()
+    if record.renderer_dependency_sha256 != current_renderer_dependency:
+        return False
     from clipforge.hero.advanced_assets import confine_work_path
 
     manifest = (
@@ -1219,6 +1382,8 @@ def _cache_ready(
     if len(document.drafts) != len(chosen):
         return False
     if document.hero_review_status != chosen[0][1].hero_review_status:
+        return False
+    if document.renderer_dependency_sha256 != current_renderer_dependency:
         return False
     from clipforge.hero.advanced_assets import confine_work_path
 
@@ -1470,6 +1635,13 @@ def _require_plan_binding(
             raise MediaError("advanced plan is stale: direction changed after planning")
         if direction.style_id != plan.style_id or direction.style_fingerprint != plan.style_fingerprint:
             raise MediaError("advanced plan is stale: selected motion style changed")
+        selected_direction = next(
+            item for item in direction.options if item.option_id == direction.selected_option_id
+        )
+        if plan.reframing_strategy == "center_crop" and selected_direction.source_native_text:
+            raise MediaError(
+                "center_crop would crop reviewed source-native text; use auto, contain, or face_follow"
+            )
         from clipforge.hero.direction_service import validate_source_evidence
 
         if not plan.editorial_arc_id:
@@ -1763,6 +1935,18 @@ def _abandon(
     root: Path,
 ) -> None:
     if run_dir is not None:
+        progress_path = _render_progress_path(run_dir)
+        if progress_path.is_file() and not progress_path.is_symlink():
+            try:
+                progress = AdvancedRenderProgress.model_validate_json(progress_path.read_text(encoding="utf-8"))
+                failed_progress = progress.model_copy(
+                    update={"state": "failed", "updated_at": datetime.now(UTC)}
+                )
+                partial = progress_path.with_suffix(".json.partial")
+                partial.write_text(failed_progress.model_dump_json() + "\n", encoding="utf-8")
+                partial.replace(progress_path)
+            except (OSError, ValidationError, ValueError):
+                pass
         staging = run_dir / "staging"
         if staging.exists():
             _cleanup_dir(staging, root)

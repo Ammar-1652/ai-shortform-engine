@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "RenderUnitReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "end_frame_exclusive": {
+          "minimum": 1,
+          "title": "End Frame Exclusive",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "exclusiveMinimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "start_frame": {
+          "minimum": 0,
+          "title": "Start Frame",
+          "type": "integer"
+        },
+        "unit_id": {
+          "pattern": "^(video-[0-9]{6}|audio)$",
+          "title": "Unit Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit_id",
+        "start_frame",
+        "end_frame_exclusive",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "RenderUnitReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "chunk_frames": {
+      "maximum": 300,
+      "minimum": 1,
+      "title": "Chunk Frames",
+      "type": "integer"
+    },
+    "dependency_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Dependency Sha256",
+      "type": "string"
+    },
+    "duration_in_frames": {
+      "minimum": 1,
+      "title": "Duration In Frames",
+      "type": "integer"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "receipts": {
+      "items": {
+        "$ref": "#/$defs/RenderUnitReceipt"
+      },
+      "title": "Receipts",
+      "type": "array"
+    },
+    "recipe": {
+      "const": "remotion-chunks-continuous-audio-v1",
+      "default": "remotion-chunks-continuous-audio-v1",
+      "title": "Recipe",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "input_sha256",
+    "dependency_sha256",
+    "duration_in_frames",
+    "chunk_frames",
+    "updated_at"
+  ],
+  "title": "CandidateRenderCheckpoint",
+  "type": "object"
+}

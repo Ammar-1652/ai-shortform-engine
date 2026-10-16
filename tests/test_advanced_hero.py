@@ -134,7 +134,7 @@ def _reserve(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
 
 
-def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
+def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture, ids = _reviewed(tmp_path, count=1, decisions=("approved",))
     _hero(fixture, FakeHeroRenderBackend(), CountingAligner())
     board = review_board(fixture.database, SOURCE_ID, fixture.work)
@@ -185,6 +185,15 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path) -> None:
     )
     assert again.cache_hit is True
     assert backend.calls == 1
+    monkeypatch.setattr("clipforge.hero.advanced_service.renderer_dependency_sha256", lambda: "a" * 64)
+    changed_renderer = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=backend,
+    )
+    assert changed_renderer.cache_hit is False
+    assert backend.calls == 2
     assert fixture.workspace.hero_sidecar().read_bytes() == hero_manifest
     before = sorted(fixture.work.rglob("render-input.json"))
     assert before
@@ -682,6 +691,60 @@ def test_renderer_failure_does_not_publish_a_set(tmp_path: Path) -> None:
             backend=Broken(),
         )
     assert not fixture.workspace.advanced_sidecar().exists()
+
+
+def test_failed_run_writes_checkpoint_and_can_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fixture, candidate_id = _approved(tmp_path)
+    plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+    )
+    monkeypatch.setattr("clipforge.hero.advanced_service._stage_candidate_base", lambda *args, **kwargs: None)
+
+    class Broken(FakeAdvancedRenderBackend):
+        def render_batch(self, batch_path: Path, *, log_path: Path) -> None:
+            self.calls += 1
+            raise MediaError("simulated browser crash")
+
+    with pytest.raises(MediaError):
+        render_advanced_drafts(
+            database=fixture.database,
+            source_asset_id=SOURCE_ID,
+            work_root=fixture.work,
+            backend=Broken(),
+        )
+    runs = sorted(fixture.workspace.advanced_root().joinpath("runs").iterdir())
+    assert len(runs) == 1
+    progress = json.loads((runs[0] / "progress.json").read_text(encoding="utf-8"))
+    assert progress["state"] == "failed"
+    resumed = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        resume_advanced_set_id=runs[0].name,
+    )
+    assert resumed.status == "rendered"
+    final_progress = json.loads((runs[0] / "progress.json").read_text(encoding="utf-8"))
+    assert final_progress["state"] == "complete"
+    assert final_progress["completed_candidate_ids"] == [candidate_id]
+    # Explicit resume must bypass the normal current-set cache lookup: a
+    # completed run can still have a missing final file after an interrupted
+    # copy or operator cleanup, and its verified worker receipts are the
+    # recovery source.
+    output = runs[0] / "candidates" / candidate_id / "advanced.mp4"
+    output.unlink()
+    repaired = render_advanced_drafts(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        work_root=fixture.work,
+        backend=FakeAdvancedRenderBackend(),
+        resume_advanced_set_id=runs[0].name,
+    )
+    assert repaired.status == "rendered"
+    assert output.is_file()
 
 
 def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable(tmp_path: Path) -> None:

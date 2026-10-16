@@ -105,6 +105,12 @@
       "title": "Rendered Count",
       "type": "integer"
     },
+    "renderer_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
+      "type": "string"
+    },
     "rough_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Rough Manifest Sha256",

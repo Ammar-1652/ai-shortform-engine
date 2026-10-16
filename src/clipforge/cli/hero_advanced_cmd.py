@@ -54,7 +54,8 @@ def advanced_plan(
     broll: Annotated[list[str] | None, typer.Option("--broll")] = None,
     sfx: Annotated[list[str] | None, typer.Option("--sfx")] = None,
     reframing: Annotated[
-        str, typer.Option("--reframing", help="contain, center_crop, face_follow, or manual_window.")
+        str,
+        typer.Option("--reframing", help="auto, contain, center_crop, face_follow, or manual_window."),
     ] = "contain",
     focus_x: Annotated[
         int | None, typer.Option("--focus-x", min=0, help="Manual crop focus x in visual pixels.")
@@ -85,12 +86,15 @@ def advanced_plan(
     ] = False,
 ) -> None:
     """Write an advanced plan for one approved Hero candidate."""
-    from clipforge.hero.advanced_service import _context, default_advanced_profile, plan_advanced_candidate
+    from clipforge.hero.advanced_service import (
+        _context,
+        choose_auto_reframing_strategy,
+        default_advanced_profile,
+        plan_advanced_candidate,
+    )
     from clipforge.hero.editorial_arc import load_editorial_arc
 
     try:
-        profile = _profile(reframing)
-        active = profile or default_advanced_profile()
         database = Database(resolve_db_path(db))
         root = resolve_work_dir(work_dir)
         context = None
@@ -105,6 +109,28 @@ def advanced_plan(
                 require_hero_approval=not draft_only,
             )
             editorial_arc, editorial_arc_sha256 = load_editorial_arc(editorial_arc_file.resolve())
+        if reframing == "auto":
+            context = context or _context(
+                database,
+                source_asset_id,
+                candidate_id,
+                root,
+                require_hero_approval=not draft_only,
+            )
+            selected_strategy = choose_auto_reframing_strategy(
+                database=database,
+                context=context,
+                candidate_id=candidate_id,
+                review_only=draft_only,
+                actor="clipforge",
+            )
+            selected_reframing = TypeAdapter(ReframingStrategy).validate_python(
+                {"strategy_id": selected_strategy}
+            )
+            active = default_advanced_profile().model_copy(update={"reframing": selected_reframing})
+        else:
+            profile = _profile(reframing)
+            active = profile or default_advanced_profile()
         if reframing == "manual_window":
             if manual_windows_file is not None and (focus_x is not None or focus_y is not None):
                 raise ClipforgeError("choose --manual-windows-file or --focus-x/--focus-y, not both")
@@ -365,6 +391,10 @@ def advanced_render(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     force: Annotated[bool, typer.Option("--force")] = False,
     narration_artifact: Annotated[str | None, typer.Option("--narration-artifact")] = None,
+    resume: Annotated[
+        str | None,
+        typer.Option("--resume", help="Resume a failed Advanced run by its advanced_set_id."),
+    ] = None,
     draft_only: Annotated[
         bool,
         typer.Option(
@@ -384,6 +414,7 @@ def advanced_render(
             force=force,
             narration_artifact_id=narration_artifact,
             draft_only=draft_only,
+            resume_advanced_set_id=resume,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

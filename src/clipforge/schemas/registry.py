@@ -25,6 +25,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
+    AdvancedRenderProgress,
     AssetBinding,
     AudioMixEvent,
     CaptionWordTiming,
@@ -220,6 +221,7 @@ from clipforge.schemas.reframe import (
     ReframeEvidenceDigest,
     ReframePlanDocument,
 )
+from clipforge.schemas.render_checkpoint import CandidateRenderCheckpoint, RenderUnitReceipt
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 from clipforge.schemas.vision import (
@@ -331,6 +333,9 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AdvancedHeroCacheRecord,
     AdvancedHeroPlanDocument,
     EditorialArcSegment,
+    AdvancedRenderProgress,
+    CandidateRenderCheckpoint,
+    RenderUnitReceipt,
     EditorialArcDocument,
     MotionStyleSpec,
     DirectionEvidence,

@@ -167,6 +167,27 @@ uv run clipforge transcript show SOURCE_ID
 
 `--confirm-rights` records your assertion. It does not verify the license. The original file stays where it is. A second `media prepare` reuses a valid proxy and FLAC instead of transcoding again. A second `transcript run` reuses a valid transcript instead of calling the model again. `--allow-model-download` is required only when the model is not already under `CLIPFORGE_MODEL_ROOT` (default `var/models`). Inference is local. The model download is the only optional network step.
 
+For Advanced Hero, let the current visual analysis choose portrait framing and
+resume a failed browser render from its verified run receipts:
+
+```bash
+uv run clipforge hero advanced plan SOURCE_ID CANDIDATE_ID \
+  --reframing auto --db PATH --work-dir PATH
+uv run clipforge hero advanced render SOURCE_ID --db PATH --work-dir PATH
+# If the command reports a resumable advanced_set_id after a crash:
+uv run clipforge hero advanced render SOURCE_ID --resume RUN_ID \
+  --db PATH --work-dir PATH
+```
+
+`auto` uses a complete frame-level face trajectory only when it is valid for
+the current TimeMap and does not crop reviewed source-native text; otherwise
+it records an explicit contain strategy. Advanced browser rendering saves a
+validated 120-frame video receipt and one full-length PCM audio receipt after
+each unit, then assembles and normalizes the final MP4. `clipforge qa run`
+also evaluates the viewer-quality contract (caption coverage, duplicate
+forced words, repeated source ranges, graphic evidence, and crop collisions),
+but decoded-frame inspection and human final review remain required.
+
 `clipforge doctor` exits `0` when every check is `PASS` or `WARN`. It exits `1` when a check is `FAIL` (Python older than 3.11, an unwritable work directory, or a broken SQLite library).
 
 ## Checks

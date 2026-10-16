@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,6 +65,7 @@ def technical_checks(inputs: TechnicalInputs) -> list[QACheck]:
         _reframing(inputs),
         _direction(inputs),
         _assets(inputs),
+        _viewer_quality(inputs),
     ]
     return checks
 
@@ -459,6 +461,72 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
             f"safe_region={plan.safe_region_id}"
         )
     return _check("direction", True, " ".join(lines))
+
+
+def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
+    """Fail obvious viewer-facing contract defects independently of file health."""
+    problems: list[str] = []
+    for plan in inputs.plans:
+        duration_us = max((window.output_end_us for window in plan.windows), default=inputs.duration_us)
+        if plan.style_id != "legacy-v1":
+            if not plan.direction_id or not plan.direction_sha256:
+                problems.append(f"candidate={plan.candidate_id} direction_missing")
+            if not plan.captions:
+                problems.append(f"candidate={plan.candidate_id} caption_coverage_missing")
+            for cue in plan.captions:
+                cue_duration = cue.interval.output_end_us - cue.interval.output_start_us
+                if cue_duration < 100_000:
+                    problems.append(f"candidate={plan.candidate_id} caption_too_short:{cue.event_id}")
+                if not cue.words:
+                    problems.append(f"candidate={plan.candidate_id} caption_words_missing:{cue.event_id}")
+                cue_tokens = _viewer_tokens(cue.text)
+                word_tokens = _viewer_tokens(" ".join(word.text for word in cue.words))
+                if cue_tokens != word_tokens:
+                    problems.append(f"candidate={plan.candidate_id} caption_text_mismatch:{cue.event_id}")
+        if plan.time_map is not None:
+            ranges = [(segment.source_start_us, segment.source_end_us) for segment in plan.time_map.segments]
+            if len(set(ranges)) != len(ranges):
+                problems.append(f"candidate={plan.candidate_id} repeated_source_range")
+        windows = sorted(plan.windows, key=lambda item: item.output_start_us)
+        if windows:
+            cursor = 0
+            for window in windows:
+                if window.output_start_us != cursor or window.output_end_us > duration_us:
+                    problems.append(f"candidate={plan.candidate_id} framing_gap_or_overrun")
+                    break
+                if window.strategy_id.strategy_id != plan.reframing_strategy:
+                    problems.append(f"candidate={plan.candidate_id} framing_strategy_mismatch")
+                    break
+                cursor = window.output_end_us
+            if cursor != duration_us:
+                problems.append(f"candidate={plan.candidate_id} framing_does_not_cover_duration")
+        elif plan.style_id != "legacy-v1":
+            problems.append(f"candidate={plan.candidate_id} framing_evidence_missing")
+        caption_words = [word.word_id for cue in plan.captions for word in cue.words]
+        if len(caption_words) != len(set(caption_words)):
+            problems.append(f"candidate={plan.candidate_id} duplicate_caption_word")
+        for graphic in plan.motion_graphics:
+            if graphic.template == "business_spotlight":
+                lowered = graphic.display_text.casefold()
+                numeric = any(character.isdigit() for character in lowered)
+                measure = any(token in lowered for token in ("$", "%", "million", "billion", "percent"))
+                if not numeric or not measure:
+                    problems.append(f"candidate={plan.candidate_id} unsupported_quantitative_graphic")
+        if plan.reframing_strategy == "center_crop" and plan.source_native_text:
+            problems.append(f"candidate={plan.candidate_id} native_text_crop_unreviewed")
+    if problems:
+        return _check("viewer-quality-contract", False, "; ".join(problems))
+    return _check(
+        "viewer-quality-contract",
+        True,
+        "caption word ids are unique; no repeated source ranges or unsupported quantitative graphic; "
+        "human visual review remains required",
+    )
+
+
+def _viewer_tokens(text: str) -> list[str]:
+    """Compare caption text without treating punctuation/whitespace as words."""
+    return re.findall(r"[\w\u00c0-\u024f\u3040-\u30ff\u3400-\u9fff]+", text.casefold(), re.UNICODE)
 
 
 def _assets(inputs: TechnicalInputs) -> QACheck:
