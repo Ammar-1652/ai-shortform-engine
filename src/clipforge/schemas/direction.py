@@ -20,6 +20,7 @@ _SHA = r"^[0-9a-f]{64}$"
 
 DirectionStyleId = Literal[
     "editorial-clean-v1",
+    "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
     "data-explainer-v1",

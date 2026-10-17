@@ -243,7 +243,7 @@ class TransitionEvent(Versioned):
     event_id: EntityId
     interval: OutputInterval
     purpose: Literal[MotionPurpose.VISUAL_REVEAL] = MotionPurpose.VISUAL_REVEAL
-    style: Literal["clean_cut_v1"] = "clean_cut_v1"
+    style: Literal["clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"] = "clean_cut_v1"
 
 
 class AdvancedHeroProfile(Versioned):

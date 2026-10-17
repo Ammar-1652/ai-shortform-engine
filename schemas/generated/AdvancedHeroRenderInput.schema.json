@@ -900,8 +900,12 @@
           "type": "string"
         },
         "style": {
-          "const": "clean_cut_v1",
           "default": "clean_cut_v1",
+          "enum": [
+            "clean_cut_v1",
+            "concat_push_v1",
+            "concat_blur_dissolve_v1"
+          ],
           "title": "Style",
           "type": "string"
         }

@@ -541,6 +541,7 @@
         "style_id": {
           "enum": [
             "editorial-clean-v1",
+            "concat-editorial-v1",
             "kinetic-caption-v1",
             "documentary-broll-v1",
             "data-explainer-v1",
@@ -764,6 +765,7 @@
     "style_id": {
       "enum": [
         "editorial-clean-v1",
+        "concat-editorial-v1",
         "kinetic-caption-v1",
         "documentary-broll-v1",
         "data-explainer-v1",

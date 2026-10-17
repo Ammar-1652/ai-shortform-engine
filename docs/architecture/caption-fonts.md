@@ -17,3 +17,9 @@ these exact staged names for a controlled local installation. It cannot bypass
 hash verification. The three hashes are carried in the render input/profile
 fingerprint, so changing a font creates a new artifact identity and invalidates
 old QA, final review, and delivery evidence.
+
+The opt-in `concat-editorial-v1` motion style stages an additional local pack
+of Hanken Grotesk, Anton, Space Grotesk, and Noto Sans Arabic UI files. Their
+individual licenses, upstream commit, and hashes are recorded in
+[the Concat motion asset provenance note](concat-motion-assets.md). The style
+does not copy or execute Concat's AGPL Rust/WGSL effects.

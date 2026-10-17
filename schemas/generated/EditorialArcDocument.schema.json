@@ -230,7 +230,9 @@
       "default": "none",
       "enum": [
         "none",
-        "clean_cut_v1"
+        "clean_cut_v1",
+        "concat_push_v1",
+        "concat_blur_dissolve_v1"
       ],
       "title": "Transition Style",
       "type": "string"

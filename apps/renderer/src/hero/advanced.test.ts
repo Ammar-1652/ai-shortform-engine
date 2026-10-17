@@ -30,6 +30,7 @@ describe("advanced hero composition", () => {
     expect(source).toContain("punch-card-v1");
     expect(source).toContain("activeEmphasis");
     expect(source).toContain("editorial-clean-v1");
+    expect(source).toContain("concat-editorial-v1");
     expect(source).toContain("output_start_frame");
     expect(source).toContain("unsupported production diagram kind");
     expect(source).toContain("motionFor");
@@ -41,6 +42,8 @@ describe("advanced hero composition", () => {
     expect(source).toContain("source_native_text");
     expect(source).toContain("duplicatesNativeText");
     expect(source).toContain("complete caption style dependencies");
+    expect(source).toContain("concat_push_v1");
+    expect(source).toContain("concat_blur_dissolve_v1");
     expect(source).toContain("useCurrentFrame");
     expect(source).not.toContain("top: 1720");
     const captionPlate = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../captions/CaptionPlate.tsx"), "utf8");
