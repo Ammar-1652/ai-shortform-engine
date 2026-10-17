@@ -880,7 +880,7 @@ def _render_run(
                 or staged_overlay.spec.watermark_asset_id != campaign_overlay.watermark_asset_id
             ):
                 raise MediaError("Tarteel overlay staging did not preserve the reviewed asset bindings")
-            staged[campaign_overlay.cta_asset_id] = staged_overlay.spec.cta_frame_prefix
+            staged[campaign_overlay.cta_asset_id] = staged_overlay.spec.cta_asset_name
             staged[campaign_overlay.watermark_asset_id] = staged_overlay.spec.watermark_asset_name
             campaign_overlay = staged_overlay.spec
         selected_style = (

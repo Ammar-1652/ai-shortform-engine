@@ -61,10 +61,14 @@ export type CampaignOverlaySpec = {
   readonly cta_asset_sha256: string;
   readonly cta_asset_name: string;
   readonly cta_background_removal: "chroma_key_v1";
-  readonly cta_render_mode: "alpha_png_sequence_v1";
-  readonly cta_frame_prefix: string;
-  readonly cta_frame_count: number;
+  readonly cta_render_mode: "alpha_video_v1" | "alpha_png_sequence_v1";
+  readonly cta_frame_prefix?: string;
+  readonly cta_frame_count?: number;
   readonly cta_frame_rate: 30;
+  readonly cta_position: "top_left_brand_rail_v1";
+  readonly cta_left_permille: number;
+  readonly cta_top_permille: number;
+  readonly cta_width_permille: number;
   readonly cta_start_us: number;
   readonly cta_end_us: number;
   readonly watermark_asset_id: string;

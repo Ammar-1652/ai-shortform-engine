@@ -102,10 +102,17 @@ class CampaignOverlaySpec(Versioned):
     cta_asset_sha256: str = Field(pattern=_SHA)
     cta_asset_name: str = Field(min_length=1, max_length=80)
     cta_background_removal: Literal["chroma_key_v1"] = "chroma_key_v1"
-    cta_render_mode: Literal["alpha_png_sequence_v1"] = "alpha_png_sequence_v1"
-    cta_frame_prefix: str = Field(min_length=1, max_length=64)
-    cta_frame_count: int = Field(ge=1, le=600)
+    # Production uses the original animated CTA as an alpha video.  The PNG
+    # sequence value remains readable for old review sidecars, but is not
+    # accepted by the Tarteel delivery policy.
+    cta_render_mode: Literal["alpha_video_v1", "alpha_png_sequence_v1"] = "alpha_video_v1"
+    cta_frame_prefix: str | None = Field(default=None, min_length=1, max_length=64)
+    cta_frame_count: int | None = Field(default=None, ge=1, le=600)
     cta_frame_rate: Literal[30] = 30
+    cta_position: Literal["top_left_brand_rail_v1"] = "top_left_brand_rail_v1"
+    cta_left_permille: int = Field(default=80, ge=0, le=300)
+    cta_top_permille: int = Field(default=110, ge=0, le=500)
+    cta_width_permille: int = Field(default=760, ge=200, le=900)
     cta_start_us: int = Field(ge=0)
     cta_end_us: int = Field(gt=0)
     watermark_asset_id: EntityId
@@ -122,11 +129,18 @@ class CampaignOverlaySpec(Versioned):
     def interval_and_names_are_safe(self) -> Self:
         if self.cta_end_us <= self.cta_start_us:
             raise ValueError("campaign CTA interval must be positive")
-        for label, name in (
-            ("CTA", self.cta_asset_name),
-            ("CTA frame prefix", self.cta_frame_prefix),
-            ("watermark", self.watermark_asset_name),
+        names = [("CTA", self.cta_asset_name), ("watermark", self.watermark_asset_name)]
+        if self.cta_render_mode == "alpha_png_sequence_v1":
+            if self.cta_frame_prefix is None or self.cta_frame_count is None:
+                raise ValueError("PNG CTA overlays require a frame prefix and count")
+            names.append(("CTA frame prefix", self.cta_frame_prefix))
+        elif self.cta_frame_prefix is not None or self.cta_frame_count is not None:
+            raise ValueError("alpha video CTA overlays must not declare PNG frames")
+        if self.cta_render_mode == "alpha_video_v1" and not self.cta_asset_name.lower().endswith(
+            (".mov", ".webm")
         ):
+            raise ValueError("alpha video CTA must use a transparent video staging filename")
+        for label, name in names:
             if (
                 name != name.strip()
                 or "/" in name

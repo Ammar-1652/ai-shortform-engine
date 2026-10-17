@@ -1,21 +1,22 @@
 """Deterministic campaign overlay staging.
 
 Only campaign-provided, rights-cleared files may reach this module.  The
-green-screen CTA and white-background watermark are converted to alpha assets
-once in the run staging directory; Remotion then composites those files as
-layers instead of drawing opaque rectangles over the source.
+green-screen CTA is converted to a muted alpha *video* once in the run
+staging directory; Remotion then composites the real animation as a layer.
+The watermark is a separate alpha image because it is intentionally static.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import AssetCatalogEntry, load_catalog, require_asset
 from clipforge.media.hashing import sha256_file
 from clipforge.media.process import ProcessRunner
-from clipforge.media.tools import resolve_ffmpeg
+from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
 from clipforge.media.workspace import SourceWorkspace, ensure_within
 from clipforge.schemas.campaign import CampaignOverlaySpec
 from clipforge.storage import Database
@@ -43,7 +44,7 @@ def stage_tarteel_overlay(
     staging_dir: Path,
     duration_us: int,
     cta_start_us: int | None = None,
-    cta_duration_us: int = 3_600_000,
+    cta_duration_us: int = 3_000_000,
     cta_asset_id: str | None = None,
     watermark_asset_id: str | None = None,
 ) -> StagedTarteelOverlay:
@@ -73,35 +74,31 @@ def stage_tarteel_overlay(
     )
     staging_dir.mkdir(parents=True, exist_ok=True)
     ensure_within(work_root, staging_dir)
-    cta_prefix = staging_dir / "tarteel-cta-alpha"
+    cta_video = staging_dir / "tarteel-cta-alpha.webm"
     watermark_path = staging_dir / "tarteel-watermark-alpha.png"
-    # The official CTA is animated, but Chromium's frame extractor is not
-    # reliable when a long Remotion render requests dozens of alpha PNGs at
-    # once.  A reviewed, fully opaque final CTA frame is held for the declared
-    # interval; the source clip hash remains bound in the overlay contract.
-    frame_count = 1
-    _chroma_key(cta_source, cta_prefix, frame_count, staging_dir / "tarteel-cta-key.log")
+    _chroma_key_video(cta_source, cta_video, staging_dir / "tarteel-cta-key.log")
     _white_key(watermark_source, watermark_path, staging_dir / "tarteel-watermark-key.log")
+    source_duration_us = _duration_us(cta_source, staging_dir / "tarteel-cta-probe.log")
+    effective_duration_us = min(cta_duration_us, source_duration_us)
     start = cta_start_us if cta_start_us is not None else max(0, duration_us - cta_duration_us - 500_000)
-    end = min(duration_us, start + cta_duration_us)
+    end = min(duration_us, start + effective_duration_us)
     if end <= start:
         raise MediaError("Tarteel CTA interval does not fit the output")
     return StagedTarteelOverlay(
         spec=CampaignOverlaySpec(
             cta_asset_id=cta_entry.reference.asset_id,
             cta_asset_sha256=cta_entry.file_sha256,
-            cta_asset_name="tarteel-cta-alpha-sequence",
+            cta_asset_name=cta_video.name,
+            cta_render_mode="alpha_video_v1",
             cta_start_us=start,
             cta_end_us=end,
-            cta_frame_prefix=cta_prefix.name,
-            cta_frame_count=frame_count,
             watermark_asset_id=watermark_entry.reference.asset_id,
             watermark_asset_sha256=watermark_entry.file_sha256,
             watermark_asset_name=watermark_path.name,
         ),
         cta_source=cta_entry,
         watermark_source=watermark_entry,
-        cta_path=cta_prefix,
+        cta_path=cta_video,
         watermark_path=watermark_path,
     )
 
@@ -127,52 +124,73 @@ def _choose(
     return sorted(candidates, key=lambda item: item.relative_path)[0]
 
 
-def _chroma_key(source: Path, destination_prefix: Path, frame_count: int, log_path: Path) -> None:
+def _chroma_key_video(source: Path, destination: Path, log_path: Path) -> None:
+    """Make a transparent, audio-free video while retaining every CTA frame.
+
+    The supplied campaign CTA is a 1080x1920 green-screen recording.  Its
+    reviewed graphic occupies the 640x240 window at (0, 840); cropping that
+    window prevents a transparent full-canvas layer from affecting layout and
+    keeps the safe-rail geometry stable across output resolutions. VP9/WebM is
+    deliberately used instead of a PNG still, QuickTime Animation,
+    or an audio-bearing MP4: it is a deterministic video format with an alpha
+    channel that Remotion's in-browser ``Video`` layer can decode frame by
+    frame in the shipped renderer.
+    """
     ffmpeg = resolve_ffmpeg()
-    base = destination_prefix.parent / f"{destination_prefix.name}-base.png"
     ProcessRunner().run(
         [
             ffmpeg,
             "-y",
-            "-ss",
-            "2.5",
             "-i",
             str(source),
-            "-t",
-            "0.1",
             "-vf",
-            "colorkey=0x00b52b:0.12:0.0,format=rgba",
+            "colorkey=0x00b52b:0.12:0.0,format=rgba,crop=640:240:0:840",
             "-an",
-            "-frames:v",
-            "1",
             "-c:v",
-            "png",
-            str(base),
+            "libvpx-vp9",
+            "-pix_fmt",
+            "yuva420p",
+            "-auto-alt-ref",
+            "0",
+            "-crf",
+            "20",
+            "-b:v",
+            "0",
+            "-r",
+            "30",
+            str(destination),
         ],
         log_path=log_path,
         check=True,
     )
-    ProcessRunner().run(
+    if not destination.is_file() or destination.stat().st_size == 0:
+        raise MediaError("Tarteel CTA alpha video staging produced no file")
+
+
+def _duration_us(source: Path, log_path: Path) -> int:
+    """Read the source duration without introducing a float timeline."""
+    result = ProcessRunner().run(
         [
-            ffmpeg,
-            "-y",
-            "-loop",
-            "1",
-            "-i",
-            str(base),
-            "-frames:v",
-            str(frame_count),
-            "-c:v",
-            "png",
-            f"{destination_prefix}-%04d.png",
+            resolve_ffprobe(),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(source),
         ],
         log_path=log_path,
         check=True,
     )
-    first = destination_prefix.parent / f"{destination_prefix.name}-0001.png"
-    last = destination_prefix.parent / f"{destination_prefix.name}-{frame_count:04d}.png"
-    if not first.is_file() or not last.is_file() or first.stat().st_size == 0 or last.stat().st_size == 0:
-        raise MediaError("Tarteel CTA alpha staging produced incomplete frames")
+    try:
+        value = Decimal(result.stdout.strip())
+    except Exception as exc:  # pragma: no cover - ffprobe contract failure
+        raise MediaError(f"CTA ffprobe returned an invalid duration for {source.name}") from exc
+    duration = int((value * Decimal(1_000_000)).to_integral_value(rounding=ROUND_HALF_UP))
+    if duration <= 0:
+        raise MediaError(f"CTA source {source.name} has no positive duration")
+    return duration
 
 
 def _white_key(source: Path, destination: Path, log_path: Path) -> None:
@@ -204,11 +222,7 @@ def overlay_dependencies_digest(overlay: StagedTarteelOverlay) -> str:
     import hashlib
 
     digest = hashlib.sha256()
-    cta_frames = sorted(
-        overlay.cta_path.parent.glob(f"{overlay.cta_path.name}-*.png"),
-        key=lambda item: item.name,
-    )
-    for path in (*cta_frames, overlay.watermark_path):
+    for path in (overlay.cta_path, overlay.watermark_path):
         digest.update(path.name.encode("utf-8"))
         digest.update(sha256_file(path).encode("ascii"))
     import json

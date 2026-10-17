@@ -79,26 +79,29 @@ for (const item of batch.items) {
     if (
       overlay.campaign_id !== "tarteel" ||
       overlay.cta_background_removal !== "chroma_key_v1" ||
-      overlay.cta_render_mode !== "alpha_png_sequence_v1" ||
+      (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
       overlay.cta_frame_rate !== 30 ||
+      overlay.cta_position !== "top_left_brand_rail_v1" ||
       overlay.watermark_mode !== "alpha_v1" ||
       overlay.watermark_position !== "top_right" ||
       typeof overlay.cta_asset_name !== "string" ||
       typeof overlay.watermark_asset_name !== "string" ||
       !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_asset_name) ||
-      !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_frame_prefix) ||
       !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.watermark_asset_name) ||
       !/^[0-9a-f]{64}$/.test(overlay.cta_asset_sha256) ||
       !/^[0-9a-f]{64}$/.test(overlay.watermark_asset_sha256) ||
       overlay.cta_end_us <= overlay.cta_start_us ||
-      !Number.isInteger(overlay.cta_frame_count) || overlay.cta_frame_count < 1 || overlay.cta_frame_count > 600 ||
       overlay.cta_end_us > input.output_duration_us
     ) {
       throw new Error("invalid Tarteel campaign overlay contract");
     }
     const names = new Set(Object.values(input.asset_names ?? {}));
-    if (!names.has(overlay.cta_frame_prefix) || !names.has(overlay.watermark_asset_name)) {
+    const ctaName = overlay.cta_render_mode === "alpha_video_v1" ? overlay.cta_asset_name : overlay.cta_frame_prefix;
+    if (!names.has(ctaName) || !names.has(overlay.watermark_asset_name)) {
       throw new Error("campaign overlay files are not staged");
+    }
+    if (overlay.cta_render_mode === "alpha_png_sequence_v1" && (!/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_frame_prefix) || !Number.isInteger(overlay.cta_frame_count) || overlay.cta_frame_count < 1 || overlay.cta_frame_count > 600)) {
+      throw new Error("campaign overlay CTA frame sequence is invalid");
     }
   }
   const productionStyles = new Set([

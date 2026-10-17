@@ -223,8 +223,6 @@ def _files(
                     )
                 else:
                     staging = rendered.parent.parent.parent / "staging"
-                    frame_prefix = overlay.cta_frame_prefix
-                    frame_path = staging / f"{frame_prefix}-0001.png"
                     for name, label in ((overlay.watermark_asset_name, "watermark"),):
                         asset_path = staging / name
                         if (
@@ -233,8 +231,22 @@ def _files(
                             or asset_path.stat().st_size == 0
                         ):
                             problems.append(f"Tarteel {label} alpha asset is missing from staging")
-                    if frame_path.is_symlink() or not frame_path.is_file() or frame_path.stat().st_size == 0:
-                        problems.append("Tarteel CTA alpha frame is missing from staging")
+                    if overlay.cta_render_mode == "alpha_video_v1":
+                        cta_path = staging / overlay.cta_asset_name
+                        if cta_path.is_symlink() or not cta_path.is_file() or cta_path.stat().st_size == 0:
+                            problems.append("Tarteel CTA alpha video is missing from staging")
+                    else:
+                        frame_prefix = overlay.cta_frame_prefix
+                        if frame_prefix is None:
+                            problems.append("Tarteel CTA alpha frame prefix is missing")
+                        else:
+                            frame_path = staging / f"{frame_prefix}-0001.png"
+                            if (
+                                frame_path.is_symlink()
+                                or not frame_path.is_file()
+                                or frame_path.stat().st_size == 0
+                            ):
+                                problems.append("Tarteel CTA alpha frame is missing from staging")
         problems.extend(_technical(video, preview))
     return problems
 

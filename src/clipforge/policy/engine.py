@@ -174,6 +174,8 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel CTA is not rights-bound in the advanced plan")
         if overlay.watermark_asset_id not in binding_ids:
             problems.append("Tarteel watermark is not rights-bound in the advanced plan")
+        if overlay.cta_render_mode != "alpha_video_v1":
+            problems.append("Tarteel CTA must be the animated alpha video, not a still or PNG sequence")
         if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
             problems.append("Tarteel CTA interval extends past the output")
         caption_texts = {item.text.strip() for item in (*plan.captions, *plan.typography)}
@@ -190,7 +192,8 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
     return _result(
         "policy-tarteel-delivery",
         ComplianceStatus.PASS,
-        "Tarteel CTA, alpha watermark, mandatory caption, output interval, and no-added-audio rules passed",
+        "Tarteel animated alpha CTA, alpha watermark, safe brand rail, mandatory caption, "
+        "output interval, and no-added-audio rules passed",
         context.source_asset_id,
     )
 

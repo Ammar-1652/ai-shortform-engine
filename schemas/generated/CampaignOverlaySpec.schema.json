@@ -37,16 +37,32 @@
       "type": "integer"
     },
     "cta_frame_count": {
-      "maximum": 600,
-      "minimum": 1,
-      "title": "Cta Frame Count",
-      "type": "integer"
+      "anyOf": [
+        {
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cta Frame Count"
     },
     "cta_frame_prefix": {
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Cta Frame Prefix",
-      "type": "string"
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cta Frame Prefix"
     },
     "cta_frame_rate": {
       "const": 30,
@@ -54,15 +70,45 @@
       "title": "Cta Frame Rate",
       "type": "integer"
     },
+    "cta_left_permille": {
+      "default": 80,
+      "maximum": 300,
+      "minimum": 0,
+      "title": "Cta Left Permille",
+      "type": "integer"
+    },
+    "cta_position": {
+      "const": "top_left_brand_rail_v1",
+      "default": "top_left_brand_rail_v1",
+      "title": "Cta Position",
+      "type": "string"
+    },
     "cta_render_mode": {
-      "const": "alpha_png_sequence_v1",
-      "default": "alpha_png_sequence_v1",
+      "default": "alpha_video_v1",
+      "enum": [
+        "alpha_video_v1",
+        "alpha_png_sequence_v1"
+      ],
       "title": "Cta Render Mode",
       "type": "string"
     },
     "cta_start_us": {
       "minimum": 0,
       "title": "Cta Start Us",
+      "type": "integer"
+    },
+    "cta_top_permille": {
+      "default": 110,
+      "maximum": 500,
+      "minimum": 0,
+      "title": "Cta Top Permille",
+      "type": "integer"
+    },
+    "cta_width_permille": {
+      "default": 760,
+      "maximum": 900,
+      "minimum": 200,
+      "title": "Cta Width Permille",
       "type": "integer"
     },
     "first_post_caption_line": {
@@ -118,8 +164,6 @@
     "cta_asset_id",
     "cta_asset_sha256",
     "cta_asset_name",
-    "cta_frame_prefix",
-    "cta_frame_count",
     "cta_start_us",
     "cta_end_us",
     "watermark_asset_id",

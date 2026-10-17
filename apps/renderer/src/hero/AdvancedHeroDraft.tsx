@@ -116,10 +116,14 @@ type CampaignOverlaySpec = {
   cta_asset_sha256: string;
   cta_asset_name: string;
   cta_background_removal: "chroma_key_v1";
-  cta_render_mode: "alpha_png_sequence_v1";
-  cta_frame_prefix: string;
-  cta_frame_count: number;
+  cta_render_mode: "alpha_video_v1" | "alpha_png_sequence_v1";
+  cta_frame_prefix?: string;
+  cta_frame_count?: number;
   cta_frame_rate: 30;
+  cta_position: "top_left_brand_rail_v1";
+  cta_left_permille: number;
+  cta_top_permille: number;
+  cta_width_permille: number;
   cta_start_us: number;
   cta_end_us: number;
   watermark_asset_id: string;
@@ -347,10 +351,11 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     if (
       input.campaign_overlay.campaign_id !== "tarteel" ||
       input.campaign_overlay.cta_background_removal !== "chroma_key_v1" ||
-      input.campaign_overlay.cta_render_mode !== "alpha_png_sequence_v1" ||
+      (input.campaign_overlay.cta_render_mode !== "alpha_video_v1" && input.campaign_overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
+      input.campaign_overlay.cta_position !== "top_left_brand_rail_v1" ||
       input.campaign_overlay.watermark_mode !== "alpha_v1" ||
       input.campaign_overlay.watermark_position !== "top_right" ||
-      names[input.campaign_overlay.cta_asset_id] !== input.campaign_overlay.cta_frame_prefix ||
+      names[input.campaign_overlay.cta_asset_id] !== (input.campaign_overlay.cta_render_mode === "alpha_video_v1" ? input.campaign_overlay.cta_asset_name : input.campaign_overlay.cta_frame_prefix) ||
       names[input.campaign_overlay.watermark_asset_id] !== input.campaign_overlay.watermark_asset_name
     ) {
       throw new Error("invalid Tarteel campaign overlay binding");
@@ -461,13 +466,18 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
               filter: "drop-shadow(0 4px 9px rgba(0,0,0,.6))",
             }}
           />
-          {frame >= frameAt(input.campaign_overlay.cta_start_us) &&
-          frame < frameAt(input.campaign_overlay.cta_end_us) ? (
+          <Sequence
+            from={frameAt(input.campaign_overlay.cta_start_us)}
+            durationInFrames={Math.max(
+              1,
+              Math.ceil(((input.campaign_overlay.cta_end_us - input.campaign_overlay.cta_start_us) * 30) / 1_000_000),
+            )}
+          >
             <CampaignCta
               overlay={input.campaign_overlay}
               localFrame={frame - frameAt(input.campaign_overlay.cta_start_us)}
             />
-          ) : null}
+          </Sequence>
         </>
       ) : null}
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
@@ -764,18 +774,40 @@ function CampaignCta({
   overlay: NonNullable<AdvancedHeroInput["campaign_overlay"]>;
   localFrame: number;
 }) {
+  const placement = {
+    position: "absolute" as const,
+    left: `${overlay.cta_left_permille / 10}%`,
+    top: `${overlay.cta_top_permille / 10}%`,
+    width: `${overlay.cta_width_permille / 10}%`,
+    height: "auto",
+    objectFit: "contain" as const,
+    zIndex: 12,
+  };
+  if (overlay.cta_render_mode === "alpha_video_v1") {
+    const durationInFrames = Math.max(
+      1,
+      Math.ceil(((overlay.cta_end_us - overlay.cta_start_us) * 30) / 1_000_000),
+    );
+    return (
+      <Video
+        src={staticFile(overlay.cta_asset_name)}
+        trimBefore={0}
+        durationInFrames={durationInFrames}
+        muted
+        style={placement}
+      />
+    );
+  }
+  if (overlay.cta_frame_prefix === undefined || overlay.cta_frame_count === undefined) {
+    throw new Error("PNG CTA overlay is missing its frame sequence");
+  }
   const index = Math.min(overlay.cta_frame_count - 1, Math.max(0, localFrame));
   const name = `${overlay.cta_frame_prefix}-${String(index + 1).padStart(4, "0")}.png`;
   return (
     <Img
       src={staticFile(name)}
       style={{
-        position: "absolute",
-        left: "7%",
-        width: "86%",
-        bottom: 360,
-        height: "auto",
-        objectFit: "contain",
+        ...placement,
       }}
     />
   );

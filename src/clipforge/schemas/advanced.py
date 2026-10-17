@@ -422,10 +422,12 @@ class AdvancedHeroRenderInput(Versioned):
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
                 raise ValueError("advanced asset name must be a staging file name")
         if self.campaign_overlay is not None:
-            for name in (
-                self.campaign_overlay.cta_frame_prefix,
-                self.campaign_overlay.watermark_asset_name,
-            ):
+            names = [self.campaign_overlay.watermark_asset_name]
+            if self.campaign_overlay.cta_render_mode == "alpha_video_v1":
+                names.append(self.campaign_overlay.cta_asset_name)
+            elif self.campaign_overlay.cta_frame_prefix is not None:
+                names.append(self.campaign_overlay.cta_frame_prefix)
+            for name in names:
                 if name not in self.asset_names.values():
                     raise ValueError("campaign overlay asset is not present in staged asset_names")
         return self
