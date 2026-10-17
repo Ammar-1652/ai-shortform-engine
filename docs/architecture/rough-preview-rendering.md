@@ -23,13 +23,20 @@ The picture is `proxy/analysis.mp4`. The speech is `audio/asr.flac`. Both alread
 
 The preview trim is the 30/1 frame that contains the candidate start. Video and audio share that frame. Canonical bounds stored on the manifest stay exact. Quantization error is recorded as `duration_error_us` and must stay inside 100 ms.
 
-The canvas is 720×1280. The whole source frame is contained. Empty areas are `#111111`. There is no face crop and no speaker inference.
+The canvas is 720×1280. The whole source frame is contained. The default review background is
+`neutral-dark-v1` (`#111111`). An explicit comparison render may select
+`blurred-source-v1`: it draws the same staged source behind the contained foreground,
+cover-fills it, applies a bounded 24px blur and 0.72 opacity, and never stretches the
+foreground. The background choice is part of the render input and therefore the cache
+identity. There is no face crop and no speaker inference. A review-only variant may also
+use a bounded uniform `video_scale_permille` (1000–1250) and `video_offset_x_px`
+(-120–120); these are composition comparisons, not final portrait reframing.
 
 ## Captions
 
 `provisional-caption-v1` copies transcript text. Word mode chunks real word times: 8 words, 42 code points, 3 seconds, and a gap over 1.25 seconds, preferring a break after observed punctuation. Segment mode uses one cue per untimed segment and does not invent word times. Cues store source microseconds, output microseconds, and derived half-open frames. `timing_quality` is `provisional`; the renderer shows the grouped phrase only and never paints a moving word highlight from provisional ASR. Forced word motion belongs to the approved Hero/Advanced alignment path. Overlapping cues fail the plan.
 
-The overlay is bold system sans-serif, white on a dark plate, centered above the bottom safe area. Changes between cues are hard cuts. Text is a React text node.
+The overlay is bold system sans-serif, white on a dark plate, centered above the bottom safe area. Changes between cues are hard cuts. Text is a React text node. `word_highlight_mode=reviewed` is an explicit visual review aid: it uses stored word intervals and review statuses (green correct, red incorrect, gold unverified); it does not upgrade provisional ASR to forced alignment or approval evidence.
 
 ## Render
 

@@ -97,8 +97,8 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   if (record.video_fit !== "contain") {
     throw new Error("render input video_fit must be contain");
   }
-  if (record.background !== "neutral-dark-v1") {
-    throw new Error("render input background must be neutral-dark-v1");
+  if (record.background !== "neutral-dark-v1" && record.background !== "blurred-source-v1") {
+    throw new Error("render input background must be neutral-dark-v1 or blurred-source-v1");
   }
   const videoScale = record.video_scale_permille === undefined ? 1000 : requireIntegerInRange(record.video_scale_permille, 1000, 1250, "video_scale_permille");
   const videoOffsetX = record.video_offset_x_px === undefined ? 0 : requireIntegerInRange(record.video_offset_x_px, -120, 120, "video_offset_x_px");
@@ -126,7 +126,7 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     width: OUTPUT_WIDTH,
     height: OUTPUT_HEIGHT,
     video_fit: "contain",
-    background: "neutral-dark-v1",
+    background: record.background,
     ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
     video_scale_permille: videoScale,
     video_offset_x_px: videoOffsetX,

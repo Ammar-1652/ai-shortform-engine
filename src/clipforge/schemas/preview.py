@@ -33,7 +33,7 @@ class RoughPreviewProfile(Versioned):
     fps_numerator: Literal[30] = 30
     fps_denominator: Literal[1] = 1
     video_fit: Literal["contain"] = "contain"
-    background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    background: Literal["neutral-dark-v1", "blurred-source-v1"] = "neutral-dark-v1"
     caption_algorithm_version: Literal["provisional-caption-v1"] = "provisional-caption-v1"
     caption_style_version: Literal["rough-caption-style-v1"] = "rough-caption-style-v1"
     renderer_recipe_version: Literal["rough-preview-renderer-v1"] = "rough-preview-renderer-v1"

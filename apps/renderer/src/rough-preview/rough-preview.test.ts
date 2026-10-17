@@ -105,6 +105,10 @@ describe("rough preview render input", () => {
     expect(() => parseRenderInput(input({ video_offset_x_px: 121 }))).toThrow(/video_offset_x_px/);
     expect(() => parseRenderInput(input({ word_highlight_mode: "forced" as never }))).toThrow(/word_highlight_mode/);
   });
+
+  it("accepts the explicit source-blur background variant", () => {
+    expect(parseRenderInput(input({ background: "blurred-source-v1" })).background).toBe("blurred-source-v1");
+  });
 });
 
 describe("provisional caption frames", () => {

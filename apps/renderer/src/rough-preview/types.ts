@@ -38,7 +38,7 @@ export type RoughPreviewInput = {
   readonly width: 720;
   readonly height: 1280;
   readonly video_fit: "contain";
-  readonly background: "neutral-dark-v1";
+  readonly background: "neutral-dark-v1" | "blurred-source-v1";
   readonly font_identity?: string;
   readonly video_scale_permille: number;
   readonly video_offset_x_px: number;

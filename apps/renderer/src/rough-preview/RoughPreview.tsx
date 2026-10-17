@@ -11,8 +11,9 @@ import { nextCaptionWord } from "../captions/word-matching.js";
  * One candidate, contained in a vertical review frame.
  *
  * Video and speech share `media_trim_frame` on the 30/1 preview grid.
- * Provisional ASR captions are phrase-only. Word motion is reserved for a
- * forced-alignment Hero render so review timing is never presented as proof.
+ * Provisional ASR captions are phrase-only by default. The explicit reviewed
+ * word mode is a visual review aid and is never a substitute for alignment
+ * evidence in a Hero approval.
  */
 function stagedName(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
@@ -30,8 +31,26 @@ export function RoughPreview(raw: RoughPreviewInput) {
   const fontsReady = useCaptionFonts(input.font_identity === "amiri-quran-local-v1", input.font_identity);
   if (!fontsReady) return null;
   return (
-    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
+    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, overflow: "hidden" }}>
       <AbsoluteFill style={{ overflow: "hidden" }}>
+        {input.background === "blurred-source-v1" ? (
+          <OffthreadVideo
+            src={staticFile(stagedName(input.video_path))}
+            trimBefore={input.media_trim_frame}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "blur(24px)",
+              transform: "scale(1.08)",
+              opacity: 0.72,
+            }}
+          />
+        ) : null}
         <OffthreadVideo
           src={staticFile(stagedName(input.video_path))}
           trimBefore={input.media_trim_frame}
