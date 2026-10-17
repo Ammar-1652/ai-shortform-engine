@@ -17,7 +17,12 @@ from pydantic import ValidationError
 from clipforge import __version__
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
-from clipforge.hero.advanced_build import _face_follow_windows, _transitions, build_advanced_plan
+from clipforge.hero.advanced_build import (
+    _effective_transition_style,
+    _face_follow_windows,
+    _transitions,
+    build_advanced_plan,
+)
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.direction_service import load_direction
 from clipforge.hero.editorial_arc import (
@@ -359,7 +364,7 @@ def plan_advanced_candidate(
         direction_sha256=direction_sha256,
         editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
-        cut_transition_style="none" if editorial_arc is None else editorial_arc.transition_style,
+        cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
     review_only = allow_unapproved
@@ -1577,7 +1582,7 @@ def _require_plan_binding(
     if plan.time_map is not None and digest_time_map(plan.time_map) != plan.time_map_sha256:
         raise MediaError("advanced plan is stale: TimeMap digest does not match stored map")
     arc_alignment: ForcedAlignmentDocument | None = None
-    expected_transition_style = "none"
+    expected_transition_style = ""
     review_only = plan.hero_review_status == "pending"
     if plan.editorial_arc_id:
         arc_path = _advanced_arc_path(context.workspace, plan.candidate_id, review_only=review_only)
@@ -1651,6 +1656,10 @@ def _require_plan_binding(
                 context.hero_plan.edit_plan.time_map,
                 {scene.scene_id for scene in context.visual.scenes},
             )
+        if not plan.editorial_arc_id:
+            expected_transition_style = _effective_transition_style("", True)
+    elif not plan.editorial_arc_id:
+        expected_transition_style = _effective_transition_style("", False)
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),

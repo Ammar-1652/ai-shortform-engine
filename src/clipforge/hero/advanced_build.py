@@ -87,7 +87,7 @@ def build_advanced_plan(
     direction_sha256: str = "",
     editorial_arc_id: str = "",
     editorial_arc_sha256: str = "",
-    cut_transition_style: str = "none",
+    cut_transition_style: str = "",
     allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
@@ -142,7 +142,13 @@ def build_advanced_plan(
     diagrams: list[DiagramEvent] = []
     motion_graphics = _motion_graphics(direction)
     source_native_text = _source_native_text(direction)
-    transitions = _transitions(candidate_id, hero_plan.edit_plan.time_map, duration_us, cut_transition_style)
+    # A directed clean-production recut gets a soft bridge by default. An
+    # editorial arc that explicitly says `none` still retains that reviewed
+    # hard-cut decision; legacy/no-direction plans remain unchanged.
+    effective_transition_style = _effective_transition_style(cut_transition_style, direction is not None)
+    transitions = _transitions(
+        candidate_id, hero_plan.edit_plan.time_map, duration_us, effective_transition_style
+    )
     typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
     selected_placements = _selected_asset_placements(direction)
@@ -566,6 +572,13 @@ def _transitions(
             )
         )
     return events
+
+
+def _effective_transition_style(style: str, directed: bool) -> str:
+    """Resolve a new-plan default without overriding an explicit arc choice."""
+    if style:
+        return style
+    return "concat_blur_dissolve_v1" if directed else "none"
 
 
 def _windows(

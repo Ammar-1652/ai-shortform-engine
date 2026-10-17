@@ -47,10 +47,10 @@ components:
   random values, remote shaders, or arbitrary operator code.
 
 These are clean-room Clipforge components, not copied WGSL or Rust. The
-`clean_cut_v1` legacy bridge remains available for old plans. No transition is
-inserted merely because a style is selected: an editorial arc must explicitly
-request the transition at a real cut, and the existing campaign policy and
-human review gates still apply.
+`clean_cut_v1` legacy bridge remains available for old plans. A directed
+production plan may use the bounded dissolve default at a real non-contiguous
+cut; an editorial arc that explicitly selects `none` retains a hard cut. The
+existing campaign policy and human review gates still apply.
 
 ## Operational contract
 
@@ -63,6 +63,12 @@ produce a new plan/render identity and cannot reuse old QA or final approval.
 The upstream references are guidance only. They do not override Clipforge's
 source-grounding, rights, no-music, no-outside-media, TimeMap, safe-area,
 caption, provenance, or human-approval rules.
+
+Directed clean-production plans that do not carry an explicit editorial arc
+transition choice use `concat_blur_dissolve_v1` at real non-contiguous
+TimeMap cuts. A persisted arc that explicitly selects `none` remains a hard
+cut by review decision; legacy plans are not reinterpreted. The bridge is
+presentation-only and does not move the audio, picture, or caption clock.
 
 ## Selecting it
 

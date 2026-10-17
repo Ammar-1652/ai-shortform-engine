@@ -66,7 +66,9 @@ to white after its interval; a reviewed-incorrect word stays red. Unverified
 words receive only the style accent while active and never claim correctness.
 Arabic words are split only at word boundaries when this status data is
 present; characters are never manually reversed or split into independent
-glyphs.
+glyphs. Rough Preview remains phrase-only because its ASR timing is
+provisional; word-by-word motion is only emitted from the forced selected-clip
+alignment used by Hero and Advanced Hero.
 
 ## Board
 

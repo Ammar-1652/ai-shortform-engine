@@ -68,6 +68,12 @@ def probe_preview(path: Path, *, expected_duration_us: int, log_path: Path | Non
             f"{path.name} audio duration {audio_duration} us differs from the time map by {audio_error} us "
             f"past the {DURATION_TOLERANCE_US} us preview tolerance"
         )
+    av_delta = audio_duration - duration
+    if abs(av_delta) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"{path.name} audio/video streams differ by {av_delta} us, "
+            f"past the {DURATION_TOLERANCE_US} us preview tolerance"
+        )
     audio_start = seconds_text_to_us(audio.get("start_time"))
     if audio_start is not None and abs(audio_start) > DURATION_TOLERANCE_US:
         raise MediaError(f"{path.name} audio starts at {audio_start} us instead of zero")

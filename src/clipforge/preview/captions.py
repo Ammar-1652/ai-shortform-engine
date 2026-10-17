@@ -166,6 +166,12 @@ def _chunk_words(
     chunks: list[_Piece] = []
     current: list[tuple[TranscriptWord, str]] = []
     for word, segment_id in ordered:
+        # Keep provisional cues on one TimeMap segment. A phrase spanning a
+        # jump cut would make the caption appear to drift across the new
+        # picture even when each word interval is individually valid.
+        if current and segment_id != current[-1][1]:
+            chunks.append(_from_words(current))
+            current = []
         if current and word.start_us - current[-1][0].end_us > profile.max_caption_gap_us:
             chunks.append(_from_words(current))
             current = []

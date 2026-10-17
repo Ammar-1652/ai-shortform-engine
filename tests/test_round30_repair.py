@@ -430,6 +430,35 @@ def test_caption_gap_above_the_cadence_splits_the_cue() -> None:
     assert len(hero_caption_pieces([first, later])) == 2
 
 
+def test_caption_never_spans_a_timemap_segment_boundary() -> None:
+    first = AlignedWord(
+        word_id="w-first",
+        candidate_id="cand-1",
+        text="first",
+        source_start_us=0,
+        source_end_us=100_000,
+        output_start_us=0,
+        output_end_us=100_000,
+        output_start_frame=0,
+        output_end_frame_exclusive=3,
+        segment_index=0,
+    )
+    second = first.model_copy(
+        update={
+            "word_id": "w-second",
+            "text": "second",
+            "source_start_us": 100_000,
+            "source_end_us": 200_000,
+            "output_start_us": 100_000,
+            "output_end_us": 200_000,
+            "output_start_frame": 3,
+            "output_end_frame_exclusive": 6,
+            "segment_index": 1,
+        }
+    )
+    assert [piece.cue.text for piece in hero_caption_pieces([first, second])] == ["first", "second"]
+
+
 def test_aliases_store_one_locale_and_cache_rejects_each_identity_change() -> None:
     assert _stored_locale(_locale_backend("ja-JP", "ja")) == "ja"
     assert _stored_locale(_locale_backend("ja", "ja")) == "ja"

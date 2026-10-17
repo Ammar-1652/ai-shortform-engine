@@ -2,7 +2,7 @@ import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from
 
 import { activeCaption } from "./captions.js";
 import { VIDEO_OBJECT_FIT } from "./layout.js";
-import { NEUTRAL_DARK, type RoughCaptionCue, type RoughPreviewInput } from "./types.js";
+import { NEUTRAL_DARK, type RoughPreviewInput } from "./types.js";
 import { parseRenderInput } from "./validation.js";
 import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
 
@@ -10,7 +10,8 @@ import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
  * One candidate, contained in a vertical review frame.
  *
  * Video and speech share `media_trim_frame` on the 30/1 preview grid.
- * Caption text is a React text node. There is no word highlight.
+ * Provisional ASR captions are phrase-only. Word motion is reserved for a
+ * forced-alignment Hero render so review timing is never presented as proof.
  */
 function stagedName(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
@@ -69,26 +70,10 @@ export function RoughPreview(raw: RoughPreviewInput) {
               whiteSpace: "pre-wrap",
             }}
           >
-          {caption.words.length === 0 ? caption.text : <CaptionWords cue={caption} frame={frame} />}
+          {caption.text}
           </div>
         </div>
       )}
     </AbsoluteFill>
-  );
-}
-
-function CaptionWords({ cue, frame }: { cue: RoughCaptionCue; frame: number }) {
-  let used = false;
-  return (
-    <>
-      {cue.text.split(/(\s+)/).map((part, index) => {
-        if (/^\s+$/u.test(part)) return <span key={`${part}-${index}`}>{part}</span>;
-        const word = cue.words.find((item) => item.text.trim() === part.trim() && (!used || item.verification_status !== "unverified"));
-        if (word) used = true;
-        const active = word !== undefined && frame >= word.output_start_frame && frame < word.output_end_frame_exclusive;
-        const color = word?.verification_status === "incorrect" ? "#ff4d5f" : word?.verification_status === "correct" && active ? "#42d487" : active ? "#ffcf4a" : "#ffffff";
-        return <span key={`${part}-${index}`} style={{ color }}>{part}</span>;
-      })}
-    </>
   );
 }

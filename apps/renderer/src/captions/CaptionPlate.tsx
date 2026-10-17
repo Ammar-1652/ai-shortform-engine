@@ -1,6 +1,7 @@
 import { layoutCaption } from "./layout.js";
 import { captionFontFamily } from "./fonts.js";
 import { measuredLines } from "./measured-layout.js";
+import { captionTokenKey, nextCaptionWord } from "./word-matching.js";
 
 /** Caption plate. The line is a React text node, not HTML. */
 
@@ -49,10 +50,6 @@ export type CaptionStyle = Readonly<{
   max_scale_permille?: number;
 }>;
 
-function tokenKey(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/[\u2000-\u206f\u2e00-\u2e7f'"`]/g, "");
-}
-
 export function CaptionPlate({ text, language, variant = "body", emphasisText, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
   const modern = layoutVersion === "caption-layout-v2";
   const safeMargins = {
@@ -62,7 +59,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
     bottom: style?.safe_bottom ?? (modern ? 300 : 64),
   };
   const layout = layoutCaption(text, language, modern ? 22 : 12, safeMargins);
-  const emphasis = (style?.max_simultaneous_emphasis ?? 1) > 0 ? tokenKey(emphasisText ?? "") : "";
+  const emphasis = (style?.max_simultaneous_emphasis ?? 1) > 0 ? captionTokenKey(emphasisText ?? "") : "";
   const typography = variant === "typography";
   const hook = variant === "hook";
   const punch = variant === "punch";
@@ -83,6 +80,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
     throw new Error("caption card exceeds configured safe region; move or regroup it");
   }
   let highlightedTokenUsed = false;
+  let wordCursor = 0;
   return (
     <div
       style={{
@@ -161,8 +159,12 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
           return (
             <div key={`${line}-${lineIndex}`}>
               {line.split(/(\s+)/).map((part, partIndex) => {
-                const status = wordStatuses?.find((item) => tokenKey(item.text ?? "") === tokenKey(part))?.verification_status;
-                const highlighted = Boolean(emphasis) && !highlightedTokenUsed && tokenKey(part) === emphasis;
+                const matched = wordStatuses === undefined
+                  ? { word: undefined, nextCursor: wordCursor }
+                  : nextCaptionWord(part, wordStatuses, wordCursor);
+                wordCursor = matched.nextCursor;
+                const status = matched.word?.verification_status;
+                const highlighted = Boolean(emphasis) && !highlightedTokenUsed && captionTokenKey(part) === emphasis;
                 if (highlighted) highlightedTokenUsed = true;
                 const statusColor = captionWordColor(status, highlighted, style?.accent);
                 return highlighted || statusColor !== undefined ? (

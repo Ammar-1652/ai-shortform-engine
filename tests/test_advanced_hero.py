@@ -17,7 +17,13 @@ from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
-from clipforge.hero.advanced_build import _broll, _directed_typography, _sfx, _typography
+from clipforge.hero.advanced_build import (
+    _broll,
+    _directed_typography,
+    _effective_transition_style,
+    _sfx,
+    _typography,
+)
 from clipforge.hero.advanced_service import (
     _require_production_direction,
     default_advanced_profile,
@@ -94,6 +100,12 @@ def test_caption_word_verification_status_is_typed_and_default_unverified() -> N
     )
     assert word.verification_status == "unverified"
     assert word.model_copy(update={"verification_status": "correct"}).verification_status == "correct"
+
+
+def test_directed_recuts_default_to_a_soft_bridge_but_keep_explicit_hard_cuts() -> None:
+    assert _effective_transition_style("", True) == "concat_blur_dissolve_v1"
+    assert _effective_transition_style("", False) == "none"
+    assert _effective_transition_style("none", True) == "none"
     with pytest.raises(ValidationError):
         CaptionWordTiming(
             word_id="word-2",

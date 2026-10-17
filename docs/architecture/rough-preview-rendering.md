@@ -27,7 +27,7 @@ The canvas is 720×1280. The whole source frame is contained. Empty areas are `#
 
 ## Captions
 
-`provisional-caption-v1` copies transcript text. Word mode chunks real word times: 8 words, 42 code points, 3 seconds, and a gap over 1.25 seconds, preferring a break after observed punctuation. Segment mode uses one cue per untimed segment and does not invent word times. Cues store source microseconds, output microseconds, and derived half-open frames. `timing_quality` is `provisional`. Overlapping cues fail the plan.
+`provisional-caption-v1` copies transcript text. Word mode chunks real word times: 8 words, 42 code points, 3 seconds, and a gap over 1.25 seconds, preferring a break after observed punctuation. Segment mode uses one cue per untimed segment and does not invent word times. Cues store source microseconds, output microseconds, and derived half-open frames. `timing_quality` is `provisional`; the renderer shows the grouped phrase only and never paints a moving word highlight from provisional ASR. Forced word motion belongs to the approved Hero/Advanced alignment path. Overlapping cues fail the plan.
 
 The overlay is bold system sans-serif, white on a dark plate, centered above the bottom safe area. Changes between cues are hard cuts. Text is a React text node.
 
