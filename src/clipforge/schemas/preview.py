@@ -114,6 +114,9 @@ class RoughPreviewRenderInput(Versioned):
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
     font_identity: str = "dejavu-noto-local-v1"
+    video_scale_permille: int = Field(default=1000, ge=1000, le=1250)
+    video_offset_x_px: int = Field(default=0, ge=-120, le=120)
+    word_highlight_mode: Literal["off", "reviewed"] = "off"
     timing_quality: Literal["provisional"] = "provisional"
     captions: list[RoughCaptionCue] = Field(default_factory=list)
     source_start_us: int = Field(default=0, ge=0)

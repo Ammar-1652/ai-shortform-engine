@@ -300,17 +300,40 @@
       "title": "Video Fit",
       "type": "string"
     },
+    "video_offset_x_px": {
+      "default": 0,
+      "maximum": 120,
+      "minimum": -120,
+      "title": "Video Offset X Px",
+      "type": "integer"
+    },
     "video_path": {
       "maxLength": 4096,
       "minLength": 1,
       "title": "Video Path",
       "type": "string"
     },
+    "video_scale_permille": {
+      "default": 1000,
+      "maximum": 1250,
+      "minimum": 1000,
+      "title": "Video Scale Permille",
+      "type": "integer"
+    },
     "width": {
       "const": 720,
       "default": 720,
       "title": "Width",
       "type": "integer"
+    },
+    "word_highlight_mode": {
+      "default": "off",
+      "enum": [
+        "off",
+        "reviewed"
+      ],
+      "title": "Word Highlight Mode",
+      "type": "string"
     }
   },
   "required": [

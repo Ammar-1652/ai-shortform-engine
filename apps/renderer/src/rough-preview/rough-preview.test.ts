@@ -44,6 +44,9 @@ function input(overrides: Partial<RoughPreviewInput> = {}): RoughPreviewInput {
     height: 1280,
     video_fit: "contain",
     background: "neutral-dark-v1",
+    video_scale_permille: 1000,
+    video_offset_x_px: 0,
+    word_highlight_mode: "off",
     timing_quality: "provisional",
     captions: [cue()],
     ...overrides,
@@ -94,6 +97,13 @@ describe("rough preview render input", () => {
     const text = "café 日本語 42";
     const parsed = parseRenderInput(input({ captions: [cue({ text })] }));
     expect(parsed.captions[0]?.text).toBe(text);
+  });
+
+  it("accepts only bounded uniform scale and explicit review highlighting", () => {
+    expect(parseRenderInput(input({ video_scale_permille: 1150, video_offset_x_px: 54, word_highlight_mode: "reviewed" })).video_offset_x_px).toBe(54);
+    expect(() => parseRenderInput(input({ video_scale_permille: 1300 }))).toThrow(/video_scale_permille/);
+    expect(() => parseRenderInput(input({ video_offset_x_px: 121 }))).toThrow(/video_offset_x_px/);
+    expect(() => parseRenderInput(input({ word_highlight_mode: "forced" as never }))).toThrow(/word_highlight_mode/);
   });
 });
 

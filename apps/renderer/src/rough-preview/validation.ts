@@ -31,6 +31,9 @@ const TOP_KEYS = new Set([
   "video_fit",
   "background",
   "font_identity",
+  "video_scale_permille",
+  "video_offset_x_px",
+  "word_highlight_mode",
   "timing_quality",
   "captions",
   "source_start_us",
@@ -97,6 +100,11 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   if (record.background !== "neutral-dark-v1") {
     throw new Error("render input background must be neutral-dark-v1");
   }
+  const videoScale = record.video_scale_permille === undefined ? 1000 : requireIntegerInRange(record.video_scale_permille, 1000, 1250, "video_scale_permille");
+  const videoOffsetX = record.video_offset_x_px === undefined ? 0 : requireIntegerInRange(record.video_offset_x_px, -120, 120, "video_offset_x_px");
+  if (record.word_highlight_mode !== undefined && record.word_highlight_mode !== "off" && record.word_highlight_mode !== "reviewed") {
+    throw new Error("render input word_highlight_mode must be off or reviewed");
+  }
   if (record.timing_quality !== "provisional") {
     throw new Error("render input timing_quality must be provisional");
   }
@@ -120,6 +128,9 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     video_fit: "contain",
     background: "neutral-dark-v1",
     ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
+    video_scale_permille: videoScale,
+    video_offset_x_px: videoOffsetX,
+    word_highlight_mode: record.word_highlight_mode === "reviewed" ? "reviewed" : "off",
     timing_quality: "provisional",
     captions,
   };
@@ -259,6 +270,13 @@ function requireId(value: unknown, label: string): string {
     throw new Error(`${label} is not a safe id`);
   }
   return value;
+}
+
+function requireIntegerInRange(value: unknown, minimum: number, maximum: number, label: string): number {
+  if (!Number.isInteger(value) || Number(value) < minimum || Number(value) > maximum) {
+    throw new Error(`${label} must be an integer from ${minimum} to ${maximum}`);
+  }
+  return Number(value);
 }
 
 function requireText(value: unknown, label: string): string {

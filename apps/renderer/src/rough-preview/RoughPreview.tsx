@@ -2,9 +2,10 @@ import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from
 
 import { activeCaption } from "./captions.js";
 import { VIDEO_OBJECT_FIT } from "./layout.js";
-import { NEUTRAL_DARK, type RoughPreviewInput } from "./types.js";
+import { NEUTRAL_DARK, type RoughCaptionCue, type RoughPreviewInput } from "./types.js";
 import { parseRenderInput } from "./validation.js";
 import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
+import { nextCaptionWord } from "../captions/word-matching.js";
 
 /**
  * One candidate, contained in a vertical review frame.
@@ -30,13 +31,13 @@ export function RoughPreview(raw: RoughPreviewInput) {
   if (!fontsReady) return null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
-      <AbsoluteFill>
+      <AbsoluteFill style={{ overflow: "hidden" }}>
         <OffthreadVideo
           src={staticFile(stagedName(input.video_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
           muted
-          style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT }}
+          style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT, transform: `translateX(${input.video_offset_x_px}px) scale(${input.video_scale_permille / 1000})` }}
         />
         <Audio
           src={staticFile(stagedName(input.audio_path))}
@@ -70,10 +71,35 @@ export function RoughPreview(raw: RoughPreviewInput) {
               whiteSpace: "pre-wrap",
             }}
           >
-          {caption.text}
+          {input.word_highlight_mode === "reviewed" && caption.words.length > 0 ? (
+            <CaptionWords cue={caption} frame={frame} />
+          ) : caption.text}
           </div>
         </div>
       )}
     </AbsoluteFill>
+  );
+}
+
+function CaptionWords({ cue, frame }: { cue: RoughCaptionCue; frame: number }) {
+  let cursor = 0;
+  return (
+    <>
+      {cue.text.split(/(\s+)/).map((part, index) => {
+        if (/^\s+$/u.test(part)) return <span key={`${part}-${index}`}>{part}</span>;
+        const matched = nextCaptionWord(part, cue.words, cursor);
+        cursor = matched.nextCursor;
+        const word = matched.word;
+        const active = word !== undefined && frame >= word.output_start_frame && frame < word.output_end_frame_exclusive;
+        const color = word?.verification_status === "incorrect"
+          ? "#ff4d5f"
+          : word?.verification_status === "correct" && active
+            ? "#42d487"
+            : active
+              ? "#ffcf4a"
+              : "#ffffff";
+        return <span key={`${part}-${index}`} style={{ color }}>{part}</span>;
+      })}
+    </>
   );
 }

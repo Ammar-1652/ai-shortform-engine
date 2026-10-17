@@ -40,6 +40,9 @@ export type RoughPreviewInput = {
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
   readonly font_identity?: string;
+  readonly video_scale_permille: number;
+  readonly video_offset_x_px: number;
+  readonly word_highlight_mode: "off" | "reviewed";
   readonly timing_quality: "provisional";
   readonly captions: readonly RoughCaptionCue[];
   readonly source_start_us?: number;

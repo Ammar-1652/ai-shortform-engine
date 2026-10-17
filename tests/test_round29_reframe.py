@@ -258,9 +258,7 @@ def test_corrupt_advanced_mp4_is_rejected(tmp_path: Path) -> None:
         probe_hero(video, expected_duration_us=1_000_000)
 
 
-def test_hero_probe_rejects_audio_video_stream_drift(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_hero_probe_rejects_audio_video_stream_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     video = tmp_path / "drift.mp4"
     video.write_bytes(b"probe fixture")
     monkeypatch.setattr(
