@@ -28,7 +28,10 @@ export function RoughPreview(raw: RoughPreviewInput) {
   const input = parseRenderInput(raw);
   const frame = useCurrentFrame();
   const caption = activeCaption(input.captions, frame);
-  const fontsReady = useCaptionFonts(input.font_identity === "amiri-quran-local-v1", input.font_identity);
+  const fontsReady = useCaptionFonts(
+    input.font_identity === "amiri-quran-local-v1" || input.font_identity === "concat-editorial-local-v1",
+    input.font_identity,
+  );
   if (!fontsReady) return null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, overflow: "hidden" }}>
