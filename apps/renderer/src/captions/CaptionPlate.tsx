@@ -1,5 +1,5 @@
 import { layoutCaption } from "./layout.js";
-import { CAPTION_FONT_FAMILY } from "./fonts.js";
+import { captionFontFamily } from "./fonts.js";
 import { measuredLines } from "./measured-layout.js";
 
 /** Caption plate. The line is a React text node, not HTML. */
@@ -48,6 +48,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
   const typography = variant === "typography";
   const hook = variant === "hook";
   const punch = variant === "punch";
+  const fontFamily = captionFontFamily(style?.font_identity, variant);
   const preferredSize = fontSize ?? (typography ? 82 : hook || punch ? 68 : 54);
   const horizontalInset = modern ? Math.ceil((style?.max_travel_px ?? 0) + (1080 * ((style?.max_scale_permille ?? 1000) / 1000 - 1)) / 2) + 8 : 0;
   const availableWidth = Math.min(layout.safe.right - layout.safe.left, 1080 - (x ?? layout.safe.left) - safeMargins.right) - horizontalInset * 2 - 60;
@@ -55,7 +56,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
   if (modern && !context) throw new Error("caption font metrics unavailable");
   const measured = modern ? measuredLines(layout.text, language, availableWidth, preferredSize, (value, size) => {
     if (!context) throw new Error("caption font metrics unavailable");
-    context.font = `700 ${size}px ${CAPTION_FONT_FAMILY}`;
+    context.font = `${typography || hook || punch ? 700 : 600} ${size}px ${fontFamily}`;
     return context.measureText(value).width;
   }) : { lines: layout.lines, fontSize: preferredSize, textWidth: 0 };
   const lines = measured.lines;
@@ -93,7 +94,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
         direction: layout.direction,
         color: "#ffffff",
         fontFamily: modern
-          ? CAPTION_FONT_FAMILY
+          ? fontFamily
           : typography || hook || punch
             ? "'Arial Black', 'Liberation Sans Narrow', 'DejaVu Sans', sans-serif"
             : "'DejaVu Sans', 'Arial', sans-serif",

@@ -26,7 +26,7 @@ from clipforge.hero.advanced_service import (
     select_advanced_backend,
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
-from clipforge.hero.motion_style import EDITORIAL_CLEAN_V1, LEGACY_V1
+from clipforge.hero.motion_style import CONCAT_EDITORIAL_V1, EDITORIAL_CLEAN_V1, LEGACY_V1
 from clipforge.hero.show import load_current_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
@@ -599,6 +599,9 @@ def test_remote_url_and_music_are_rejected() -> None:
 def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
     assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
     assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
+    assert CONCAT_EDITORIAL_V1.style_id == "concat-editorial-v1"
+    assert CONCAT_EDITORIAL_V1.fingerprint() != EDITORIAL_CLEAN_V1.fingerprint()
+    assert len(CONCAT_EDITORIAL_V1.font_sha256) == 4
     assert default_advanced_profile().renderer_recipe_version == "advanced-hero-renderer-directed-v4"
     prior_geometry_recipe = default_advanced_profile().model_copy(
         update={"renderer_recipe_version": "advanced-hero-renderer-directed-v3"}

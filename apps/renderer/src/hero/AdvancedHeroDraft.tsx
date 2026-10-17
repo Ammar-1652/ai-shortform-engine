@@ -2,10 +2,11 @@ import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame
 import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
-import { useCaptionFonts } from "../captions/fonts.js";
+import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
 import { placedVideo, windowAt, type CropWindow } from "./crop.js";
 import { linearVolume } from "./gain.js";
 import { MotionGraphicCard, type MotionGraphic } from "./MotionGraphic.js";
+import { ConcatTransitionOverlay, type ConcatTransitionStyle } from "./ConcatMotion.js";
 import { cueWindow, frameAtOrAfter } from "./program-frames.js";
 import { containRect } from "./portrait-transform.js";
 
@@ -78,7 +79,7 @@ type EmphasisEvent = { text?: string; output_start_us?: number; output_end_us?: 
 type TransitionEvent = {
   event_id?: string;
   interval?: Interval;
-  style?: "clean_cut_v1";
+  style?: ConcatTransitionStyle;
 };
 
 type SourceNativeText = {
@@ -114,6 +115,7 @@ export type AdvancedHeroInput = {
   style_id?:
     | "legacy-v1"
     | "editorial-clean-v1"
+    | "concat-editorial-v1"
     | "kinetic-caption-v1"
     | "documentary-broll-v1"
     | "data-explainer-v1"
@@ -243,11 +245,13 @@ function motionFor(frame: number, interval: Interval | undefined, style: MotionS
 export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const frame = useCurrentFrame();
   const modernLayout = input.renderer_recipe_version === "advanced-hero-renderer-directed-v4";
-  const fontsReady = useCaptionFonts(modernLayout);
+  const motionStyle = input.motion_style;
+  const fontsReady = useCaptionFonts(modernLayout, motionStyle?.font_identity);
   const strategy = input.reframing_strategy ?? "contain";
   const style = input.style_id ?? "legacy-v1";
   const productionStyles = new Set([
     "editorial-clean-v1",
+    "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
     "data-explainer-v1",
@@ -333,7 +337,6 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   // Legacy/offline fixtures may omit locale evidence. Keep the layout
   // deterministic without treating the sentinel as a supported locale claim.
   const language = !rawLanguage || rawLanguage === "missing" ? "en-US" : rawLanguage;
-  const motionStyle = input.motion_style;
   const diagram = (input.diagrams ?? []).find((item) => active(frame, item.interval));
   const motionGraphics = (input.motion_graphics ?? []).filter((item) => active(frame, item.interval));
   const transitions = (input.transitions ?? []).filter((item) => active(frame, item.interval));
@@ -519,27 +522,30 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             key={graphic.event_id ?? `${graphic.template}-${graphic.display_text}`}
             graphic={graphic}
             accent={motionStyle?.accent ?? "#64d8ff"}
+            fontFamily={captionFontFamily(motionStyle?.font_identity, "typography")}
             showLabel={!duplicateCaption}
           />
         );
       })}
       {transitions.map((transition) => {
-        if (transition.style !== undefined && transition.style !== "clean_cut_v1") {
+        if (
+          transition.style !== undefined &&
+          transition.style !== "clean_cut_v1" &&
+          transition.style !== "concat_push_v1" &&
+          transition.style !== "concat_blur_dissolve_v1"
+        ) {
           throw new Error(`unsupported production transition ${String(transition.style)}`);
         }
         const start = frameAtOrAfter(transition.interval?.output_start_us);
         const local = Math.max(0, frame - start);
-        const progress = Math.min(1, local / 4);
-        const opacity = 0.56 * (1 - eased(progress, motionStyle?.easing));
+        const duration = Math.max(1, frameAtOrAfter(transition.interval?.output_end_us) - start);
+        const progress = Math.min(1, local / duration);
         return (
-          <AbsoluteFill
+          <ConcatTransitionOverlay
             key={`transition-${transition.event_id ?? start}`}
-            style={{
-              pointerEvents: "none",
-              opacity,
-              background: `linear-gradient(112deg, transparent 0%, ${motionStyle?.accent ?? "#ffcf4a"} 47%, #ffffff 50%, ${motionStyle?.accent ?? "#3ddbd6"} 53%, transparent 100%)`,
-              mixBlendMode: "screen",
-            }}
+            style={transition.style ?? "clean_cut_v1"}
+            progress={eased(progress, motionStyle?.easing)}
+            accent={motionStyle?.accent ?? "#ffcf4a"}
           />
         );
       })}

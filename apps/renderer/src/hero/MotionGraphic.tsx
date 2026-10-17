@@ -17,6 +17,7 @@ export type MotionGraphic = {
 type Props = {
   graphic: MotionGraphic;
   accent: string;
+  fontFamily?: string;
   showLabel?: boolean;
 };
 
@@ -27,7 +28,7 @@ const clamp = (value: number) => Math.max(0, Math.min(1, value));
  * only a typed template and source-copied text; operator-provided SVG/HTML or
  * effect code never reaches a production composition.
  */
-export function MotionGraphicCard({ graphic, accent, showLabel = true }: Props) {
+export function MotionGraphicCard({ graphic, accent, fontFamily, showLabel = true }: Props) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   if (fps !== 30) throw new Error("native graphics require the canonical 30/1 program grid");
@@ -59,18 +60,18 @@ export function MotionGraphicCard({ graphic, accent, showLabel = true }: Props) 
     pointerEvents: "none" as const,
   };
   if (graphic.template === "credit_card") {
-    return <CreditCard graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
+    return <CreditCard graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
   }
   if (graphic.template === "travel_postcard") {
-    return <TravelPostcard graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
+    return <TravelPostcard graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
   }
   if (graphic.template === "business_identity") {
-    return <BusinessIdentity graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
+    return <BusinessIdentity graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
   }
-  return <BusinessSpotlight graphic={graphic} accent={accent} text={text} style={base} local={local} showLabel={showLabel} />;
+  return <BusinessSpotlight graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
 }
 
-function Label({ text, accent, show = true }: { text: string; accent: string; show?: boolean }) {
+function Label({ text, accent, fontFamily, show = true }: { text: string; accent: string; fontFamily?: string; show?: boolean }) {
   if (!show) return null;
   return (
     <div
@@ -80,7 +81,7 @@ function Label({ text, accent, show = true }: { text: string; accent: string; sh
         right: 20,
         bottom: 18,
         color: "#fff",
-        fontFamily: "'DejaVu Sans', sans-serif",
+        fontFamily: fontFamily ?? "'DejaVu Sans', sans-serif",
         fontSize: 26,
         fontWeight: 800,
         lineHeight: 1.12,
@@ -106,6 +107,7 @@ function Label({ text, accent, show = true }: { text: string; accent: string; sh
 
 function CreditCard({
   accent,
+  fontFamily,
   text,
   style,
   local,
@@ -113,6 +115,7 @@ function CreditCard({
 }: {
   graphic: MotionGraphic;
   accent: string;
+  fontFamily?: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
@@ -145,13 +148,14 @@ function CreditCard({
         <circle cx="566" cy="244" r="36" fill="#ffcb5b" opacity=".92" />
         <circle cx="612" cy="244" r="36" fill="#ef5b75" opacity=".9" />
       </svg>
-      <Label text={text} accent={accent} show={showLabel} />
+      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );
 }
 
 function TravelPostcard({
   accent,
+  fontFamily,
   text,
   style,
   local,
@@ -159,6 +163,7 @@ function TravelPostcard({
 }: {
   graphic: MotionGraphic;
   accent: string;
+  fontFamily?: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
@@ -182,13 +187,14 @@ function TravelPostcard({
         </g>
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 38%, rgba(2,12,24,.74))" }} />
-      <Label text={text} accent={accent} show={showLabel} />
+      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );
 }
 
 function BusinessSpotlight({
   accent,
+  fontFamily,
   text,
   style,
   local,
@@ -196,6 +202,7 @@ function BusinessSpotlight({
 }: {
   graphic: MotionGraphic;
   accent: string;
+  fontFamily?: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
@@ -212,13 +219,14 @@ function BusinessSpotlight({
         <path d={`M604 ${rise + 6} L632 ${rise} L618 ${rise + 28}`} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
-      <Label text={text} accent={accent} show={showLabel} />
+      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );
 }
 
 function BusinessIdentity({
   accent,
+  fontFamily,
   text,
   style,
   local,
@@ -226,6 +234,7 @@ function BusinessIdentity({
 }: {
   graphic: MotionGraphic;
   accent: string;
+  fontFamily?: string;
   text: string;
   style: Record<string, string | number>;
   local: number;
@@ -257,7 +266,7 @@ function BusinessIdentity({
         <path d={`M84 310H${84 + easedReveal * 432}`} stroke={accent} strokeWidth="8" strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
-      <Label text={text} accent={accent} show={showLabel} />
+      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );
 }

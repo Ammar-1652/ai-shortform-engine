@@ -17,7 +17,7 @@ packages.
 Add a typed `DirectionDocument` between the approved Hero candidate and the
 Advanced Hero plan. A direction contains exactly three source-grounded
 hook/body/punch alternatives, evidence ids and copied source text, a
-deterministically selected option, and one of six pinned production styles:
+deterministically selected option, and one of seven pinned production styles:
 
 `editorial-clean-v1`, `kinetic-caption-v1`, `documentary-broll-v1`,
 `data-explainer-v1`, `paper-explainer-v1`, and `premium-minimal-v1`.
@@ -31,7 +31,7 @@ contract. Any changed direction, style, font dependency, source, alignment,
 TimeMap, rights evidence, or plan invalidates downstream render/cache/review
 evidence through the existing hashes and stale checks.
 
-Remotion remains the sole renderer. It accepts only the six style ids (plus
+Remotion remains the sole renderer. It accepts only the seven style ids (plus
 legacy compatibility for old artifacts), derives animation from
 `useCurrentFrame`, and never receives JavaScript, JSX, CSS, HTML, or shell code
 from an operator. The universal `portrait-safe-v1` region remains the sole

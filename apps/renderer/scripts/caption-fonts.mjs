@@ -2,8 +2,11 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, constants, existsSync, lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const fonts = [
+const bundledFontDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../assets/fonts");
+
+const coreFonts = [
   {
     name: "clipforge-dejavu-bold.ttf",
     sha256: "b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f",
@@ -21,12 +24,53 @@ const fonts = [
   },
 ];
 
+// The Concat repository's Rust/WGSL effects are AGPL-3.0 and coupled to its
+// native compositor, so they are not copied into this Remotion renderer. Its
+// independently licensed fonts are safe to bundle and are selected by an
+// explicit, fingerprinted motion style.
+const concatEditorialFonts = [
+  {
+    name: "HankenGrotesk-SemiBold.ttf",
+    sha256: "4f70ae1dd1c951e80603732344f18507d6a6932a3df9f7f6d8a91d4495d41e17",
+    bundledName: "concat/HankenGrotesk-SemiBold.ttf",
+    candidates: [],
+  },
+  {
+    name: "Anton-Regular.ttf",
+    sha256: "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab",
+    bundledName: "concat/Anton-Regular.ttf",
+    candidates: [],
+  },
+  {
+    name: "SpaceGrotesk-Bold.ttf",
+    sha256: "42c2abe5fddba9a6da76fabab653246fcf48daa3ae3fc6251e61f8215fdda006",
+    bundledName: "concat/SpaceGrotesk-Bold.ttf",
+    candidates: [],
+  },
+  {
+    name: "NotoSansArabicUI-Concat.ttf",
+    sha256: "9187fa244db5f50201cfb0ede30ae7269651d090290f164c0703403fd0fab1b2",
+    bundledName: "concat/NotoSansArabicUI-Concat.ttf",
+    candidates: [],
+  },
+];
+
+const packs = [coreFonts, concatEditorialFonts];
+
 export function stageCaptionFonts(stagingDir, expected, sourceDirectory = process.env.CLIPFORGE_CAPTION_FONT_DIR) {
-  if (!Array.isArray(expected) || expected.length !== fonts.length || fonts.some((font, index) => font.sha256 !== expected[index])) {
+  const selectedPack = packs.find((pack) =>
+    Array.isArray(expected) &&
+    expected.length === pack.length &&
+    pack.every((font, index) => font.sha256 === expected[index]),
+  );
+  if (!selectedPack) {
     throw new Error("caption font dependencies differ from the pinned recipe");
   }
+  const fonts = selectedPack === concatEditorialFonts ? [...coreFonts, ...concatEditorialFonts] : selectedPack;
   for (const font of fonts) {
-    const candidates = sourceDirectory ? [path.join(sourceDirectory, font.name)] : font.candidates;
+    const candidates = sourceDirectory
+      ? [path.join(sourceDirectory, font.name)]
+      : [path.join(bundledFontDirectory, font.bundledName ?? font.name), ...font.candidates];
     const source = candidates.find((candidate) => existsSync(candidate));
     if (!source || lstatSync(source).isSymbolicLink() || !lstatSync(source).isFile()) {
       throw new Error(`caption font unavailable: ${font.name}; install the pinned font or set CLIPFORGE_CAPTION_FONT_DIR`);

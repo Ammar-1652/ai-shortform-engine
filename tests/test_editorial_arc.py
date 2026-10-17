@@ -118,6 +118,12 @@ def _alignment() -> ForcedAlignmentDocument:
 def test_arc_requires_ordered_hook_body_punch_and_exact_map() -> None:
     arc = _arc()
     assert [item.beat for item in arc.segments] == ["hook", "body", "punch"]
+
+
+@pytest.mark.parametrize("transition", ["concat_push_v1", "concat_blur_dissolve_v1"])
+def test_concat_transition_styles_are_explicit_arc_choices(transition: str) -> None:
+    arc = _arc().model_copy(update={"transition_style": transition})
+    assert arc.transition_style == transition
     with pytest.raises(ValidationError, match="segment order"):
         EditorialArcDocument.model_validate(
             {

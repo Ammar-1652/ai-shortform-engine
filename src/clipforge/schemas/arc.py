@@ -47,7 +47,12 @@ class EditorialArcDocument(Versioned):
     time_map_sha256: str = Field(pattern=_SHA)
     segments: list[EditorialArcSegment] = Field(min_length=3, max_length=12)
     selection_mode: Literal["operator_override", "reviewed"] = "operator_override"
-    transition_style: Literal["none", "clean_cut_v1"] = "none"
+    transition_style: Literal[
+        "none",
+        "clean_cut_v1",
+        "concat_push_v1",
+        "concat_blur_dissolve_v1",
+    ] = "none"
 
     @model_validator(mode="after")
     def is_ordered_and_source_bound(self) -> Self:

@@ -547,7 +547,7 @@ def _transitions(
     """Create restrained bridges only where the reviewed TimeMap actually cuts."""
     mapped = time_map.to_time_map().segments
     events: list[TransitionEvent] = []
-    if style not in {"none", "clean_cut_v1"}:
+    if style not in {"none", "clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"}:
         raise MediaError(f"unsupported cut transition style: {style}")
     if style == "none":
         return events
