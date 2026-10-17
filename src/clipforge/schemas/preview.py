@@ -112,11 +112,14 @@ class RoughPreviewRenderInput(Versioned):
     width: Literal[720] = 720
     height: Literal[1280] = 1280
     video_fit: Literal["contain"] = "contain"
-    background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    background: Literal["neutral-dark-v1", "blurred-source-v1"] = "neutral-dark-v1"
     font_identity: str = "dejavu-noto-local-v1"
     video_scale_permille: int = Field(default=1000, ge=1000, le=1250)
     video_offset_x_px: int = Field(default=0, ge=-120, le=120)
     word_highlight_mode: Literal["off", "reviewed"] = "off"
+    word_timing_source: Literal["segment-only-v1", "transcript-word-times-v1", "reviewed-word-times-v1"] = (
+        "segment-only-v1"
+    )
     timing_quality: Literal["provisional"] = "provisional"
     captions: list[RoughCaptionCue] = Field(default_factory=list)
     source_start_us: int = Field(default=0, ge=0)
@@ -137,6 +140,12 @@ class RoughPreviewRenderInput(Versioned):
                 raise ValueError("caption output range extends past the candidate duration")
             if cue.output_end_frame_exclusive > self.duration_in_frames:
                 raise ValueError("caption frame range extends past duration_in_frames")
+        if (
+            self.word_highlight_mode == "reviewed"
+            and any(cue.words for cue in self.captions)
+            and self.word_timing_source == "segment-only-v1"
+        ):
+            raise ValueError("reviewed word highlighting requires an explicit word timing source")
         return self
 
     def _duration_hint_us(self) -> int:

@@ -326,6 +326,10 @@ def _render_input(
         captions=captions,
         source_start_us=segment.source_start_us,
         source_end_us=segment.source_end_us,
+        background=profile.background,
+        word_timing_source=(
+            "transcript-word-times-v1" if any(cue.words for cue in captions) else "segment-only-v1"
+        ),
         proxy_sha256=inputs.proxy_sha256,
         staged_video_sha256=staged_video_sha,
         staged_audio_sha256=staged_audio_sha,

@@ -34,6 +34,7 @@ const TOP_KEYS = new Set([
   "video_scale_permille",
   "video_offset_x_px",
   "word_highlight_mode",
+  "word_timing_source",
   "timing_quality",
   "captions",
   "source_start_us",
@@ -105,6 +106,10 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   if (record.word_highlight_mode !== undefined && record.word_highlight_mode !== "off" && record.word_highlight_mode !== "reviewed") {
     throw new Error("render input word_highlight_mode must be off or reviewed");
   }
+  const wordTimingSource = record.word_timing_source === undefined ? "segment-only-v1" : record.word_timing_source;
+  if (wordTimingSource !== "segment-only-v1" && wordTimingSource !== "transcript-word-times-v1" && wordTimingSource !== "reviewed-word-times-v1") {
+    throw new Error("render input word_timing_source is unsupported");
+  }
   if (record.timing_quality !== "provisional") {
     throw new Error("render input timing_quality must be provisional");
   }
@@ -113,6 +118,9 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   const video = requireLocalPath(record.video_path, "video_path");
   const audio = requireLocalPath(record.audio_path, "audio_path");
   const captions = parseCaptions(record.captions, duration);
+  if (record.word_highlight_mode === "reviewed" && wordTimingSource === "segment-only-v1" && captions.some((cue) => cue.words.length > 0)) {
+    throw new Error("reviewed word highlighting requires an explicit timing source");
+  }
   return {
     composition_id: COMPOSITION_ID,
     candidate_id: requireId(record.candidate_id, "candidate_id"),
@@ -131,6 +139,7 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     video_scale_permille: videoScale,
     video_offset_x_px: videoOffsetX,
     word_highlight_mode: record.word_highlight_mode === "reviewed" ? "reviewed" : "off",
+    word_timing_source: wordTimingSource,
     timing_quality: "provisional",
     captions,
   };

@@ -104,6 +104,7 @@ def test_full_set_preserves_order_hashes_and_digest(tmp_path: Path) -> None:
         payload = rendered.read_text(encoding="utf-8")
         assert "quality_score" not in payload
         assert "virality" not in payload
+        assert '"word_timing_source": "transcript-word-times-v1"' in payload
         assert preview.width == 720 and preview.height == 1280
         assert preview.detected_video_codec == "h264"
         assert preview.detected_pixel_format == "yuv420p"
@@ -222,6 +223,21 @@ def test_profile_and_candidate_changes_miss(tmp_path: Path) -> None:
     third = render(fixture, backend, profile=changed)
     assert third.cache_hit is False
     assert third.mining_id != second.mining_id
+
+
+def test_profile_background_is_bound_to_render_input_and_cache(tmp_path: Path) -> None:
+    fixture, backend = _mined(tmp_path, 1)
+    first = render(fixture, backend)
+    blurred = default_profile().model_copy(update={"background": "blurred-source-v1"})
+    second = render(fixture, backend, profile=blurred)
+    assert second.cache_hit is False
+    assert second.preview_set_id != first.preview_set_id
+    document = load_preview_document(fixture.database, SOURCE_ID, fixture.work)
+    rendered = (
+        second.manifest_path.parent / "candidates" / document.previews[0].candidate_id / "render-input.json"
+    )
+    payload = rendered.read_text(encoding="utf-8")
+    assert '"background": "blurred-source-v1"' in payload
 
 
 def test_transcript_and_visual_changes_block_until_restored(tmp_path: Path) -> None:

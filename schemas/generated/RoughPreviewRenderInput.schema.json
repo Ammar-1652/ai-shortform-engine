@@ -186,8 +186,11 @@
       "type": "string"
     },
     "background": {
-      "const": "neutral-dark-v1",
       "default": "neutral-dark-v1",
+      "enum": [
+        "neutral-dark-v1",
+        "blurred-source-v1"
+      ],
       "title": "Background",
       "type": "string"
     },
@@ -333,6 +336,16 @@
         "reviewed"
       ],
       "title": "Word Highlight Mode",
+      "type": "string"
+    },
+    "word_timing_source": {
+      "default": "segment-only-v1",
+      "enum": [
+        "segment-only-v1",
+        "transcript-word-times-v1",
+        "reviewed-word-times-v1"
+      ],
+      "title": "Word Timing Source",
       "type": "string"
     }
   },

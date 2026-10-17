@@ -43,6 +43,7 @@ export type RoughPreviewInput = {
   readonly video_scale_permille: number;
   readonly video_offset_x_px: number;
   readonly word_highlight_mode: "off" | "reviewed";
+  readonly word_timing_source: "segment-only-v1" | "transcript-word-times-v1" | "reviewed-word-times-v1";
   readonly timing_quality: "provisional";
   readonly captions: readonly RoughCaptionCue[];
   readonly source_start_us?: number;

@@ -47,6 +47,7 @@ function input(overrides: Partial<RoughPreviewInput> = {}): RoughPreviewInput {
     video_scale_permille: 1000,
     video_offset_x_px: 0,
     word_highlight_mode: "off",
+    word_timing_source: "segment-only-v1",
     timing_quality: "provisional",
     captions: [cue()],
     ...overrides,
@@ -108,6 +109,12 @@ describe("rough preview render input", () => {
 
   it("accepts the explicit source-blur background variant", () => {
     expect(parseRenderInput(input({ background: "blurred-source-v1" })).background).toBe("blurred-source-v1");
+    expect(parseRenderInput(input({ word_highlight_mode: "reviewed", word_timing_source: "reviewed-word-times-v1", captions: [cue({ words: [{ word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" }] })] })).word_timing_source).toBe("reviewed-word-times-v1");
+  });
+
+  it("rejects reviewed words without a declared timing source", () => {
+    const word = { word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" as const };
+    expect(() => parseRenderInput(input({ word_highlight_mode: "reviewed", captions: [cue({ words: [word] })] }))).toThrow(/timing source/);
   });
 });
 

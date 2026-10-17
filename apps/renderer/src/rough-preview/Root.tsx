@@ -21,6 +21,7 @@ const placeholder: RoughPreviewInput = {
       video_scale_permille: 1000,
       video_offset_x_px: 0,
       word_highlight_mode: "off",
+      word_timing_source: "segment-only-v1",
   timing_quality: "provisional",
   captions: [],
 };
