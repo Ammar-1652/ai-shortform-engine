@@ -16,7 +16,25 @@ type CaptionPlateProps = {
   fontSize?: number;
   style?: CaptionStyle;
   layoutVersion?: "caption-layout-v1" | "caption-layout-v2";
+  wordStatuses?: readonly CaptionWordStatus[];
+  emphasisStatus?: CaptionWordStatus["verification_status"];
 };
+
+export type CaptionWordStatus = Readonly<{
+  text?: string;
+  verification_status?: "unverified" | "correct" | "incorrect";
+}>;
+
+export function captionWordColor(
+  status: CaptionWordStatus["verification_status"] | undefined,
+  active: boolean,
+  accent = "#ffcf4a",
+): string | undefined {
+  if (status === "incorrect") return "#ff4d5f";
+  if (status === "correct" && active) return "#42d487";
+  if (active) return accent;
+  return undefined;
+}
 
 export type CaptionStyle = Readonly<{
   contrast?: string;
@@ -35,7 +53,7 @@ function tokenKey(value: string): string {
   return value.trim().toLocaleLowerCase().replace(/[\u2000-\u206f\u2e00-\u2e7f'"`]/g, "");
 }
 
-export function CaptionPlate({ text, language, variant = "body", emphasisText, x, y, fontSize, style, layoutVersion = "caption-layout-v1" }: CaptionPlateProps) {
+export function CaptionPlate({ text, language, variant = "body", emphasisText, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
   const modern = layoutVersion === "caption-layout-v2";
   const safeMargins = {
     left: style?.safe_left ?? 64,
@@ -137,18 +155,23 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
           // Keep RTL and CJK as whole shaped runs. Splitting their characters
           // into independently styled spans can change joining, grapheme
           // shaping, or punctuation placement in the browser.
-          if (layout.direction === "rtl" || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
+          if ((layout.direction === "rtl" && wordStatuses === undefined) || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
             return <div key={`${line}-${lineIndex}`}>{line}</div>;
           }
           return (
             <div key={`${line}-${lineIndex}`}>
               {line.split(/(\s+)/).map((part, partIndex) => {
+                const status = wordStatuses?.find((item) => tokenKey(item.text ?? "") === tokenKey(part))?.verification_status;
                 const highlighted = Boolean(emphasis) && !highlightedTokenUsed && tokenKey(part) === emphasis;
                 if (highlighted) highlightedTokenUsed = true;
-                return highlighted ? (
+                const statusColor = captionWordColor(status, highlighted, style?.accent);
+                return highlighted || statusColor !== undefined ? (
                   <span
                     key={`${part}-${partIndex}`}
-                    style={{ color: style?.accent ?? "#ffcf4a", textShadow: "0 2px 5px rgba(0,0,0,0.7)" }}
+                    style={{
+                      color: statusColor ?? (emphasisStatus === "incorrect" ? "#ff4d5f" : style?.accent ?? "#ffcf4a"),
+                      textShadow: "0 2px 5px rgba(0,0,0,0.7)",
+                    }}
                   >
                     {part}
                   </span>

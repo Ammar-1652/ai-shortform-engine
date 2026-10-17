@@ -2,8 +2,9 @@ import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from
 
 import { activeCaption } from "./captions.js";
 import { VIDEO_OBJECT_FIT } from "./layout.js";
-import { NEUTRAL_DARK, type RoughPreviewInput } from "./types.js";
+import { NEUTRAL_DARK, type RoughCaptionCue, type RoughPreviewInput } from "./types.js";
 import { parseRenderInput } from "./validation.js";
+import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
 
 /**
  * One candidate, contained in a vertical review frame.
@@ -24,6 +25,8 @@ export function RoughPreview(raw: RoughPreviewInput) {
   const input = parseRenderInput(raw);
   const frame = useCurrentFrame();
   const caption = activeCaption(input.captions, frame);
+  const fontsReady = useCaptionFonts(input.font_identity === "amiri-quran-local-v1", input.font_identity);
+  if (!fontsReady) return null;
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
       <AbsoluteFill>
@@ -54,7 +57,7 @@ export function RoughPreview(raw: RoughPreviewInput) {
           <div
             style={{
               color: "#ffffff",
-              fontFamily: "sans-serif",
+              fontFamily: captionFontFamily(input.font_identity),
               fontWeight: 700,
               fontSize: 42,
               lineHeight: 1.25,
@@ -66,10 +69,26 @@ export function RoughPreview(raw: RoughPreviewInput) {
               whiteSpace: "pre-wrap",
             }}
           >
-            {caption.text}
+          {caption.words.length === 0 ? caption.text : <CaptionWords cue={caption} frame={frame} />}
           </div>
         </div>
       )}
     </AbsoluteFill>
+  );
+}
+
+function CaptionWords({ cue, frame }: { cue: RoughCaptionCue; frame: number }) {
+  let used = false;
+  return (
+    <>
+      {cue.text.split(/(\s+)/).map((part, index) => {
+        if (/^\s+$/u.test(part)) return <span key={`${part}-${index}`}>{part}</span>;
+        const word = cue.words.find((item) => item.text.trim() === part.trim() && (!used || item.verification_status !== "unverified"));
+        if (word) used = true;
+        const active = word !== undefined && frame >= word.output_start_frame && frame < word.output_end_frame_exclusive;
+        const color = word?.verification_status === "incorrect" ? "#ff4d5f" : word?.verification_status === "correct" && active ? "#42d487" : active ? "#ffcf4a" : "#ffffff";
+        return <span key={`${part}-${index}`} style={{ color }}>{part}</span>;
+      })}
+    </>
   );
 }

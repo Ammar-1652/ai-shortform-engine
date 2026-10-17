@@ -62,7 +62,7 @@ const CAPTION_KEYS = new Set([
   "words",
 ]);
 
-const WORD_KEYS = new Set(["text", "output_start_frame", "output_end_frame_exclusive"]);
+const WORD_KEYS = new Set(["text", "output_start_frame", "output_end_frame_exclusive", "verification_status"]);
 
 const EVENT_KEYS = new Set([
   "event_id",
@@ -222,6 +222,10 @@ function parseWord(raw: unknown, duration: number): HeroWord {
     text: String(record.text),
     output_start_frame: start,
     output_end_frame_exclusive: end,
+    verification_status:
+      record.verification_status === "correct" || record.verification_status === "incorrect"
+        ? record.verification_status
+        : "unverified",
   };
 }
 

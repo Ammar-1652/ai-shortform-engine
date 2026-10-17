@@ -38,6 +38,16 @@
       "title": "Text",
       "type": "string"
     },
+    "verification_status": {
+      "default": "unverified",
+      "enum": [
+        "unverified",
+        "correct",
+        "incorrect"
+      ],
+      "title": "Verification Status",
+      "type": "string"
+    },
     "word_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

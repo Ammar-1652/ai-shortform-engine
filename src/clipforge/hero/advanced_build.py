@@ -530,6 +530,7 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                         output_end_us=word.output_end_us,
                         output_start_frame=word.output_start_frame,
                         output_end_frame_exclusive=word.output_end_frame_exclusive,
+                        verification_status=word.verification_status,
                     )
                     for word in piece.words
                 ],

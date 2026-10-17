@@ -6,8 +6,8 @@ import { parseHeroInput } from "./validation.js";
 
 const sha = "a".repeat(64);
 
-function word(text: string, start: number, end: number) {
-  return { text, output_start_frame: start, output_end_frame_exclusive: end };
+function word(text: string, start: number, end: number, verification_status?: "unverified" | "correct" | "incorrect") {
+  return { text, output_start_frame: start, output_end_frame_exclusive: end, ...(verification_status ? { verification_status } : {}) };
 }
 
 function caption(overrides: Partial<HeroCaption> = {}): HeroCaption {
@@ -85,6 +85,13 @@ describe("hero draft render input", () => {
     expect(() => parseHeroInput({ ...input(), video_path: "https://example.com/a.mp4" })).toThrow(/http/);
     const provisional: unknown = { ...input(), alignment_quality: "provisional" };
     expect(() => parseHeroInput(provisional)).toThrow(/forced/);
+  });
+
+  it("preserves caption verification status for the renderer", () => {
+    const parsed = parseHeroInput(
+      input({ captions: [caption({ words: [word("صحيح", 0, 15, "correct"), word("خطأ", 15, 30, "incorrect")] })] }),
+    );
+    expect(parsed.captions[0]?.words.map((item) => item.verification_status)).toEqual(["correct", "incorrect"]);
   });
 });
 

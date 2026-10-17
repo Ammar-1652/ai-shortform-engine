@@ -12,6 +12,17 @@ export type RoughCaptionCue = {
   readonly output_start_frame: number;
   readonly output_end_frame_exclusive: number;
   readonly timing_quality: "provisional";
+  readonly words: readonly RoughCaptionWord[];
+};
+
+export type RoughCaptionWord = {
+  readonly word_id: string;
+  readonly text: string;
+  readonly output_start_us: number;
+  readonly output_end_us: number;
+  readonly output_start_frame: number;
+  readonly output_end_frame_exclusive: number;
+  readonly verification_status: "unverified" | "correct" | "incorrect";
 };
 
 export type RoughPreviewInput = {
@@ -28,6 +39,7 @@ export type RoughPreviewInput = {
   readonly height: 1280;
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
+  readonly font_identity?: string;
   readonly timing_quality: "provisional";
   readonly captions: readonly RoughCaptionCue[];
   readonly source_start_us?: number;

@@ -30,6 +30,7 @@ type TypeEvent = {
     output_end_us?: number;
     output_start_frame?: number;
     output_end_frame_exclusive?: number;
+      verification_status?: "unverified" | "correct" | "incorrect";
   }[];
 };
 
@@ -115,6 +116,7 @@ export type AdvancedHeroInput = {
   style_id?:
     | "legacy-v1"
     | "editorial-clean-v1"
+    | "quran-editorial-v1"
     | "concat-editorial-v1"
     | "kinetic-caption-v1"
     | "documentary-broll-v1"
@@ -554,13 +556,24 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           const activeWord =
             style !== "legacy-v1" &&
             motionStyle?.caption_mode === "phrase_active_word" &&
-            !language.startsWith("ar") &&
-            !language.startsWith("ja")
+            (item.words?.some((word) => word.verification_status === "correct" || word.verification_status === "incorrect") ||
+              (!language.startsWith("ar") && !language.startsWith("ja")))
               ? item.words?.find(
                   (word) =>
                     frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
                     frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
                 )?.text
+              : undefined;
+          const activeWordRecord =
+            style !== "legacy-v1" &&
+            motionStyle?.caption_mode === "phrase_active_word" &&
+            (item.words?.some((word) => word.verification_status === "correct" || word.verification_status === "incorrect") ||
+              (!language.startsWith("ar") && !language.startsWith("ja")))
+              ? item.words?.find(
+                  (word) =>
+                    frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
+                    frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
+                )
               : undefined;
           return (
             <AbsoluteFill
@@ -572,6 +585,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 language={item.language || language}
                 variant="body"
                 emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
+                emphasisStatus={activeWordRecord?.verification_status}
+                wordStatuses={item.words}
                 style={modernLayout ? motionStyle : undefined}
                 layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
               />

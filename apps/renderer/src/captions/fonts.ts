@@ -15,6 +15,7 @@ export const CONCAT_EDITORIAL_FONT_HASHES = [
 ] as const;
 const CONCAT_ARABIC_FALLBACK = "'Clipforge Noto Arabic Concat', 'DejaVu Sans', sans-serif";
 export const CONCAT_EDITORIAL_FONT_FAMILY = `'Clipforge Hanken', ${CONCAT_ARABIC_FALLBACK}`;
+export const QURAN_FONT_FAMILY = "'Clipforge Amiri Quran', 'Clipforge Noto Arabic', serif";
 const CONCAT_DISPLAY_FONT_FAMILY = `'Clipforge Anton', ${CONCAT_ARABIC_FALLBACK}`;
 const CONCAT_LABEL_FONT_FAMILY = `'Clipforge Space', ${CONCAT_ARABIC_FALLBACK}`;
 
@@ -22,6 +23,7 @@ export function captionFontFamily(
   fontIdentity: string | undefined,
   variant: "body" | "hook" | "punch" | "typography" = "body",
 ): string {
+  if (fontIdentity === "amiri-quran-local-v1") return QURAN_FONT_FAMILY;
   if (fontIdentity !== "concat-editorial-local-v1") return CAPTION_FONT_FAMILY;
   if (variant === "hook" || variant === "punch") return CONCAT_DISPLAY_FONT_FAMILY;
   if (variant === "typography") return CONCAT_LABEL_FONT_FAMILY;
@@ -31,7 +33,7 @@ export function captionFontFamily(
 const pending = new Map<string, Promise<void>>();
 
 function loadPinnedFonts(fontIdentity: string | undefined): Promise<void> {
-  const pack = fontIdentity === "concat-editorial-local-v1" ? "concat" : "core";
+  const pack = fontIdentity === "concat-editorial-local-v1" ? "concat" : fontIdentity === "amiri-quran-local-v1" ? "quran" : "core";
   const cached = pending.get(pack);
   if (cached) return cached;
   const files = [
@@ -47,6 +49,7 @@ function loadPinnedFonts(fontIdentity: string | undefined): Promise<void> {
       ["Clipforge Noto Arabic Concat", "NotoSansArabicUI-Concat.ttf", "400"],
     );
   }
+  if (pack === "quran") files.push(["Clipforge Amiri Quran", "AmiriQuran.ttf", "400"]);
   const loading = Promise.all(files.map(async ([family, file, weight]) => {
     const face = new FontFace(family ?? "", `url(${JSON.stringify(staticFile(file ?? ""))})`, { weight: weight ?? "700" });
     document.fonts.add(await face.load());

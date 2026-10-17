@@ -40,6 +40,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
     AudioMixEvent,
+    CaptionWordTiming,
     DiagramEvent,
     DiagramPayload,
     ReframingStrategy,
@@ -80,6 +81,29 @@ def test_manual_portrait_crop_uses_largest_integer_9_by_16_window(
 def test_manual_portrait_crop_rejects_empty_frame() -> None:
     with pytest.raises(ClipforgeError, match="too small"):
         _portrait_crop_size(0, 720)
+
+
+def test_caption_word_verification_status_is_typed_and_default_unverified() -> None:
+    word = CaptionWordTiming(
+        word_id="word-1",
+        text="الإنسان",
+        output_start_us=0,
+        output_end_us=100_000,
+        output_start_frame=0,
+        output_end_frame_exclusive=3,
+    )
+    assert word.verification_status == "unverified"
+    assert word.model_copy(update={"verification_status": "correct"}).verification_status == "correct"
+    with pytest.raises(ValidationError):
+        CaptionWordTiming(
+            word_id="word-2",
+            text="خطأ",
+            output_start_us=0,
+            output_end_us=100_000,
+            output_start_frame=0,
+            output_end_frame_exclusive=3,
+            verification_status="guess",
+        )
 
 
 def test_manual_crop_trajectory_is_typed_and_fingerprinted() -> None:

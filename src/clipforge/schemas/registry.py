@@ -186,6 +186,7 @@ from clipforge.schemas.multilingual import (
 from clipforge.schemas.preview import (
     CandidateRoughPreview,
     RoughCaptionCue,
+    RoughCaptionWord,
     RoughPreviewCacheRecord,
     RoughPreviewProfile,
     RoughPreviewRenderInput,
@@ -297,6 +298,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CandidateMiningCacheRecord,
     RoughPreviewProfile,
     RoughCaptionCue,
+    RoughCaptionWord,
     RoughPreviewRenderInput,
     CandidateRoughPreview,
     RoughPreviewSetSummary,

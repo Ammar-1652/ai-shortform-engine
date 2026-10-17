@@ -79,6 +79,7 @@ class CaptionWordTiming(Versioned):
     output_end_us: Microseconds
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
+    verification_status: Literal["unverified", "correct", "incorrect"] = "unverified"
 
     @model_validator(mode="after")
     def interval_is_positive(self) -> Self:

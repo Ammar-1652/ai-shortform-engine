@@ -55,7 +55,16 @@ const concatEditorialFonts = [
   },
 ];
 
-const packs = [coreFonts, concatEditorialFonts];
+const quranEditorialFonts = [
+  ...coreFonts,
+  {
+    name: "AmiriQuran.ttf",
+    sha256: "8fa95faaf7bd18b71789f6f57312003e30c5029218a035e5baf613a0222ab82d",
+    candidates: [],
+  },
+];
+
+const packs = [coreFonts, concatEditorialFonts, quranEditorialFonts];
 
 export function stageCaptionFonts(stagingDir, expected, sourceDirectory = process.env.CLIPFORGE_CAPTION_FONT_DIR) {
   const selectedPack = packs.find((pack) =>
@@ -68,9 +77,16 @@ export function stageCaptionFonts(stagingDir, expected, sourceDirectory = proces
   }
   const fonts = selectedPack === concatEditorialFonts ? [...coreFonts, ...concatEditorialFonts] : selectedPack;
   for (const font of fonts) {
-    const candidates = sourceDirectory
-      ? [path.join(sourceDirectory, font.name)]
-      : [path.join(bundledFontDirectory, font.bundledName ?? font.name), ...font.candidates];
+    const quranSourceDirectory = process.env.CLIPFORGE_QURAN_FONT_DIR;
+    const candidates = font.name === "AmiriQuran.ttf"
+      ? [
+        ...(quranSourceDirectory ? [path.join(quranSourceDirectory, font.name)] : []),
+        path.join(bundledFontDirectory, font.bundledName ?? font.name),
+        ...font.candidates,
+      ]
+      : sourceDirectory
+        ? [path.join(sourceDirectory, font.name)]
+        : [path.join(bundledFontDirectory, font.bundledName ?? font.name), ...font.candidates];
     const source = candidates.find((candidate) => existsSync(candidate));
     if (!source || lstatSync(source).isSymbolicLink() || !lstatSync(source).isFile()) {
       throw new Error(`caption font unavailable: ${font.name}; install the pinned font or set CLIPFORGE_CAPTION_FONT_DIR`);

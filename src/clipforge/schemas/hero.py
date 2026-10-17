@@ -54,6 +54,9 @@ class HeroProfile(Versioned):
         return hero_fingerprint(payload)
 
 
+CaptionVerificationStatus = Literal["unverified", "correct", "incorrect"]
+
+
 class AlignedWord(Versioned):
     """One forced word. Text is copied from the transcript. Times are not provisional."""
 
@@ -67,6 +70,7 @@ class AlignedWord(Versioned):
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
     alignment_quality: Literal["forced"] = "forced"
+    verification_status: CaptionVerificationStatus = "unverified"
     segment_index: int = Field(default=-1, ge=-1)
 
     @model_validator(mode="after")

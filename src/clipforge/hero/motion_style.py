@@ -66,6 +66,28 @@ EDITORIAL_CLEAN_V1 = MotionStyleProfile(
     max_simultaneous_emphasis=1,
 )
 
+QURAN_EDITORIAL_V1 = MotionStyleProfile(
+    style_id="quran-editorial-v1",
+    easing=EDITORIAL_CLEAN_V1.easing,
+    enter_frames=EDITORIAL_CLEAN_V1.enter_frames,
+    exit_frames=EDITORIAL_CLEAN_V1.exit_frames,
+    max_travel_px=EDITORIAL_CLEAN_V1.max_travel_px,
+    max_scale_permille=EDITORIAL_CLEAN_V1.max_scale_permille,
+    caption_mode="phrase_active_word",
+    contrast=EDITORIAL_CLEAN_V1.contrast,
+    font_identity="amiri-quran-local-v1",
+    font_sha256=(
+        *EDITORIAL_CLEAN_V1.font_sha256,
+        "8fa95faaf7bd18b71789f6f57312003e30c5029218a035e5baf613a0222ab82d",
+    ),
+    accent="#ffcf4a",
+    safe_left=64,
+    safe_right=64,
+    safe_top=120,
+    safe_bottom=300,
+    max_simultaneous_emphasis=1,
+)
+
 CONCAT_EDITORIAL_V1 = MotionStyleProfile(
     style_id="concat-editorial-v1",
     easing="ease_out_cubic",
@@ -209,6 +231,7 @@ STYLE_PROFILES: dict[str, MotionStyleProfile] = {
     item.style_id: item
     for item in (
         EDITORIAL_CLEAN_V1,
+        QURAN_EDITORIAL_V1,
         CONCAT_EDITORIAL_V1,
         KINETIC_CAPTION_V1,
         DOCUMENTARY_BROLL_V1,
@@ -230,6 +253,7 @@ def style_for_id(style_id: str) -> MotionStyleProfile:
 def production_style_ids() -> tuple[DirectionStyleId, ...]:
     return (
         "editorial-clean-v1",
+        "quran-editorial-v1",
         "concat-editorial-v1",
         "kinetic-caption-v1",
         "documentary-broll-v1",

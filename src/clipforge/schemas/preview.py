@@ -50,6 +50,26 @@ class RoughPreviewProfile(Versioned):
         return preview_fingerprint(self.model_dump(mode="json"))
 
 
+class RoughCaptionWord(Versioned):
+    """One provisional word interval carried into a review preview."""
+
+    word_id: EntityId
+    text: str = Field(min_length=1, max_length=200)
+    output_start_us: Microseconds
+    output_end_us: Microseconds
+    output_start_frame: int = Field(ge=0)
+    output_end_frame_exclusive: int = Field(ge=1)
+    verification_status: Literal["unverified", "correct", "incorrect"] = "unverified"
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.output_end_us <= self.output_start_us:
+            raise ValueError("rough caption word interval must be positive")
+        if self.output_end_frame_exclusive <= self.output_start_frame:
+            raise ValueError("rough caption word frame interval must be positive")
+        return self
+
+
 class RoughCaptionCue(Versioned):
     """One provisional caption. Microseconds are canonical. Frames are a render derivative."""
 
@@ -64,6 +84,7 @@ class RoughCaptionCue(Versioned):
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
     timing_quality: Literal["provisional"] = "provisional"
+    words: list[RoughCaptionWord] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def ranges_are_half_open(self) -> Self:
@@ -92,6 +113,7 @@ class RoughPreviewRenderInput(Versioned):
     height: Literal[1280] = 1280
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    font_identity: str = "dejavu-noto-local-v1"
     timing_quality: Literal["provisional"] = "provisional"
     captions: list[RoughCaptionCue] = Field(default_factory=list)
     source_start_us: int = Field(default=0, ge=0)

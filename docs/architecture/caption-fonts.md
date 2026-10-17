@@ -23,3 +23,11 @@ of Hanken Grotesk, Anton, Space Grotesk, and Noto Sans Arabic UI files. Their
 individual licenses, upstream commit, and hashes are recorded in
 [the Concat motion asset provenance note](concat-motion-assets.md). The style
 does not copy or execute Concat's AGPL Rust/WGSL effects.
+
+The opt-in `quran-editorial-v1` style adds the locally licensed
+`AmiriQuran.ttf` file (SIL Open Font License, SHA-256
+`8fa95faaf7bd18b71789f6f57312003e30c5029218a035e5baf613a0222ab82d`). The
+production staging script reads it from `CLIPFORGE_QURAN_FONT_DIR` and still
+hash-checks it before rendering; it never downloads a font at render time.
+Use this style only for reviewed canonical Quran captions, not as evidence that
+an ASR transcript or pronunciation is correct.

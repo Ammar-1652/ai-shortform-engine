@@ -37,6 +37,7 @@
     "CandidateMiningCacheRecord",
     "RoughPreviewProfile",
     "RoughCaptionCue",
+    "RoughCaptionWord",
     "RoughPreviewRenderInput",
     "CandidateRoughPreview",
     "RoughPreviewSetSummary",

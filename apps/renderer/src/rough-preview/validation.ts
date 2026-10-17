@@ -10,6 +10,7 @@ import {
   COMPOSITION_ID,
   OUTPUT_HEIGHT,
   OUTPUT_WIDTH,
+  type RoughCaptionWord,
   type RoughCaptionCue,
   type RoughPreviewInput,
 } from "./types.js";
@@ -29,6 +30,7 @@ const TOP_KEYS = new Set([
   "height",
   "video_fit",
   "background",
+  "font_identity",
   "timing_quality",
   "captions",
   "source_start_us",
@@ -52,6 +54,17 @@ const CUE_KEYS = new Set([
   "output_start_frame",
   "output_end_frame_exclusive",
   "timing_quality",
+  "words",
+]);
+const WORD_KEYS = new Set([
+  "schema_version",
+  "word_id",
+  "text",
+  "output_start_us",
+  "output_end_us",
+  "output_start_frame",
+  "output_end_frame_exclusive",
+  "verification_status",
 ]);
 
 const DANGEROUS = new Set([
@@ -106,6 +119,7 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     height: OUTPUT_HEIGHT,
     video_fit: "contain",
     background: "neutral-dark-v1",
+    ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
     timing_quality: "provisional",
     captions,
   };
@@ -175,7 +189,32 @@ function parseCue(raw: unknown, index: number, duration: number): RoughCaptionCu
     output_start_frame: frameStart,
     output_end_frame_exclusive: frameEnd,
     timing_quality: "provisional",
+    words: parseWords(record.words, duration),
   };
+}
+
+function parseWords(raw: unknown, duration: number): RoughCaptionWord[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error("caption words must be a list");
+  return raw.map((item, index) => {
+    const record = requireRecord(item, `caption word ${index}`);
+    rejectUnknown(record, WORD_KEYS, `caption word ${index}`);
+    const start = requireNonNegativeInt(record.output_start_frame, `caption word ${index} start`);
+    const end = requireNonNegativeInt(record.output_end_frame_exclusive, `caption word ${index} end`);
+    if (end <= start || end > duration) throw new Error(`caption word ${index} frame interval is invalid`);
+    if (record.verification_status !== "unverified" && record.verification_status !== "correct" && record.verification_status !== "incorrect") {
+      throw new Error(`caption word ${index} verification status is invalid`);
+    }
+    return {
+      word_id: requireId(record.word_id, `caption word ${index} id`),
+      text: requireText(record.text, `caption word ${index} text`),
+      output_start_us: requireNonNegativeInt(record.output_start_us, `caption word ${index} start_us`),
+      output_end_us: requireNonNegativeInt(record.output_end_us, `caption word ${index} end_us`),
+      output_start_frame: start,
+      output_end_frame_exclusive: end,
+      verification_status: record.verification_status,
+    };
+  });
 }
 
 function requireRecord(raw: unknown, label: string): Record<string, unknown> {
@@ -218,6 +257,13 @@ function requireNonNegativeInt(value: unknown, label: string): number {
 function requireId(value: unknown, label: string): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
     throw new Error(`${label} is not a safe id`);
+  }
+  return value;
+}
+
+function requireText(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 300) {
+    throw new Error(`${label} must be non-empty text`);
   }
   return value;
 }

@@ -4,6 +4,7 @@ export type HeroWord = {
   readonly text: string;
   readonly output_start_frame: number;
   readonly output_end_frame_exclusive: number;
+  readonly verification_status?: "unverified" | "correct" | "incorrect";
 };
 
 export type HeroCaption = {

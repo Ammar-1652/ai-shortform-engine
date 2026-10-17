@@ -24,6 +24,7 @@ function cue(overrides: Partial<RoughCaptionCue> = {}): RoughCaptionCue {
     output_start_frame: 0,
     output_end_frame_exclusive: 30,
     timing_quality: "provisional",
+    words: [],
     ...overrides,
   };
 }
@@ -142,6 +143,6 @@ describe("composition source", () => {
     const overlay = readFileSync(resolve(here, "captions.ts"), "utf8");
     expect(picture).not.toContain("dangerouslySetInnerHTML");
     expect(overlay).not.toContain("dangerouslySetInnerHTML");
-    expect(picture).toContain("{caption.text}");
+    expect(picture).toContain("caption.text");
   });
 });
