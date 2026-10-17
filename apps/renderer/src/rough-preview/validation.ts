@@ -12,6 +12,7 @@ import {
   OUTPUT_WIDTH,
   type RoughCaptionWord,
   type RoughCaptionCue,
+  type CampaignOverlaySpec,
   type RoughPreviewInput,
 } from "./types.js";
 
@@ -30,6 +31,7 @@ const TOP_KEYS = new Set([
   "height",
   "video_fit",
   "background",
+  "campaign_overlay",
   "font_identity",
   "video_scale_permille",
   "video_offset_x_px",
@@ -135,6 +137,9 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     height: OUTPUT_HEIGHT,
     video_fit: "contain",
     background: record.background,
+    ...(record.campaign_overlay === undefined || record.campaign_overlay === null
+      ? {}
+      : { campaign_overlay: parseCampaignOverlay(record.campaign_overlay, duration) }),
     ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
     video_scale_permille: videoScale,
     video_offset_x_px: videoOffsetX,
@@ -142,6 +147,67 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     word_timing_source: wordTimingSource,
     timing_quality: "provisional",
     captions,
+  };
+}
+
+function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySpec {
+  const record = requireRecord(raw, "campaign overlay");
+  const required = [
+    "campaign_id", "cta_asset_id", "cta_asset_sha256", "cta_asset_name",
+    "cta_background_removal", "cta_render_mode", "cta_frame_prefix", "cta_frame_count",
+    "cta_frame_rate", "cta_start_us", "cta_end_us", "watermark_asset_id",
+    "watermark_asset_sha256", "watermark_asset_name", "watermark_mode",
+    "watermark_position", "watermark_width_permille", "first_post_caption_line",
+  ];
+  for (const key of required) {
+    if (!(key in record)) throw new Error(`campaign overlay is missing ${key}`);
+  }
+  rejectDangerousKeys(record, "campaign overlay");
+  rejectUnknown(record, new Set(["schema_version", ...required]), "campaign overlay");
+  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || record.cta_render_mode !== "alpha_png_sequence_v1" || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || record.watermark_position !== "top_right") {
+    throw new Error("unsupported campaign overlay contract");
+  }
+  const ctaStart = requireNonNegativeInt(record.cta_start_us, "campaign overlay cta_start_us");
+  const ctaEnd = requireNonNegativeInt(record.cta_end_us, "campaign overlay cta_end_us");
+  if (ctaEnd <= ctaStart || ctaEnd > Math.ceil(duration * 1_000_000 / 30)) {
+    throw new Error("campaign overlay CTA interval is outside the composition");
+  }
+  const safeName = (value: unknown, label: string): string => {
+    if (typeof value !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(value) || value.includes("..")) {
+      throw new Error(`campaign overlay ${label} must be a safe staging filename`);
+    }
+    return value;
+  };
+  const ctaName = safeName(record.cta_asset_name, "CTA name");
+  const ctaPrefix = safeName(record.cta_frame_prefix, "CTA frame prefix");
+  const frameCount = requireIntegerInRange(record.cta_frame_count, 1, 600, "campaign overlay cta_frame_count");
+  const watermarkName = safeName(record.watermark_asset_name, "watermark name");
+  if (typeof record.cta_asset_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.cta_asset_sha256) || typeof record.watermark_asset_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.watermark_asset_sha256)) {
+    throw new Error("campaign overlay asset hashes must be sha256");
+  }
+  if (typeof record.cta_asset_id !== "string" || typeof record.watermark_asset_id !== "string" || typeof record.first_post_caption_line !== "string") {
+    throw new Error("campaign overlay asset ids and caption line must be strings");
+  }
+  const width = requireIntegerInRange(record.watermark_width_permille, 80, 280, "campaign overlay watermark_width_permille");
+  return {
+    campaign_id: "tarteel",
+    cta_asset_id: record.cta_asset_id,
+    cta_asset_sha256: record.cta_asset_sha256,
+    cta_asset_name: ctaName,
+    cta_background_removal: "chroma_key_v1",
+    cta_render_mode: "alpha_png_sequence_v1",
+    cta_frame_prefix: ctaPrefix,
+    cta_frame_count: frameCount,
+    cta_frame_rate: 30,
+    cta_start_us: ctaStart,
+    cta_end_us: ctaEnd,
+    watermark_asset_id: record.watermark_asset_id,
+    watermark_asset_sha256: record.watermark_asset_sha256,
+    watermark_asset_name: watermarkName,
+    watermark_mode: "alpha_v1",
+    watermark_position: "top_right",
+    watermark_width_permille: width,
+    first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
   };
 }
 

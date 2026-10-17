@@ -62,6 +62,7 @@ from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
 from clipforge.schemas.campaign import (
     Campaign,
+    CampaignOverlaySpec,
     CampaignPolicy,
     CampaignPolicyRule,
     CampaignSource,
@@ -402,6 +403,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     NarrationRequest,
     VoiceProviderProfile,
     Campaign,
+    CampaignOverlaySpec,
     CampaignPolicy,
     CampaignPolicyRule,
     CampaignSource,

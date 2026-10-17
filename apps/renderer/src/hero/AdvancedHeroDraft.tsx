@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
+import { AbsoluteFill, Audio, Img, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
 import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
@@ -110,6 +110,27 @@ type MotionStyle = {
   accent?: string;
 };
 
+type CampaignOverlaySpec = {
+  campaign_id: "tarteel";
+  cta_asset_id: string;
+  cta_asset_sha256: string;
+  cta_asset_name: string;
+  cta_background_removal: "chroma_key_v1";
+  cta_render_mode: "alpha_png_sequence_v1";
+  cta_frame_prefix: string;
+  cta_frame_count: number;
+  cta_frame_rate: 30;
+  cta_start_us: number;
+  cta_end_us: number;
+  watermark_asset_id: string;
+  watermark_asset_sha256: string;
+  watermark_asset_name: string;
+  watermark_mode: "alpha_v1";
+  watermark_position: "top_right";
+  watermark_width_permille: number;
+  first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
+};
+
 export type AdvancedHeroInput = {
   renderer_recipe_version?: "advanced-hero-renderer-v1" | "advanced-hero-renderer-clean-v1" | "advanced-hero-renderer-directed-v2" | "advanced-hero-renderer-directed-v3" | "advanced-hero-renderer-directed-v4";
   duration_in_frames: number;
@@ -137,6 +158,7 @@ export type AdvancedHeroInput = {
   reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
+  campaign_overlay?: CampaignOverlaySpec;
   captions?: TypeEvent[];
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
@@ -321,6 +343,19 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
+  if (input.campaign_overlay) {
+    if (
+      input.campaign_overlay.campaign_id !== "tarteel" ||
+      input.campaign_overlay.cta_background_removal !== "chroma_key_v1" ||
+      input.campaign_overlay.cta_render_mode !== "alpha_png_sequence_v1" ||
+      input.campaign_overlay.watermark_mode !== "alpha_v1" ||
+      input.campaign_overlay.watermark_position !== "top_right" ||
+      names[input.campaign_overlay.cta_asset_id] !== input.campaign_overlay.cta_frame_prefix ||
+      names[input.campaign_overlay.watermark_asset_id] !== input.campaign_overlay.watermark_asset_name
+    ) {
+      throw new Error("invalid Tarteel campaign overlay binding");
+    }
+  }
   const captions = input.captions ?? [];
   const typography = input.typography ?? [];
   const visibleType = typography.filter(
@@ -412,6 +447,29 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         durationInFrames={input.duration_in_frames}
         volume={linearVolume(input.source_gain_db ?? 0)}
       />
+      {input.campaign_overlay ? (
+        <>
+          <Img
+            src={staticFile(input.campaign_overlay.watermark_asset_name)}
+            style={{
+              position: "absolute",
+              top: 52,
+              right: 52,
+              width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+              height: "auto",
+              objectFit: "contain",
+              filter: "drop-shadow(0 4px 9px rgba(0,0,0,.6))",
+            }}
+          />
+          {frame >= frameAt(input.campaign_overlay.cta_start_us) &&
+          frame < frameAt(input.campaign_overlay.cta_end_us) ? (
+            <CampaignCta
+              overlay={input.campaign_overlay}
+              localFrame={frame - frameAt(input.campaign_overlay.cta_start_us)}
+            />
+          ) : null}
+        </>
+      ) : null}
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
         <Audio
           src={staticFile(names.narration)}
@@ -696,5 +754,29 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         />
       </AbsoluteFill> : null}
     </AbsoluteFill>
+  );
+}
+
+function CampaignCta({
+  overlay,
+  localFrame,
+}: {
+  overlay: NonNullable<AdvancedHeroInput["campaign_overlay"]>;
+  localFrame: number;
+}) {
+  const index = Math.min(overlay.cta_frame_count - 1, Math.max(0, localFrame));
+  const name = `${overlay.cta_frame_prefix}-${String(index + 1).padStart(4, "0")}.png`;
+  return (
+    <Img
+      src={staticFile(name)}
+      style={{
+        position: "absolute",
+        left: "7%",
+        width: "86%",
+        bottom: 360,
+        height: "auto",
+        objectFit: "contain",
+      }}
+    />
   );
 }

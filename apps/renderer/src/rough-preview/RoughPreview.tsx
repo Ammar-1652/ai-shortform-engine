@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, Img, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
 
 import { activeCaption } from "./captions.js";
 import { VIDEO_OBJECT_FIT } from "./layout.js";
@@ -67,6 +67,29 @@ export function RoughPreview(raw: RoughPreviewInput) {
           durationInFrames={input.duration_in_frames}
         />
       </AbsoluteFill>
+      {input.campaign_overlay ? (
+        <>
+          <Img
+            src={staticFile(input.campaign_overlay.watermark_asset_name)}
+            style={{
+              position: "absolute",
+              top: 34,
+              right: 34,
+              width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+              height: "auto",
+              objectFit: "contain",
+              filter: "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
+            }}
+          />
+          {frame >= Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000) &&
+          frame < Math.ceil((input.campaign_overlay.cta_end_us * 30) / 1_000_000) ? (
+            <CampaignCta
+              overlay={input.campaign_overlay}
+              localFrame={frame - Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000)}
+            />
+          ) : null}
+        </>
+      ) : null}
       {caption === null ? null : (
         <div
           style={{
@@ -100,6 +123,31 @@ export function RoughPreview(raw: RoughPreviewInput) {
         </div>
       )}
     </AbsoluteFill>
+  );
+}
+
+function CampaignCta({
+  overlay,
+  localFrame,
+}: {
+  overlay: NonNullable<RoughPreviewInput["campaign_overlay"]>;
+  localFrame: number;
+}) {
+  const index = Math.min(overlay.cta_frame_count - 1, Math.max(0, localFrame));
+  const name = `${overlay.cta_frame_prefix}-${String(index + 1).padStart(4, "0")}.png`;
+  return (
+    <Img
+      src={staticFile(name)}
+      style={{
+        position: "absolute",
+        left: "8%",
+        right: "8%",
+        bottom: 300,
+        width: "84%",
+        height: "auto",
+        objectFit: "contain",
+      }}
+    />
   );
 }
 

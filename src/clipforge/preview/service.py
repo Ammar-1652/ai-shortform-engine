@@ -19,6 +19,7 @@ from time import perf_counter
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.campaign.overlays import stage_tarteel_overlay
 from clipforge.errors import MediaError, StorageError
 from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
@@ -56,6 +57,8 @@ from clipforge.storage import (
     Database,
     find_artifact,
     get_job,
+    get_project,
+    get_source_asset,
     insert_artifact,
     insert_job,
     list_jobs,
@@ -100,6 +103,12 @@ def render_previews(
     """Render every selected candidate for ``source_asset_id``."""
     root = work_root.resolve()
     active = profile or default_profile()
+    if profile is None:
+        with database.connect() as connection:
+            source_record = get_source_asset(connection, source_asset_id)
+            project = get_project(connection, source_record.project_id)
+        if project.profile_id == "profile-tarteel-campaign":
+            active = active.model_copy(update={"campaign_id": "tarteel"})
     renderer = backend if backend is not None else RemotionRoughRenderBackend()
     inputs = load_preview_inputs(
         database,
@@ -143,6 +152,7 @@ def render_previews(
             inputs = _confirm(database, source_asset_id, root, active, inputs)
             run_dir = inputs.pair.workspace.make_preview_run(preview_set_id)
             document, manifest = _render_run(
+                database,
                 inputs,
                 active,
                 renderer,
@@ -175,6 +185,7 @@ def render_previews(
 
 
 def _render_run(
+    database: Database,
     inputs: PreviewInputs,
     profile: RoughPreviewProfile,
     backend: RoughRenderBackend,
@@ -200,6 +211,7 @@ def _render_run(
         directory = inputs.pair.workspace.preview_candidate_dir(preview_set_id, candidate.candidate_id)
         directory.mkdir()
         rendered = _render_input(
+            database,
             inputs,
             candidate,
             profile,
@@ -267,6 +279,7 @@ def _selected(inputs: PreviewInputs, candidate_id: str | None) -> list[Candidate
 
 
 def _render_input(
+    database: Database,
     inputs: PreviewInputs,
     candidate: CandidateClip,
     profile: RoughPreviewProfile,
@@ -296,6 +309,17 @@ def _render_input(
     staged_video_sha = ""
     staged_audio_sha = ""
     staged_duration = 0
+    campaign_overlay = None
+    if profile.campaign_id == "tarteel":
+        overlay = stage_tarteel_overlay(
+            database=database,
+            workspace=inputs.pair.workspace,
+            project_id=inputs.pair.source.project_id,
+            work_root=inputs.pair.workspace.root,
+            staging_dir=run_dir / "staging",
+            duration_us=(frame_count * 1_000_000) // profile.fps_numerator,
+        )
+        campaign_overlay = overlay.spec
     if browser:
         from clipforge.preview.trim import stage_candidate_span
 
@@ -327,6 +351,7 @@ def _render_input(
         source_start_us=segment.source_start_us,
         source_end_us=segment.source_end_us,
         background=profile.background,
+        campaign_overlay=campaign_overlay,
         word_timing_source=(
             "transcript-word-times-v1" if any(cue.words for cue in captions) else "segment-only-v1"
         ),

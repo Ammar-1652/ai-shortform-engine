@@ -154,6 +154,137 @@
       "title": "BrollEvent",
       "type": "object"
     },
+    "CampaignOverlaySpec": {
+      "additionalProperties": false,
+      "description": "Source-bound branding required by a campaign delivery profile.\n\nThe renderer receives safe staging names only. Asset ids and hashes stay\nin the typed plan/catalogue, so an overlay cannot be swapped after QA.\nTarteel CTA clips are green-screen files; ``chroma_key_v1`` records that\nthe green background was removed before Remotion compositing.",
+      "properties": {
+        "campaign_id": {
+          "const": "tarteel",
+          "default": "tarteel",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "cta_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Cta Asset Id",
+          "type": "string"
+        },
+        "cta_asset_name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Cta Asset Name",
+          "type": "string"
+        },
+        "cta_asset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cta Asset Sha256",
+          "type": "string"
+        },
+        "cta_background_removal": {
+          "const": "chroma_key_v1",
+          "default": "chroma_key_v1",
+          "title": "Cta Background Removal",
+          "type": "string"
+        },
+        "cta_end_us": {
+          "exclusiveMinimum": 0,
+          "title": "Cta End Us",
+          "type": "integer"
+        },
+        "cta_frame_count": {
+          "maximum": 600,
+          "minimum": 1,
+          "title": "Cta Frame Count",
+          "type": "integer"
+        },
+        "cta_frame_prefix": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Cta Frame Prefix",
+          "type": "string"
+        },
+        "cta_frame_rate": {
+          "const": 30,
+          "default": 30,
+          "title": "Cta Frame Rate",
+          "type": "integer"
+        },
+        "cta_render_mode": {
+          "const": "alpha_png_sequence_v1",
+          "default": "alpha_png_sequence_v1",
+          "title": "Cta Render Mode",
+          "type": "string"
+        },
+        "cta_start_us": {
+          "minimum": 0,
+          "title": "Cta Start Us",
+          "type": "integer"
+        },
+        "first_post_caption_line": {
+          "const": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+          "default": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+          "title": "First Post Caption Line",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "watermark_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Watermark Asset Id",
+          "type": "string"
+        },
+        "watermark_asset_name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Watermark Asset Name",
+          "type": "string"
+        },
+        "watermark_asset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Watermark Asset Sha256",
+          "type": "string"
+        },
+        "watermark_mode": {
+          "const": "alpha_v1",
+          "default": "alpha_v1",
+          "title": "Watermark Mode",
+          "type": "string"
+        },
+        "watermark_position": {
+          "const": "top_right",
+          "default": "top_right",
+          "title": "Watermark Position",
+          "type": "string"
+        },
+        "watermark_width_permille": {
+          "default": 170,
+          "maximum": 280,
+          "minimum": 80,
+          "title": "Watermark Width Permille",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cta_asset_id",
+        "cta_asset_sha256",
+        "cta_asset_name",
+        "cta_frame_prefix",
+        "cta_frame_count",
+        "cta_start_us",
+        "cta_end_us",
+        "watermark_asset_id",
+        "watermark_asset_sha256",
+        "watermark_asset_name"
+      ],
+      "title": "CampaignOverlaySpec",
+      "type": "object"
+    },
     "CaptionWordTiming": {
       "additionalProperties": false,
       "description": "One forced word inside a grouped Advanced Hero caption.",
@@ -1066,6 +1197,17 @@
       },
       "title": "Broll",
       "type": "array"
+    },
+    "campaign_overlay": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CampaignOverlaySpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "candidate_id": {
       "description": "Stable id. UUID text is the usual value.",

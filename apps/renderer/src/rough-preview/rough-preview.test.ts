@@ -116,6 +116,62 @@ describe("rough preview render input", () => {
     const word = { word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" as const };
     expect(() => parseRenderInput(input({ word_highlight_mode: "reviewed", captions: [cue({ words: [word] })] }))).toThrow(/timing source/);
   });
+
+  it("accepts a source-bound Tarteel CTA and alpha watermark overlay", () => {
+    const overlay = {
+      schema_version: "1.0.0",
+      campaign_id: "tarteel",
+      cta_asset_id: "cta-asset",
+      cta_asset_sha256: "a".repeat(64),
+      cta_asset_name: "tarteel-cta-alpha.webm",
+      cta_background_removal: "chroma_key_v1",
+      cta_render_mode: "alpha_png_sequence_v1",
+      cta_frame_prefix: "tarteel-cta-alpha",
+      cta_frame_count: 60,
+      cta_frame_rate: 30,
+      cta_start_us: 1_000_000,
+      cta_end_us: 3_000_000,
+      watermark_asset_id: "watermark-asset",
+      watermark_asset_sha256: "b".repeat(64),
+      watermark_asset_name: "tarteel-watermark-alpha.png",
+      watermark_mode: "alpha_v1",
+      watermark_position: "top_right",
+      watermark_width_permille: 170,
+      first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
+    } as const;
+    expect(parseRenderInput(input({ campaign_overlay: overlay })).campaign_overlay?.cta_asset_name).toBe(
+      "tarteel-cta-alpha.webm",
+    );
+  });
+
+  it("keeps legacy inputs compatible when the optional overlay is null", () => {
+    expect(parseRenderInput({ ...input(), campaign_overlay: null }).campaign_overlay).toBeUndefined();
+  });
+
+  it("rejects an opaque CTA contract", () => {
+    const overlay = {
+      schema_version: "1.0.0",
+      campaign_id: "tarteel",
+      cta_asset_id: "cta-asset",
+      cta_asset_sha256: "a".repeat(64),
+      cta_asset_name: "cta.mp4",
+      cta_background_removal: "none",
+      cta_render_mode: "alpha_png_sequence_v1",
+      cta_frame_prefix: "cta",
+      cta_frame_count: 60,
+      cta_frame_rate: 30,
+      cta_start_us: 1_000_000,
+      cta_end_us: 3_000_000,
+      watermark_asset_id: "watermark-asset",
+      watermark_asset_sha256: "b".repeat(64),
+      watermark_asset_name: "watermark.png",
+      watermark_mode: "alpha_v1",
+      watermark_position: "top_right",
+      watermark_width_permille: 170,
+      first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
+    };
+    expect(() => parseRenderInput(input({ campaign_overlay: overlay as never }))).toThrow(/overlay/);
+  });
 });
 
 describe("provisional caption frames", () => {

@@ -95,6 +95,25 @@ for (const item of batch.items) {
   const audioName = stagedBasename(input.audio_path);
   contained(path.join(stagingDir, videoName), stagingDir);
   contained(path.join(stagingDir, audioName), stagingDir);
+  if (input.campaign_overlay) {
+    const overlay = input.campaign_overlay;
+    for (const key of ["watermark_asset_name"]) {
+      const value = overlay[key];
+      if (typeof value !== "string" || stagedBasename(value) !== value) {
+        throw new Error(`campaign overlay ${key} is not a safe staged name`);
+      }
+      contained(path.join(stagingDir, value), stagingDir);
+    }
+    if (typeof overlay.cta_frame_prefix !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_frame_prefix) || !Number.isInteger(overlay.cta_frame_count) || overlay.cta_frame_count < 1 || overlay.cta_frame_count > 600) {
+      throw new Error("campaign overlay CTA frame sequence is invalid");
+    }
+    for (let index = 1; index <= overlay.cta_frame_count; index += 1) {
+      contained(path.join(stagingDir, `${overlay.cta_frame_prefix}-${String(index).padStart(4, "0")}.png`), stagingDir);
+    }
+    if (overlay.cta_background_removal !== "chroma_key_v1" || overlay.cta_render_mode !== "alpha_png_sequence_v1" || overlay.cta_frame_rate !== 30 || overlay.watermark_mode !== "alpha_v1") {
+      throw new Error("unsupported campaign overlay contract");
+    }
+  }
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
     throw new Error("render batch h264Crf must be an integer from 0 to 51");
   }

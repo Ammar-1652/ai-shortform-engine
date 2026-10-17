@@ -13,6 +13,7 @@ from typing import Any, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
+from clipforge.schemas.campaign import CampaignOverlaySpec
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.direction import MotionStyleSpec, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
@@ -385,6 +386,7 @@ class AdvancedHeroRenderInput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
+    campaign_overlay: CampaignOverlaySpec | None = None
     language: str = "en-US"
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
@@ -419,6 +421,13 @@ class AdvancedHeroRenderInput(Versioned):
             lowered = name.lower()
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
                 raise ValueError("advanced asset name must be a staging file name")
+        if self.campaign_overlay is not None:
+            for name in (
+                self.campaign_overlay.cta_frame_prefix,
+                self.campaign_overlay.watermark_asset_name,
+            ):
+                if name not in self.asset_names.values():
+                    raise ValueError("campaign overlay asset is not present in staged asset_names")
         return self
 
 
@@ -516,6 +525,7 @@ class AdvancedHeroPlanDocument(Versioned):
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     assets: list[AssetBinding] = Field(default_factory=list)
+    campaign_overlay: CampaignOverlaySpec | None = None
     qa_requirements: list[str] = Field(min_length=1)
     provenance: ArtifactProvenance
 

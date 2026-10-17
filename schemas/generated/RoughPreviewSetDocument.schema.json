@@ -295,6 +295,15 @@
           "title": "Background",
           "type": "string"
         },
+        "campaign_id": {
+          "default": "none",
+          "enum": [
+            "none",
+            "tarteel"
+          ],
+          "title": "Campaign Id",
+          "type": "string"
+        },
         "caption_algorithm_version": {
           "const": "provisional-caption-v1",
           "default": "provisional-caption-v1",

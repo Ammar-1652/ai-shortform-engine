@@ -141,6 +141,7 @@
     "NarrationRequest",
     "VoiceProviderProfile",
     "Campaign",
+    "CampaignOverlaySpec",
     "CampaignPolicy",
     "CampaignPolicyRule",
     "CampaignSource",

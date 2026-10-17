@@ -15,6 +15,7 @@ from typing import TypeVar, cast
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.campaign.overlays import stage_tarteel_overlay
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
@@ -855,12 +856,33 @@ def _render_run(
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
         staged = {item.asset_id: _staged_name(item) for item in plan.assets}
+        campaign_overlay = plan.campaign_overlay
         if narration is not None:
             _link(narration[1], staging / "narration.wav", root)
             staged["narration"] = "narration.wav"
         for binding in plan.assets:
             catalog_file = _asset_path(workspace, binding.asset_id, root)
             _link(catalog_file, staging / staged[binding.asset_id], root)
+        if campaign_overlay is not None:
+            staged_overlay = stage_tarteel_overlay(
+                database=database,
+                workspace=workspace,
+                project_id=hero.project_id,
+                work_root=root,
+                staging_dir=staging,
+                duration_us=_output_end_us(plan),
+                cta_start_us=campaign_overlay.cta_start_us,
+                cta_asset_id=campaign_overlay.cta_asset_id,
+                watermark_asset_id=campaign_overlay.watermark_asset_id,
+            )
+            if (
+                staged_overlay.spec.cta_asset_id != campaign_overlay.cta_asset_id
+                or staged_overlay.spec.watermark_asset_id != campaign_overlay.watermark_asset_id
+            ):
+                raise MediaError("Tarteel overlay staging did not preserve the reviewed asset bindings")
+            staged[campaign_overlay.cta_asset_id] = staged_overlay.spec.cta_frame_prefix
+            staged[campaign_overlay.watermark_asset_id] = staged_overlay.spec.watermark_asset_name
+            campaign_overlay = staged_overlay.spec
         selected_style = (
             style_for_id(plan.style_id)
             if plan.style_id != "legacy-v1"
@@ -887,6 +909,7 @@ def _render_run(
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
             hero_review_status=plan.hero_review_status,
             language=_alignment_locale(workspace, plan, review_only=review_only),
+            campaign_overlay=campaign_overlay,
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,

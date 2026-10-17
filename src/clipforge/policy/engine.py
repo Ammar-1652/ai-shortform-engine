@@ -32,6 +32,7 @@ class PolicyContext:
     plans: tuple[AdvancedHeroPlanDocument, ...]
     work_root: Path
     workspace: SourceWorkspace | None
+    profile_id: str = ""
 
 
 Evaluator = Callable[[PolicyContext], ComplianceResult]
@@ -153,6 +154,47 @@ def evaluate_asset_rights(context: PolicyContext) -> ComplianceResult:
     )
 
 
+def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
+    """Enforce the non-negotiable Tarteel branding and audio contract."""
+    if not context.plans:
+        return _result(
+            "policy-tarteel-delivery",
+            ComplianceStatus.INSUFFICIENT_EVIDENCE,
+            "Tarteel compliance has no advanced plan to inspect",
+            context.source_asset_id,
+        )
+    problems: list[str] = []
+    for plan in context.plans:
+        overlay = plan.campaign_overlay
+        if overlay is None:
+            problems.append(f"plan {plan.plan_id} is missing the mandatory Tarteel CTA and watermark overlay")
+            continue
+        binding_ids = {item.asset_id for item in plan.assets}
+        if overlay.cta_asset_id not in binding_ids:
+            problems.append("Tarteel CTA is not rights-bound in the advanced plan")
+        if overlay.watermark_asset_id not in binding_ids:
+            problems.append("Tarteel watermark is not rights-bound in the advanced plan")
+        if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
+            problems.append("Tarteel CTA interval extends past the output")
+        caption_texts = {item.text.strip() for item in (*plan.captions, *plan.typography)}
+        if overlay.first_post_caption_line not in caption_texts:
+            problems.append("mandatory first-post Tarteel caption line is missing")
+        if plan.sfx:
+            problems.append("Tarteel forbids added SFX/music, but the plan contains audio events")
+        if "tarteel-overlay-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the tarteel-overlay-v1 QA gate")
+    if problems:
+        return _result(
+            "policy-tarteel-delivery", ComplianceStatus.FAIL, "; ".join(problems), context.source_asset_id
+        )
+    return _result(
+        "policy-tarteel-delivery",
+        ComplianceStatus.PASS,
+        "Tarteel CTA, alpha watermark, mandatory caption, output interval, and no-added-audio rules passed",
+        context.source_asset_id,
+    )
+
+
 def _public(text: str, root: Path, asset_id: str) -> str:
     lowered = text.lower()
     if "symlink" in lowered:
@@ -183,4 +225,5 @@ def _result(rule_id: str, status: ComplianceStatus, evidence: str, source_asset_
 _EVALUATORS: dict[str, Evaluator] = {
     "policy-source-rights": evaluate_source_rights,
     "policy-asset-rights": evaluate_asset_rights,
+    "policy-tarteel-delivery": evaluate_tarteel_delivery,
 }

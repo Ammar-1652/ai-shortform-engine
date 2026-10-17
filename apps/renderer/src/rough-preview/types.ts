@@ -39,6 +39,7 @@ export type RoughPreviewInput = {
   readonly height: 1280;
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1" | "blurred-source-v1";
+  readonly campaign_overlay?: CampaignOverlaySpec;
   readonly font_identity?: string;
   readonly video_scale_permille: number;
   readonly video_offset_x_px: number;
@@ -52,6 +53,27 @@ export type RoughPreviewInput = {
   readonly staged_video_sha256?: string;
   readonly staged_audio_sha256?: string;
   readonly staged_duration_us?: number;
+};
+
+export type CampaignOverlaySpec = {
+  readonly campaign_id: "tarteel";
+  readonly cta_asset_id: string;
+  readonly cta_asset_sha256: string;
+  readonly cta_asset_name: string;
+  readonly cta_background_removal: "chroma_key_v1";
+  readonly cta_render_mode: "alpha_png_sequence_v1";
+  readonly cta_frame_prefix: string;
+  readonly cta_frame_count: number;
+  readonly cta_frame_rate: 30;
+  readonly cta_start_us: number;
+  readonly cta_end_us: number;
+  readonly watermark_asset_id: string;
+  readonly watermark_asset_sha256: string;
+  readonly watermark_asset_name: string;
+  readonly watermark_mode: "alpha_v1";
+  readonly watermark_position: "top_right";
+  readonly watermark_width_permille: number;
+  readonly first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
 };
 
 export const COMPOSITION_ID = "RoughPreview" as const;

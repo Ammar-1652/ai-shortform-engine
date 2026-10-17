@@ -15,6 +15,7 @@ from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.preview import (
     CandidateRoughPreview,
     RoughPreviewCacheRecord,
+    RoughPreviewRenderInput,
     RoughPreviewSetDocument,
 )
 from clipforge.schemas.time import digest_time_map
@@ -209,6 +210,31 @@ def _files(
             problems.append(f"preview MP4 for {preview.candidate_id} does not match its recorded hash")
         if input_hash != preview.render_input_sha256:
             problems.append(f"render input for {preview.candidate_id} does not match its recorded hash")
+        if document.profile.campaign_id == "tarteel":
+            try:
+                render_input = RoughPreviewRenderInput.model_validate_json(rendered.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                problems.append(f"Tarteel render input for {preview.candidate_id} is invalid: {exc}")
+            else:
+                overlay = render_input.campaign_overlay
+                if overlay is None:
+                    problems.append(
+                        f"Tarteel render input for {preview.candidate_id} has no CTA/watermark overlay"
+                    )
+                else:
+                    staging = rendered.parent.parent.parent / "staging"
+                    frame_prefix = overlay.cta_frame_prefix
+                    frame_path = staging / f"{frame_prefix}-0001.png"
+                    for name, label in ((overlay.watermark_asset_name, "watermark"),):
+                        asset_path = staging / name
+                        if (
+                            asset_path.is_symlink()
+                            or not asset_path.is_file()
+                            or asset_path.stat().st_size == 0
+                        ):
+                            problems.append(f"Tarteel {label} alpha asset is missing from staging")
+                    if frame_path.is_symlink() or not frame_path.is_file() or frame_path.stat().st_size == 0:
+                        problems.append("Tarteel CTA alpha frame is missing from staging")
         problems.extend(_technical(video, preview))
     return problems
 

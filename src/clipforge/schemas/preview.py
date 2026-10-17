@@ -13,6 +13,7 @@ from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
+from clipforge.schemas.campaign import CampaignOverlaySpec
 from clipforge.schemas.common import ContractModel, EntityId, Microseconds, Versioned
 from clipforge.schemas.provenance import ArtifactProvenance
 
@@ -37,6 +38,7 @@ class RoughPreviewProfile(Versioned):
     caption_algorithm_version: Literal["provisional-caption-v1"] = "provisional-caption-v1"
     caption_style_version: Literal["rough-caption-style-v1"] = "rough-caption-style-v1"
     renderer_recipe_version: Literal["rough-preview-renderer-v1"] = "rough-preview-renderer-v1"
+    campaign_id: Literal["none", "tarteel"] = "none"
     video_codec: Literal["h264"] = "h264"
     pixel_format: Literal["yuv420p"] = "yuv420p"
     audio_enabled: Literal[True] = True
@@ -47,7 +49,12 @@ class RoughPreviewProfile(Versioned):
     max_caption_gap_us: Literal[1_250_000] = 1_250_000
 
     def fingerprint(self) -> str:
-        return preview_fingerprint(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        # Keep the legacy rough-preview fingerprint stable when no campaign
+        # overlay is requested. A named campaign is output-changing.
+        if self.campaign_id == "none":
+            payload.pop("campaign_id", None)
+        return preview_fingerprint(payload)
 
 
 class RoughCaptionWord(Versioned):
@@ -113,6 +120,7 @@ class RoughPreviewRenderInput(Versioned):
     height: Literal[1280] = 1280
     video_fit: Literal["contain"] = "contain"
     background: Literal["neutral-dark-v1", "blurred-source-v1"] = "neutral-dark-v1"
+    campaign_overlay: CampaignOverlaySpec | None = None
     font_identity: str = "dejavu-noto-local-v1"
     video_scale_permille: int = Field(default=1000, ge=1000, le=1250)
     video_offset_x_px: int = Field(default=0, ge=-120, le=120)
@@ -146,6 +154,8 @@ class RoughPreviewRenderInput(Versioned):
             and self.word_timing_source == "segment-only-v1"
         ):
             raise ValueError("reviewed word highlighting requires an explicit word timing source")
+        if self.campaign_overlay is not None and self.campaign_overlay.cta_end_us > self._duration_hint_us():
+            raise ValueError("campaign CTA interval extends past the preview duration")
         return self
 
     def _duration_hint_us(self) -> int:

@@ -88,6 +88,56 @@ class Campaign(Versioned):
         return _plain(value, label="campaign url", allow_https=True)
 
 
+class CampaignOverlaySpec(Versioned):
+    """Source-bound branding required by a campaign delivery profile.
+
+    The renderer receives safe staging names only. Asset ids and hashes stay
+    in the typed plan/catalogue, so an overlay cannot be swapped after QA.
+    Tarteel CTA clips are green-screen files; ``chroma_key_v1`` records that
+    the green background was removed before Remotion compositing.
+    """
+
+    campaign_id: Literal["tarteel"] = "tarteel"
+    cta_asset_id: EntityId
+    cta_asset_sha256: str = Field(pattern=_SHA)
+    cta_asset_name: str = Field(min_length=1, max_length=80)
+    cta_background_removal: Literal["chroma_key_v1"] = "chroma_key_v1"
+    cta_render_mode: Literal["alpha_png_sequence_v1"] = "alpha_png_sequence_v1"
+    cta_frame_prefix: str = Field(min_length=1, max_length=64)
+    cta_frame_count: int = Field(ge=1, le=600)
+    cta_frame_rate: Literal[30] = 30
+    cta_start_us: int = Field(ge=0)
+    cta_end_us: int = Field(gt=0)
+    watermark_asset_id: EntityId
+    watermark_asset_sha256: str = Field(pattern=_SHA)
+    watermark_asset_name: str = Field(min_length=1, max_length=80)
+    watermark_mode: Literal["alpha_v1"] = "alpha_v1"
+    watermark_position: Literal["top_right"] = "top_right"
+    watermark_width_permille: int = Field(default=170, ge=80, le=280)
+    first_post_caption_line: Literal["اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"] = (
+        "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"
+    )
+
+    @model_validator(mode="after")
+    def interval_and_names_are_safe(self) -> Self:
+        if self.cta_end_us <= self.cta_start_us:
+            raise ValueError("campaign CTA interval must be positive")
+        for label, name in (
+            ("CTA", self.cta_asset_name),
+            ("CTA frame prefix", self.cta_frame_prefix),
+            ("watermark", self.watermark_asset_name),
+        ):
+            if (
+                name != name.strip()
+                or "/" in name
+                or "\\" in name
+                or ".." in name
+                or not all(character.isalnum() or character in ".-_" for character in name)
+            ):
+                raise ValueError(f"campaign {label} asset name must be a safe staging filename")
+        return self
+
+
 class CampaignPolicyRule(Versioned):
     """One hard rule. Ambiguous rules ask the operator instead of guessing."""
 
