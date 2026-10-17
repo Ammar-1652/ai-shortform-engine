@@ -39,6 +39,32 @@ Antoine's outside-media rule blocks registration for that campaign. Other campai
 
 A cache hit returns the same asset id and does not copy again. Changed bytes are a new asset. `--force` keeps the previous directory. A failed promotion restores the previous media and manifest. `cancel` leaves an unverified registration. `resume` continues it. `verify` reads and does not write.
 
+## Campaign-provided local assets
+
+Campaign files such as an official CTA or watermark are not implicit free
+media. Register them with the same project and source-bound catalog used by
+Advanced Hero:
+
+```text
+uv run clipforge assets register-local \
+  --project PROJECT_ID \
+  --source-asset-id SOURCE_ID --file campaigns/Campaign/cta/cta.mp4 \
+  --license-file campaigns/Campaign/intake/campaign-provided-rights-assertion.md \
+  --kind graphic --confirm-rights --tag cta --tag campaign-provided
+```
+
+Repeat `--source-asset-id` for every source catalog that may use the file.
+The command does not search or download. It rejects paths outside the work
+root, symlinks, empty evidence, undecodable bytes, and missing confirmation.
+The asset identity includes its bytes, evidence hash, kind, project, and
+content tags. A changed file, evidence document, or tag set creates a new
+identity; the old catalog entry remains immutable. `require_asset` rechecks
+the bytes and evidence before an Advanced Hero plan can use the file.
+
+Registration is rights/provenance evidence, not editorial approval. Campaign
+policy still decides whether the material is allowed, and music or unrelated
+outside media remain prohibited where the policy says so.
+
 ### Optional portal credential setup
 
 `clipforge assets envato auth setup` stores a portal login only in the user
