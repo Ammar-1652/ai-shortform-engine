@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import shutil
 import subprocess
 import zipfile
 from datetime import UTC, datetime
@@ -239,3 +240,64 @@ def test_audio_asset_probe_accepts_pcm_wav_from_portal(tmp_path: Path) -> None:
     assert facts.audio_codec == "pcm_s16le"
     assert facts.video_codec is None
     assert facts.sample_rate == 44100
+
+
+def test_font_asset_probe_uses_fontconfig_and_rejects_non_font(tmp_path: Path) -> None:
+    executable = shutil.which("fc-scan")
+    matcher = shutil.which("fc-match")
+    if executable is None or matcher is None:
+        pytest.skip("fontconfig fixture is unavailable")
+    source = Path(
+        subprocess.run(
+            [matcher, "-f", "%{file}", "sans"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+    if not source.is_file():
+        pytest.skip("fontconfig did not return a local font")
+    media = tmp_path / "incoming" / "font.ttf"
+    media.parent.mkdir()
+    media.write_bytes(source.read_bytes())
+    request = EnvatoAssetRequest(
+        request_id="font-probe",
+        provider="envato_mcp",
+        provider_version="3.4.7",
+        query="Arabic display font",
+        media_kind="font",
+        intended_use="titles",
+        campaign_id="envato-bridge-test",
+        policy_fingerprint=current_policy_fingerprint("envato-bridge-test"),
+        created_at=datetime.now(UTC),
+    )
+    facts = _inspect(tmp_path, media, request)
+    assert facts.format_name == "ttf"
+    assert facts.duration_us == 0
+    media.with_suffix(".bin").write_bytes(b"not a font")
+    with pytest.raises(AssetError, match="extension"):
+        _inspect(tmp_path, media.with_suffix(".bin"), request)
+
+
+def test_font_request_kind_is_preserved_when_hit_metadata_is_unknown(tmp_path: Path) -> None:
+    request = create_envato_requests(
+        tmp_path,
+        query="Arabic display font",
+        filters={"asset_type": "font", "intended_use": "titles"},
+        campaign_id="tarteel",
+        provider="envato_mcp",
+        provider_version="3.4.7",
+        hits=[
+            AssetSearchHit(
+                request_id="font-kind",
+                provider="envato_mcp",
+                title="Arabic display font",
+                item_url="https://elements.envato.com/arabic-font-X",
+                asset_type="unknown",
+                created_at=datetime.now(UTC),
+            )
+        ],
+        supported_filters={},
+        deferred_filters={},
+    )[0]
+    assert request.media_kind == "font"

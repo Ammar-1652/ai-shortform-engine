@@ -10,7 +10,7 @@ from clipforge.schemas.campaign import PolicyOutcome, _plain, _relative
 from clipforge.schemas.common import EntityId, Versioned
 
 _SHA = r"^[0-9a-f]{64}$"
-AssetType = Literal["video", "audio", "image", "graphic", "template", "unknown"]
+AssetType = Literal["video", "audio", "image", "graphic", "template", "font", "unknown"]
 CommercialUse = Literal["unknown", "allowed", "prohibited"]
 SelectionStatus = Literal["candidate", "selected", "rejected"]
 

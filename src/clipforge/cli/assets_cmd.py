@@ -66,6 +66,15 @@ _PORTAL_ITEM_TYPES = {
     "video": "video",
     "image": "photo",
     "graphic": "graphics",
+    "font": "fonts",
+}
+
+_PORTAL_ITEM_TYPE_ALIASES = {
+    "audio": {"music", "sound-effects"},
+    "font": {"fonts", "font"},
+    "video": {"video"},
+    "image": {"photo"},
+    "graphic": {"graphics"},
 }
 
 
@@ -232,6 +241,10 @@ def envato_request(
             deferred_filters=deferred,
         )
         label, version = _provider_names(provider)
+        if provider == "envato":
+            advertised_version = getattr(getattr(chosen, "client", None), "server_version", None)
+            if isinstance(advertised_version, str) and advertised_version.strip():
+                version = advertised_version.strip()
         stored = create_envato_requests(
             root,
             query=query,
@@ -326,14 +339,15 @@ def envato_fetch(
         expected_type = _portal_item_type(request.media_kind)
         if requested_uuid is not None and identity.item_uuid != requested_uuid:
             raise AssetError("portal UUID does not match the MCP item page", code="portal_item_mismatch")
-        if identity.item_type != expected_type:
+        allowed_types = _PORTAL_ITEM_TYPE_ALIASES.get(request.media_kind, {expected_type})
+        if identity.item_type not in allowed_types:
             raise AssetError("portal item type does not match the MCP request", code="portal_item_mismatch")
         if request.item_id is not None and request.item_id not in {identity.item_id, identity.item_uuid}:
             raise AssetError("portal item identity does not match MCP metadata", code="portal_item_mismatch")
         item_uuid = identity.item_uuid
         downloaded = bridge.fetch_item(
             item_uuid=item_uuid,
-            item_type=_portal_item_type(request.media_kind),
+            item_type=identity.item_type,
             project_name=project_name,
             media_path=archive,
             license_path=license_staging,
