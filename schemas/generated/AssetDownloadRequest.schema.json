@@ -12,6 +12,7 @@
             "image",
             "graphic",
             "template",
+            "font",
             "unknown"
           ],
           "title": "Asset Type",

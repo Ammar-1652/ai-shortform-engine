@@ -252,6 +252,7 @@
         "audio",
         "image",
         "graphic",
+        "font",
         "unknown"
       ],
       "title": "Media Kind",

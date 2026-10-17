@@ -38,9 +38,10 @@ _MEDIA_EXTENSIONS: dict[str, tuple[str, ...]] = {
     "image": (".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif"),
     "graphic": (".svg", ".json", ".png", ".jpg", ".jpeg", ".webp"),
     "template": (".zip", ".aep", ".mogrt", ".prproj"),
+    "font": (".ttf", ".otf", ".woff2", ".woff"),
     "unknown": (),
 }
-_PORTAL_ITEM_TYPES = {"music", "video", "photo", "graphics"}
+_PORTAL_ITEM_TYPES = {"music", "sound-effects", "video", "photo", "graphics", "fonts", "font"}
 _DOWNLOAD_URL = re.compile(r'"downloadUrl","((?:\\.|[^"\\])*)"')
 _LICENSE = re.compile(
     r'"id","(?P<id>[A-Za-z0-9-]+)".*?'
@@ -378,7 +379,7 @@ def extract_media_archive(
     archive: Path,
     destination: Path,
     *,
-    media_kind: Literal["audio", "video", "image", "graphic", "template", "unknown"],
+    media_kind: Literal["audio", "video", "image", "graphic", "template", "font", "unknown"],
     max_bytes: int,
 ) -> tuple[Path, int, str]:
     """Extract one deterministic media member without trusting archive paths.

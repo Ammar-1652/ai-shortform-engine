@@ -28,7 +28,7 @@ _LEAKS = (
     "<script",
     "javascript:",
 )
-MediaKind = Literal["video", "audio", "image", "graphic", "unknown"]
+MediaKind = Literal["video", "audio", "image", "graphic", "font", "unknown"]
 RightsWord = Literal["allowed", "unknown", "prohibited", "missing"]
 AcquisitionWord = Literal["verified", "failed", "cancelled"]
 

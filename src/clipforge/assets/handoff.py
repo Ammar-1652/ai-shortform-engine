@@ -121,7 +121,12 @@ def filters_for_provider(
 def _offline_filter_split(filters: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
     """Classify filters without a network call when no tool schema was consulted."""
     kind = filters.get("asset_type", "video")
-    tool_name = "search_music" if kind == "audio" else "search_stock_video"
+    if kind == "audio":
+        tool_name = "search_sound_effects"
+    elif kind == "font":
+        tool_name = "search_fonts"
+    else:
+        tool_name = "search_stock_video"
     explicit = SUPPORTED_ENVATO_FIELDS.get(tool_name, {})
     supported: dict[str, str] = {}
     deferred: dict[str, str] = {}
@@ -649,6 +654,8 @@ def _inspect(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
     _confine(root, path.resolve().relative_to(root).as_posix(), require_incoming=False)
     if request.media_kind == "audio":
         return _inspect_audio_asset(root, path, request)
+    if request.media_kind == "font":
+        return _inspect_font_asset(root, path, request)
     try:
         _raw, normalized = probe_file(
             path, ProcessRunner(), video_override=None, audio_override=None, log_path=None
@@ -753,6 +760,47 @@ def _inspect_audio_asset(root: Path, path: Path, request: EnvatoAssetRequest) ->
         )
     except ValidationError as exc:
         raise AssetError("probe facts were rejected", code="corrupt_media") from exc
+
+
+def _inspect_font_asset(root: Path, path: Path, request: EnvatoAssetRequest) -> ProbeFacts:
+    """Validate a local font with Fontconfig without treating it as media."""
+    del root, request
+    suffix = path.suffix.casefold()
+    if suffix == ".partial":
+        suffix = Path(path.stem).suffix.casefold()
+    if suffix not in {".ttf", ".otf", ".woff", ".woff2"}:
+        raise AssetError("font file extension is not supported", code="unsupported_media")
+    if path.stat().st_size <= 0:
+        raise AssetError("font file is empty", code="corrupt_media")
+    import shutil
+
+    executable = shutil.which("fc-scan")
+    if executable is None:
+        raise AssetError("fc-scan is required to validate a font", code="unsupported_media")
+    try:
+        result = ProcessRunner().run(
+            [executable, "--format=%{family}", str(path)],
+            log_path=None,
+            check=True,
+            timeout_s=15,
+        )
+    except MediaError as exc:
+        raise AssetError("font could not be validated", code="corrupt_media") from exc
+    if not result.stdout.strip():
+        raise AssetError("font has no readable family metadata", code="corrupt_media")
+    try:
+        return ProbeFacts(
+            duration_us=0,
+            width=None,
+            height=None,
+            video_codec=None,
+            audio_codec=None,
+            frame_rate=None,
+            sample_rate=None,
+            format_name=suffix.removeprefix("."),
+        )
+    except ValidationError as exc:
+        raise AssetError("font probe facts were rejected", code="corrupt_media") from exc
 
 
 def _expect_resolution(requested: str | None, width: int | None, height: int | None) -> None:
@@ -887,7 +935,7 @@ def _media_kind(hit: AssetSearchHit | None, filters: dict[str, str]) -> str:
     if hit is not None and hit.asset_type != "unknown":
         return hit.asset_type
     declared = filters.get("asset_type")
-    if declared in {"video", "audio", "image", "graphic"}:
+    if declared in {"video", "audio", "image", "graphic", "font"}:
         return declared
     return "unknown"
 
