@@ -149,6 +149,23 @@ uv run clipforge storage status
 uv run clipforge source inspect /path/to/video.mp4
 ```
 
+Register campaign-provided CTA, watermark, graphic, or audio material before
+an Advanced Hero plan references it. Use paths relative to the work root and
+repeat `--source-asset-id` for every source catalog that may use the asset:
+
+```bash
+uv run clipforge assets register-local \
+  --project PROJECT_ID \
+  --source-asset-id SOURCE_ID \
+  --file campaigns/Campaign/cta/cta.mp4 \
+  --license-file campaigns/Campaign/intake/campaign-provided-rights-assertion.md \
+  --kind graphic --confirm-rights --tag cta --tag campaign-provided
+uv run clipforge assets verify-local SOURCE_ID
+```
+
+This records a campaign-provided rights row and a hash-bound Advanced Hero
+catalog entry. It never downloads media or substitutes for human review.
+
 Ingest and prepare, after `db init` and `project create`:
 
 ```bash

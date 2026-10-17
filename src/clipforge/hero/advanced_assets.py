@@ -150,6 +150,9 @@ def require_asset(
     if not license_record.evidence_uri or not license_record.evidence_uri.strip():
         raise MediaError(f"advanced asset {asset_id} license evidence is missing")
     _reject_remote(license_record.evidence_uri, "license evidence")
+    from clipforge.assets.local import validate_local_asset_evidence
+
+    validate_local_asset_evidence(work_root, entry, license_record)
     return entry, license_record, path
 
 

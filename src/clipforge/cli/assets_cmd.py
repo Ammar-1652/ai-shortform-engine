@@ -21,6 +21,7 @@ from clipforge.assets.handoff import (
     show_envato_asset,
     verify_envato_asset,
 )
+from clipforge.assets.local import LocalAssetKind, register_local_asset
 from clipforge.assets.mcp_client import AssetError
 from clipforge.assets.portal_bridge import EnvatoPortalBridge, extract_media_archive
 from clipforge.assets.provider import (
@@ -489,6 +490,105 @@ def envato_verify(
     typer.echo(result.model_dump_json())
     if not result.renderable:
         raise typer.Exit(1)
+
+
+@assets_app.command("register-local")
+def assets_register_local(
+    project_id: Annotated[str, typer.Option("--project")],
+    source_asset_ids: Annotated[
+        list[str], typer.Option("--source-asset-id", help="Source catalog to receive the asset; repeatable.")
+    ],
+    relative_file: Annotated[str, typer.Option("--file", help="Path relative to the work root.")],
+    license_relative: Annotated[
+        str, typer.Option("--license-file", help="Rights evidence path relative to the work root.")
+    ],
+    kind: Annotated[LocalAssetKind, typer.Option("--kind", help="graphic or audio.")],
+    confirm_rights: Annotated[bool, typer.Option("--confirm-rights")] = False,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Register campaign-provided local material in Advanced Hero catalogs.
+
+    This command never searches or downloads. It records a hash, campaign
+    rights evidence, and a source-bound catalog entry for each selected source.
+    """
+    if not source_asset_ids:
+        _fail(ClipforgeError("at least one --source-asset-id is required"))
+    try:
+        registrations = [
+            register_local_asset(
+                database=Database(resolve_db_path(db)),
+                work_root=resolve_work_dir(work_dir),
+                project_id=project_id,
+                source_asset_id=source_asset_id,
+                relative_file=relative_file,
+                license_relative=license_relative,
+                kind=kind,
+                confirm_rights=confirm_rights,
+                content_tags=content_tags,
+            )
+            for source_asset_id in source_asset_ids
+        ]
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(
+        json.dumps(
+            [
+                {
+                    "asset_id": item.asset_id,
+                    "license_record_id": item.license_record_id,
+                    "source_asset_id": item.source_asset_id,
+                    "relative_path": item.relative_path,
+                    "sha256": item.sha256,
+                    "kind": item.kind,
+                    "cache_status": item.cache_status,
+                }
+                for item in registrations
+            ],
+            sort_keys=True,
+        )
+    )
+
+
+@assets_app.command("verify-local")
+def assets_verify_local(
+    source_asset_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Rehash local campaign assets and evidence via the production asset gate."""
+    from clipforge.hero.advanced_assets import load_catalog, require_asset
+    from clipforge.media.workspace import SourceWorkspace, advanced_read_lock
+    from clipforge.storage import get_source_asset
+
+    try:
+        database = Database(resolve_db_path(db))
+        root = resolve_work_dir(work_dir).resolve()
+        with database.connect() as connection:
+            source = get_source_asset(connection, source_asset_id)
+        workspace = SourceWorkspace(root, source.project_id, source_asset_id)
+        with advanced_read_lock(workspace):
+            entries = [
+                entry
+                for entry in load_catalog(workspace)
+                if entry.reference.provenance.tool == "clipforge.assets.local"
+            ]
+            if not entries:
+                raise ClipforgeError("no registered local campaign assets for this source")
+            for entry in entries:
+                require_asset(
+                    database,
+                    workspace,
+                    project_id=source.project_id,
+                    asset_id=entry.reference.asset_id,
+                    expected_kind=entry.reference.kind.value,
+                    work_root=root,
+                )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"verified_local_assets: {len(entries)}")
+    typer.echo("scope: bytes, rights and evidence only; not campaign compliance or editorial approval")
 
 
 @envato_app.command("list")
