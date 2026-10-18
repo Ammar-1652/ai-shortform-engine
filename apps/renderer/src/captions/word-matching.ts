@@ -1,6 +1,6 @@
 /** Match caption runs to timed words without collapsing repeated or unverified words. */
 
-export type CaptionWordLike = Readonly<{ text?: string }>;
+export type CaptionWordLike = Readonly<{ text?: string; word_id?: string }>;
 
 /**
  * Normalize only punctuation/spacing that commonly differs between a cue and
@@ -23,9 +23,24 @@ export function nextCaptionWord<T extends CaptionWordLike>(
   const target = captionTokenKey(part);
   if (!target) return { word: undefined, nextCursor: cursor };
   for (let index = Math.max(0, cursor); index < words.length; index += 1) {
-    if (captionTokenKey(words[index]?.text ?? "") === target) {
+    // Uthmani pause marks belong to the preceding timed word, but are a
+    // separate whitespace run in the rendered line. Match its spoken run
+    // without deleting the mark from the displayed canonical text.
+    const spokenRun = (words[index]?.text ?? "").trim().split(/\s+/u)[0] ?? "";
+    if (captionTokenKey(spokenRun) === target) {
       return { word: words[index], nextCursor: index + 1 };
     }
   }
   return { word: undefined, nextCursor: cursor };
+}
+
+export function captionWordIsActive(
+  word: CaptionWordLike | undefined,
+  activeWordId: string | undefined,
+  part: string,
+  emphasisText: string,
+  fallbackAlreadyUsed: boolean,
+): boolean {
+  if (activeWordId !== undefined) return word?.word_id === activeWordId;
+  return !fallbackAlreadyUsed && Boolean(emphasisText) && captionTokenKey(part) === emphasisText;
 }

@@ -30,6 +30,7 @@ Return a concise direction brief with:
    automatically by the deterministic score/tie-break rule unless the
    operator explicitly supplies an allowlisted override;
 4. one allowlisted style id from `editorial-clean-v1`, `quran-editorial-v1`,
+   `quran-readable-v2`,
    `kinetic-caption-v1`, `documentary-broll-v1`, `data-explainer-v1`,
    `paper-explainer-v1`, or `premium-minimal-v1`;
 5. the project-defined `portrait-safe-v1` region (not a universal platform

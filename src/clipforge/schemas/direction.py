@@ -21,6 +21,7 @@ _SHA = r"^[0-9a-f]{64}$"
 DirectionStyleId = Literal[
     "editorial-clean-v1",
     "quran-editorial-v1",
+    "quran-readable-v2",
     "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
@@ -261,7 +262,7 @@ class DirectionOption(Versioned):
             raise ValueError("annotated source-native text status requires annotations")
         if self.source_native_text_status == "reviewed_absent" and self.source_native_text:
             raise ValueError("reviewed_absent source-native text status cannot carry annotations")
-        if self.style_id == "quran-editorial-v1" and self.context_line is None:
+        if self.style_id in {"quran-editorial-v1", "quran-readable-v2"} and self.context_line is None:
             raise ValueError("quran-editorial-v1 requires a reviewed upper context line")
         graphics = sorted(self.motion_graphics, key=lambda item: item.interval.output_start_us)
         if any(

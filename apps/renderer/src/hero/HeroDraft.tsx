@@ -85,6 +85,7 @@ export function HeroDraft(raw: HeroDraftInput) {
             text={caption}
             language={language ?? ""}
             emphasisText={activeWord?.text}
+            activeWordId={activeWord?.word_id}
             emphasisStatus={activeWord?.verification_status}
             wordStatuses={active?.words}
             layoutVersion={legacy ? "caption-layout-v1" : "caption-layout-v2"}

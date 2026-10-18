@@ -102,7 +102,7 @@ class TypographyEvent(Versioned):
     text: str = Field(min_length=1, max_length=80)
     x: int = Field(ge=_SAFE_X, le=_FRAME_W - _SAFE_X)
     y: int = Field(ge=_SAFE_Y, le=_FRAME_H - _SAFE_Y)
-    font_size: int = Field(ge=24, le=96)
+    font_size: int = Field(ge=24, le=160)
     color: Literal["#ffffff"] = "#ffffff"
     emoji: Literal["📖", "💡", "🎯", "✨", "⚡", "🧠", "✅", "🔎", "🕌"] | None = None
     words: list[CaptionWordTiming] = Field(default_factory=list)

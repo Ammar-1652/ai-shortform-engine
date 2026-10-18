@@ -662,6 +662,7 @@
       "enum": [
         "editorial-clean-v1",
         "quran-editorial-v1",
+        "quran-readable-v2",
         "concat-editorial-v1",
         "kinetic-caption-v1",
         "documentary-broll-v1",

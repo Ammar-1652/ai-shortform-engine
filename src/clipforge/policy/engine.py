@@ -204,7 +204,7 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("plan does not require the Tarteel face/caption clearance gate")
         if "tarteel-caption-direction-v1" not in plan.qa_requirements:
             problems.append("plan does not require the Tarteel caption-direction gate")
-        if getattr(plan, "style_id", "") != "quran-editorial-v1":
+        if getattr(plan, "style_id", "") not in {"quran-editorial-v1", "quran-readable-v2"}:
             problems.append("Tarteel captions require the quran-editorial-v1 style")
         if "tarteel-quran-caption-v1" not in plan.qa_requirements:
             problems.append("plan does not require the canonical Quran caption gate")

@@ -78,7 +78,7 @@ for (const item of batch.items) {
     const overlay = input.campaign_overlay;
     if (
       overlay.campaign_id !== "tarteel" ||
-      input.style_id !== "quran-editorial-v1" ||
+      !["quran-editorial-v1", "quran-readable-v2"].includes(input.style_id) ||
       typeof input.quran_review_id !== "string" ||
       !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "") ||
       overlay.cta_background_removal !== "chroma_key_v1" ||
@@ -116,6 +116,7 @@ for (const item of batch.items) {
     "editorial-clean-v1",
     "concat-editorial-v1",
     "quran-editorial-v1",
+    "quran-readable-v2",
     "kinetic-caption-v1",
     "documentary-broll-v1",
     "data-explainer-v1",

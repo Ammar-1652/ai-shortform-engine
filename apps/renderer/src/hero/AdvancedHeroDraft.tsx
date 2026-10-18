@@ -148,6 +148,7 @@ export type AdvancedHeroInput = {
     | "legacy-v1"
     | "editorial-clean-v1"
     | "quran-editorial-v1"
+    | "quran-readable-v2"
     | "concat-editorial-v1"
     | "kinetic-caption-v1"
     | "documentary-broll-v1"
@@ -288,6 +289,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const productionStyles = new Set([
     "editorial-clean-v1",
     "quran-editorial-v1",
+    "quran-readable-v2",
     "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
@@ -341,14 +343,15 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       }
     }
     const contextLines = (input.typography ?? []).filter((event) => event.component_id === "context-line-v1");
-    if (style === "quran-editorial-v1" && contextLines.length !== 1) {
+    if ((style === "quran-editorial-v1" || style === "quran-readable-v2") && contextLines.length !== 1) {
       throw new Error("quran-editorial-v1 requires exactly one upper context line");
     }
     for (const line of contextLines) {
       if (!line.emoji || !line.text?.trim() || /[\r\n]/u.test(line.text)) {
         throw new Error("context line requires one non-empty line and an allowlisted emoji");
       }
-      if ((line.y ?? 120) < 120 || (line.y ?? 120) > 260 || (line.font_size ?? 48) > 60) {
+      const largeContext = style === "quran-readable-v2";
+      if ((line.y ?? 120) < 120 || (line.y ?? 120) > (largeContext ? 360 : 260) || (line.font_size ?? 48) > (largeContext ? 96 : 60)) {
         throw new Error("context line must stay in the upper blur safe lane");
       }
       const metrics = document.createElement("canvas").getContext("2d");
@@ -378,7 +381,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     if (input.campaign_overlay.sizing_method !== "source_frame_scan_v1" || !/^[0-9a-f]{64}$/.test(input.campaign_overlay.sizing_measurement_sha256)) {
       throw new Error("Tarteel campaign overlay requires source-measured sizing evidence");
     }
-    if (style !== "quran-editorial-v1" || !input.quran_review_id || !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "")) {
+    if ((style !== "quran-editorial-v1" && style !== "quran-readable-v2") || !input.quran_review_id || !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "")) {
       throw new Error("Tarteel production requires reviewed Quran captions and quran-editorial-v1");
     }
     if (
@@ -706,6 +709,10 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 variant="body"
                 emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
                 emphasisStatus={activeWordRecord?.verification_status}
+                activeWordId={activeWordRecord?.word_id}
+                centeredLarge={style === "quran-readable-v2"}
+                fontSize={style === "quran-readable-v2" ? item.font_size : undefined}
+                y={style === "quran-readable-v2" ? item.y : undefined}
                 wordStatuses={item.words}
                 style={modernLayout ? motionStyle : undefined}
                 layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
@@ -751,7 +758,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "clip",
-                  textAlign: language.startsWith("ar") ? "right" : "left",
+                  textAlign: style === "quran-readable-v2" ? "center" : language.startsWith("ar") ? "right" : "left",
                   textShadow: "0 3px 12px rgba(0,0,0,0.72)",
                   background: "linear-gradient(90deg, rgba(7,10,18,0.78), rgba(7,10,18,0.22), transparent)",
                   padding: "12px 18px",

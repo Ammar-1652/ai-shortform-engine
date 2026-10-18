@@ -1435,7 +1435,7 @@
           "type": "string"
         },
         "font_size": {
-          "maximum": 96,
+          "maximum": 160,
           "minimum": 24,
           "title": "Font Size",
           "type": "integer"

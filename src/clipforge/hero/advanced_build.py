@@ -134,7 +134,7 @@ def build_advanced_plan(
     caption_alignment = alignment
     if quran_review is not None:
         caption_alignment = canonicalize_quran_alignment(alignment, quran_review)
-    captions = _captions(caption_alignment, candidate_id)
+    captions = _captions(caption_alignment, candidate_id, style_id=direction.style_id if direction else "")
     if direction is not None:
         typography = _directed_typography(direction, alignment, candidate_id)
         typography = _drop_caption_duplicates(typography, captions)
@@ -401,8 +401,8 @@ def _directed_typography(
                 component_id="context-line-v1",
                 text=context_line.text,
                 x=72,
-                y=120,
-                font_size=48,
+                y=280 if getattr(direction, "style_id", "") == "quran-readable-v2" else 120,
+                font_size=64 if getattr(direction, "style_id", "") == "quran-readable-v2" else 48,
                 emoji=context_line.emoji,
             )
         )
@@ -551,7 +551,9 @@ def _phrase(words: list[AlignedWord]) -> str:
     return re.sub(r"\s+([,.;?!…。？！:])", r"\1", text).strip()  # noqa: RUF001
 
 
-def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[TypographyEvent]:
+def _captions(
+    alignment: ForcedAlignmentDocument, candidate_id: str, *, style_id: str = ""
+) -> list[TypographyEvent]:
     """Persist grouped forced captions separately from optional typography cards."""
     events: list[TypographyEvent] = []
     for index, piece in enumerate(hero_caption_pieces(alignment.words)):
@@ -566,8 +568,8 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                 component_id=f"caption-{index}",
                 text=text,
                 x=72,
-                y=1540,
-                font_size=54,
+                y=1560 if style_id == "quran-readable-v2" else 1540,
+                font_size=120 if style_id == "quran-readable-v2" else 54,
                 words=[
                     CaptionWordTiming(
                         word_id=word.word_id,

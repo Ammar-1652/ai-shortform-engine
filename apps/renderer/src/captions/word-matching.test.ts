@@ -15,4 +15,11 @@ describe("caption word matching", () => {
     expect(captionTokenKey("وَنَحْنُ،")).toBe("وَنَحْنُ");
     expect(captionTokenKey("نَفْسُهُ ۖ")).toBe("نَفْسُهُ ۖ");
   });
+
+  it("keeps active-word identity stable when visible Arabic text repeats", () => {
+    const words = [{ word_id: "first", text: " الله" }, { word_id: "second", text: " الله" }];
+    const first = nextCaptionWord("الله", words, 0);
+    const second = nextCaptionWord("الله", words, first.nextCursor);
+    expect([first.word?.word_id, second.word?.word_id]).toEqual(["first", "second"]);
+  });
 });

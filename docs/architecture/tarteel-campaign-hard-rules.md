@@ -40,6 +40,12 @@ These rules are delivery gates, not creative preferences.
   challenge or payoff in one readable line, use only an allowlisted emoji, and
   pass a semantic review for meaning, relevance, and non-duplication before
   planning. A generic or context-free sentence blocks the render.
+- The public-readable Quran preset uses centered, enlarged lower captions and
+  a larger centered upper context line. Word emphasis is bound by forced
+  `word_id`, not by matching visible strings, so repeated Arabic words and
+  Uthmani marks cannot silently lose their active color. The opening arc must
+  begin at the reviewed `احنا اليوم بإذن الله` source boundary and retain the
+  reviewed readiness exchange before the recitation.
 - Before reporting a render, inspect the encoded MP4 and a contact sheet. The
   check must confirm caption accuracy against the source evidence, active-word
   styling, source-logo visibility after reframing, CTA placement after the

@@ -321,8 +321,11 @@ def plan_advanced_candidate(
     quran_review_sha256 = ""
     quran_review: QuranCaptionReview | None = None
     if project.profile_id == TARTEEL_PROFILE_ID:
-        if stored_direction is None or stored_direction.style_id != "quran-editorial-v1":
-            raise MediaError("Tarteel Advanced Hero requires the quran-editorial-v1 caption style")
+        if stored_direction is None or stored_direction.style_id not in {
+            "quran-editorial-v1",
+            "quran-readable-v2",
+        }:
+            raise MediaError("Tarteel Advanced Hero requires a versioned Quran caption style")
         quran_review, quran_review_sha256, _quran_review_path = load_tarteel_quran_review(
             root,
             source_asset_id=source_asset_id,
@@ -1766,7 +1769,9 @@ def _require_plan_binding(
             target_alignment=arc_alignment or context.alignment,
         )
         expected_captions = _captions(
-            canonicalize_quran_alignment(arc_alignment or context.alignment, render_review), plan.candidate_id
+            canonicalize_quran_alignment(arc_alignment or context.alignment, render_review),
+            plan.candidate_id,
+            style_id=plan.style_id,
         )
         if plan.captions != expected_captions:
             raise MediaError("advanced plan is stale: Quran captions differ from canonical evidence")

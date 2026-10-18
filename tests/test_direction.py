@@ -242,6 +242,9 @@ def test_style_contract_is_fingerprintable_and_allowlisted() -> None:
     profile = style_for_id("data-explainer-v1")
     assert profile.contract().style_id == "data-explainer-v1"
     assert profile.max_travel_px <= 80
+    readable = style_for_id("quran-readable-v2")
+    assert readable.contract().style_id == "quran-readable-v2"
+    assert readable.max_scale_permille == 1000
     with pytest.raises(ValueError, match="unsupported motion style"):
         style_for_id("random-css")
 
