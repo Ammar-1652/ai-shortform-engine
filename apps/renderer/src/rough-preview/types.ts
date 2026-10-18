@@ -43,6 +43,11 @@ export type RoughPreviewInput = {
   readonly font_identity?: string;
   readonly video_scale_permille: number;
   readonly video_offset_x_px: number;
+  readonly foreground_x_px?: number;
+  readonly foreground_y_px?: number;
+  readonly foreground_width_px?: number;
+  readonly foreground_height_px?: number;
+  readonly foreground_scale_permille?: number;
   readonly word_highlight_mode: "off" | "reviewed";
   readonly word_timing_source: "segment-only-v1" | "transcript-word-times-v1" | "reviewed-word-times-v1";
   readonly timing_quality: "provisional";
@@ -65,7 +70,8 @@ export type CampaignOverlaySpec = {
   readonly cta_frame_prefix?: string;
   readonly cta_frame_count?: number;
   readonly cta_frame_rate: 30;
-  readonly cta_position: "top_left_brand_rail_v1";
+  readonly cta_position: "foreground_attention_v1" | "top_left_brand_rail_v1";
+  readonly overlay_coordinate_space?: "foreground_v1" | "canvas_v1";
   readonly cta_clearance: "faces_and_captions_clear_v1";
   readonly cta_left_permille: number;
   readonly cta_top_permille: number;
@@ -76,7 +82,8 @@ export type CampaignOverlaySpec = {
   readonly watermark_asset_sha256: string;
   readonly watermark_asset_name: string;
   readonly watermark_mode: "alpha_v1";
-  readonly watermark_position: "top_right";
+  readonly watermark_position: "foreground_top_right_v1" | "top_right";
+  readonly watermark_visibility?: "overlay_required_v1" | "source_visible_v1";
   readonly watermark_width_permille: number;
   readonly first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
 };

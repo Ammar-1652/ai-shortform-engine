@@ -108,7 +108,11 @@ def render_previews(
             source_record = get_source_asset(connection, source_asset_id)
             project = get_project(connection, source_record.project_id)
         if project.profile_id == "profile-tarteel-campaign":
-            active = active.model_copy(update={"campaign_id": "tarteel"})
+            # Tarteel review and delivery share one composition contract:
+            # blurred source canvas, contained source foreground, and a
+            # restrained zoom. The old neutral-dark/letterbox profile is kept
+            # available for non-campaign previews only.
+            active = active.model_copy(update={"campaign_id": "tarteel", "background": "blurred-source-v1"})
     renderer = backend if backend is not None else RemotionRoughRenderBackend()
     inputs = load_preview_inputs(
         database,
@@ -310,7 +314,27 @@ def _render_input(
     staged_audio_sha = ""
     staged_duration = 0
     campaign_overlay = None
+    foreground_x: int = 0
+    foreground_y: int = 0
+    foreground_width: int = int(profile.width)
+    foreground_height: int = int(profile.height)
+    foreground_scale: int = 1000
     if profile.campaign_id == "tarteel":
+        canvas_width = int(profile.width)
+        canvas_height = int(profile.height)
+        source_width = inputs.pair.visual.proxy_width
+        source_height = inputs.pair.visual.proxy_height
+        base_scale = min(canvas_width / source_width, canvas_height / source_height)
+        # The scale is applied to the contained picture only. This keeps the
+        # subject legible without stretching the source or enlarging the blur.
+        foreground_scale = 1080
+        scaled_width = source_width * base_scale * foreground_scale / 1000
+        scaled_height = source_height * base_scale * foreground_scale / 1000
+        fit_back = min(1.0, canvas_width / scaled_width, canvas_height / scaled_height)
+        foreground_width = max(1, round(scaled_width * fit_back))
+        foreground_height = max(1, round(scaled_height * fit_back))
+        foreground_x = (canvas_width - foreground_width) // 2
+        foreground_y = (canvas_height - foreground_height) // 2
         overlay = stage_tarteel_overlay(
             database=database,
             workspace=inputs.pair.workspace,
@@ -318,6 +342,16 @@ def _render_input(
             work_root=inputs.pair.workspace.root,
             staging_dir=run_dir / "staging",
             duration_us=(frame_count * 1_000_000) // profile.fps_numerator,
+            caption_intervals=[(cue.output_start_us, cue.output_end_us) for cue in captions],
+            face_boxes=[
+                (
+                    sample.bounding_box.x,
+                    sample.bounding_box.y,
+                    sample.bounding_box.width,
+                    sample.bounding_box.height,
+                )
+                for sample in inputs.pair.visual.face_detection_samples
+            ],
         )
         campaign_overlay = overlay.spec
     if browser:
@@ -352,6 +386,11 @@ def _render_input(
         source_end_us=segment.source_end_us,
         background=profile.background,
         campaign_overlay=campaign_overlay,
+        foreground_x_px=foreground_x,
+        foreground_y_px=foreground_y,
+        foreground_width_px=foreground_width,
+        foreground_height_px=foreground_height,
+        foreground_scale_permille=foreground_scale,
         word_timing_source=(
             "transcript-word-times-v1" if any(cue.words for cue in captions) else "segment-only-v1"
         ),
@@ -475,7 +514,12 @@ def _link_or_copy(source: Path, destination: Path, root: Path) -> None:
         destination.write_bytes(source.read_bytes())
 
 
-def _cleanup_staging(run_dir: Path, root: Path) -> None:
+def _cleanup_staging(
+    run_dir: Path,
+    root: Path,
+    *,
+    preserve_names: frozenset[str] = frozenset(),
+) -> None:
     staging = run_dir / "staging"
     if not staging.exists():
         return
@@ -486,18 +530,36 @@ def _cleanup_staging(run_dir: Path, root: Path) -> None:
         if path.is_symlink() or not path.is_file():
             raise MediaError(f"refusing to clean unexpected staging path {path.name}")
         ensure_within(root, path)
+        if path.name in preserve_names:
+            continue
         path.unlink()
-    staging.rmdir()
+    if not any(staging.iterdir()):
+        staging.rmdir()
 
 
 def _cleanup_transients(run_dir: Path, root: Path) -> None:
-    """Remove staged media and the batch file; neither is a persistent preview artifact."""
-    _cleanup_staging(run_dir, root)
+    """Remove transient media while retaining campaign assets used by verify."""
+    _cleanup_staging(run_dir, root, preserve_names=_campaign_staging_names(run_dir))
     batch = run_dir / "render-batch.json"
     ensure_within(root, batch)
     if batch.is_symlink():
         raise MediaError("refusing to clean a symlinked preview render batch")
     safe_unlink(root, batch)
+
+
+def _campaign_staging_names(run_dir: Path) -> frozenset[str]:
+    """Return validated campaign overlay names that remain evidence for verify."""
+    names: set[str] = set()
+    for render_input in sorted(run_dir.glob("candidates/*/render-input.json")):
+        try:
+            document = RoughPreviewRenderInput.model_validate_json(render_input.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if document.campaign_overlay is None:
+            continue
+        names.add(document.campaign_overlay.cta_asset_name)
+        names.add(document.campaign_overlay.watermark_asset_name)
+    return frozenset(names)
 
 
 def _confirm(

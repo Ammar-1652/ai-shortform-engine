@@ -109,10 +109,17 @@ class CampaignOverlaySpec(Versioned):
     cta_frame_prefix: str | None = Field(default=None, min_length=1, max_length=64)
     cta_frame_count: int | None = Field(default=None, ge=1, le=600)
     cta_frame_rate: Literal[30] = 30
-    cta_position: Literal["top_left_brand_rail_v1"] = "top_left_brand_rail_v1"
+    # New campaign renders place both brand layers inside the contained source
+    # picture. The old value remains readable for immutable pre-checkpoint
+    # artifacts, but policy and new staging require the foreground space.
+    cta_position: Literal["foreground_attention_v1", "top_left_brand_rail_v1"] = "foreground_attention_v1"
+    overlay_coordinate_space: Literal["foreground_v1", "canvas_v1"] = "foreground_v1"
     cta_clearance: Literal["faces_and_captions_clear_v1"] = "faces_and_captions_clear_v1"
-    cta_left_permille: int = Field(default=80, ge=0, le=300)
-    cta_top_permille: int = Field(default=70, ge=0, le=300)
+    # These coordinates are relative to the original foreground picture, not
+    # the blurred portrait canvas. Permille values keep the placement
+    # deterministic across review and delivery resolutions.
+    cta_left_permille: int = Field(default=80, ge=0, le=1000)
+    cta_top_permille: int = Field(default=360, ge=0, le=1000)
     # This is intentionally capped. The campaign CTA is a small brand cue,
     # never a foreground card over a child or a caption.
     cta_width_permille: int = Field(default=600, ge=320, le=600)
@@ -122,7 +129,8 @@ class CampaignOverlaySpec(Versioned):
     watermark_asset_sha256: str = Field(pattern=_SHA)
     watermark_asset_name: str = Field(min_length=1, max_length=80)
     watermark_mode: Literal["alpha_v1"] = "alpha_v1"
-    watermark_position: Literal["top_right"] = "top_right"
+    watermark_position: Literal["foreground_top_right_v1", "top_right"] = "foreground_top_right_v1"
+    watermark_visibility: Literal["overlay_required_v1", "source_visible_v1"] = "overlay_required_v1"
     watermark_width_permille: int = Field(default=170, ge=80, le=280)
     first_post_caption_line: Literal["اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"] = (
         "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"
@@ -145,6 +153,8 @@ class CampaignOverlaySpec(Versioned):
             raise ValueError("alpha video CTA must use a transparent video staging filename")
         if self.cta_clearance != "faces_and_captions_clear_v1":
             raise ValueError("Tarteel CTA must declare face and caption clearance")
+        if self.overlay_coordinate_space != "foreground_v1" and self.cta_position == "foreground_attention_v1":
+            raise ValueError("foreground CTA placement requires foreground coordinate space")
         for label, name in names:
             if (
                 name != name.strip()

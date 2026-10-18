@@ -81,11 +81,12 @@ for (const item of batch.items) {
       overlay.cta_background_removal !== "chroma_key_v1" ||
       (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
       overlay.cta_frame_rate !== 30 ||
-      overlay.cta_position !== "top_left_brand_rail_v1" ||
+      overlay.cta_position !== "foreground_attention_v1" ||
+      overlay.overlay_coordinate_space !== "foreground_v1" ||
       overlay.cta_clearance !== "faces_and_captions_clear_v1" ||
       !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 320 || overlay.cta_width_permille > 600 ||
       overlay.watermark_mode !== "alpha_v1" ||
-      overlay.watermark_position !== "top_right" ||
+      overlay.watermark_position !== "foreground_top_right_v1" && overlay.watermark_position !== "top_right" ||
       typeof overlay.cta_asset_name !== "string" ||
       typeof overlay.watermark_asset_name !== "string" ||
       !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_asset_name) ||

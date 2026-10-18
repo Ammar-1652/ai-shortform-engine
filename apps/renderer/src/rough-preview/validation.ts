@@ -35,6 +35,11 @@ const TOP_KEYS = new Set([
   "font_identity",
   "video_scale_permille",
   "video_offset_x_px",
+  "foreground_x_px",
+  "foreground_y_px",
+  "foreground_width_px",
+  "foreground_height_px",
+  "foreground_scale_permille",
   "word_highlight_mode",
   "word_timing_source",
   "timing_quality",
@@ -105,6 +110,14 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   }
   const videoScale = record.video_scale_permille === undefined ? 1000 : requireIntegerInRange(record.video_scale_permille, 1000, 1250, "video_scale_permille");
   const videoOffsetX = record.video_offset_x_px === undefined ? 0 : requireIntegerInRange(record.video_offset_x_px, -120, 120, "video_offset_x_px");
+  const foregroundX = record.foreground_x_px === undefined ? 0 : requireIntegerInRange(record.foreground_x_px, 0, OUTPUT_WIDTH, "foreground_x_px");
+  const foregroundY = record.foreground_y_px === undefined ? 0 : requireIntegerInRange(record.foreground_y_px, 0, OUTPUT_HEIGHT, "foreground_y_px");
+  const foregroundWidth = record.foreground_width_px === undefined ? OUTPUT_WIDTH : requireIntegerInRange(record.foreground_width_px, 1, OUTPUT_WIDTH, "foreground_width_px");
+  const foregroundHeight = record.foreground_height_px === undefined ? OUTPUT_HEIGHT : requireIntegerInRange(record.foreground_height_px, 1, OUTPUT_HEIGHT, "foreground_height_px");
+  const foregroundScale = record.foreground_scale_permille === undefined ? 1000 : requireIntegerInRange(record.foreground_scale_permille, 1000, 1150, "foreground_scale_permille");
+  if (foregroundX + foregroundWidth > OUTPUT_WIDTH || foregroundY + foregroundHeight > OUTPUT_HEIGHT) {
+    throw new Error("foreground rectangle is outside the preview canvas");
+  }
   if (record.word_highlight_mode !== undefined && record.word_highlight_mode !== "off" && record.word_highlight_mode !== "reviewed") {
     throw new Error("render input word_highlight_mode must be off or reviewed");
   }
@@ -143,6 +156,11 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
     video_scale_permille: videoScale,
     video_offset_x_px: videoOffsetX,
+    foreground_x_px: foregroundX,
+    foreground_y_px: foregroundY,
+    foreground_width_px: foregroundWidth,
+    foreground_height_px: foregroundHeight,
+    foreground_scale_permille: foregroundScale,
     word_highlight_mode: record.word_highlight_mode === "reviewed" ? "reviewed" : "off",
     word_timing_source: wordTimingSource,
     timing_quality: "provisional",
@@ -164,8 +182,12 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     if (!(key in record)) throw new Error(`campaign overlay is missing ${key}`);
   }
   rejectDangerousKeys(record, "campaign overlay");
-  rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count"]), "campaign overlay");
-  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || record.watermark_position !== "top_right" || record.cta_position !== "top_left_brand_rail_v1" || record.cta_clearance !== "faces_and_captions_clear_v1") {
+  rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count", "watermark_visibility", "overlay_coordinate_space"]), "campaign overlay");
+  const coordinateSpace = record.overlay_coordinate_space === undefined ? "foreground_v1" : record.overlay_coordinate_space;
+  const ctaPosition = record.cta_position === "top_left_brand_rail_v1" ? "foreground_attention_v1" : record.cta_position;
+  const watermarkPosition = record.watermark_position === "top_right" ? "foreground_top_right_v1" : record.watermark_position;
+  const watermarkVisibility = record.watermark_visibility === undefined ? "overlay_required_v1" : record.watermark_visibility;
+  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || watermarkPosition !== "foreground_top_right_v1" || ctaPosition !== "foreground_attention_v1" || record.cta_clearance !== "faces_and_captions_clear_v1" || coordinateSpace !== "foreground_v1" || (watermarkVisibility !== "overlay_required_v1" && watermarkVisibility !== "source_visible_v1")) {
     throw new Error("unsupported campaign overlay contract");
   }
   const ctaStart = requireNonNegativeInt(record.cta_start_us, "campaign overlay cta_start_us");
@@ -183,8 +205,15 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
   if (record.cta_render_mode === "alpha_video_v1" && !/\.(mov|webm)$/i.test(ctaName)) {
     throw new Error("alpha video CTA must use a transparent video staging file");
   }
-  const ctaPrefix = record.cta_frame_prefix === undefined ? undefined : safeName(record.cta_frame_prefix, "CTA frame prefix");
-  const frameCount = record.cta_frame_count === undefined ? undefined : requireIntegerInRange(record.cta_frame_count, 1, 600, "campaign overlay cta_frame_count");
+  // Pydantic emits optional PNG-sequence fields as JSON null for the
+  // production alpha-video mode.  Null has the same meaning as omission;
+  // it must not be sent through the filename validator.
+  const ctaPrefix = record.cta_frame_prefix === undefined || record.cta_frame_prefix === null
+    ? undefined
+    : safeName(record.cta_frame_prefix, "CTA frame prefix");
+  const frameCount = record.cta_frame_count === undefined || record.cta_frame_count === null
+    ? undefined
+    : requireIntegerInRange(record.cta_frame_count, 1, 600, "campaign overlay cta_frame_count");
   if (record.cta_render_mode === "alpha_video_v1" && (ctaPrefix !== undefined || frameCount !== undefined)) {
     throw new Error("alpha video CTA must not include PNG sequence fields");
   }
@@ -199,8 +228,8 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     throw new Error("campaign overlay asset ids and caption line must be strings");
   }
   const width = requireIntegerInRange(record.watermark_width_permille, 80, 280, "campaign overlay watermark_width_permille");
-  const left = requireIntegerInRange(record.cta_left_permille, 0, 300, "campaign overlay cta_left_permille");
-  const top = requireIntegerInRange(record.cta_top_permille, 0, 300, "campaign overlay cta_top_permille");
+  const left = requireIntegerInRange(record.cta_left_permille, 0, 1000, "campaign overlay cta_left_permille");
+  const top = requireIntegerInRange(record.cta_top_permille, 0, 1000, "campaign overlay cta_top_permille");
   const ctaWidth = requireIntegerInRange(record.cta_width_permille, 320, 600, "campaign overlay cta_width_permille");
   return {
     campaign_id: "tarteel",
@@ -212,7 +241,8 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     cta_frame_prefix: ctaPrefix,
     cta_frame_count: frameCount,
     cta_frame_rate: 30,
-    cta_position: "top_left_brand_rail_v1",
+    cta_position: "foreground_attention_v1",
+    overlay_coordinate_space: "foreground_v1",
     cta_clearance: "faces_and_captions_clear_v1",
     cta_left_permille: left,
     cta_top_permille: top,
@@ -223,7 +253,8 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     watermark_asset_sha256: record.watermark_asset_sha256,
     watermark_asset_name: watermarkName,
     watermark_mode: "alpha_v1",
-    watermark_position: "top_right",
+    watermark_position: "foreground_top_right_v1",
+    watermark_visibility: watermarkVisibility,
     watermark_width_permille: width,
     first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
   };

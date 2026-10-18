@@ -47,6 +47,9 @@ def stage_tarteel_overlay(
     cta_duration_us: int = 3_000_000,
     cta_asset_id: str | None = None,
     watermark_asset_id: str | None = None,
+    caption_intervals: list[tuple[int, int]] | None = None,
+    source_logo_visible: bool = False,
+    face_boxes: list[tuple[float, float, float, float]] | None = None,
 ) -> StagedTarteelOverlay:
     """Stage the reviewed Tarteel CTA and watermark with deterministic alpha."""
     if duration_us <= 0:
@@ -80,27 +83,106 @@ def stage_tarteel_overlay(
     _white_key(watermark_source, watermark_path, staging_dir / "tarteel-watermark-key.log")
     source_duration_us = _duration_us(cta_source, staging_dir / "tarteel-cta-probe.log")
     effective_duration_us = min(cta_duration_us, source_duration_us)
-    start = cta_start_us if cta_start_us is not None else max(0, duration_us - cta_duration_us - 500_000)
+    start = (
+        cta_start_us
+        if cta_start_us is not None
+        else choose_tarteel_overlay_start_us(
+            duration_us,
+            cta_duration_us,
+            caption_intervals or [],
+        )
+    )
     end = min(duration_us, start + effective_duration_us)
     if end <= start:
         raise MediaError("Tarteel CTA interval does not fit the output")
+    cta_left, cta_top = choose_tarteel_foreground_position(face_boxes or [])
     return StagedTarteelOverlay(
         spec=CampaignOverlaySpec(
             cta_asset_id=cta_entry.reference.asset_id,
             cta_asset_sha256=cta_entry.file_sha256,
             cta_asset_name=cta_video.name,
             cta_render_mode="alpha_video_v1",
+            cta_left_permille=cta_left,
+            cta_top_permille=cta_top,
             cta_start_us=start,
             cta_end_us=end,
             watermark_asset_id=watermark_entry.reference.asset_id,
             watermark_asset_sha256=watermark_entry.file_sha256,
             watermark_asset_name=watermark_path.name,
+            watermark_visibility="source_visible_v1" if source_logo_visible else "overlay_required_v1",
         ),
         cta_source=cta_entry,
         watermark_source=watermark_entry,
         cta_path=cta_video,
         watermark_path=watermark_path,
     )
+
+
+def choose_tarteel_overlay_start_us(
+    duration_us: int,
+    cta_duration_us: int,
+    caption_intervals: list[tuple[int, int]],
+) -> int:
+    """Choose a reviewed-looking CTA beat without hiding a caption.
+
+    The CTA is a short visual cue inside the source picture. It should not be
+    blindly pinned to the final frame or laid over a spoken caption. Candidate
+    starts are deterministic and prefer the middle/latter third of a long
+    clip, with the latest safe option as a stable tie-break.
+    """
+    if duration_us <= cta_duration_us:
+        return 0
+    latest = duration_us - cta_duration_us
+    raw_candidates = [
+        int(duration_us * 0.46),
+        int(duration_us * 0.62),
+        int(duration_us * 0.78),
+        latest,
+    ]
+    candidates = sorted({max(0, min(latest, value)) for value in raw_candidates})
+
+    def overlap(start: int) -> int:
+        end = start + cta_duration_us
+        return sum(
+            max(0, min(end, cue_end) - max(start, cue_start)) for cue_start, cue_end in caption_intervals
+        )
+
+    scored = [(overlap(start), -abs(start - int(duration_us * 0.62)), start) for start in candidates]
+    # Prefer a caption-free slot; if every slot contains speech, the smallest
+    # overlap wins and the middle/latter beat remains the tie-break.
+    return min(scored)[2]
+
+
+def choose_tarteel_foreground_position(
+    face_boxes: list[tuple[float, float, float, float]],
+) -> tuple[int, int]:
+    """Place the small CTA in the least occupied source-picture region.
+
+    Face detections are geometry only. They do not identify a speaker or a
+    person. The chosen candidate is still carried as a clearance fact and is
+    reviewed in decoded frames before delivery.
+    """
+    cta_width = 600
+    cta_height = 225
+    candidates = [(60, 180), (340, 180), (60, 520), (340, 520)]
+
+    def overlap(candidate: tuple[int, int]) -> float:
+        left, top = candidate
+        right = left + cta_width
+        bottom = top + cta_height
+        total = 0.0
+        for x, y, width, height in face_boxes:
+            face_left = x * 1000
+            face_top = y * 1000
+            face_right = face_left + width * 1000
+            face_bottom = face_top + height * 1000
+            intersection = max(0.0, min(right, face_right) - max(left, face_left)) * max(
+                0.0, min(bottom, face_bottom) - max(top, face_top)
+            )
+            total += intersection
+        return total
+
+    return min(candidates, key=lambda candidate: (overlap(candidate), candidate[1], candidate[0]))
 
 
 def _choose(

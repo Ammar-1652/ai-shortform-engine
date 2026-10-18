@@ -16,7 +16,7 @@ from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.constants import KIND_PREVIEW
 from clipforge.preview.inputs import load_preview_inputs, preview_input_digest
 from clipforge.preview.integrity import preview_problems
-from clipforge.preview.service import default_profile
+from clipforge.preview.service import _cleanup_staging, default_profile
 from clipforge.preview.show import format_preview, format_preview_list, load_preview_document
 from clipforge.preview.verify import verify_preview
 from clipforge.schemas.jobs import JobStatus
@@ -44,6 +44,24 @@ def _mined(tmp_path: Path, count: int = 1) -> tuple[PreviewFixture, FakeRoughRen
     mined = mine(fixture, profile=short_profile(max_candidates=max(count, 1)))
     assert mined.selected_count == count
     return fixture, FakeRoughRenderBackend()
+
+
+def test_campaign_overlay_assets_survive_transient_cleanup(tmp_path: Path) -> None:
+    staging = tmp_path / "run" / "staging"
+    staging.mkdir(parents=True)
+    (staging / "analysis.mp4").write_bytes(b"proxy")
+    (staging / "tarteel-cta-alpha.webm").write_bytes(b"cta")
+    (staging / "tarteel-watermark-alpha.png").write_bytes(b"watermark")
+
+    _cleanup_staging(
+        staging.parent,
+        tmp_path,
+        preserve_names=frozenset({"tarteel-cta-alpha.webm", "tarteel-watermark-alpha.png"}),
+    )
+
+    assert not (staging / "analysis.mp4").exists()
+    assert (staging / "tarteel-cta-alpha.webm").read_bytes() == b"cta"
+    assert (staging / "tarteel-watermark-alpha.png").read_bytes() == b"watermark"
 
 
 def test_root_help_hides_preview_subcommands() -> None:

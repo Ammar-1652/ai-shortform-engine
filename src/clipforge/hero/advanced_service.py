@@ -15,7 +15,7 @@ from typing import TypeVar, cast
 from pydantic import ValidationError
 
 from clipforge import __version__
-from clipforge.campaign.overlays import stage_tarteel_overlay
+from clipforge.campaign.overlays import TARTEEL_PROFILE_ID, stage_tarteel_overlay
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
@@ -245,6 +245,20 @@ def plan_advanced_candidate(
         root,
         require_hero_approval=not allow_unapproved,
     )
+    # Campaign duration and editorial structure are planning gates, not a
+    # late delivery warning.  Without this check an old short candidate can
+    # be promoted into Advanced Hero and the policy layer only discovers the
+    # problem after assets and sidecars have been staged.  Tarteel needs one
+    # coherent hook/body/punch arc; it must be supplied as a reviewed,
+    # source-bound EditorialArcDocument before any plan is written.
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        project = get_project(connection, context.project_id)
+    if project.profile_id == TARTEEL_PROFILE_ID and editorial_arc is None:
+        raise MediaError(
+            "Tarteel Advanced Hero requires a reviewed hook/body/punch editorial arc before planning"
+        )
     stored_direction = direction
     direction_sha256 = ""
     if stored_direction is None:
@@ -327,6 +341,11 @@ def plan_advanced_candidate(
             raise MediaError("SFX ids must match the selected direction placements")
     actor = _actor(created_by)
     effective_duration_us = render_hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
+    if project.profile_id == TARTEEL_PROFILE_ID and not 25_000_000 <= effective_duration_us <= 55_000_000:
+        raise MediaError(
+            "Tarteel Advanced Hero duration must be between 25 and 55 seconds; "
+            "select a longer coherent candidate instead of repeating footage"
+        )
     # Build the plan before publishing sidecars so validation errors leave no
     # claim of a usable render.  The effective alignment hash for an arc is
     # replaced below with the hash of the immutable advanced alignment file;
@@ -874,6 +893,21 @@ def _render_run(
                 cta_start_us=campaign_overlay.cta_start_us,
                 cta_asset_id=campaign_overlay.cta_asset_id,
                 watermark_asset_id=campaign_overlay.watermark_asset_id,
+                caption_intervals=[
+                    (item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
+                ],
+                source_logo_visible=any(
+                    "logo" in f"{item.region_id} {item.note}".lower() for item in plan.source_native_text
+                ),
+                face_boxes=[
+                    (
+                        sample.bounding_box.x,
+                        sample.bounding_box.y,
+                        sample.bounding_box.width,
+                        sample.bounding_box.height,
+                    )
+                    for sample in inputs.pair.visual.face_detection_samples
+                ],
             )
             if (
                 staged_overlay.spec.cta_asset_id != campaign_overlay.cta_asset_id

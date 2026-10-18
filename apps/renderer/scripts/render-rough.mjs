@@ -104,7 +104,7 @@ for (const item of batch.items) {
       }
       contained(path.join(stagingDir, value), stagingDir);
     }
-    if (overlay.cta_background_removal !== "chroma_key_v1" || (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") || overlay.cta_frame_rate !== 30 || overlay.watermark_mode !== "alpha_v1" || overlay.cta_position !== "top_left_brand_rail_v1" || overlay.cta_clearance !== "faces_and_captions_clear_v1" || !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 320 || overlay.cta_width_permille > 600) {
+    if (overlay.cta_background_removal !== "chroma_key_v1" || (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") || overlay.cta_frame_rate !== 30 || overlay.watermark_mode !== "alpha_v1" || overlay.cta_position !== "foreground_attention_v1" || overlay.overlay_coordinate_space !== "foreground_v1" || (overlay.watermark_position !== "foreground_top_right_v1" && overlay.watermark_position !== "top_right") || !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 320 || overlay.cta_width_permille > 600) {
       throw new Error("unsupported campaign overlay contract");
     }
     if (overlay.cta_render_mode === "alpha_video_v1") {

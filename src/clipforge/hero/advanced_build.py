@@ -247,7 +247,13 @@ def build_advanced_plan(
         broll=broll,
         sfx=sfx,
         assets=assets,
-        qa_requirements=["forced_alignment", "rights_cleared_assets", "no_speaker_inference", "no_music"],
+        qa_requirements=[
+            "forced_alignment",
+            "rights_cleared_assets",
+            "no_speaker_inference",
+            "no_music",
+            *(["tarteel-editorial-arc-v1"] if editorial_arc_id else []),
+        ],
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,

@@ -176,6 +176,16 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel watermark is not rights-bound in the advanced plan")
         if overlay.cta_render_mode != "alpha_video_v1":
             problems.append("Tarteel CTA must be the animated alpha video, not a still or PNG sequence")
+        if (
+            overlay.cta_position != "foreground_attention_v1"
+            or overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            problems.append("Tarteel CTA must be placed inside the original foreground picture")
+        if (
+            overlay.watermark_position != "foreground_top_right_v1"
+            or overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            problems.append("Tarteel watermark must be placed inside the original foreground picture")
         if overlay.cta_width_permille > 600:
             problems.append("Tarteel CTA is too large for the face-safe brand rail")
         if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
@@ -191,6 +201,10 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("plan does not require the Tarteel face/caption clearance gate")
         if "tarteel-caption-direction-v1" not in plan.qa_requirements:
             problems.append("plan does not require the Tarteel caption-direction gate")
+        if not getattr(plan, "editorial_arc_id", ""):
+            problems.append("Tarteel production requires a reviewed hook/body/punch editorial arc")
+        if "tarteel-editorial-arc-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel editorial-arc gate")
     if problems:
         return _result(
             "policy-tarteel-delivery", ComplianceStatus.FAIL, "; ".join(problems), context.source_asset_id

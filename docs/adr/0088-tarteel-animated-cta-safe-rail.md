@@ -20,14 +20,14 @@ staged video hash are included in the render dependency digest. Remotion uses
 its in-browser `Video` layer with `muted`, so every CTA frame is animated and
 the CTA audio stream cannot compete with campaign speech.
 
-Tarteel uses the explicit `top_left_brand_rail_v1` safe region. Its normalized
-left, top, and width values are part of `CampaignOverlaySpec`; the renderer
-does not choose a different location. The CTA width is capped at 600 permille
-and the contract declares `faces_and_captions_clear_v1`. The rail is above the
-caption lane and is separated from the watermark. A plan that omits the rail,
-clearance declaration, or uses a static sequence is rejected by the campaign
-policy and renderer input validation. Face/caption clearance is a hard
-delivery gate, not a visual suggestion.
+Tarteel uses the `foreground_attention_v1` region. Its normalized left, top,
+and width values are relative to the contained original source picture, not
+the blurred portrait canvas. The CTA width is capped at 600 permille and the
+contract declares `faces_and_captions_clear_v1`. The renderer places the
+watermark and CTA inside the same foreground layer. A plan that omits the
+foreground coordinate space, clearance declaration, or uses a static sequence
+is rejected by the campaign policy and renderer input validation.
+Face/caption clearance is a hard delivery gate, not a visual suggestion.
 
 The PNG sequence mode remains readable only for old review fixtures. It is not
 eligible for Tarteel compliance or delivery. The CTA remains a campaign asset

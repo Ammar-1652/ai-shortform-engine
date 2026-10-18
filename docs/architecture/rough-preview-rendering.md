@@ -31,6 +31,10 @@ foreground. The background choice is part of the render input and therefore the 
 identity. There is no face crop and no speaker inference. A review-only variant may also
 use a bounded uniform `video_scale_permille` (1000–1250) and `video_offset_x_px`
 (-120–120); these are composition comparisons, not final portrait reframing.
+The Tarteel profile selects a bounded foreground rectangle and mild zoom on the
+contained source while keeping campaign overlays in that same foreground coordinate
+space. Its CTA start and face-safe position are deterministic and recorded in the
+render input.
 
 ## Captions
 
@@ -40,7 +44,7 @@ The overlay is bold system sans-serif, white on a dark plate, centered above the
 
 ## Render
 
-Remotion 4.0.532 composites one `RoughPreview`. Python writes `candidates/<id>/render-input.json` and one batch file. Node bundles once per set and renders in order at concurrency 1. Staged media is a hard link of the proxy and the FLAC under the run directory, served to Remotion from that directory, then removed. The original source is not copied.
+Remotion 4.0.532 composites one `RoughPreview`. Python writes `candidates/<id>/render-input.json` and one batch file. Node bundles once per set and renders in order at concurrency 1. Staged media is a hard link of the proxy and the FLAC under the run directory, served to Remotion from that directory, then removed. For a Tarteel run, the validated alpha CTA and watermark are retained under the run's `staging/` directory because `preview verify` checks those exact evidence files; they remain inside the gitignored work root. The original source is not copied.
 
 Each MP4 is written to a partial path, probed, hashed, and renamed to `preview.mp4`. The manifest is published only after every candidate validates. The current artifact kind is `rough_preview_set_json`. The sidecar is `metadata/rough-preview.recipe.json`.
 

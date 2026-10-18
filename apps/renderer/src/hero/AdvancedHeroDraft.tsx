@@ -120,7 +120,8 @@ type CampaignOverlaySpec = {
   cta_frame_prefix?: string;
   cta_frame_count?: number;
   cta_frame_rate: 30;
-  cta_position: "top_left_brand_rail_v1";
+  cta_position: "foreground_attention_v1" | "top_left_brand_rail_v1";
+  overlay_coordinate_space: "foreground_v1" | "canvas_v1";
   cta_clearance: "faces_and_captions_clear_v1";
   cta_left_permille: number;
   cta_top_permille: number;
@@ -131,7 +132,8 @@ type CampaignOverlaySpec = {
   watermark_asset_sha256: string;
   watermark_asset_name: string;
   watermark_mode: "alpha_v1";
-  watermark_position: "top_right";
+  watermark_position: "foreground_top_right_v1" | "top_right";
+  watermark_visibility: "overlay_required_v1" | "source_visible_v1";
   watermark_width_permille: number;
   first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
 };
@@ -353,9 +355,10 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       input.campaign_overlay.campaign_id !== "tarteel" ||
       input.campaign_overlay.cta_background_removal !== "chroma_key_v1" ||
       (input.campaign_overlay.cta_render_mode !== "alpha_video_v1" && input.campaign_overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
-      input.campaign_overlay.cta_position !== "top_left_brand_rail_v1" ||
+      (input.campaign_overlay.cta_position !== "foreground_attention_v1" && input.campaign_overlay.cta_position !== "top_left_brand_rail_v1") ||
+      input.campaign_overlay.overlay_coordinate_space !== "foreground_v1" ||
       input.campaign_overlay.watermark_mode !== "alpha_v1" ||
-      input.campaign_overlay.watermark_position !== "top_right" ||
+      (input.campaign_overlay.watermark_position !== "foreground_top_right_v1" && input.campaign_overlay.watermark_position !== "top_right") ||
       names[input.campaign_overlay.cta_asset_id] !== (input.campaign_overlay.cta_render_mode === "alpha_video_v1" ? input.campaign_overlay.cta_asset_name : input.campaign_overlay.cta_frame_prefix) ||
       names[input.campaign_overlay.watermark_asset_id] !== input.campaign_overlay.watermark_asset_name
     ) {
@@ -410,6 +413,9 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const containBox = sourceWindow
     ? containRect(sourceWindow.frame_width, sourceWindow.frame_height, 1080, 1920)
     : containRect(1080, 1920, 1080, 1920);
+  const campaignForegroundTransform = input.campaign_overlay
+    ? { transform: "scale(1.08)", transformOrigin: "center center" }
+    : {};
   const followed =
     strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
       ? placedVideo(windowAt(frame, input.windows ?? []))
@@ -429,7 +435,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             <AbsoluteFill style={sourceWindow ? { width: "100%", aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`, top: "50%", transform: "translateY(-50%)" } : { inset: 0 }}>
               <Video src={staticFile(picture)} durationInFrames={input.duration_in_frames} muted style={{ width: "100%", height: "100%", objectFit: "fill" }} />
             </AbsoluteFill>
-          ) : <div style={{ position: "absolute", ...containBox }}>
+          ) : <div style={{ position: "absolute", ...containBox, ...campaignForegroundTransform }}>
             <Video
               src={staticFile(picture)}
               durationInFrames={input.duration_in_frames}
@@ -454,19 +460,27 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         volume={linearVolume(input.source_gain_db ?? 0)}
       />
       {input.campaign_overlay ? (
-        <>
-          <Img
-            src={staticFile(input.campaign_overlay.watermark_asset_name)}
-            style={{
-              position: "absolute",
-              top: 52,
-              right: 52,
-              width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
-              height: "auto",
-              objectFit: "contain",
-              filter: "drop-shadow(0 4px 9px rgba(0,0,0,.6))",
-            }}
-          />
+        <div
+          style={
+            followed === null && !legacyGeometry
+              ? { position: "absolute", ...containBox, ...campaignForegroundTransform, overflow: "hidden" }
+              : { position: "absolute", inset: 0, overflow: "hidden" }
+          }
+        >
+          {input.campaign_overlay.watermark_visibility === "source_visible_v1" ? null : (
+            <Img
+              src={staticFile(input.campaign_overlay.watermark_asset_name)}
+              style={{
+                position: "absolute",
+                top: 18,
+                right: 18,
+                width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+                height: "auto",
+                objectFit: "contain",
+                filter: "drop-shadow(0 4px 9px rgba(0,0,0,.6))",
+              }}
+            />
+          )}
           <Sequence
             from={frameAt(input.campaign_overlay.cta_start_us)}
             durationInFrames={Math.max(
@@ -479,7 +493,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
               localFrame={frame - frameAt(input.campaign_overlay.cta_start_us)}
             />
           </Sequence>
-        </>
+        </div>
       ) : null}
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
         <Audio

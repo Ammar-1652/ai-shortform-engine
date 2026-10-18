@@ -33,6 +33,26 @@ export function RoughPreview(raw: RoughPreviewInput) {
     input.font_identity,
   );
   if (!fontsReady) return null;
+  const foregroundX = input.foreground_x_px ?? 0;
+  const foregroundY = input.foreground_y_px ?? 0;
+  const foregroundWidth = input.foreground_width_px ?? input.width;
+  const foregroundHeight = input.foreground_height_px ?? input.height;
+  const foreground = {
+    position: "absolute" as const,
+    left: foregroundX,
+    top: foregroundY,
+    width: foregroundWidth,
+    height: foregroundHeight,
+    overflow: "hidden" as const,
+    // Keep the portrait foreground mildly pushed in while the blurred copy
+    // supplies the surrounding canvas.  The transform is shared by the
+    // media and the campaign overlay wrapper so CTA/logo coordinates remain
+    // attached to the same source picture after the zoom.
+    transform: `scale(${(input.foreground_scale_permille ?? 1000) / 1000})`,
+    transformOrigin: "center center",
+  };
+  const containedForeground = input.background === "blurred-source-v1" &&
+    (foregroundWidth < input.width || foregroundHeight < input.height);
   return (
     <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, overflow: "hidden" }}>
       <AbsoluteFill style={{ overflow: "hidden" }}>
@@ -54,13 +74,25 @@ export function RoughPreview(raw: RoughPreviewInput) {
             }}
           />
         ) : null}
-        <OffthreadVideo
-          src={staticFile(stagedName(input.video_path))}
-          trimBefore={input.media_trim_frame}
-          durationInFrames={input.duration_in_frames}
-          muted
-          style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT, transform: `translateX(${input.video_offset_x_px}px) scale(${input.video_scale_permille / 1000})` }}
-        />
+        {containedForeground ? (
+          <div style={foreground}>
+            <OffthreadVideo
+              src={staticFile(stagedName(input.video_path))}
+              trimBefore={input.media_trim_frame}
+              durationInFrames={input.duration_in_frames}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "fill", transform: `translateX(${input.video_offset_x_px}px)` }}
+            />
+          </div>
+        ) : (
+          <OffthreadVideo
+            src={staticFile(stagedName(input.video_path))}
+            trimBefore={input.media_trim_frame}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT, transform: `translateX(${input.video_offset_x_px}px) scale(${input.video_scale_permille / 1000})` }}
+          />
+        )}
         <Audio
           src={staticFile(stagedName(input.audio_path))}
           trimBefore={input.media_trim_frame}
@@ -68,19 +100,21 @@ export function RoughPreview(raw: RoughPreviewInput) {
         />
       </AbsoluteFill>
       {input.campaign_overlay ? (
-        <>
-          <Img
-            src={staticFile(input.campaign_overlay.watermark_asset_name)}
-            style={{
-              position: "absolute",
-              top: 34,
-              right: 34,
-              width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
-              height: "auto",
-              objectFit: "contain",
-              filter: "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
-            }}
-          />
+        <div style={containedForeground ? foreground : { position: "absolute", inset: 0, overflow: "hidden" }}>
+          {input.campaign_overlay.watermark_visibility === "source_visible_v1" ? null : (
+            <Img
+              src={staticFile(input.campaign_overlay.watermark_asset_name)}
+              style={{
+                position: "absolute",
+                top: 18,
+                right: 18,
+                width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+                height: "auto",
+                objectFit: "contain",
+                filter: "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
+              }}
+            />
+          )}
           <Sequence
             from={Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000)}
             durationInFrames={Math.max(
@@ -90,7 +124,7 @@ export function RoughPreview(raw: RoughPreviewInput) {
           >
             <CampaignCta overlay={input.campaign_overlay} localFrame={frame - Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000)} />
           </Sequence>
-        </>
+        </div>
       ) : null}
       {caption === null ? null : (
         <div

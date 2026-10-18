@@ -124,6 +124,14 @@ class RoughPreviewRenderInput(Versioned):
     font_identity: str = "dejavu-noto-local-v1"
     video_scale_permille: int = Field(default=1000, ge=1000, le=1250)
     video_offset_x_px: int = Field(default=0, ge=-120, le=120)
+    # The source picture is rendered in this explicit rectangle when the
+    # campaign asks for the blurred-background composition. Overlay layers use
+    # the same rectangle, so they cannot accidentally land on the blur rail.
+    foreground_x_px: int = Field(default=0, ge=0, le=720)
+    foreground_y_px: int = Field(default=0, ge=0, le=1280)
+    foreground_width_px: int = Field(default=720, ge=1, le=720)
+    foreground_height_px: int = Field(default=1280, ge=1, le=1280)
+    foreground_scale_permille: int = Field(default=1000, ge=1000, le=1150)
     word_highlight_mode: Literal["off", "reviewed"] = "off"
     word_timing_source: Literal["segment-only-v1", "transcript-word-times-v1", "reviewed-word-times-v1"] = (
         "segment-only-v1"
@@ -156,6 +164,15 @@ class RoughPreviewRenderInput(Versioned):
             raise ValueError("reviewed word highlighting requires an explicit word timing source")
         if self.campaign_overlay is not None and self.campaign_overlay.cta_end_us > self._duration_hint_us():
             raise ValueError("campaign CTA interval extends past the preview duration")
+        if self.foreground_x_px + self.foreground_width_px > self.width:
+            raise ValueError("foreground rectangle extends past the preview width")
+        if self.foreground_y_px + self.foreground_height_px > self.height:
+            raise ValueError("foreground rectangle extends past the preview height")
+        if (
+            self.campaign_overlay is not None
+            and self.campaign_overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            raise ValueError("campaign overlays must use the original foreground coordinate space")
         return self
 
     def _duration_hint_us(self) -> int:

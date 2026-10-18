@@ -112,6 +112,19 @@ describe("rough preview render input", () => {
     expect(parseRenderInput(input({ word_highlight_mode: "reviewed", word_timing_source: "reviewed-word-times-v1", captions: [cue({ words: [{ word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" }] })] })).word_timing_source).toBe("reviewed-word-times-v1");
   });
 
+  it("keeps the campaign foreground rectangle inside the portrait canvas", () => {
+    const parsed = parseRenderInput(input({
+      background: "blurred-source-v1",
+      foreground_x_px: 0,
+      foreground_y_px: 432,
+      foreground_width_px: 720,
+      foreground_height_px: 416,
+      foreground_scale_permille: 1080,
+    }));
+    expect(parsed.foreground_y_px).toBe(432);
+    expect(() => parseRenderInput(input({ foreground_y_px: 1000, foreground_height_px: 400 }))).toThrow(/outside/);
+  });
+
   it("rejects reviewed words without a declared timing source", () => {
     const word = { word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" as const };
     expect(() => parseRenderInput(input({ word_highlight_mode: "reviewed", captions: [cue({ words: [word] })] }))).toThrow(/timing source/);
@@ -126,8 +139,11 @@ describe("rough preview render input", () => {
       cta_asset_name: "tarteel-cta-alpha.webm",
       cta_background_removal: "chroma_key_v1",
       cta_render_mode: "alpha_video_v1",
+      cta_frame_prefix: null,
+      cta_frame_count: null,
       cta_frame_rate: 30,
       cta_position: "top_left_brand_rail_v1",
+      overlay_coordinate_space: "foreground_v1",
       cta_clearance: "faces_and_captions_clear_v1",
       cta_left_permille: 80,
       cta_top_permille: 70,
@@ -139,10 +155,11 @@ describe("rough preview render input", () => {
       watermark_asset_name: "tarteel-watermark-alpha.png",
       watermark_mode: "alpha_v1",
       watermark_position: "top_right",
+      watermark_visibility: "overlay_required_v1",
       watermark_width_permille: 170,
       first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
     } as const;
-    expect(parseRenderInput(input({ campaign_overlay: overlay })).campaign_overlay?.cta_asset_name).toBe(
+    expect(parseRenderInput(input({ campaign_overlay: overlay as never })).campaign_overlay?.cta_asset_name).toBe(
       "tarteel-cta-alpha.webm",
     );
   });
