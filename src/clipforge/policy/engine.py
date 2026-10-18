@@ -176,6 +176,8 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel watermark is not rights-bound in the advanced plan")
         if overlay.cta_render_mode != "alpha_video_v1":
             problems.append("Tarteel CTA must be the animated alpha video, not a still or PNG sequence")
+        if overlay.cta_width_permille > 600:
+            problems.append("Tarteel CTA is too large for the face-safe brand rail")
         if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
             problems.append("Tarteel CTA interval extends past the output")
         caption_texts = {item.text.strip() for item in (*plan.captions, *plan.typography)}
@@ -185,6 +187,10 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel forbids added SFX/music, but the plan contains audio events")
         if "tarteel-overlay-v1" not in plan.qa_requirements:
             problems.append("plan does not require the tarteel-overlay-v1 QA gate")
+        if "tarteel-face-clearance-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel face/caption clearance gate")
+        if "tarteel-caption-direction-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel caption-direction gate")
     if problems:
         return _result(
             "policy-tarteel-delivery", ComplianceStatus.FAIL, "; ".join(problems), context.source_asset_id

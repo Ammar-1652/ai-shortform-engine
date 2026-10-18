@@ -66,6 +66,8 @@ def test_tarteel_policy_requires_the_exact_caption_gate_and_no_sfx() -> None:
     assert result.status.value == "fail"
     assert "mandatory first-post" in result.evidence
     assert "SFX/music" in result.evidence
+    assert "face/caption clearance" in result.evidence
+    assert "caption-direction" in result.evidence
 
 
 def test_tarteel_policy_rejects_a_static_cta_sequence() -> None:
@@ -104,6 +106,21 @@ def test_campaign_overlay_contract_requires_video_filename_for_video_mode() -> N
             cta_asset_sha256="a" * 64,
             cta_asset_name="cta.png",
             cta_render_mode="alpha_video_v1",
+            cta_start_us=1_000_000,
+            cta_end_us=3_000_000,
+            watermark_asset_id="watermark-asset",
+            watermark_asset_sha256="b" * 64,
+            watermark_asset_name="watermark.png",
+        )
+
+
+def test_campaign_overlay_contract_caps_the_cta_brand_rail_size() -> None:
+    with pytest.raises(ValueError, match="less than or equal to 600"):
+        CampaignOverlaySpec(
+            cta_asset_id="cta-asset",
+            cta_asset_sha256="a" * 64,
+            cta_asset_name="cta.webm",
+            cta_width_permille=601,
             cta_start_us=1_000_000,
             cta_end_us=3_000_000,
             watermark_asset_id="watermark-asset",

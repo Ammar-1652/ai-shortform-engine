@@ -350,6 +350,12 @@
           "title": "Cta Background Removal",
           "type": "string"
         },
+        "cta_clearance": {
+          "const": "faces_and_captions_clear_v1",
+          "default": "faces_and_captions_clear_v1",
+          "title": "Cta Clearance",
+          "type": "string"
+        },
         "cta_end_us": {
           "exclusiveMinimum": 0,
           "title": "Cta End Us",
@@ -417,16 +423,16 @@
           "type": "integer"
         },
         "cta_top_permille": {
-          "default": 110,
-          "maximum": 500,
+          "default": 70,
+          "maximum": 300,
           "minimum": 0,
           "title": "Cta Top Permille",
           "type": "integer"
         },
         "cta_width_permille": {
-          "default": 760,
-          "maximum": 900,
-          "minimum": 200,
+          "default": 600,
+          "maximum": 600,
+          "minimum": 320,
           "title": "Cta Width Permille",
           "type": "integer"
         },

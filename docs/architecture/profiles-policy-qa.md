@@ -23,10 +23,17 @@ when SFX/music events are present. Green-screen CTA files are converted to a
 deterministic, audio-free VP9/WebM alpha video during staging; the source
 asset hash and safe-rail geometry remain bound to the plan. The renderer
 consumes the animated video with a muted Remotion `Video` layer and places
-it in `top_left_brand_rail_v1`, above the caption lane. A rough preview for
+the small (maximum 600-permille) CTA in `top_left_brand_rail_v1`, above the
+caption lane and outside reviewed face regions. A rough preview for
 this profile carries the same overlay contract and `preview verify` checks the
 staged alpha video and watermark, so the campaign gate cannot be bypassed by
 stopping before Advanced Hero. See [ADR 0088](../adr/0088-tarteel-animated-cta-safe-rail.md).
+
+Tarteel caption direction is also a hard rule: canonical Quran text is only
+rendered after source verification and forced alignment; reviewed correct
+words may turn green and reviewed incorrect words red, while ordinary dialogue
+uses the measured phrase/word timing without Quran styling. A plan that lacks
+the campaign caption-direction QA requirement is not deliverable.
 
 ## QA set
 

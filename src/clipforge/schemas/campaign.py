@@ -110,9 +110,12 @@ class CampaignOverlaySpec(Versioned):
     cta_frame_count: int | None = Field(default=None, ge=1, le=600)
     cta_frame_rate: Literal[30] = 30
     cta_position: Literal["top_left_brand_rail_v1"] = "top_left_brand_rail_v1"
+    cta_clearance: Literal["faces_and_captions_clear_v1"] = "faces_and_captions_clear_v1"
     cta_left_permille: int = Field(default=80, ge=0, le=300)
-    cta_top_permille: int = Field(default=110, ge=0, le=500)
-    cta_width_permille: int = Field(default=760, ge=200, le=900)
+    cta_top_permille: int = Field(default=70, ge=0, le=300)
+    # This is intentionally capped. The campaign CTA is a small brand cue,
+    # never a foreground card over a child or a caption.
+    cta_width_permille: int = Field(default=600, ge=320, le=600)
     cta_start_us: int = Field(ge=0)
     cta_end_us: int = Field(gt=0)
     watermark_asset_id: EntityId
@@ -140,6 +143,8 @@ class CampaignOverlaySpec(Versioned):
             (".mov", ".webm")
         ):
             raise ValueError("alpha video CTA must use a transparent video staging filename")
+        if self.cta_clearance != "faces_and_captions_clear_v1":
+            raise ValueError("Tarteel CTA must declare face and caption clearance")
         for label, name in names:
             if (
                 name != name.strip()

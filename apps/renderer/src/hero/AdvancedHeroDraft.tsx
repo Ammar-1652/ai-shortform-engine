@@ -121,6 +121,7 @@ type CampaignOverlaySpec = {
   cta_frame_count?: number;
   cta_frame_rate: 30;
   cta_position: "top_left_brand_rail_v1";
+  cta_clearance: "faces_and_captions_clear_v1";
   cta_left_permille: number;
   cta_top_permille: number;
   cta_width_permille: number;

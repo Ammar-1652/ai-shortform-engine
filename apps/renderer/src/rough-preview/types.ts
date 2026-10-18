@@ -66,6 +66,7 @@ export type CampaignOverlaySpec = {
   readonly cta_frame_count?: number;
   readonly cta_frame_rate: 30;
   readonly cta_position: "top_left_brand_rail_v1";
+  readonly cta_clearance: "faces_and_captions_clear_v1";
   readonly cta_left_permille: number;
   readonly cta_top_permille: number;
   readonly cta_width_permille: number;

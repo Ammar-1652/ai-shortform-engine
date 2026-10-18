@@ -158,14 +158,14 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     "cta_frame_rate", "cta_start_us", "cta_end_us", "watermark_asset_id",
     "watermark_asset_sha256", "watermark_asset_name", "watermark_mode",
     "watermark_position", "watermark_width_permille", "first_post_caption_line",
-    "cta_position", "cta_left_permille", "cta_top_permille", "cta_width_permille",
+    "cta_position", "cta_clearance", "cta_left_permille", "cta_top_permille", "cta_width_permille",
   ];
   for (const key of required) {
     if (!(key in record)) throw new Error(`campaign overlay is missing ${key}`);
   }
   rejectDangerousKeys(record, "campaign overlay");
   rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count"]), "campaign overlay");
-  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || record.watermark_position !== "top_right" || record.cta_position !== "top_left_brand_rail_v1") {
+  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || record.watermark_position !== "top_right" || record.cta_position !== "top_left_brand_rail_v1" || record.cta_clearance !== "faces_and_captions_clear_v1") {
     throw new Error("unsupported campaign overlay contract");
   }
   const ctaStart = requireNonNegativeInt(record.cta_start_us, "campaign overlay cta_start_us");
@@ -200,8 +200,8 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
   }
   const width = requireIntegerInRange(record.watermark_width_permille, 80, 280, "campaign overlay watermark_width_permille");
   const left = requireIntegerInRange(record.cta_left_permille, 0, 300, "campaign overlay cta_left_permille");
-  const top = requireIntegerInRange(record.cta_top_permille, 0, 500, "campaign overlay cta_top_permille");
-  const ctaWidth = requireIntegerInRange(record.cta_width_permille, 200, 900, "campaign overlay cta_width_permille");
+  const top = requireIntegerInRange(record.cta_top_permille, 0, 300, "campaign overlay cta_top_permille");
+  const ctaWidth = requireIntegerInRange(record.cta_width_permille, 320, 600, "campaign overlay cta_width_permille");
   return {
     campaign_id: "tarteel",
     cta_asset_id: record.cta_asset_id,
@@ -213,6 +213,7 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     cta_frame_count: frameCount,
     cta_frame_rate: 30,
     cta_position: "top_left_brand_rail_v1",
+    cta_clearance: "faces_and_captions_clear_v1",
     cta_left_permille: left,
     cta_top_permille: top,
     cta_width_permille: ctaWidth,
