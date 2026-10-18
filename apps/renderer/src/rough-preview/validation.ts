@@ -182,11 +182,15 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     if (!(key in record)) throw new Error(`campaign overlay is missing ${key}`);
   }
   rejectDangerousKeys(record, "campaign overlay");
-  rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count", "watermark_visibility", "overlay_coordinate_space"]), "campaign overlay");
+  rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count", "watermark_visibility", "overlay_coordinate_space", "sizing_method", "sizing_measurement_sha256"]), "campaign overlay");
   const coordinateSpace = record.overlay_coordinate_space === undefined ? "foreground_v1" : record.overlay_coordinate_space;
   const ctaPosition = record.cta_position === "top_left_brand_rail_v1" ? "foreground_attention_v1" : record.cta_position;
   const watermarkPosition = record.watermark_position === "top_right" ? "foreground_top_right_v1" : record.watermark_position;
   const watermarkVisibility = record.watermark_visibility === undefined ? "overlay_required_v1" : record.watermark_visibility;
+  const sizingMethod = record.sizing_method === undefined ? "legacy_fixed_v1" : record.sizing_method;
+  const sizingDigest = typeof record.sizing_measurement_sha256 === "string"
+    ? record.sizing_measurement_sha256
+    : "";
   if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || watermarkPosition !== "foreground_top_right_v1" || ctaPosition !== "foreground_attention_v1" || record.cta_clearance !== "faces_and_captions_clear_v1" || coordinateSpace !== "foreground_v1" || (watermarkVisibility !== "overlay_required_v1" && watermarkVisibility !== "source_visible_v1")) {
     throw new Error("unsupported campaign overlay contract");
   }
@@ -227,10 +231,16 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
   if (typeof record.cta_asset_id !== "string" || typeof record.watermark_asset_id !== "string" || typeof record.first_post_caption_line !== "string") {
     throw new Error("campaign overlay asset ids and caption line must be strings");
   }
-  const width = requireIntegerInRange(record.watermark_width_permille, 80, 280, "campaign overlay watermark_width_permille");
+  if (sizingMethod !== "source_frame_scan_v1" && sizingMethod !== "legacy_fixed_v1") {
+    throw new Error("unsupported campaign sizing method");
+  }
+  if (sizingMethod === "source_frame_scan_v1" && (typeof sizingDigest !== "string" || !/^[0-9a-f]{64}$/.test(sizingDigest))) {
+    throw new Error("source-measured campaign overlay requires a measurement digest");
+  }
+  const width = requireIntegerInRange(record.watermark_width_permille, 24, 280, "campaign overlay watermark_width_permille");
   const left = requireIntegerInRange(record.cta_left_permille, 0, 1000, "campaign overlay cta_left_permille");
   const top = requireIntegerInRange(record.cta_top_permille, 0, 1000, "campaign overlay cta_top_permille");
-  const ctaWidth = requireIntegerInRange(record.cta_width_permille, 320, 600, "campaign overlay cta_width_permille");
+  const ctaWidth = requireIntegerInRange(record.cta_width_permille, 80, 600, "campaign overlay cta_width_permille");
   return {
     campaign_id: "tarteel",
     cta_asset_id: record.cta_asset_id,
@@ -256,6 +266,8 @@ function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySp
     watermark_position: "foreground_top_right_v1",
     watermark_visibility: watermarkVisibility,
     watermark_width_permille: width,
+    sizing_method: sizingMethod,
+    sizing_measurement_sha256: sizingDigest,
     first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
   };
 }

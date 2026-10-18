@@ -29,7 +29,7 @@ Return a concise direction brief with:
    segment order, transcript word evidence, and a score/reason; select one
    automatically by the deterministic score/tie-break rule unless the
    operator explicitly supplies an allowlisted override;
-4. one allowlisted style id from `editorial-clean-v1`,
+4. one allowlisted style id from `editorial-clean-v1`, `quran-editorial-v1`,
    `kinetic-caption-v1`, `documentary-broll-v1`, `data-explainer-v1`,
    `paper-explainer-v1`, or `premium-minimal-v1`;
 5. the project-defined `portrait-safe-v1` region (not a universal platform
@@ -40,9 +40,15 @@ Return a concise direction brief with:
    annotation with its exact phrase, interval, visual scene id, and note so
    duplicate optional typography can be suppressed. `unavailable` cannot enter
    clean production;
-6. optional diagram facts only when both sides, units, labels, values, and source
+6. an optional `context_line` for campaigns that reserve an upper blurred lane.
+   It is one typed sentence with an allowlisted emoji, a full-output interval,
+   and exact transcript evidence or explicit human-review metadata. It must not
+   duplicate a timed caption; omit it when no defensible context exists. The
+   renderer owns the upper safe-lane geometry and never accepts arbitrary HTML
+   or emoji strings;
+7. optional diagram facts only when both sides, units, labels, values, and source
    word/span provenance are explicit;
-7. optional native `motion_graphics` only when an allowlisted illustration conveys
+8. optional native `motion_graphics` only when an allowlisted illustration conveys
    a source-grounded fact more clearly than captions alone. Each record must name
    an allowlisted `template`, integer-microsecond output `interval`, exact source
    evidence ids, a `MotionPurpose`, display text copied exactly from one bound
@@ -56,7 +62,7 @@ Return a concise direction brief with:
    use a graphic as a generic decoration, replacement caption, or way to invent a
    hook. Graphics must not overlap each other; omission is the correct choice when
    no template fits;
-8. optional `asset_placements` only for locally registered, rights-cleared media
+9. optional `asset_placements` only for locally registered, rights-cleared media
    that has a real source-grounded reason. Each placement must name `asset_id`,
    `kind` (`graphic` or `audio`), an integer-microsecond output `interval`,
    `source_in_us`, one or more evidence ids, a `purpose`, and a concise
@@ -65,7 +71,7 @@ Return a concise direction brief with:
    may also set a bounded `gain_db`; clean production defaults to a restrained
    -18 dB cap with a short deterministic envelope. Never distribute assets
    evenly or add a whoosh/impact merely to create motion;
-9. a validation checklist covering alignment, rights, geometry, stale
+10. a validation checklist covering alignment, rights, geometry, stale
    approvals, and complete-word TimeMap boundaries. Reject a cut that
    intersects a spoken word so the picture cannot lose its leading phoneme.
 
@@ -92,7 +98,8 @@ The brief is declarative JSON, not executable code. Its top-level fields are
 `selection_mode`, `style_id`,
 `style_fingerprint`, `safe_region_id` (`portrait-safe-v1`), and provenance.
 Each option contains `style_id`, `beats`, `evidence`, `segment_order`,
-`motion_graphics`, `asset_placements`, `selection_score`, and `selection_reason`; every beat contains a `kind`
+`context_line`, `motion_graphics`, `asset_placements`, `selection_score`, and
+`selection_reason`; every beat contains a `kind`
 (`hook`, `body`, or `punch`), source segment ids, evidence ids, and exact
 source-grounded display text. A brief that cannot populate these fields must
 be rejected rather than filled with invented copy.

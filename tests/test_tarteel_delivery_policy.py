@@ -18,6 +18,8 @@ def _overlay() -> CampaignOverlaySpec:
         watermark_asset_id="watermark-asset",
         watermark_asset_sha256="b" * 64,
         watermark_asset_name="tarteel-watermark-alpha.png",
+        sizing_method="source_frame_scan_v1",
+        sizing_measurement_sha256="c" * 64,
     )
 
 

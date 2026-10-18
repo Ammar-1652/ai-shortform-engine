@@ -23,6 +23,7 @@ type TypeEvent = {
   y?: number;
   font_size?: number;
   color?: string;
+  emoji?: "📖" | "💡" | "🎯" | "✨" | "⚡" | "🧠" | "✅" | "🔎" | "🕌";
   words?: readonly {
     word_id?: string;
     text?: string;
@@ -135,6 +136,8 @@ type CampaignOverlaySpec = {
   watermark_position: "foreground_top_right_v1" | "top_right";
   watermark_visibility: "overlay_required_v1" | "source_visible_v1";
   watermark_width_permille: number;
+  sizing_method: "source_frame_scan_v1" | "legacy_fixed_v1";
+  sizing_measurement_sha256: string;
   first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
 };
 
@@ -154,6 +157,8 @@ export type AdvancedHeroInput = {
   style_fingerprint?: string;
   direction_id?: string;
   direction_sha256?: string;
+  quran_review_id?: string;
+  quran_review_sha256?: string;
   profile_fingerprint?: string;
   alignment_sha256?: string;
   hero_plan_sha256?: string;
@@ -282,6 +287,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const style = input.style_id ?? "legacy-v1";
   const productionStyles = new Set([
     "editorial-clean-v1",
+    "quran-editorial-v1",
     "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
@@ -334,6 +340,24 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         throw new Error("production SFX requires source evidence, purpose, and relevance");
       }
     }
+    const contextLines = (input.typography ?? []).filter((event) => event.component_id === "context-line-v1");
+    if (style === "quran-editorial-v1" && contextLines.length !== 1) {
+      throw new Error("quran-editorial-v1 requires exactly one upper context line");
+    }
+    for (const line of contextLines) {
+      if (!line.emoji || !line.text?.trim() || /[\r\n]/u.test(line.text)) {
+        throw new Error("context line requires one non-empty line and an allowlisted emoji");
+      }
+      if ((line.y ?? 120) < 120 || (line.y ?? 120) > 260 || (line.font_size ?? 48) > 60) {
+        throw new Error("context line must stay in the upper blur safe lane");
+      }
+      const metrics = document.createElement("canvas").getContext("2d");
+      if (!metrics) throw new Error("context line font metrics unavailable");
+      metrics.font = `700 ${line.font_size ?? 48}px ${captionFontFamily(motionStyle?.font_identity, "typography")}`;
+      if (metrics.measureText(`${line.emoji} ${line.text}`).width + 36 > 936) {
+        throw new Error("context line does not fit on one line in the upper safe lane");
+      }
+    }
   }
   if (input.motion_style && input.motion_style.style_id !== style) {
     throw new Error("motion style payload does not match style_id");
@@ -351,6 +375,12 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   }
   const names = input.asset_names ?? {};
   if (input.campaign_overlay) {
+    if (input.campaign_overlay.sizing_method !== "source_frame_scan_v1" || !/^[0-9a-f]{64}$/.test(input.campaign_overlay.sizing_measurement_sha256)) {
+      throw new Error("Tarteel campaign overlay requires source-measured sizing evidence");
+    }
+    if (style !== "quran-editorial-v1" || !input.quran_review_id || !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "")) {
+      throw new Error("Tarteel production requires reviewed Quran captions and quran-editorial-v1");
+    }
     if (
       input.campaign_overlay.campaign_id !== "tarteel" ||
       input.campaign_overlay.cta_background_removal !== "chroma_key_v1" ||
@@ -358,6 +388,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       (input.campaign_overlay.cta_position !== "foreground_attention_v1" && input.campaign_overlay.cta_position !== "top_left_brand_rail_v1") ||
       input.campaign_overlay.overlay_coordinate_space !== "foreground_v1" ||
       input.campaign_overlay.watermark_mode !== "alpha_v1" ||
+      input.campaign_overlay.sizing_method !== "source_frame_scan_v1" ||
+      !/^[0-9a-f]{64}$/.test(input.campaign_overlay.sizing_measurement_sha256) ||
       (input.campaign_overlay.watermark_position !== "foreground_top_right_v1" && input.campaign_overlay.watermark_position !== "top_right") ||
       names[input.campaign_overlay.cta_asset_id] !== (input.campaign_overlay.cta_render_mode === "alpha_video_v1" ? input.campaign_overlay.cta_asset_name : input.campaign_overlay.cta_frame_prefix) ||
       names[input.campaign_overlay.watermark_asset_id] !== input.campaign_overlay.watermark_asset_name
@@ -690,6 +722,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         );
         const isHook = item.component_id === "hook-card-v1";
         const isPunch = item.component_id === "punch-card-v1";
+        const isContext = item.component_id === "context-line-v1";
         const left = item.x ?? 72;
         const top = item.y ?? (isHook ? 220 : isPunch ? 1450 : 360);
         const accent = motionStyle?.accent ?? "#ffcf4a";
@@ -698,7 +731,34 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             key={`${item.component_id ?? "type"}-${item.event_id ?? ""}-${item.text}`}
             style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
           >
-            {duplicatesCaption || duplicatesNativeText ? (
+            {isContext ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left,
+                  top,
+                  width: 936,
+                  color: "#ffffff",
+                  fontFamily: captionFontFamily(motionStyle?.font_identity, "typography"),
+                  fontWeight: 700,
+                  fontSize: item.font_size ?? 48,
+                  lineHeight: 1.12,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "clip",
+                  textAlign: language.startsWith("ar") ? "right" : "left",
+                  textShadow: "0 3px 12px rgba(0,0,0,0.72)",
+                  background: "linear-gradient(90deg, rgba(7,10,18,0.78), rgba(7,10,18,0.22), transparent)",
+                  padding: "12px 18px",
+                  borderLeft: `5px solid ${accent}`,
+                  borderRadius: 10,
+                  boxSizing: "border-box",
+                }}
+              >
+                <span aria-hidden="true">{item.emoji} </span>{item.text}
+              </div>
+            ) : null}
+            {!isContext && (duplicatesCaption || duplicatesNativeText) ? (
               <div
                 style={{
                   position: "absolute",
@@ -725,7 +785,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 />
               </div>
             ) : null}
-            {!duplicatesCaption && !duplicatesNativeText ? (
+            {!isContext && !duplicatesCaption && !duplicatesNativeText ? (
               <CaptionPlate
                 text={item.text ?? ""}
                 language={item.language || language}

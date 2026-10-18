@@ -1,7 +1,14 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from clipforge.campaign.overlays import (
     choose_tarteel_foreground_position,
     choose_tarteel_overlay_start_us,
 )
+from clipforge.campaign.quran import load_tarteel_quran_review
+from clipforge.errors import MediaError
 from clipforge.schemas.campaign import CampaignOverlaySpec
 
 
@@ -24,6 +31,8 @@ def test_new_tarteel_overlay_coordinates_are_foreground_relative() -> None:
         watermark_asset_id="watermark-asset",
         watermark_asset_sha256="b" * 64,
         watermark_asset_name="tarteel-watermark-alpha.png",
+        sizing_method="source_frame_scan_v1",
+        sizing_measurement_sha256="c" * 64,
     )
     assert overlay.cta_position == "foreground_attention_v1"
     assert overlay.overlay_coordinate_space == "foreground_v1"
@@ -33,3 +42,42 @@ def test_new_tarteel_overlay_coordinates_are_foreground_relative() -> None:
 def test_cta_position_avoids_the_most_occupied_face_region() -> None:
     left_top = choose_tarteel_foreground_position([(0.02, 0.05, 0.55, 0.35)])
     assert left_top != (60, 180)
+
+
+def test_quran_review_blocks_unreviewed_pronunciation(tmp_path: Path) -> None:
+    sidecar = tmp_path / "campaigns" / "Tarteel" / "pilot" / "quran-caption-review.json"
+    sidecar.parent.mkdir(parents=True)
+    payload = {
+        "review_kind": "source_grounded_quran_caption",
+        "campaign": "tarteel",
+        "source_asset_id": "source-1",
+        "candidate_id": "candidate-1",
+        "source_window_us": [0, 2_000_000],
+        "canonical_source": {
+            "provider": "Quran.com",
+            "url": "https://quran.com/qaf/16-18",
+            "surah": 50,
+            "ayah_start": 16,
+            "ayah_end": 16,
+            "text_uthmani": ["وَقُلْ رَبِّ زِدْنِي عِلْمًا"],
+        },
+        "source_audio_mapping": [{"source_start_us": 0, "source_end_us": 2_000_000, "ayah": 16}],
+        "verification_policy": {
+            "quran_text": "canonical_uthmani_only",
+            "timing": "forced_alignment_required",
+            "pronunciation_status": "human_review_required",
+            "unverified_words_must_not_be_colored_green": True,
+            "incorrect_words_require_human_evidence": True,
+            "font_identity": "amiri-quran-local-v1",
+            "font_relative_path": "fonts/AmiriQuran.ttf",
+            "font_sha256": "a" * 64,
+        },
+        "notes": [],
+    }
+    sidecar.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(MediaError, match="human_reviewed"):
+        load_tarteel_quran_review(
+            tmp_path,
+            source_asset_id="source-1",
+            candidate_id="candidate-1",
+        )

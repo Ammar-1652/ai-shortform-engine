@@ -116,9 +116,9 @@
           "type": "integer"
         },
         "cta_width_permille": {
-          "default": 600,
+          "default": 240,
           "maximum": 600,
-          "minimum": 320,
+          "minimum": 80,
           "title": "Cta Width Permille",
           "type": "integer"
         },
@@ -141,6 +141,21 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "sizing_measurement_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Sizing Measurement Sha256",
+          "type": "string"
+        },
+        "sizing_method": {
+          "default": "legacy_fixed_v1",
+          "enum": [
+            "source_frame_scan_v1",
+            "legacy_fixed_v1"
+          ],
+          "title": "Sizing Method",
           "type": "string"
         },
         "watermark_asset_id": {
@@ -185,9 +200,9 @@
           "type": "string"
         },
         "watermark_width_permille": {
-          "default": 170,
+          "default": 55,
           "maximum": 280,
-          "minimum": 80,
+          "minimum": 24,
           "title": "Watermark Width Permille",
           "type": "integer"
         }

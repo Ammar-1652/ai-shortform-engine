@@ -87,6 +87,8 @@ def build_advanced_plan(
     direction_sha256: str = "",
     editorial_arc_id: str = "",
     editorial_arc_sha256: str = "",
+    quran_review_id: str = "",
+    quran_review_sha256: str = "",
     cut_transition_style: str = "",
     allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
@@ -194,6 +196,11 @@ def build_advanced_plan(
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        campaign_profile_id = get_project(connection, project_id).profile_id
+    campaign_qa = ["tarteel-quran-caption-v1"] if campaign_profile_id == "profile-tarteel-campaign" else []
     bound_review_id = review_id
     bound_review_digest = review_digest
     if allow_unapproved:
@@ -227,6 +234,8 @@ def build_advanced_plan(
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
         editorial_arc_id=editorial_arc_id,
         editorial_arc_sha256=editorial_arc_sha256,
+        quran_review_id=quran_review_id,
+        quran_review_sha256=quran_review_sha256,
         profile_fingerprint=profile.fingerprint(),
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
@@ -252,6 +261,7 @@ def build_advanced_plan(
             "rights_cleared_assets",
             "no_speaker_inference",
             "no_music",
+            *campaign_qa,
             *(["tarteel-editorial-arc-v1"] if editorial_arc_id else []),
         ],
         provenance=ArtifactProvenance(
@@ -320,7 +330,8 @@ def _drop_typography_graphic_collisions(
     return [
         item
         for item in typography
-        if not any(
+        if item.component_id == "context-line-v1"
+        or not any(
             item.interval.output_start_us < graphic.interval.output_end_us
             and graphic.interval.output_start_us < item.interval.output_end_us
             for graphic in motion_graphics
@@ -372,6 +383,23 @@ def _directed_typography(
     evidence = {item.evidence_id: item for item in option.evidence}
     words = {word.word_id: word for word in alignment.words}
     events: list[TypographyEvent] = []
+    context_line = getattr(option, "context_line", None)
+    if context_line is not None:
+        events.append(
+            TypographyEvent(
+                event_id=stable_id(
+                    "context-line", candidate_id, direction.direction_id, context_line.context_id
+                ),
+                interval=context_line.interval,
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id="context-line-v1",
+                text=context_line.text,
+                x=72,
+                y=120,
+                font_size=48,
+                emoji=context_line.emoji,
+            )
+        )
     for beat in option.beats:
         if beat.display_text is None:
             continue

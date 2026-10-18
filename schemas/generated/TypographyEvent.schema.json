@@ -131,6 +131,29 @@
       "title": "Component Id",
       "type": "string"
     },
+    "emoji": {
+      "anyOf": [
+        {
+          "enum": [
+            "\ud83d\udcd6",
+            "\ud83d\udca1",
+            "\ud83c\udfaf",
+            "\u2728",
+            "\u26a1",
+            "\ud83e\udde0",
+            "\u2705",
+            "\ud83d\udd0e",
+            "\ud83d\udd4c"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Emoji"
+    },
     "event_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

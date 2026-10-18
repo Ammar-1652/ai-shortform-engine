@@ -270,9 +270,9 @@
           "type": "integer"
         },
         "cta_width_permille": {
-          "default": 600,
+          "default": 240,
           "maximum": 600,
-          "minimum": 320,
+          "minimum": 80,
           "title": "Cta Width Permille",
           "type": "integer"
         },
@@ -295,6 +295,21 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "sizing_measurement_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Sizing Measurement Sha256",
+          "type": "string"
+        },
+        "sizing_method": {
+          "default": "legacy_fixed_v1",
+          "enum": [
+            "source_frame_scan_v1",
+            "legacy_fixed_v1"
+          ],
+          "title": "Sizing Method",
           "type": "string"
         },
         "watermark_asset_id": {
@@ -339,9 +354,9 @@
           "type": "string"
         },
         "watermark_width_permille": {
-          "default": 170,
+          "default": 55,
           "maximum": 280,
-          "minimum": 80,
+          "minimum": 24,
           "title": "Watermark Width Permille",
           "type": "integer"
         }
@@ -1148,6 +1163,29 @@
           "title": "Component Id",
           "type": "string"
         },
+        "emoji": {
+          "anyOf": [
+            {
+              "enum": [
+                "\ud83d\udcd6",
+                "\ud83d\udca1",
+                "\ud83c\udfaf",
+                "\u2728",
+                "\u26a1",
+                "\ud83e\udde0",
+                "\u2705",
+                "\ud83d\udd0e",
+                "\ud83d\udd4c"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emoji"
+        },
         "event_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -1422,6 +1460,18 @@
     "profile_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "quran_review_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Quran Review Id",
+      "type": "string"
+    },
+    "quran_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Quran Review Sha256",
       "type": "string"
     },
     "reframing_config_sha256": {

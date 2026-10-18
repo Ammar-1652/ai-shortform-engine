@@ -369,6 +369,42 @@ def test_direction_accent_tracks_stay_below_face_space_and_above_captions() -> N
     assert all(event.y >= 1_212 for event in events)
 
 
+def test_direction_context_line_is_serialized_in_upper_lane() -> None:
+    words = [
+        SimpleNamespace(word_id="word-0", output_start_us=0, output_end_us=1_000_000),
+        SimpleNamespace(word_id="word-1", output_start_us=1_000_000, output_end_us=2_000_000),
+        SimpleNamespace(word_id="word-2", output_start_us=2_000_000, output_end_us=3_000_000),
+    ]
+    evidence = [
+        SimpleNamespace(evidence_id=f"evidence-{kind}", source_word_ids=[f"word-{index}"])
+        for index, kind in enumerate(("hook", "body", "punch"))
+    ]
+    beats = [
+        SimpleNamespace(
+            beat_id=f"beat-{kind}",
+            kind=kind,
+            display_text=f"source phrase {kind}",
+            evidence_ids=[f"evidence-{kind}"],
+        )
+        for kind in ("hook", "body", "punch")
+    ]
+    context = SimpleNamespace(
+        context_id="context-1",
+        text="Why this lesson matters",
+        emoji="📖",
+        interval=OutputInterval(output_start_us=0, output_end_us=3_000_000),
+    )
+    direction = SimpleNamespace(
+        direction_id="direction",
+        selected_option_id="selected",
+        options=[SimpleNamespace(option_id="selected", beats=beats, evidence=evidence, context_line=context)],
+    )
+    events = _directed_typography(direction, SimpleNamespace(words=words), "candidate")
+    assert events[0].component_id == "context-line-v1"
+    assert events[0].y == 120
+    assert events[0].emoji == "📖"
+
+
 def test_clean_production_requires_direction_before_remotion() -> None:
     plan = SimpleNamespace(
         style_id="editorial-clean-v1",

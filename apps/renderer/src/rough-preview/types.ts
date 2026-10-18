@@ -85,6 +85,8 @@ export type CampaignOverlaySpec = {
   readonly watermark_position: "foreground_top_right_v1" | "top_right";
   readonly watermark_visibility?: "overlay_required_v1" | "source_visible_v1";
   readonly watermark_width_permille: number;
+  readonly sizing_method: "source_frame_scan_v1" | "legacy_fixed_v1";
+  readonly sizing_measurement_sha256: string;
   readonly first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
 };
 

@@ -78,13 +78,18 @@ for (const item of batch.items) {
     const overlay = input.campaign_overlay;
     if (
       overlay.campaign_id !== "tarteel" ||
+      input.style_id !== "quran-editorial-v1" ||
+      typeof input.quran_review_id !== "string" ||
+      !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "") ||
       overlay.cta_background_removal !== "chroma_key_v1" ||
       (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
       overlay.cta_frame_rate !== 30 ||
       overlay.cta_position !== "foreground_attention_v1" ||
       overlay.overlay_coordinate_space !== "foreground_v1" ||
       overlay.cta_clearance !== "faces_and_captions_clear_v1" ||
-      !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 320 || overlay.cta_width_permille > 600 ||
+      overlay.sizing_method !== "source_frame_scan_v1" ||
+      !/^[0-9a-f]{64}$/.test(overlay.sizing_measurement_sha256 ?? "") ||
+      !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 80 || overlay.cta_width_permille > 600 ||
       overlay.watermark_mode !== "alpha_v1" ||
       overlay.watermark_position !== "foreground_top_right_v1" && overlay.watermark_position !== "top_right" ||
       typeof overlay.cta_asset_name !== "string" ||

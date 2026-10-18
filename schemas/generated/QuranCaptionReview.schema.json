@@ -1,0 +1,238 @@
+{
+  "$defs": {
+    "QuranAudioMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "ayah": {
+          "minimum": 1,
+          "title": "Ayah",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_end_us": {
+          "exclusiveMinimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_start_us",
+        "source_end_us",
+        "ayah"
+      ],
+      "title": "QuranAudioMapping",
+      "type": "object"
+    },
+    "QuranCanonicalSource": {
+      "additionalProperties": false,
+      "properties": {
+        "ayah_end": {
+          "minimum": 1,
+          "title": "Ayah End",
+          "type": "integer"
+        },
+        "ayah_start": {
+          "minimum": 1,
+          "title": "Ayah Start",
+          "type": "integer"
+        },
+        "provider": {
+          "const": "Quran.com",
+          "title": "Provider",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "surah": {
+          "maximum": 114,
+          "minimum": 1,
+          "title": "Surah",
+          "type": "integer"
+        },
+        "text_uthmani": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Text Uthmani",
+          "type": "array"
+        },
+        "url": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "url",
+        "surah",
+        "ayah_start",
+        "ayah_end",
+        "text_uthmani"
+      ],
+      "title": "QuranCanonicalSource",
+      "type": "object"
+    },
+    "QuranVerificationPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "font_identity": {
+          "const": "amiri-quran-local-v1",
+          "title": "Font Identity",
+          "type": "string"
+        },
+        "font_relative_path": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Font Relative Path",
+          "type": "string"
+        },
+        "font_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Font Sha256",
+          "type": "string"
+        },
+        "incorrect_words_require_human_evidence": {
+          "const": true,
+          "default": true,
+          "title": "Incorrect Words Require Human Evidence",
+          "type": "boolean"
+        },
+        "pronunciation_status": {
+          "enum": [
+            "human_review_required",
+            "human_reviewed"
+          ],
+          "title": "Pronunciation Status",
+          "type": "string"
+        },
+        "quran_text": {
+          "const": "canonical_uthmani_only",
+          "title": "Quran Text",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "timing": {
+          "const": "forced_alignment_required",
+          "title": "Timing",
+          "type": "string"
+        },
+        "unverified_words_must_not_be_colored_green": {
+          "const": true,
+          "default": true,
+          "title": "Unverified Words Must Not Be Colored Green",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "quran_text",
+        "timing",
+        "pronunciation_status",
+        "font_identity",
+        "font_relative_path",
+        "font_sha256"
+      ],
+      "title": "QuranVerificationPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "campaign": {
+      "const": "tarteel",
+      "title": "Campaign",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "canonical_source": {
+      "$ref": "#/$defs/QuranCanonicalSource"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "review_kind": {
+      "const": "source_grounded_quran_caption",
+      "title": "Review Kind",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_audio_mapping": {
+      "items": {
+        "$ref": "#/$defs/QuranAudioMapping"
+      },
+      "minItems": 1,
+      "title": "Source Audio Mapping",
+      "type": "array"
+    },
+    "source_window_us": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "title": "Source Window Us",
+      "type": "array"
+    },
+    "verification_policy": {
+      "$ref": "#/$defs/QuranVerificationPolicy"
+    }
+  },
+  "required": [
+    "review_kind",
+    "campaign",
+    "source_asset_id",
+    "candidate_id",
+    "source_window_us",
+    "canonical_source",
+    "source_audio_mapping",
+    "verification_policy"
+  ],
+  "title": "QuranCaptionReview",
+  "type": "object"
+}

@@ -1,0 +1,56 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "ayah_end": {
+      "minimum": 1,
+      "title": "Ayah End",
+      "type": "integer"
+    },
+    "ayah_start": {
+      "minimum": 1,
+      "title": "Ayah Start",
+      "type": "integer"
+    },
+    "provider": {
+      "const": "Quran.com",
+      "title": "Provider",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "surah": {
+      "maximum": 114,
+      "minimum": 1,
+      "title": "Surah",
+      "type": "integer"
+    },
+    "text_uthmani": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Text Uthmani",
+      "type": "array"
+    },
+    "url": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Url",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider",
+    "url",
+    "surah",
+    "ayah_start",
+    "ayah_end",
+    "text_uthmani"
+  ],
+  "title": "QuranCanonicalSource",
+  "type": "object"
+}

@@ -19,7 +19,6 @@ from time import perf_counter
 from pydantic import ValidationError
 
 from clipforge import __version__
-from clipforge.campaign.overlays import stage_tarteel_overlay
 from clipforge.errors import MediaError, StorageError
 from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
@@ -320,40 +319,10 @@ def _render_input(
     foreground_height: int = int(profile.height)
     foreground_scale: int = 1000
     if profile.campaign_id == "tarteel":
-        canvas_width = int(profile.width)
-        canvas_height = int(profile.height)
-        source_width = inputs.pair.visual.proxy_width
-        source_height = inputs.pair.visual.proxy_height
-        base_scale = min(canvas_width / source_width, canvas_height / source_height)
-        # The scale is applied to the contained picture only. This keeps the
-        # subject legible without stretching the source or enlarging the blur.
-        foreground_scale = 1080
-        scaled_width = source_width * base_scale * foreground_scale / 1000
-        scaled_height = source_height * base_scale * foreground_scale / 1000
-        fit_back = min(1.0, canvas_width / scaled_width, canvas_height / scaled_height)
-        foreground_width = max(1, round(scaled_width * fit_back))
-        foreground_height = max(1, round(scaled_height * fit_back))
-        foreground_x = (canvas_width - foreground_width) // 2
-        foreground_y = (canvas_height - foreground_height) // 2
-        overlay = stage_tarteel_overlay(
-            database=database,
-            workspace=inputs.pair.workspace,
-            project_id=inputs.pair.source.project_id,
-            work_root=inputs.pair.workspace.root,
-            staging_dir=run_dir / "staging",
-            duration_us=(frame_count * 1_000_000) // profile.fps_numerator,
-            caption_intervals=[(cue.output_start_us, cue.output_end_us) for cue in captions],
-            face_boxes=[
-                (
-                    sample.bounding_box.x,
-                    sample.bounding_box.y,
-                    sample.bounding_box.width,
-                    sample.bounding_box.height,
-                )
-                for sample in inputs.pair.visual.face_detection_samples
-            ],
+        raise MediaError(
+            "Tarteel branded previews require forced alignment, canonical Quran review, "
+            "and quran-editorial-v1; render an Advanced Hero draft instead"
         )
-        campaign_overlay = overlay.spec
     if browser:
         from clipforge.preview.trim import stage_candidate_span
 

@@ -218,6 +218,30 @@ def validate_source_evidence(
             ):
                 raise MediaError("direction beat interval differs from forced-word timing")
             beat_bounds.append((beat.kind, start, end))
+        duration = time_map.to_time_map().total_output_duration()
+        context_line = option.context_line
+        if context_line is not None:
+            if any(evidence_id not in evidence_by_id for evidence_id in context_line.evidence_ids):
+                raise MediaError("context line references undeclared evidence")
+            context_evidence = [evidence_by_id[item] for item in context_line.evidence_ids]
+            context_words = [
+                by_id[word_id] for evidence in context_evidence for word_id in evidence.source_word_ids
+            ]
+            if not context_words:
+                raise MediaError("context line must bind at least one aligned word")
+            if context_line.interval.output_start_us != 0 or context_line.interval.output_end_us != duration:
+                raise MediaError("context line must cover the complete approved output")
+            if context_line.copy_mode == "exact_evidence":
+                if not any(
+                    _normalize(context_line.text) == _normalize(evidence.source_text)
+                    for evidence in context_evidence
+                ):
+                    raise MediaError("exact context line text must equal its bound evidence")
+            elif any(
+                _normalize(context_line.text) == _normalize(evidence.source_text)
+                for evidence in context_evidence
+            ):
+                raise MediaError("reviewed context summary must not duplicate its evidence phrase")
         kinds = [item[0] for item in beat_bounds]
         if (
             kinds[0] != "hook"
@@ -226,7 +250,6 @@ def validate_source_evidence(
             or any(left[2] > right[1] for left, right in pairwise(beat_bounds))
         ):
             raise MediaError("direction hook, body, and punch beats must be ordered and non-overlapping")
-        duration = time_map.to_time_map().total_output_duration()
         for placement in option.asset_placements:
             if placement.interval.output_end_us > duration:
                 raise MediaError("direction asset placement extends past the approved TimeMap")

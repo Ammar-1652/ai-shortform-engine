@@ -39,6 +39,62 @@ DownloadStatus = Literal[
 ]
 
 
+class QuranCanonicalSource(Versioned):
+    provider: Literal["Quran.com"]
+    url: str = Field(min_length=1, max_length=300)
+    surah: int = Field(ge=1, le=114)
+    ayah_start: int = Field(ge=1)
+    ayah_end: int = Field(ge=1)
+    text_uthmani: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def range_is_ordered(self) -> Self:
+        if self.ayah_end < self.ayah_start:
+            raise ValueError("Quran ayah range must be ordered")
+        return self
+
+
+class QuranAudioMapping(Versioned):
+    source_start_us: int = Field(ge=0)
+    source_end_us: int = Field(gt=0)
+    ayah: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.source_end_us <= self.source_start_us:
+            raise ValueError("Quran audio mapping interval must be positive")
+        return self
+
+
+class QuranVerificationPolicy(Versioned):
+    quran_text: Literal["canonical_uthmani_only"]
+    timing: Literal["forced_alignment_required"]
+    pronunciation_status: Literal["human_review_required", "human_reviewed"]
+    unverified_words_must_not_be_colored_green: Literal[True] = True
+    incorrect_words_require_human_evidence: Literal[True] = True
+    font_identity: Literal["amiri-quran-local-v1"]
+    font_relative_path: str = Field(min_length=1, max_length=300)
+    font_sha256: str = Field(pattern=_SHA)
+
+
+class QuranCaptionReview(Versioned):
+    review_kind: Literal["source_grounded_quran_caption"]
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_window_us: tuple[int, int]
+    canonical_source: QuranCanonicalSource
+    source_audio_mapping: list[QuranAudioMapping] = Field(min_length=1)
+    verification_policy: QuranVerificationPolicy
+    notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def window_is_positive(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("Quran review source window must be positive")
+        return self
+
+
 def _plain(value: str, *, label: str, allow_https: bool = False) -> str:
     stripped = value.strip()
     if stripped != value or not stripped:
@@ -122,7 +178,9 @@ class CampaignOverlaySpec(Versioned):
     cta_top_permille: int = Field(default=360, ge=0, le=1000)
     # This is intentionally capped. The campaign CTA is a small brand cue,
     # never a foreground card over a child or a caption.
-    cta_width_permille: int = Field(default=600, ge=320, le=600)
+    # New renders use a measured ratio from the source-native CTA. The wider
+    # legacy range remains readable for immutable historical artifacts.
+    cta_width_permille: int = Field(default=240, ge=80, le=600)
     cta_start_us: int = Field(ge=0)
     cta_end_us: int = Field(gt=0)
     watermark_asset_id: EntityId
@@ -131,7 +189,9 @@ class CampaignOverlaySpec(Versioned):
     watermark_mode: Literal["alpha_v1"] = "alpha_v1"
     watermark_position: Literal["foreground_top_right_v1", "top_right"] = "foreground_top_right_v1"
     watermark_visibility: Literal["overlay_required_v1", "source_visible_v1"] = "overlay_required_v1"
-    watermark_width_permille: int = Field(default=170, ge=80, le=280)
+    watermark_width_permille: int = Field(default=55, ge=24, le=280)
+    sizing_method: Literal["source_frame_scan_v1", "legacy_fixed_v1"] = "legacy_fixed_v1"
+    sizing_measurement_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     first_post_caption_line: Literal["اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"] = (
         "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"
     )
@@ -153,6 +213,8 @@ class CampaignOverlaySpec(Versioned):
             raise ValueError("alpha video CTA must use a transparent video staging filename")
         if self.cta_clearance != "faces_and_captions_clear_v1":
             raise ValueError("Tarteel CTA must declare face and caption clearance")
+        if self.sizing_method == "source_frame_scan_v1" and not self.sizing_measurement_sha256:
+            raise ValueError("source-measured campaign overlays require a measurement digest")
         if self.overlay_coordinate_space != "foreground_v1" and self.cta_position == "foreground_attention_v1":
             raise ValueError("foreground CTA placement requires foreground coordinate space")
         for label, name in names:

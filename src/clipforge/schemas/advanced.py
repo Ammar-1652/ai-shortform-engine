@@ -103,6 +103,7 @@ class TypographyEvent(Versioned):
     y: int = Field(ge=_SAFE_Y, le=_FRAME_H - _SAFE_Y)
     font_size: int = Field(ge=24, le=96)
     color: Literal["#ffffff"] = "#ffffff"
+    emoji: Literal["📖", "💡", "🎯", "✨", "⚡", "🧠", "✅", "🔎", "🕌"] | None = None
     words: list[CaptionWordTiming] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -113,6 +114,8 @@ class TypographyEvent(Versioned):
             raise ValueError("typography extends below the safe area")
         if self.component_id.startswith("caption-") and not self.words:
             raise ValueError("advanced captions require forced word timing")
+        if self.component_id == "context-line-v1" and self.emoji is None:
+            raise ValueError("context-line-v1 requires an allowlisted emoji")
         for word in self.words:
             if word.output_start_us < self.interval.output_start_us:
                 raise ValueError("caption word starts before its cue")
@@ -379,6 +382,8 @@ class AdvancedHeroRenderInput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
@@ -450,6 +455,8 @@ class AdvancedHeroDraftOutput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
@@ -507,6 +514,8 @@ class AdvancedHeroPlanDocument(Versioned):
     time_map_sha256: str = Field(pattern=_SHA)
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     profile_fingerprint: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")

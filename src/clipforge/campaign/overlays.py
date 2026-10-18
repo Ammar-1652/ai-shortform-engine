@@ -8,12 +8,19 @@ The watermark is a separate alpha image because it is intentionally static.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import statistics
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import AssetCatalogEntry, load_catalog, require_asset
+from clipforge.media.clock import us_to_seconds_str
 from clipforge.media.hashing import sha256_file
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
@@ -35,6 +42,151 @@ class StagedTarteelOverlay:
     watermark_path: Path
 
 
+@dataclass(frozen=True, slots=True)
+class TarteelOverlaySizing:
+    """Measured source-native branding geometry used for one render."""
+
+    source_width_px: int
+    source_height_px: int
+    native_cta_width_px: int
+    native_logo_width_px: int | None
+    source_logo_visible: bool
+    measurement_sha256: str
+
+
+def measure_tarteel_overlay_sizing(
+    *,
+    source_proxy_path: Path,
+    source_start_us: int,
+    source_end_us: int,
+    source_proxy_sha256: str,
+    staging_dir: Path,
+    log_path: Path,
+) -> TarteelOverlaySizing:
+    """Measure native CTA/logo bounds before sizing added campaign layers."""
+    if source_end_us <= source_start_us:
+        raise MediaError("Tarteel source measurement requires a positive source interval")
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    sample_times = [
+        source_start_us + (source_end_us - source_start_us) * fraction // 100
+        # The native CTA can be a short animation beat. Sample the early
+        # window densely enough to catch its entrance, then use wider samples
+        # for logo visibility across the rest of the candidate.
+        for fraction in (10, 15, 18, 20, 25, 50, 80, 90)
+    ]
+    cta_widths: list[int] = []
+    logo_widths: list[int] = []
+    frame_width = 0
+    frame_height = 0
+    for index, timestamp_us in enumerate(sample_times):
+        frame_path = staging_dir / f"tarteel-branding-measure-{index}.png"
+        ProcessRunner().run(
+            [
+                resolve_ffmpeg(),
+                "-y",
+                "-ss",
+                us_to_seconds_str(timestamp_us),
+                "-i",
+                str(source_proxy_path),
+                "-frames:v",
+                "1",
+                "-f",
+                "image2",
+                str(frame_path),
+            ],
+            log_path=log_path,
+            check=True,
+        )
+        image = cv2.imread(str(frame_path), cv2.IMREAD_COLOR)
+        try:
+            if image is None or image.size == 0:
+                continue
+            frame_height, frame_width = image.shape[:2]
+            cta_width = _scan_native_cta_width(image)
+            if cta_width is not None:
+                cta_widths.append(cta_width)
+            logo_width = _scan_native_logo_width(image)
+            if logo_width is not None:
+                logo_widths.append(logo_width)
+        finally:
+            frame_path.unlink(missing_ok=True)
+    if not cta_widths or frame_width <= 0 or frame_height <= 0:
+        raise MediaError(
+            "Tarteel native CTA geometry could not be measured from the source frames; "
+            "branding placement is blocked"
+        )
+    native_cta_width = round(statistics.median(cta_widths))
+    native_logo_width = round(statistics.median(logo_widths)) if logo_widths else None
+    payload = {
+        "method": "source-frame-scan-v1",
+        "source_proxy_sha256": source_proxy_sha256,
+        "source_start_us": source_start_us,
+        "source_end_us": source_end_us,
+        "source_width_px": frame_width,
+        "source_height_px": frame_height,
+        "native_cta_width_px": native_cta_width,
+        "native_logo_width_px": native_logo_width,
+        "source_logo_visible": native_logo_width is not None,
+        "sample_times_us": sample_times,
+    }
+    measurement_sha256 = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return TarteelOverlaySizing(
+        source_width_px=frame_width,
+        source_height_px=frame_height,
+        native_cta_width_px=native_cta_width,
+        native_logo_width_px=native_logo_width,
+        source_logo_visible=native_logo_width is not None,
+        measurement_sha256=measurement_sha256,
+    )
+
+
+def _white_mask(region: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    return cv2.inRange(hsv, np.array([0, 0, 205]), np.array([180, 85, 255]))
+
+
+def _scan_native_logo_width(image: np.ndarray) -> int | None:
+    height, width = image.shape[:2]
+    regions = (
+        (0, 0, int(width * 0.20), int(height * 0.25)),
+        (int(width * 0.80), 0, width, int(height * 0.25)),
+    )
+    candidates: list[int] = []
+    for left, top, right, bottom in regions:
+        mask = _white_mask(image[top:bottom, left:right])
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+        count, _labels, stats, _centers = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        for index in range(1, count):
+            _x, _y, box_width, box_height, area = stats[index]
+            if area >= 80 and box_width >= width * 0.025 and box_height >= height * 0.025:
+                candidates.append(int(box_width))
+    return max(candidates) if candidates else None
+
+
+def _scan_native_cta_width(image: np.ndarray) -> int | None:
+    height, width = image.shape[:2]
+    left, right = int(width * 0.28), int(width * 0.72)
+    top, bottom = int(height * 0.76), int(height * 0.90)
+    mask = _white_mask(image[top:bottom, left:right])
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((11, 11), np.uint8))
+    mask = cv2.dilate(mask, np.ones((5, 5), np.uint8), iterations=1)
+    runs: list[int] = []
+    for row in mask:
+        occupied = np.flatnonzero(row > 0)
+        if occupied.size == 0:
+            continue
+        boundaries = np.flatnonzero(np.diff(occupied) > 1)
+        starts = np.concatenate(([occupied[0]], occupied[boundaries + 1]))
+        ends = np.concatenate((occupied[boundaries], [occupied[-1]]))
+        runs.extend((ends - starts + 1).tolist())
+    candidates = [run for run in runs if run >= width * 0.20]
+    if not candidates:
+        return None
+    return max(candidates)
+
+
 def stage_tarteel_overlay(
     *,
     database: Database,
@@ -50,10 +202,16 @@ def stage_tarteel_overlay(
     caption_intervals: list[tuple[int, int]] | None = None,
     source_logo_visible: bool = False,
     face_boxes: list[tuple[float, float, float, float]] | None = None,
+    sizing: TarteelOverlaySizing | None = None,
 ) -> StagedTarteelOverlay:
     """Stage the reviewed Tarteel CTA and watermark with deterministic alpha."""
     if duration_us <= 0:
         raise MediaError("Tarteel overlay staging requires a positive output duration")
+    if sizing is None:
+        raise MediaError(
+            "Tarteel overlay staging requires source-measured CTA/logo sizing; "
+            "fixed campaign overlay dimensions are blocked"
+        )
     if cta_duration_us <= 0:
         raise MediaError("Tarteel CTA duration must be positive")
     entries = load_catalog(workspace)
@@ -96,6 +254,19 @@ def stage_tarteel_overlay(
     if end <= start:
         raise MediaError("Tarteel CTA interval does not fit the output")
     cta_left, cta_top = choose_tarteel_foreground_position(face_boxes or [])
+    cta_width_permille = max(
+        80,
+        min(600, round(sizing.native_cta_width_px * 1000 / sizing.source_width_px)),
+    )
+    watermark_width_permille = max(
+        24,
+        min(
+            280,
+            round(
+                (sizing.native_logo_width_px or sizing.native_cta_width_px // 4) * 1000 / sizing.source_width_px
+            ),
+        ),
+    )
     return StagedTarteelOverlay(
         spec=CampaignOverlaySpec(
             cta_asset_id=cta_entry.reference.asset_id,
@@ -104,12 +275,20 @@ def stage_tarteel_overlay(
             cta_render_mode="alpha_video_v1",
             cta_left_permille=cta_left,
             cta_top_permille=cta_top,
+            cta_width_permille=cta_width_permille,
             cta_start_us=start,
             cta_end_us=end,
             watermark_asset_id=watermark_entry.reference.asset_id,
             watermark_asset_sha256=watermark_entry.file_sha256,
             watermark_asset_name=watermark_path.name,
-            watermark_visibility="source_visible_v1" if source_logo_visible else "overlay_required_v1",
+            watermark_visibility=(
+                "source_visible_v1"
+                if (source_logo_visible or sizing.source_logo_visible)
+                else "overlay_required_v1"
+            ),
+            watermark_width_permille=watermark_width_permille,
+            sizing_method="source_frame_scan_v1",
+            sizing_measurement_sha256=sizing.measurement_sha256,
         ),
         cta_source=cta_entry,
         watermark_source=watermark_entry,

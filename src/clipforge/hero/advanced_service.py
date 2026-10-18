@@ -15,7 +15,12 @@ from typing import TypeVar, cast
 from pydantic import ValidationError
 
 from clipforge import __version__
-from clipforge.campaign.overlays import TARTEEL_PROFILE_ID, stage_tarteel_overlay
+from clipforge.campaign.overlays import (
+    TARTEEL_PROFILE_ID,
+    measure_tarteel_overlay_sizing,
+    stage_tarteel_overlay,
+)
+from clipforge.campaign.quran import load_tarteel_quran_review
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
@@ -290,6 +295,19 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+    quran_review_id = ""
+    quran_review_sha256 = ""
+    if project.profile_id == TARTEEL_PROFILE_ID:
+        if stored_direction is None or stored_direction.style_id != "quran-editorial-v1":
+            raise MediaError("Tarteel Advanced Hero requires the quran-editorial-v1 caption style")
+        quran_review, quran_review_sha256, _quran_review_path = load_tarteel_quran_review(
+            root,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+        )
+        quran_review_id = f"quran-{quran_review_sha256[:24]}"
+        if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
+            raise MediaError("Tarteel Quran review must bind the local Amiri Quran font")
     render_alignment = context.alignment
     render_hero_plan = context.hero_plan
     render_direction = stored_direction
@@ -384,6 +402,8 @@ def plan_advanced_candidate(
         direction_sha256=direction_sha256,
         editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
+        quran_review_id=quran_review_id,
+        quran_review_sha256=quran_review_sha256,
         cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
@@ -883,6 +903,18 @@ def _render_run(
             catalog_file = _asset_path(workspace, binding.asset_id, root)
             _link(catalog_file, staging / staged[binding.asset_id], root)
         if campaign_overlay is not None:
+            sizing = measure_tarteel_overlay_sizing(
+                source_proxy_path=inputs.proxy_path,
+                source_start_us=min(segment.source_start_us for segment in plan.time_map.segments)
+                if plan.time_map is not None
+                else 0,
+                source_end_us=max(segment.source_end_us for segment in plan.time_map.segments)
+                if plan.time_map is not None
+                else inputs.pair.manifest.canonical_duration_us,
+                source_proxy_sha256=inputs.proxy_sha256,
+                staging_dir=staging,
+                log_path=run_dir / "logs" / f"{candidate_id}.branding.log",
+            )
             staged_overlay = stage_tarteel_overlay(
                 database=database,
                 workspace=workspace,
@@ -896,9 +928,6 @@ def _render_run(
                 caption_intervals=[
                     (item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
                 ],
-                source_logo_visible=any(
-                    "logo" in f"{item.region_id} {item.note}".lower() for item in plan.source_native_text
-                ),
                 face_boxes=[
                     (
                         sample.bounding_box.x,
@@ -908,6 +937,8 @@ def _render_run(
                     )
                     for sample in inputs.pair.visual.face_detection_samples
                 ],
+                source_logo_visible=sizing.source_logo_visible,
+                sizing=sizing,
             )
             if (
                 staged_overlay.spec.cta_asset_id != campaign_overlay.cta_asset_id
@@ -937,6 +968,8 @@ def _render_run(
             direction_sha256=plan.direction_sha256,
             editorial_arc_id=plan.editorial_arc_id,
             editorial_arc_sha256=plan.editorial_arc_sha256,
+            quran_review_id=plan.quran_review_id,
+            quran_review_sha256=plan.quran_review_sha256,
             safe_region_id=plan.safe_region_id,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
@@ -2388,6 +2421,7 @@ def _review_draft(
             "x": item.x,
             "y": item.y,
             "font_size": item.font_size,
+            "emoji": item.emoji,
             "style_id": "advanced-typography-v1",
         }
         for item in plan.typography

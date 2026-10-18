@@ -23,6 +23,15 @@ These rules are delivery gates, not creative preferences.
   dialogue remains separate from Quran styling. Leading/trailing whitespace,
   punctuation, Arabic joining, and `هههه` reactions must be preserved or
   corrected from the source evidence.
+- Keep the lower timed caption lane separate from one optional upper context
+  line in the blurred background. The context line is one short, source-related
+  sentence with an allowlisted emoji (`📖`, `💡`, `🎯`, `✨`, `⚡`, `🧠`, `✅`,
+  `🔎`, or `🕌`). It must be bound to reviewed transcript evidence, cover the
+  full approved output, fit on one line inside the upper safe lane, and not
+  duplicate a caption phrase. A human-reviewed summary must record its reviewer
+  and review note; otherwise the wording must equal the bound evidence exactly.
+  If no defensible line exists, the render is blocked rather than filled with
+  invented copy.
 - Keep the exact post-caption first line:
   `اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic`.
 - Do not portray children negatively, invent claims, use clickbait, or add

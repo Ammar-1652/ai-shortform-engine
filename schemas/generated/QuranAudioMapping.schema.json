@@ -1,0 +1,33 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "ayah": {
+      "minimum": 1,
+      "title": "Ayah",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "exclusiveMinimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "source_start_us",
+    "source_end_us",
+    "ayah"
+  ],
+  "title": "QuranAudioMapping",
+  "type": "object"
+}

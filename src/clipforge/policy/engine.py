@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from clipforge.campaign.quran import load_tarteel_quran_review
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import require_asset
 from clipforge.media.hashing import sha256_file
@@ -188,6 +189,8 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel watermark must be placed inside the original foreground picture")
         if overlay.cta_width_permille > 600:
             problems.append("Tarteel CTA is too large for the face-safe brand rail")
+        if overlay.sizing_method != "source_frame_scan_v1" or not overlay.sizing_measurement_sha256:
+            problems.append("Tarteel CTA and watermark sizes must be measured from the source frame")
         if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
             problems.append("Tarteel CTA interval extends past the output")
         caption_texts = {item.text.strip() for item in (*plan.captions, *plan.typography)}
@@ -201,6 +204,23 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("plan does not require the Tarteel face/caption clearance gate")
         if "tarteel-caption-direction-v1" not in plan.qa_requirements:
             problems.append("plan does not require the Tarteel caption-direction gate")
+        if getattr(plan, "style_id", "") != "quran-editorial-v1":
+            problems.append("Tarteel captions require the quran-editorial-v1 style")
+        if "tarteel-quran-caption-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the canonical Quran caption gate")
+        if not getattr(plan, "quran_review_id", "") or not getattr(plan, "quran_review_sha256", ""):
+            problems.append("Tarteel plan is missing the source-bound Quran review evidence")
+        elif context.workspace is not None:
+            try:
+                _review, review_sha256, _path = load_tarteel_quran_review(
+                    context.work_root,
+                    source_asset_id=plan.source_asset_id,
+                    candidate_id=plan.candidate_id,
+                )
+                if review_sha256 != plan.quran_review_sha256:
+                    problems.append("Tarteel Quran review evidence is stale against the plan")
+            except MediaError as exc:
+                problems.append(str(exc))
         if not getattr(plan, "editorial_arc_id", ""):
             problems.append("Tarteel production requires a reviewed hook/body/punch editorial arc")
         if "tarteel-editorial-arc-v1" not in plan.qa_requirements:

@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "font_identity": {
+      "const": "amiri-quran-local-v1",
+      "title": "Font Identity",
+      "type": "string"
+    },
+    "font_relative_path": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Font Relative Path",
+      "type": "string"
+    },
+    "font_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Font Sha256",
+      "type": "string"
+    },
+    "incorrect_words_require_human_evidence": {
+      "const": true,
+      "default": true,
+      "title": "Incorrect Words Require Human Evidence",
+      "type": "boolean"
+    },
+    "pronunciation_status": {
+      "enum": [
+        "human_review_required",
+        "human_reviewed"
+      ],
+      "title": "Pronunciation Status",
+      "type": "string"
+    },
+    "quran_text": {
+      "const": "canonical_uthmani_only",
+      "title": "Quran Text",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "timing": {
+      "const": "forced_alignment_required",
+      "title": "Timing",
+      "type": "string"
+    },
+    "unverified_words_must_not_be_colored_green": {
+      "const": true,
+      "default": true,
+      "title": "Unverified Words Must Not Be Colored Green",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "quran_text",
+    "timing",
+    "pronunciation_status",
+    "font_identity",
+    "font_relative_path",
+    "font_sha256"
+  ],
+  "title": "QuranVerificationPolicy",
+  "type": "object"
+}
