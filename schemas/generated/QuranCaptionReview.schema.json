@@ -15,11 +15,15 @@
           "type": "string"
         },
         "source_end_us": {
-          "exclusiveMinimum": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
           "title": "Source End Us",
           "type": "integer"
         },
         "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
           "minimum": 0,
           "title": "Source Start Us",
           "type": "integer"
@@ -55,6 +59,22 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_relative_path": {
+          "default": "",
+          "title": "Snapshot Relative Path",
+          "type": "string"
+        },
+        "snapshot_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Snapshot Sha256",
+          "type": "string"
+        },
+        "snapshot_url": {
+          "default": "",
+          "title": "Snapshot Url",
           "type": "string"
         },
         "surah": {
@@ -117,6 +137,7 @@
         "pronunciation_status": {
           "enum": [
             "human_review_required",
+            "canonical_match_verified",
             "human_reviewed"
           ],
           "title": "Pronunciation Status",
@@ -205,19 +226,37 @@
       "title": "Source Audio Mapping",
       "type": "array"
     },
+    "source_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
     "source_window_us": {
       "maxItems": 2,
       "minItems": 2,
       "prefixItems": [
         {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
           "type": "integer"
         },
         {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
           "type": "integer"
         }
       ],
       "title": "Source Window Us",
       "type": "array"
+    },
+    "transcript_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
     },
     "verification_policy": {
       "$ref": "#/$defs/QuranVerificationPolicy"

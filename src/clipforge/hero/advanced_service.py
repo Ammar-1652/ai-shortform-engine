@@ -20,10 +20,11 @@ from clipforge.campaign.overlays import (
     measure_tarteel_overlay_sizing,
     stage_tarteel_overlay,
 )
-from clipforge.campaign.quran import load_tarteel_quran_review
+from clipforge.campaign.quran import canonicalize_quran_alignment, load_tarteel_quran_review
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
+    _captions,
     _effective_transition_style,
     _face_follow_windows,
     _transitions,
@@ -80,6 +81,7 @@ from clipforge.schemas.advanced import (
     advanced_fingerprint,
 )
 from clipforge.schemas.arc import EditorialArcDocument
+from clipforge.schemas.campaign import QuranCaptionReview
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
@@ -297,6 +299,7 @@ def plan_advanced_candidate(
         )
     quran_review_id = ""
     quran_review_sha256 = ""
+    quran_review: QuranCaptionReview | None = None
     if project.profile_id == TARTEEL_PROFILE_ID:
         if stored_direction is None or stored_direction.style_id != "quran-editorial-v1":
             raise MediaError("Tarteel Advanced Hero requires the quran-editorial-v1 caption style")
@@ -304,6 +307,8 @@ def plan_advanced_candidate(
             root,
             source_asset_id=source_asset_id,
             candidate_id=candidate_id,
+            source_sha256=context.source_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
         )
         quran_review_id = f"quran-{quran_review_sha256[:24]}"
         if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
@@ -404,6 +409,7 @@ def plan_advanced_candidate(
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
         quran_review_id=quran_review_id,
         quran_review_sha256=quran_review_sha256,
+        quran_review=quran_review,
         cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
@@ -1717,6 +1723,21 @@ def _require_plan_binding(
             )
             if evidence.status != "verified_live":
                 raise MediaError(evidence.blocker or evidence.status)
+    if plan.quran_review_id or plan.campaign_overlay is not None:
+        review, review_sha, _ = load_tarteel_quran_review(
+            context.workspace.root,
+            source_asset_id=plan.source_asset_id,
+            candidate_id=plan.candidate_id,
+            source_sha256=context.source_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+        )
+        if plan.quran_review_sha256 != review_sha or plan.quran_review_id != f"quran-{review_sha[:24]}":
+            raise MediaError("advanced plan is stale: Quran display-text evidence changed")
+        expected_captions = _captions(
+            canonicalize_quran_alignment(arc_alignment or context.alignment, review), plan.candidate_id
+        )
+        if plan.captions != expected_captions:
+            raise MediaError("advanced plan is stale: Quran captions differ from canonical evidence")
     if plan.direction_id:
         loaded_direction = load_direction(
             context.workspace,

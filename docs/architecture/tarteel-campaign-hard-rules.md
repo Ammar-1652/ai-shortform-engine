@@ -18,8 +18,10 @@ These rules are delivery gates, not creative preferences.
   logo is clearly visible, record `source_visible_v1` and omit the added
   watermark.
 - Caption the exact spoken words with measured alignment. Quran text must be
-  checked against canonical text before styling; do not trust raw ASR. Reviewed
-  correct Quran words may be green, reviewed incorrect words red, and ordinary
+  checked against canonical text before styling; do not trust raw ASR. A
+  canonical-match verification may correct ASR spelling while retaining its
+  measured timing; a human pronunciation review remains stronger evidence.
+  Only canonical-matched or human-reviewed Quran words may be green. Ordinary
   dialogue remains separate from Quran styling. Leading/trailing whitespace,
   punctuation, Arabic joining, and `هههه` reactions must be preserved or
   corrected from the source evidence.

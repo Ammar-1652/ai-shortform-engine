@@ -26,6 +26,7 @@
     "pronunciation_status": {
       "enum": [
         "human_review_required",
+        "canonical_match_verified",
         "human_reviewed"
       ],
       "title": "Pronunciation Status",

@@ -72,6 +72,7 @@ class AlignedWord(Versioned):
     alignment_quality: Literal["forced"] = "forced"
     verification_status: CaptionVerificationStatus = "unverified"
     segment_index: int = Field(default=-1, ge=-1)
+    source_word_ids: list[EntityId] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def ranges_are_positive(self) -> Self:

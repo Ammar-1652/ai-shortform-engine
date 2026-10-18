@@ -9,6 +9,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+from clipforge.campaign.quran import canonicalize_quran_alignment
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
 from clipforge.hero.captions import hero_caption_pieces
@@ -33,6 +34,7 @@ from clipforge.schemas.advanced import (
     TypographyEvent,
     advanced_fingerprint,
 )
+from clipforge.schemas.campaign import QuranCaptionReview
 from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
@@ -89,6 +91,7 @@ def build_advanced_plan(
     editorial_arc_sha256: str = "",
     quran_review_id: str = "",
     quran_review_sha256: str = "",
+    quran_review: QuranCaptionReview | None = None,
     cut_transition_style: str = "",
     allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
@@ -128,7 +131,10 @@ def build_advanced_plan(
         if cursor_us != duration_us:
             raise MediaError("manual crop windows must cover the complete output without gaps")
     emphasis = _emphasis(alignment, candidate_id)
-    captions = _captions(alignment, candidate_id)
+    caption_alignment = alignment
+    if quran_review is not None:
+        caption_alignment = canonicalize_quran_alignment(alignment, quran_review)
+    captions = _captions(caption_alignment, candidate_id)
     if direction is not None:
         typography = _directed_typography(direction, alignment, candidate_id)
         typography = _drop_caption_duplicates(typography, captions)
@@ -571,6 +577,7 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                         output_start_frame=word.output_start_frame,
                         output_end_frame_exclusive=word.output_end_frame_exclusive,
                         verification_status=word.verification_status,
+                        source_word_ids=word.source_word_ids or [word.word_id],
                     )
                     for word in piece.words
                 ],

@@ -6,10 +6,11 @@ Stored records may name a public https URL. They do not store credentials.
 from __future__ import annotations
 
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.common import EntityId, Microseconds, Versioned
 
 _SHA = r"^[0-9a-f]{64}$"
 _SECRET = ("bearer ", "password=", "token=", "api_key", "authorization:", "cookie=", "secret=")
@@ -46,17 +47,36 @@ class QuranCanonicalSource(Versioned):
     ayah_start: int = Field(ge=1)
     ayah_end: int = Field(ge=1)
     text_uthmani: list[str] = Field(min_length=1)
+    snapshot_relative_path: str = ""
+    snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    snapshot_url: str = ""
 
     @model_validator(mode="after")
     def range_is_ordered(self) -> Self:
         if self.ayah_end < self.ayah_start:
             raise ValueError("Quran ayah range must be ordered")
+        if len(self.text_uthmani) != self.ayah_end - self.ayah_start + 1:
+            raise ValueError("Quran canonical text must contain exactly one entry per declared ayah")
+        for url in (self.url, self.snapshot_url):
+            if not url:
+                continue
+            parsed = urlsplit(url)
+            if parsed.scheme != "https" or parsed.hostname not in {"quran.com", "api.quran.com"}:
+                raise ValueError("Quran canonical evidence must use an official HTTPS Quran.com source")
+            if parsed.username or parsed.password or parsed.port not in {None, 443}:
+                raise ValueError("Quran canonical evidence URL cannot contain credentials or a custom port")
+        if any((self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)) and not all(
+            (self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)
+        ):
+            raise ValueError("Quran snapshot path, hash, and URL must be supplied together")
+        if self.snapshot_relative_path:
+            _relative(self.snapshot_relative_path)
         return self
 
 
 class QuranAudioMapping(Versioned):
-    source_start_us: int = Field(ge=0)
-    source_end_us: int = Field(gt=0)
+    source_start_us: Microseconds
+    source_end_us: Microseconds
     ayah: int = Field(ge=1)
 
     @model_validator(mode="after")
@@ -69,7 +89,11 @@ class QuranAudioMapping(Versioned):
 class QuranVerificationPolicy(Versioned):
     quran_text: Literal["canonical_uthmani_only"]
     timing: Literal["forced_alignment_required"]
-    pronunciation_status: Literal["human_review_required", "human_reviewed"]
+    pronunciation_status: Literal[
+        "human_review_required",
+        "canonical_match_verified",
+        "human_reviewed",
+    ]
     unverified_words_must_not_be_colored_green: Literal[True] = True
     incorrect_words_require_human_evidence: Literal[True] = True
     font_identity: Literal["amiri-quran-local-v1"]
@@ -82,7 +106,9 @@ class QuranCaptionReview(Versioned):
     campaign: Literal["tarteel"]
     source_asset_id: EntityId
     candidate_id: EntityId
-    source_window_us: tuple[int, int]
+    source_window_us: tuple[Microseconds, Microseconds]
+    source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    transcript_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     canonical_source: QuranCanonicalSource
     source_audio_mapping: list[QuranAudioMapping] = Field(min_length=1)
     verification_policy: QuranVerificationPolicy
@@ -92,6 +118,15 @@ class QuranCaptionReview(Versioned):
     def window_is_positive(self) -> Self:
         if self.source_window_us[1] <= self.source_window_us[0]:
             raise ValueError("Quran review source window must be positive")
+        previous_end = self.source_window_us[0]
+        for mapping in self.source_audio_mapping:
+            if not self.canonical_source.ayah_start <= mapping.ayah <= self.canonical_source.ayah_end:
+                raise ValueError("Quran audio mapping names an ayah outside the canonical range")
+            if mapping.source_start_us < previous_end or mapping.source_end_us > self.source_window_us[1]:
+                raise ValueError(
+                    "Quran audio mappings must be ordered, non-overlapping, and inside the source window"
+                )
+            previous_end = mapping.source_end_us
         return self
 
 

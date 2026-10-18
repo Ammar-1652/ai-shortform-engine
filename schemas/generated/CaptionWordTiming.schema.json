@@ -32,6 +32,15 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "source_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Source Word Ids",
+      "type": "array"
+    },
     "text": {
       "maxLength": 200,
       "minLength": 1,

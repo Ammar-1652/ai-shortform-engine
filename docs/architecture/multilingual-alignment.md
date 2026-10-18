@@ -60,6 +60,13 @@ Narration cache identity is the locale, script SHA-256, source SHA-256, transcri
 
 Arabic layout is `rtl` and does not reverse characters, transliterate, or rewrite Arabic-Indic digits. Japanese layout wraps by Unicode character, does not insert spaces, and does not leave `。` or similar closing marks at the start of a line. Latin captions wrap on spaces and keep tokens such as `$12.50` intact. Plates use React text nodes. Advanced styles provide explicit safe margins (the clean defaults are 64px left/right, 120px top, and 300px bottom) and the renderer consumes those values. The clean recipe stages hashed local DejaVu, Noto CJK, and Noto Arabic fonts; their license evidence is [caption-fonts.md](caption-fonts.md). There is no `innerHTML`, remote font, or CDN request.
 
+Tarteel Quran caption correction is a separate display-text evidence path. A
+hashed official Quran.com Uthmani snapshot may replace ASR spellings while
+retaining the forced alignment intervals. `canonical_match_verified` does not
+mean pronunciation verified: corrected words remain `unverified` unless a
+human pronunciation review is recorded. The snapshot and source/transcript
+hashes are checked offline; rendering never fetches canonical text.
+
 Forced caption words may carry an explicit review status: `unverified`,
 `correct`, or `incorrect`. An active reviewed-correct word is green and returns
 to white after its interval; a reviewed-incorrect word stays red. Unverified

@@ -13,11 +13,15 @@
       "type": "string"
     },
     "source_end_us": {
-      "exclusiveMinimum": 0,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
       "title": "Source End Us",
       "type": "integer"
     },
     "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
       "minimum": 0,
       "title": "Source Start Us",
       "type": "integer"

@@ -81,6 +81,7 @@ class CaptionWordTiming(Versioned):
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
     verification_status: Literal["unverified", "correct", "incorrect"] = "unverified"
+    source_word_ids: list[EntityId] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def interval_is_positive(self) -> Self:
