@@ -50,6 +50,17 @@ def hero_caption_pieces(words: list[AlignedWord]) -> list[HeroCaptionPiece]:
     chunks: list[list[AlignedWord]] = []
     current: list[AlignedWord] = []
     for word in words:
+        # A caption must never survive an editorial TimeMap cut. Even when
+        # source ranges are close together, the output picture/audio clock
+        # changes owner at the segment boundary, so split the phrase first.
+        if (
+            current
+            and current[-1].segment_index >= 0
+            and word.segment_index >= 0
+            and word.segment_index != current[-1].segment_index
+        ):
+            chunks.append(current)
+            current = []
         if current and word.source_start_us - current[-1].source_end_us > _MAX_GAP_US:
             chunks.append(current)
             current = []

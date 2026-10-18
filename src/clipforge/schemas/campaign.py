@@ -6,10 +6,11 @@ Stored records may name a public https URL. They do not store credentials.
 from __future__ import annotations
 
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.common import EntityId, Microseconds, Versioned
 
 _SHA = r"^[0-9a-f]{64}$"
 _SECRET = ("bearer ", "password=", "token=", "api_key", "authorization:", "cookie=", "secret=")
@@ -37,6 +38,119 @@ DownloadStatus = Literal[
     "manual_download_required",
     "rejected",
 ]
+
+
+class QuranCanonicalSource(Versioned):
+    provider: Literal["Quran.com"]
+    url: str = Field(min_length=1, max_length=300)
+    surah: int = Field(ge=1, le=114)
+    ayah_start: int = Field(ge=1)
+    ayah_end: int = Field(ge=1)
+    text_uthmani: list[str] = Field(min_length=1)
+    snapshot_relative_path: str = ""
+    snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    snapshot_url: str = ""
+
+    @model_validator(mode="after")
+    def range_is_ordered(self) -> Self:
+        if self.ayah_end < self.ayah_start:
+            raise ValueError("Quran ayah range must be ordered")
+        if len(self.text_uthmani) != self.ayah_end - self.ayah_start + 1:
+            raise ValueError("Quran canonical text must contain exactly one entry per declared ayah")
+        for url in (self.url, self.snapshot_url):
+            if not url:
+                continue
+            parsed = urlsplit(url)
+            if parsed.scheme != "https" or parsed.hostname not in {"quran.com", "api.quran.com"}:
+                raise ValueError("Quran canonical evidence must use an official HTTPS Quran.com source")
+            if parsed.username or parsed.password or parsed.port not in {None, 443}:
+                raise ValueError("Quran canonical evidence URL cannot contain credentials or a custom port")
+        if any((self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)) and not all(
+            (self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)
+        ):
+            raise ValueError("Quran snapshot path, hash, and URL must be supplied together")
+        if self.snapshot_relative_path:
+            _relative(self.snapshot_relative_path)
+        return self
+
+
+class QuranAudioMapping(Versioned):
+    source_start_us: Microseconds
+    source_end_us: Microseconds
+    ayah: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.source_end_us <= self.source_start_us:
+            raise ValueError("Quran audio mapping interval must be positive")
+        return self
+
+
+class QuranVerificationPolicy(Versioned):
+    quran_text: Literal["canonical_uthmani_only"]
+    timing: Literal["forced_alignment_required"]
+    pronunciation_status: Literal[
+        "human_review_required",
+        "canonical_match_verified",
+        "human_reviewed",
+    ]
+    unverified_words_must_not_be_colored_green: Literal[True] = True
+    incorrect_words_require_human_evidence: Literal[True] = True
+    font_identity: Literal["amiri-quran-local-v1"]
+    font_relative_path: str = Field(min_length=1, max_length=300)
+    font_sha256: str = Field(pattern=_SHA)
+
+
+class TarteelDisplayCorrection(Versioned):
+    """Reviewed source-text replacement for one forced word interval."""
+
+    source_word_id: EntityId
+    display_text: str = Field(min_length=1, max_length=120)
+
+    @field_validator("display_text")
+    @classmethod
+    def display_text_is_one_line(cls, value: str) -> str:
+        if "\n" in value or "\r" in value:
+            raise ValueError("Tarteel display correction must be one line")
+        return value
+
+
+class QuranCaptionReview(Versioned):
+    review_kind: Literal["source_grounded_quran_caption"]
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_window_us: tuple[Microseconds, Microseconds]
+    source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    transcript_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    display_evidence_relative_path: str = ""
+    display_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    canonical_source: QuranCanonicalSource
+    source_audio_mapping: list[QuranAudioMapping] = Field(min_length=1)
+    display_corrections: list[TarteelDisplayCorrection] = Field(default_factory=list)
+    verification_policy: QuranVerificationPolicy
+    notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def window_is_positive(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("Quran review source window must be positive")
+        if any((self.display_evidence_relative_path, self.display_evidence_sha256)) and not all(
+            (self.display_evidence_relative_path, self.display_evidence_sha256)
+        ):
+            raise ValueError("display evidence path and hash must be supplied together")
+        if self.display_evidence_relative_path:
+            _relative(self.display_evidence_relative_path)
+        previous_end = self.source_window_us[0]
+        for mapping in self.source_audio_mapping:
+            if not self.canonical_source.ayah_start <= mapping.ayah <= self.canonical_source.ayah_end:
+                raise ValueError("Quran audio mapping names an ayah outside the canonical range")
+            if mapping.source_start_us < previous_end or mapping.source_end_us > self.source_window_us[1]:
+                raise ValueError(
+                    "Quran audio mappings must be ordered, non-overlapping, and inside the source window"
+                )
+            previous_end = mapping.source_end_us
+        return self
 
 
 def _plain(value: str, *, label: str, allow_https: bool = False) -> str:
@@ -86,6 +200,91 @@ class Campaign(Versioned):
         if value is None:
             return None
         return _plain(value, label="campaign url", allow_https=True)
+
+
+class CampaignOverlaySpec(Versioned):
+    """Source-bound branding required by a campaign delivery profile.
+
+    The renderer receives safe staging names only. Asset ids and hashes stay
+    in the typed plan/catalogue, so an overlay cannot be swapped after QA.
+    Tarteel CTA clips are green-screen files; ``chroma_key_v1`` records that
+    the green background was removed before Remotion compositing.
+    """
+
+    campaign_id: Literal["tarteel"] = "tarteel"
+    cta_asset_id: EntityId
+    cta_asset_sha256: str = Field(pattern=_SHA)
+    cta_asset_name: str = Field(min_length=1, max_length=80)
+    cta_background_removal: Literal["chroma_key_v1"] = "chroma_key_v1"
+    # Production uses the original animated CTA as an alpha video.  The PNG
+    # sequence value remains readable for old review sidecars, but is not
+    # accepted by the Tarteel delivery policy.
+    cta_render_mode: Literal["alpha_video_v1", "alpha_png_sequence_v1"] = "alpha_video_v1"
+    cta_frame_prefix: str | None = Field(default=None, min_length=1, max_length=64)
+    cta_frame_count: int | None = Field(default=None, ge=1, le=600)
+    cta_frame_rate: Literal[30] = 30
+    # New campaign renders place both brand layers inside the contained source
+    # picture. The old value remains readable for immutable pre-checkpoint
+    # artifacts, but policy and new staging require the foreground space.
+    cta_position: Literal["foreground_attention_v1", "top_left_brand_rail_v1"] = "foreground_attention_v1"
+    overlay_coordinate_space: Literal["foreground_v1", "canvas_v1"] = "foreground_v1"
+    cta_clearance: Literal["faces_and_captions_clear_v1"] = "faces_and_captions_clear_v1"
+    # These coordinates are relative to the original foreground picture, not
+    # the blurred portrait canvas. Permille values keep the placement
+    # deterministic across review and delivery resolutions.
+    cta_left_permille: int = Field(default=80, ge=0, le=1000)
+    cta_top_permille: int = Field(default=360, ge=0, le=1000)
+    # This is intentionally capped. The campaign CTA is a small brand cue,
+    # never a foreground card over a child or a caption.
+    # New renders use a measured ratio from the source-native CTA. The wider
+    # legacy range remains readable for immutable historical artifacts.
+    cta_width_permille: int = Field(default=240, ge=80, le=600)
+    cta_start_us: int = Field(ge=0)
+    cta_end_us: int = Field(gt=0)
+    watermark_asset_id: EntityId
+    watermark_asset_sha256: str = Field(pattern=_SHA)
+    watermark_asset_name: str = Field(min_length=1, max_length=80)
+    watermark_mode: Literal["alpha_v1"] = "alpha_v1"
+    watermark_position: Literal["foreground_top_right_v1", "top_right"] = "foreground_top_right_v1"
+    watermark_visibility: Literal["overlay_required_v1", "source_visible_v1"] = "overlay_required_v1"
+    watermark_width_permille: int = Field(default=55, ge=24, le=280)
+    sizing_method: Literal["source_frame_scan_v1", "legacy_fixed_v1"] = "legacy_fixed_v1"
+    sizing_measurement_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    first_post_caption_line: Literal["اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"] = (
+        "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"
+    )
+
+    @model_validator(mode="after")
+    def interval_and_names_are_safe(self) -> Self:
+        if self.cta_end_us <= self.cta_start_us:
+            raise ValueError("campaign CTA interval must be positive")
+        names = [("CTA", self.cta_asset_name), ("watermark", self.watermark_asset_name)]
+        if self.cta_render_mode == "alpha_png_sequence_v1":
+            if self.cta_frame_prefix is None or self.cta_frame_count is None:
+                raise ValueError("PNG CTA overlays require a frame prefix and count")
+            names.append(("CTA frame prefix", self.cta_frame_prefix))
+        elif self.cta_frame_prefix is not None or self.cta_frame_count is not None:
+            raise ValueError("alpha video CTA overlays must not declare PNG frames")
+        if self.cta_render_mode == "alpha_video_v1" and not self.cta_asset_name.lower().endswith(
+            (".mov", ".webm")
+        ):
+            raise ValueError("alpha video CTA must use a transparent video staging filename")
+        if self.cta_clearance != "faces_and_captions_clear_v1":
+            raise ValueError("Tarteel CTA must declare face and caption clearance")
+        if self.sizing_method == "source_frame_scan_v1" and not self.sizing_measurement_sha256:
+            raise ValueError("source-measured campaign overlays require a measurement digest")
+        if self.overlay_coordinate_space != "foreground_v1" and self.cta_position == "foreground_attention_v1":
+            raise ValueError("foreground CTA placement requires foreground coordinate space")
+        for label, name in names:
+            if (
+                name != name.strip()
+                or "/" in name
+                or "\\" in name
+                or ".." in name
+                or not all(character.isalnum() or character in ".-_" for character in name)
+            ):
+                raise ValueError(f"campaign {label} asset name must be a safe staging filename")
+        return self
 
 
 class CampaignPolicyRule(Versioned):

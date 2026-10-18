@@ -258,6 +258,35 @@ def test_corrupt_advanced_mp4_is_rejected(tmp_path: Path) -> None:
         probe_hero(video, expected_duration_us=1_000_000)
 
 
+def test_hero_probe_rejects_audio_video_stream_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    video = tmp_path / "drift.mp4"
+    video.write_bytes(b"probe fixture")
+    monkeypatch.setattr(
+        "clipforge.hero.probe.read_ffprobe_json",
+        lambda *_args, **_kwargs: {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "pix_fmt": "yuv420p",
+                    "width": 1080,
+                    "height": 1920,
+                    "r_frame_rate": "30/1",
+                    "duration": "1.0",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "duration": "1.2",
+                    "start_time": "0",
+                },
+            ]
+        },
+    )
+    with pytest.raises(MediaError, match="audio/video streams differ"):
+        probe_hero(video, expected_duration_us=1_100_000)
+
+
 def test_changed_trajectory_invalidates_qa(tmp_path: Path) -> None:
     document = _plan()
     workspace = SourceWorkspace(tmp_path, "project-1", "source-1")

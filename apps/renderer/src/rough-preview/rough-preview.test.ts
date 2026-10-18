@@ -24,6 +24,7 @@ function cue(overrides: Partial<RoughCaptionCue> = {}): RoughCaptionCue {
     output_start_frame: 0,
     output_end_frame_exclusive: 30,
     timing_quality: "provisional",
+    words: [],
     ...overrides,
   };
 }
@@ -43,6 +44,10 @@ function input(overrides: Partial<RoughPreviewInput> = {}): RoughPreviewInput {
     height: 1280,
     video_fit: "contain",
     background: "neutral-dark-v1",
+    video_scale_permille: 1000,
+    video_offset_x_px: 0,
+    word_highlight_mode: "off",
+    word_timing_source: "segment-only-v1",
     timing_quality: "provisional",
     captions: [cue()],
     ...overrides,
@@ -94,6 +99,102 @@ describe("rough preview render input", () => {
     const parsed = parseRenderInput(input({ captions: [cue({ text })] }));
     expect(parsed.captions[0]?.text).toBe(text);
   });
+
+  it("accepts only bounded uniform scale and explicit review highlighting", () => {
+    expect(parseRenderInput(input({ video_scale_permille: 1150, video_offset_x_px: 54, word_highlight_mode: "reviewed" })).video_offset_x_px).toBe(54);
+    expect(() => parseRenderInput(input({ video_scale_permille: 1300 }))).toThrow(/video_scale_permille/);
+    expect(() => parseRenderInput(input({ video_offset_x_px: 121 }))).toThrow(/video_offset_x_px/);
+    expect(() => parseRenderInput(input({ word_highlight_mode: "forced" as never }))).toThrow(/word_highlight_mode/);
+  });
+
+  it("accepts the explicit source-blur background variant", () => {
+    expect(parseRenderInput(input({ background: "blurred-source-v1" })).background).toBe("blurred-source-v1");
+    expect(parseRenderInput(input({ word_highlight_mode: "reviewed", word_timing_source: "reviewed-word-times-v1", captions: [cue({ words: [{ word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" }] })] })).word_timing_source).toBe("reviewed-word-times-v1");
+  });
+
+  it("keeps the campaign foreground rectangle inside the portrait canvas", () => {
+    const parsed = parseRenderInput(input({
+      background: "blurred-source-v1",
+      foreground_x_px: 0,
+      foreground_y_px: 432,
+      foreground_width_px: 720,
+      foreground_height_px: 416,
+      foreground_scale_permille: 1080,
+    }));
+    expect(parsed.foreground_y_px).toBe(432);
+    expect(() => parseRenderInput(input({ foreground_y_px: 1000, foreground_height_px: 400 }))).toThrow(/outside/);
+  });
+
+  it("rejects reviewed words without a declared timing source", () => {
+    const word = { word_id: "w-0", text: "Hello", output_start_us: 0, output_end_us: 500_000, output_start_frame: 0, output_end_frame_exclusive: 15, verification_status: "unverified" as const };
+    expect(() => parseRenderInput(input({ word_highlight_mode: "reviewed", captions: [cue({ words: [word] })] }))).toThrow(/timing source/);
+  });
+
+  it("accepts a source-bound Tarteel CTA and alpha watermark overlay", () => {
+    const overlay = {
+      schema_version: "1.0.0",
+      campaign_id: "tarteel",
+      cta_asset_id: "cta-asset",
+      cta_asset_sha256: "a".repeat(64),
+      cta_asset_name: "tarteel-cta-alpha.webm",
+      cta_background_removal: "chroma_key_v1",
+      cta_render_mode: "alpha_video_v1",
+      cta_frame_prefix: null,
+      cta_frame_count: null,
+      cta_frame_rate: 30,
+      cta_position: "top_left_brand_rail_v1",
+      overlay_coordinate_space: "foreground_v1",
+      cta_clearance: "faces_and_captions_clear_v1",
+      cta_left_permille: 80,
+      cta_top_permille: 70,
+      cta_width_permille: 600,
+      cta_start_us: 1_000_000,
+      cta_end_us: 3_000_000,
+      watermark_asset_id: "watermark-asset",
+      watermark_asset_sha256: "b".repeat(64),
+      watermark_asset_name: "tarteel-watermark-alpha.png",
+      watermark_mode: "alpha_v1",
+      watermark_position: "top_right",
+      watermark_visibility: "overlay_required_v1",
+      watermark_width_permille: 170,
+      first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
+    } as const;
+    expect(parseRenderInput(input({ campaign_overlay: overlay as never })).campaign_overlay?.cta_asset_name).toBe(
+      "tarteel-cta-alpha.webm",
+    );
+  });
+
+  it("keeps legacy inputs compatible when the optional overlay is null", () => {
+    expect(parseRenderInput({ ...input(), campaign_overlay: null }).campaign_overlay).toBeUndefined();
+  });
+
+  it("rejects an opaque CTA contract", () => {
+    const overlay = {
+      schema_version: "1.0.0",
+      campaign_id: "tarteel",
+      cta_asset_id: "cta-asset",
+      cta_asset_sha256: "a".repeat(64),
+      cta_asset_name: "cta.mp4",
+      cta_background_removal: "none",
+      cta_render_mode: "alpha_video_v1",
+      cta_frame_rate: 30,
+      cta_position: "top_left_brand_rail_v1",
+      cta_clearance: "faces_and_captions_clear_v1",
+      cta_left_permille: 80,
+      cta_top_permille: 70,
+      cta_width_permille: 600,
+      cta_start_us: 1_000_000,
+      cta_end_us: 3_000_000,
+      watermark_asset_id: "watermark-asset",
+      watermark_asset_sha256: "b".repeat(64),
+      watermark_asset_name: "watermark.png",
+      watermark_mode: "alpha_v1",
+      watermark_position: "top_right",
+      watermark_width_permille: 170,
+      first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
+    };
+    expect(() => parseRenderInput(input({ campaign_overlay: overlay as never }))).toThrow(/overlay/);
+  });
 });
 
 describe("provisional caption frames", () => {
@@ -142,6 +243,6 @@ describe("composition source", () => {
     const overlay = readFileSync(resolve(here, "captions.ts"), "utf8");
     expect(picture).not.toContain("dangerouslySetInnerHTML");
     expect(overlay).not.toContain("dangerouslySetInnerHTML");
-    expect(picture).toContain("{caption.text}");
+    expect(picture).toContain("caption.text");
   });
 });

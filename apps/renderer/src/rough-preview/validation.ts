@@ -10,7 +10,9 @@ import {
   COMPOSITION_ID,
   OUTPUT_HEIGHT,
   OUTPUT_WIDTH,
+  type RoughCaptionWord,
   type RoughCaptionCue,
+  type CampaignOverlaySpec,
   type RoughPreviewInput,
 } from "./types.js";
 
@@ -29,6 +31,17 @@ const TOP_KEYS = new Set([
   "height",
   "video_fit",
   "background",
+  "campaign_overlay",
+  "font_identity",
+  "video_scale_permille",
+  "video_offset_x_px",
+  "foreground_x_px",
+  "foreground_y_px",
+  "foreground_width_px",
+  "foreground_height_px",
+  "foreground_scale_permille",
+  "word_highlight_mode",
+  "word_timing_source",
   "timing_quality",
   "captions",
   "source_start_us",
@@ -52,6 +65,17 @@ const CUE_KEYS = new Set([
   "output_start_frame",
   "output_end_frame_exclusive",
   "timing_quality",
+  "words",
+]);
+const WORD_KEYS = new Set([
+  "schema_version",
+  "word_id",
+  "text",
+  "output_start_us",
+  "output_end_us",
+  "output_start_frame",
+  "output_end_frame_exclusive",
+  "verification_status",
 ]);
 
 const DANGEROUS = new Set([
@@ -81,8 +105,25 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   if (record.video_fit !== "contain") {
     throw new Error("render input video_fit must be contain");
   }
-  if (record.background !== "neutral-dark-v1") {
-    throw new Error("render input background must be neutral-dark-v1");
+  if (record.background !== "neutral-dark-v1" && record.background !== "blurred-source-v1") {
+    throw new Error("render input background must be neutral-dark-v1 or blurred-source-v1");
+  }
+  const videoScale = record.video_scale_permille === undefined ? 1000 : requireIntegerInRange(record.video_scale_permille, 1000, 1250, "video_scale_permille");
+  const videoOffsetX = record.video_offset_x_px === undefined ? 0 : requireIntegerInRange(record.video_offset_x_px, -120, 120, "video_offset_x_px");
+  const foregroundX = record.foreground_x_px === undefined ? 0 : requireIntegerInRange(record.foreground_x_px, 0, OUTPUT_WIDTH, "foreground_x_px");
+  const foregroundY = record.foreground_y_px === undefined ? 0 : requireIntegerInRange(record.foreground_y_px, 0, OUTPUT_HEIGHT, "foreground_y_px");
+  const foregroundWidth = record.foreground_width_px === undefined ? OUTPUT_WIDTH : requireIntegerInRange(record.foreground_width_px, 1, OUTPUT_WIDTH, "foreground_width_px");
+  const foregroundHeight = record.foreground_height_px === undefined ? OUTPUT_HEIGHT : requireIntegerInRange(record.foreground_height_px, 1, OUTPUT_HEIGHT, "foreground_height_px");
+  const foregroundScale = record.foreground_scale_permille === undefined ? 1000 : requireIntegerInRange(record.foreground_scale_permille, 1000, 1150, "foreground_scale_permille");
+  if (foregroundX + foregroundWidth > OUTPUT_WIDTH || foregroundY + foregroundHeight > OUTPUT_HEIGHT) {
+    throw new Error("foreground rectangle is outside the preview canvas");
+  }
+  if (record.word_highlight_mode !== undefined && record.word_highlight_mode !== "off" && record.word_highlight_mode !== "reviewed") {
+    throw new Error("render input word_highlight_mode must be off or reviewed");
+  }
+  const wordTimingSource = record.word_timing_source === undefined ? "segment-only-v1" : record.word_timing_source;
+  if (wordTimingSource !== "segment-only-v1" && wordTimingSource !== "transcript-word-times-v1" && wordTimingSource !== "reviewed-word-times-v1") {
+    throw new Error("render input word_timing_source is unsupported");
   }
   if (record.timing_quality !== "provisional") {
     throw new Error("render input timing_quality must be provisional");
@@ -92,6 +133,9 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
   const video = requireLocalPath(record.video_path, "video_path");
   const audio = requireLocalPath(record.audio_path, "audio_path");
   const captions = parseCaptions(record.captions, duration);
+  if (record.word_highlight_mode === "reviewed" && wordTimingSource === "segment-only-v1" && captions.some((cue) => cue.words.length > 0)) {
+    throw new Error("reviewed word highlighting requires an explicit timing source");
+  }
   return {
     composition_id: COMPOSITION_ID,
     candidate_id: requireId(record.candidate_id, "candidate_id"),
@@ -105,9 +149,126 @@ export function parseRenderInput(raw: unknown): RoughPreviewInput {
     width: OUTPUT_WIDTH,
     height: OUTPUT_HEIGHT,
     video_fit: "contain",
-    background: "neutral-dark-v1",
+    background: record.background,
+    ...(record.campaign_overlay === undefined || record.campaign_overlay === null
+      ? {}
+      : { campaign_overlay: parseCampaignOverlay(record.campaign_overlay, duration) }),
+    ...(typeof record.font_identity === "string" ? { font_identity: record.font_identity } : {}),
+    video_scale_permille: videoScale,
+    video_offset_x_px: videoOffsetX,
+    foreground_x_px: foregroundX,
+    foreground_y_px: foregroundY,
+    foreground_width_px: foregroundWidth,
+    foreground_height_px: foregroundHeight,
+    foreground_scale_permille: foregroundScale,
+    word_highlight_mode: record.word_highlight_mode === "reviewed" ? "reviewed" : "off",
+    word_timing_source: wordTimingSource,
     timing_quality: "provisional",
     captions,
+  };
+}
+
+function parseCampaignOverlay(raw: unknown, duration: number): CampaignOverlaySpec {
+  const record = requireRecord(raw, "campaign overlay");
+  const required = [
+    "campaign_id", "cta_asset_id", "cta_asset_sha256", "cta_asset_name",
+    "cta_background_removal", "cta_render_mode",
+    "cta_frame_rate", "cta_start_us", "cta_end_us", "watermark_asset_id",
+    "watermark_asset_sha256", "watermark_asset_name", "watermark_mode",
+    "watermark_position", "watermark_width_permille", "first_post_caption_line",
+    "cta_position", "cta_clearance", "cta_left_permille", "cta_top_permille", "cta_width_permille",
+  ];
+  for (const key of required) {
+    if (!(key in record)) throw new Error(`campaign overlay is missing ${key}`);
+  }
+  rejectDangerousKeys(record, "campaign overlay");
+  rejectUnknown(record, new Set(["schema_version", ...required, "cta_frame_prefix", "cta_frame_count", "watermark_visibility", "overlay_coordinate_space", "sizing_method", "sizing_measurement_sha256"]), "campaign overlay");
+  const coordinateSpace = record.overlay_coordinate_space === undefined ? "foreground_v1" : record.overlay_coordinate_space;
+  const ctaPosition = record.cta_position === "top_left_brand_rail_v1" ? "foreground_attention_v1" : record.cta_position;
+  const watermarkPosition = record.watermark_position === "top_right" ? "foreground_top_right_v1" : record.watermark_position;
+  const watermarkVisibility = record.watermark_visibility === undefined ? "overlay_required_v1" : record.watermark_visibility;
+  const sizingMethod = record.sizing_method === undefined ? "legacy_fixed_v1" : record.sizing_method;
+  const sizingDigest = typeof record.sizing_measurement_sha256 === "string"
+    ? record.sizing_measurement_sha256
+    : "";
+  if (record.campaign_id !== "tarteel" || record.cta_background_removal !== "chroma_key_v1" || (record.cta_render_mode !== "alpha_video_v1" && record.cta_render_mode !== "alpha_png_sequence_v1") || record.cta_frame_rate !== 30 || record.watermark_mode !== "alpha_v1" || watermarkPosition !== "foreground_top_right_v1" || ctaPosition !== "foreground_attention_v1" || record.cta_clearance !== "faces_and_captions_clear_v1" || coordinateSpace !== "foreground_v1" || (watermarkVisibility !== "overlay_required_v1" && watermarkVisibility !== "source_visible_v1")) {
+    throw new Error("unsupported campaign overlay contract");
+  }
+  const ctaStart = requireNonNegativeInt(record.cta_start_us, "campaign overlay cta_start_us");
+  const ctaEnd = requireNonNegativeInt(record.cta_end_us, "campaign overlay cta_end_us");
+  if (ctaEnd <= ctaStart || ctaEnd > Math.ceil(duration * 1_000_000 / 30)) {
+    throw new Error("campaign overlay CTA interval is outside the composition");
+  }
+  const safeName = (value: unknown, label: string): string => {
+    if (typeof value !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(value) || value.includes("..")) {
+      throw new Error(`campaign overlay ${label} must be a safe staging filename`);
+    }
+    return value;
+  };
+  const ctaName = safeName(record.cta_asset_name, "CTA name");
+  if (record.cta_render_mode === "alpha_video_v1" && !/\.(mov|webm)$/i.test(ctaName)) {
+    throw new Error("alpha video CTA must use a transparent video staging file");
+  }
+  // Pydantic emits optional PNG-sequence fields as JSON null for the
+  // production alpha-video mode.  Null has the same meaning as omission;
+  // it must not be sent through the filename validator.
+  const ctaPrefix = record.cta_frame_prefix === undefined || record.cta_frame_prefix === null
+    ? undefined
+    : safeName(record.cta_frame_prefix, "CTA frame prefix");
+  const frameCount = record.cta_frame_count === undefined || record.cta_frame_count === null
+    ? undefined
+    : requireIntegerInRange(record.cta_frame_count, 1, 600, "campaign overlay cta_frame_count");
+  if (record.cta_render_mode === "alpha_video_v1" && (ctaPrefix !== undefined || frameCount !== undefined)) {
+    throw new Error("alpha video CTA must not include PNG sequence fields");
+  }
+  if (record.cta_render_mode === "alpha_png_sequence_v1" && (ctaPrefix === undefined || frameCount === undefined)) {
+    throw new Error("PNG CTA requires a frame prefix and count");
+  }
+  const watermarkName = safeName(record.watermark_asset_name, "watermark name");
+  if (typeof record.cta_asset_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.cta_asset_sha256) || typeof record.watermark_asset_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(record.watermark_asset_sha256)) {
+    throw new Error("campaign overlay asset hashes must be sha256");
+  }
+  if (typeof record.cta_asset_id !== "string" || typeof record.watermark_asset_id !== "string" || typeof record.first_post_caption_line !== "string") {
+    throw new Error("campaign overlay asset ids and caption line must be strings");
+  }
+  if (sizingMethod !== "source_frame_scan_v1" && sizingMethod !== "legacy_fixed_v1") {
+    throw new Error("unsupported campaign sizing method");
+  }
+  if (sizingMethod === "source_frame_scan_v1" && (typeof sizingDigest !== "string" || !/^[0-9a-f]{64}$/.test(sizingDigest))) {
+    throw new Error("source-measured campaign overlay requires a measurement digest");
+  }
+  const width = requireIntegerInRange(record.watermark_width_permille, 24, 280, "campaign overlay watermark_width_permille");
+  const left = requireIntegerInRange(record.cta_left_permille, 0, 1000, "campaign overlay cta_left_permille");
+  const top = requireIntegerInRange(record.cta_top_permille, 0, 1000, "campaign overlay cta_top_permille");
+  const ctaWidth = requireIntegerInRange(record.cta_width_permille, 80, 600, "campaign overlay cta_width_permille");
+  return {
+    campaign_id: "tarteel",
+    cta_asset_id: record.cta_asset_id,
+    cta_asset_sha256: record.cta_asset_sha256,
+    cta_asset_name: ctaName,
+    cta_background_removal: "chroma_key_v1",
+    cta_render_mode: record.cta_render_mode,
+    cta_frame_prefix: ctaPrefix,
+    cta_frame_count: frameCount,
+    cta_frame_rate: 30,
+    cta_position: "foreground_attention_v1",
+    overlay_coordinate_space: "foreground_v1",
+    cta_clearance: "faces_and_captions_clear_v1",
+    cta_left_permille: left,
+    cta_top_permille: top,
+    cta_width_permille: ctaWidth,
+    cta_start_us: ctaStart,
+    cta_end_us: ctaEnd,
+    watermark_asset_id: record.watermark_asset_id,
+    watermark_asset_sha256: record.watermark_asset_sha256,
+    watermark_asset_name: watermarkName,
+    watermark_mode: "alpha_v1",
+    watermark_position: "foreground_top_right_v1",
+    watermark_visibility: watermarkVisibility,
+    watermark_width_permille: width,
+    sizing_method: sizingMethod,
+    sizing_measurement_sha256: sizingDigest,
+    first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic",
   };
 }
 
@@ -175,7 +336,32 @@ function parseCue(raw: unknown, index: number, duration: number): RoughCaptionCu
     output_start_frame: frameStart,
     output_end_frame_exclusive: frameEnd,
     timing_quality: "provisional",
+    words: parseWords(record.words, duration),
   };
+}
+
+function parseWords(raw: unknown, duration: number): RoughCaptionWord[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error("caption words must be a list");
+  return raw.map((item, index) => {
+    const record = requireRecord(item, `caption word ${index}`);
+    rejectUnknown(record, WORD_KEYS, `caption word ${index}`);
+    const start = requireNonNegativeInt(record.output_start_frame, `caption word ${index} start`);
+    const end = requireNonNegativeInt(record.output_end_frame_exclusive, `caption word ${index} end`);
+    if (end <= start || end > duration) throw new Error(`caption word ${index} frame interval is invalid`);
+    if (record.verification_status !== "unverified" && record.verification_status !== "correct" && record.verification_status !== "incorrect") {
+      throw new Error(`caption word ${index} verification status is invalid`);
+    }
+    return {
+      word_id: requireId(record.word_id, `caption word ${index} id`),
+      text: requireText(record.text, `caption word ${index} text`),
+      output_start_us: requireNonNegativeInt(record.output_start_us, `caption word ${index} start_us`),
+      output_end_us: requireNonNegativeInt(record.output_end_us, `caption word ${index} end_us`),
+      output_start_frame: start,
+      output_end_frame_exclusive: end,
+      verification_status: record.verification_status,
+    };
+  });
 }
 
 function requireRecord(raw: unknown, label: string): Record<string, unknown> {
@@ -218,6 +404,20 @@ function requireNonNegativeInt(value: unknown, label: string): number {
 function requireId(value: unknown, label: string): string {
   if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
     throw new Error(`${label} is not a safe id`);
+  }
+  return value;
+}
+
+function requireIntegerInRange(value: unknown, minimum: number, maximum: number, label: string): number {
+  if (!Number.isInteger(value) || Number(value) < minimum || Number(value) > maximum) {
+    throw new Error(`${label} must be an integer from ${minimum} to ${maximum}`);
+  }
+  return Number(value);
+}
+
+function requireText(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 300) {
+    throw new Error(`${label} must be non-empty text`);
   }
   return value;
 }

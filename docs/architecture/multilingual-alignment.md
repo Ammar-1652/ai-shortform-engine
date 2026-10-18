@@ -12,13 +12,13 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. The new 
 | en-GB | same English checkpoint, `available_not_smoked` until it has its own speech record | `locale_not_smoked` |
 | fr-FR | `verified_live` only with its own external speech file and the measured French model | `unsupported_language` |
 | es-ES, de-DE | Apache-2.0 wav2vec2 catalog, evidence `model_missing` | `unsupported_language` |
-| ar | `alignment_not_claimed`, RTL captions | `unsupported_language` |
+| ar | Full-source claim remains `alignment_not_claimed`; selected Hero clips may use the pinned Arabic WhisperX model as `available_not_smoked`; RTL captions | `unsupported_language` |
 | ja | `verified_live` only with its own external speech file and the measured Japanese model, character wrap | `unsupported_language` |
 | zh-CN | `unsupported_language` | `unsupported_language` |
 
 `clipforge language doctor` prints this matrix. It also prints `full_source_runtime: not_configured`, `whop_live: not_configured`, and `publishing: deferred`.
 
-A fake aligner may be used in tests. Its document status is `available_not_smoked`. The model rejects `verified_live` when the provider id is `fake`.
+A fake aligner may be used in tests. Its document status is `available_not_smoked`. The model rejects `verified_live` when the provider id is `fake`. Arabic uses the Apache-2.0 `jonatasgrosman/wav2vec2-large-xlsr-53-arabic` checkpoint at the pinned revision recorded in the provider registry; a local model may align a selected clip as `available_not_smoked`, but it is not a `verified_live` language claim until a matching speech-evidence smoke is recorded.
 
 ## Alignment
 
@@ -59,6 +59,25 @@ Narration cache identity is the locale, script SHA-256, source SHA-256, transcri
 ## Captions
 
 Arabic layout is `rtl` and does not reverse characters, transliterate, or rewrite Arabic-Indic digits. Japanese layout wraps by Unicode character, does not insert spaces, and does not leave `。` or similar closing marks at the start of a line. Latin captions wrap on spaces and keep tokens such as `$12.50` intact. Plates use React text nodes. Advanced styles provide explicit safe margins (the clean defaults are 64px left/right, 120px top, and 300px bottom) and the renderer consumes those values. The clean recipe stages hashed local DejaVu, Noto CJK, and Noto Arabic fonts; their license evidence is [caption-fonts.md](caption-fonts.md). There is no `innerHTML`, remote font, or CDN request.
+
+Tarteel Quran caption correction is a separate display-text evidence path. A
+hashed official Quran.com Uthmani snapshot may replace ASR spellings while
+retaining the forced alignment intervals. `canonical_match_verified` permits
+the agreed green active-word display treatment, but does not mean pronunciation
+verified; human pronunciation review remains stronger evidence. Hashed campaign
+subtitle evidence may correct ordinary dialogue by exact forced-word id. The
+snapshot, subtitle evidence, and source/transcript hashes are checked offline;
+rendering never fetches canonical text.
+
+Forced caption words may carry an explicit review status: `unverified`,
+`correct`, or `incorrect`. An active reviewed-correct word is green and returns
+to white after its interval; a reviewed-incorrect word stays red. Unverified
+words receive only the style accent while active and never claim correctness.
+Arabic words are split only at word boundaries when this status data is
+present; characters are never manually reversed or split into independent
+glyphs. Rough Preview remains phrase-only because its ASR timing is
+provisional; word-by-word motion is only emitted from the forced selected-clip
+alignment used by Hero and Advanced Hero.
 
 ## Board
 

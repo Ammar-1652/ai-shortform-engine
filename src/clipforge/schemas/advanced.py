@@ -13,6 +13,7 @@ from typing import Any, Literal, Protocol, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
+from clipforge.schemas.campaign import CampaignOverlaySpec
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.direction import MotionStyleSpec, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
@@ -79,6 +80,8 @@ class CaptionWordTiming(Versioned):
     output_end_us: Microseconds
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
+    verification_status: Literal["unverified", "correct", "incorrect"] = "unverified"
+    source_word_ids: list[EntityId] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def interval_is_positive(self) -> Self:
@@ -99,8 +102,9 @@ class TypographyEvent(Versioned):
     text: str = Field(min_length=1, max_length=80)
     x: int = Field(ge=_SAFE_X, le=_FRAME_W - _SAFE_X)
     y: int = Field(ge=_SAFE_Y, le=_FRAME_H - _SAFE_Y)
-    font_size: int = Field(ge=24, le=96)
+    font_size: int = Field(ge=24, le=160)
     color: Literal["#ffffff"] = "#ffffff"
+    emoji: Literal["📖", "💡", "🎯", "✨", "⚡", "🧠", "✅", "🔎", "🕌"] | None = None
     words: list[CaptionWordTiming] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -111,6 +115,8 @@ class TypographyEvent(Versioned):
             raise ValueError("typography extends below the safe area")
         if self.component_id.startswith("caption-") and not self.words:
             raise ValueError("advanced captions require forced word timing")
+        if self.component_id == "context-line-v1" and self.emoji is None:
+            raise ValueError("context-line-v1 requires an allowlisted emoji")
         for word in self.words:
             if word.output_start_us < self.interval.output_start_us:
                 raise ValueError("caption word starts before its cue")
@@ -377,6 +383,8 @@ class AdvancedHeroRenderInput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
@@ -384,6 +392,7 @@ class AdvancedHeroRenderInput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
+    campaign_overlay: CampaignOverlaySpec | None = None
     language: str = "en-US"
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
@@ -418,6 +427,15 @@ class AdvancedHeroRenderInput(Versioned):
             lowered = name.lower()
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
                 raise ValueError("advanced asset name must be a staging file name")
+        if self.campaign_overlay is not None:
+            names = [self.campaign_overlay.watermark_asset_name]
+            if self.campaign_overlay.cta_render_mode == "alpha_video_v1":
+                names.append(self.campaign_overlay.cta_asset_name)
+            elif self.campaign_overlay.cta_frame_prefix is not None:
+                names.append(self.campaign_overlay.cta_frame_prefix)
+            for name in names:
+                if name not in self.asset_names.values():
+                    raise ValueError("campaign overlay asset is not present in staged asset_names")
         return self
 
 
@@ -438,6 +456,8 @@ class AdvancedHeroDraftOutput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
@@ -495,6 +515,8 @@ class AdvancedHeroPlanDocument(Versioned):
     time_map_sha256: str = Field(pattern=_SHA)
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    quran_review_id: str = Field(default="", max_length=128)
+    quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     profile_fingerprint: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -515,6 +537,7 @@ class AdvancedHeroPlanDocument(Versioned):
     broll: list[BrollEvent] = Field(default_factory=list)
     sfx: list[AudioMixEvent] = Field(default_factory=list)
     assets: list[AssetBinding] = Field(default_factory=list)
+    campaign_overlay: CampaignOverlaySpec | None = None
     qa_requirements: list[str] = Field(min_length=1)
     provenance: ArtifactProvenance
 

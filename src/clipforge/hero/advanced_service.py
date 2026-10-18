@@ -15,9 +15,25 @@ from typing import TypeVar, cast
 from pydantic import ValidationError
 
 from clipforge import __version__
+from clipforge.campaign.overlays import (
+    TARTEEL_PROFILE_ID,
+    measure_tarteel_overlay_sizing,
+    stage_tarteel_overlay,
+)
+from clipforge.campaign.quran import (
+    canonicalize_quran_alignment,
+    load_tarteel_quran_review,
+    quran_review_for_alignment,
+)
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
-from clipforge.hero.advanced_build import _face_follow_windows, _transitions, build_advanced_plan
+from clipforge.hero.advanced_build import (
+    _captions,
+    _effective_transition_style,
+    _face_follow_windows,
+    _transitions,
+    build_advanced_plan,
+)
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.direction_service import load_direction
 from clipforge.hero.editorial_arc import (
@@ -69,6 +85,7 @@ from clipforge.schemas.advanced import (
     advanced_fingerprint,
 )
 from clipforge.schemas.arc import EditorialArcDocument
+from clipforge.schemas.campaign import QuranCaptionReview
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
@@ -239,6 +256,20 @@ def plan_advanced_candidate(
         root,
         require_hero_approval=not allow_unapproved,
     )
+    # Campaign duration and editorial structure are planning gates, not a
+    # late delivery warning.  Without this check an old short candidate can
+    # be promoted into Advanced Hero and the policy layer only discovers the
+    # problem after assets and sidecars have been staged.  Tarteel needs one
+    # coherent hook/body/punch arc; it must be supplied as a reviewed,
+    # source-bound EditorialArcDocument before any plan is written.
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        project = get_project(connection, context.project_id)
+    if project.profile_id == TARTEEL_PROFILE_ID and editorial_arc is None:
+        raise MediaError(
+            "Tarteel Advanced Hero requires a reviewed hook/body/punch editorial arc before planning"
+        )
     stored_direction = direction
     direction_sha256 = ""
     if stored_direction is None:
@@ -270,6 +301,41 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+        if project.profile_id == TARTEEL_PROFILE_ID:
+            selected_option = next(
+                item
+                for item in stored_direction.options
+                if item.option_id == stored_direction.selected_option_id
+            )
+            context_line = selected_option.context_line
+            if context_line is None or context_line.copy_mode != "human_reviewed_summary":
+                raise MediaError("Tarteel requires a human-reviewed, source-grounded upper context summary")
+            normalized_context = context_line.text.replace(" ", "")
+            if "؟" not in context_line.text or not any(
+                term in normalized_context for term in ("آية", "ايه", "يكمل", "تختفي", "حفظ", "قرآن", "ترتيل")
+            ):
+                raise MediaError(
+                    "Tarteel upper context summary must be a meaningful question about the reviewed challenge"
+                )
+    quran_review_id = ""
+    quran_review_sha256 = ""
+    quran_review: QuranCaptionReview | None = None
+    if project.profile_id == TARTEEL_PROFILE_ID:
+        if stored_direction is None or stored_direction.style_id not in {
+            "quran-editorial-v1",
+            "quran-readable-v2",
+        }:
+            raise MediaError("Tarteel Advanced Hero requires a versioned Quran caption style")
+        quran_review, quran_review_sha256, _quran_review_path = load_tarteel_quran_review(
+            root,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            source_sha256=context.source_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+        )
+        quran_review_id = f"quran-{quran_review_sha256[:24]}"
+        if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
+            raise MediaError("Tarteel Quran review must bind the local Amiri Quran font")
     render_alignment = context.alignment
     render_hero_plan = context.hero_plan
     render_direction = stored_direction
@@ -305,6 +371,13 @@ def plan_advanced_candidate(
                 context.hero_plan.edit_plan.time_map,
                 editorial_arc.time_map,
             )
+    render_quran_review = quran_review
+    if quran_review is not None:
+        render_quran_review = quran_review_for_alignment(
+            quran_review,
+            source_alignment=context.alignment,
+            target_alignment=render_alignment,
+        )
     directed_broll_ids: list[str] = []
     directed_sfx_ids: list[str] = []
     if stored_direction is not None:
@@ -321,6 +394,11 @@ def plan_advanced_candidate(
             raise MediaError("SFX ids must match the selected direction placements")
     actor = _actor(created_by)
     effective_duration_us = render_hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
+    if project.profile_id == TARTEEL_PROFILE_ID and not 25_000_000 <= effective_duration_us <= 55_000_000:
+        raise MediaError(
+            "Tarteel Advanced Hero duration must be between 25 and 55 seconds; "
+            "select a longer coherent candidate instead of repeating footage"
+        )
     # Build the plan before publishing sidecars so validation errors leave no
     # claim of a usable render.  The effective alignment hash for an arc is
     # replaced below with the hash of the immutable advanced alignment file;
@@ -359,7 +437,10 @@ def plan_advanced_candidate(
         direction_sha256=direction_sha256,
         editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
-        cut_transition_style="none" if editorial_arc is None else editorial_arc.transition_style,
+        quran_review_id=quran_review_id,
+        quran_review_sha256=quran_review_sha256,
+        quran_review=render_quran_review,
+        cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
     review_only = allow_unapproved
@@ -850,12 +931,59 @@ def _render_run(
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
         staged = {item.asset_id: _staged_name(item) for item in plan.assets}
+        campaign_overlay = plan.campaign_overlay
         if narration is not None:
             _link(narration[1], staging / "narration.wav", root)
             staged["narration"] = "narration.wav"
         for binding in plan.assets:
             catalog_file = _asset_path(workspace, binding.asset_id, root)
             _link(catalog_file, staging / staged[binding.asset_id], root)
+        if campaign_overlay is not None:
+            sizing = measure_tarteel_overlay_sizing(
+                source_proxy_path=inputs.proxy_path,
+                source_start_us=min(segment.source_start_us for segment in plan.time_map.segments)
+                if plan.time_map is not None
+                else 0,
+                source_end_us=max(segment.source_end_us for segment in plan.time_map.segments)
+                if plan.time_map is not None
+                else inputs.pair.manifest.canonical_duration_us,
+                source_proxy_sha256=inputs.proxy_sha256,
+                staging_dir=staging,
+                log_path=run_dir / "logs" / f"{candidate_id}.branding.log",
+            )
+            staged_overlay = stage_tarteel_overlay(
+                database=database,
+                workspace=workspace,
+                project_id=hero.project_id,
+                work_root=root,
+                staging_dir=staging,
+                duration_us=_output_end_us(plan),
+                cta_start_us=campaign_overlay.cta_start_us,
+                cta_asset_id=campaign_overlay.cta_asset_id,
+                watermark_asset_id=campaign_overlay.watermark_asset_id,
+                caption_intervals=[
+                    (item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
+                ],
+                face_boxes=[
+                    (
+                        sample.bounding_box.x,
+                        sample.bounding_box.y,
+                        sample.bounding_box.width,
+                        sample.bounding_box.height,
+                    )
+                    for sample in inputs.pair.visual.face_detection_samples
+                ],
+                source_logo_visible=sizing.source_logo_visible,
+                sizing=sizing,
+            )
+            if (
+                staged_overlay.spec.cta_asset_id != campaign_overlay.cta_asset_id
+                or staged_overlay.spec.watermark_asset_id != campaign_overlay.watermark_asset_id
+            ):
+                raise MediaError("Tarteel overlay staging did not preserve the reviewed asset bindings")
+            staged[campaign_overlay.cta_asset_id] = staged_overlay.spec.cta_asset_name
+            staged[campaign_overlay.watermark_asset_id] = staged_overlay.spec.watermark_asset_name
+            campaign_overlay = staged_overlay.spec
         selected_style = (
             style_for_id(plan.style_id)
             if plan.style_id != "legacy-v1"
@@ -876,12 +1004,15 @@ def _render_run(
             direction_sha256=plan.direction_sha256,
             editorial_arc_id=plan.editorial_arc_id,
             editorial_arc_sha256=plan.editorial_arc_sha256,
+            quran_review_id=plan.quran_review_id,
+            quran_review_sha256=plan.quran_review_sha256,
             safe_region_id=plan.safe_region_id,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
             hero_review_status=plan.hero_review_status,
             language=_alignment_locale(workspace, plan, review_only=review_only),
+            campaign_overlay=campaign_overlay,
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
@@ -1577,7 +1708,7 @@ def _require_plan_binding(
     if plan.time_map is not None and digest_time_map(plan.time_map) != plan.time_map_sha256:
         raise MediaError("advanced plan is stale: TimeMap digest does not match stored map")
     arc_alignment: ForcedAlignmentDocument | None = None
-    expected_transition_style = "none"
+    expected_transition_style = ""
     review_only = plan.hero_review_status == "pending"
     if plan.editorial_arc_id:
         arc_path = _advanced_arc_path(context.workspace, plan.candidate_id, review_only=review_only)
@@ -1622,6 +1753,28 @@ def _require_plan_binding(
             )
             if evidence.status != "verified_live":
                 raise MediaError(evidence.blocker or evidence.status)
+    if plan.quran_review_id or plan.campaign_overlay is not None:
+        review, review_sha, _ = load_tarteel_quran_review(
+            context.workspace.root,
+            source_asset_id=plan.source_asset_id,
+            candidate_id=plan.candidate_id,
+            source_sha256=context.source_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+        )
+        if plan.quran_review_sha256 != review_sha or plan.quran_review_id != f"quran-{review_sha[:24]}":
+            raise MediaError("advanced plan is stale: Quran display-text evidence changed")
+        render_review = quran_review_for_alignment(
+            review,
+            source_alignment=context.alignment,
+            target_alignment=arc_alignment or context.alignment,
+        )
+        expected_captions = _captions(
+            canonicalize_quran_alignment(arc_alignment or context.alignment, render_review),
+            plan.candidate_id,
+            style_id=plan.style_id,
+        )
+        if plan.captions != expected_captions:
+            raise MediaError("advanced plan is stale: Quran captions differ from canonical evidence")
     if plan.direction_id:
         loaded_direction = load_direction(
             context.workspace,
@@ -1651,6 +1804,10 @@ def _require_plan_binding(
                 context.hero_plan.edit_plan.time_map,
                 {scene.scene_id for scene in context.visual.scenes},
             )
+        if not plan.editorial_arc_id:
+            expected_transition_style = _effective_transition_style("", True)
+    elif not plan.editorial_arc_id:
+        expected_transition_style = _effective_transition_style("", False)
     checks = (
         (plan.source_sha256 != context.source_sha256, "source"),
         (plan.candidate_set_artifact_id != context.candidate_set_artifact_id, "candidate set"),
@@ -2322,6 +2479,7 @@ def _review_draft(
             "x": item.x,
             "y": item.y,
             "font_size": item.font_size,
+            "emoji": item.emoji,
             "style_id": "advanced-typography-v1",
         }
         for item in plan.typography

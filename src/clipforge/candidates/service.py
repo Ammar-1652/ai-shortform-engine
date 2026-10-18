@@ -83,6 +83,24 @@ def default_profile() -> CandidateMiningProfile:
     return _PROFILE
 
 
+def profile_for_project(
+    profile: CandidateMiningProfile,
+    project_profile_id: str | None,
+) -> CandidateMiningProfile:
+    """Apply campaign duration intent without changing generic mining defaults."""
+    if project_profile_id != "profile-tarteel-campaign":
+        return profile
+    return profile.model_copy(
+        update={
+            "hard_min_duration_us": 25_000_000,
+            "preferred_min_duration_us": 40_000_000,
+            "preferred_max_duration_us": 45_000_000,
+            "hard_max_duration_us": 55_000_000,
+            "boundary_padding_us": 120_000,
+        }
+    )
+
+
 def mine_source(
     *,
     database: Database,
@@ -96,6 +114,16 @@ def mine_source(
     root = work_root.resolve()
     active = profile or default_profile()
     pair = load_evidence_pair(database, source_asset_id, root)
+    if profile is None:
+        with database.connect() as connection:
+            from clipforge.storage import get_project
+
+            project = get_project(connection, pair.source.project_id)
+        # Tarteel edits need enough uninterrupted context for a real
+        # hook/body/punch arc. Keep the generic miner unchanged for other
+        # projects, while making this campaign's duration intent part of its
+        # cache fingerprint and candidate evidence.
+        active = profile_for_project(active, project.profile_id)
     _validate_candidate_workspace(pair.workspace)
     actor = created_by.strip()[:200] if created_by and created_by.strip() else _actor()
     started = perf_counter()

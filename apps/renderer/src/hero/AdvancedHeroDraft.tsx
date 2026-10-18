@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
+import { AbsoluteFill, Audio, Img, interpolate, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
 import type { CSSProperties } from "react";
 
 import { CaptionPlate } from "../captions/CaptionPlate.js";
@@ -23,6 +23,7 @@ type TypeEvent = {
   y?: number;
   font_size?: number;
   color?: string;
+  emoji?: "📖" | "💡" | "🎯" | "✨" | "⚡" | "🧠" | "✅" | "🔎" | "🕌";
   words?: readonly {
     word_id?: string;
     text?: string;
@@ -30,6 +31,7 @@ type TypeEvent = {
     output_end_us?: number;
     output_start_frame?: number;
     output_end_frame_exclusive?: number;
+      verification_status?: "unverified" | "correct" | "incorrect";
   }[];
 };
 
@@ -109,12 +111,44 @@ type MotionStyle = {
   accent?: string;
 };
 
+type CampaignOverlaySpec = {
+  campaign_id: "tarteel";
+  cta_asset_id: string;
+  cta_asset_sha256: string;
+  cta_asset_name: string;
+  cta_background_removal: "chroma_key_v1";
+  cta_render_mode: "alpha_video_v1" | "alpha_png_sequence_v1";
+  cta_frame_prefix?: string;
+  cta_frame_count?: number;
+  cta_frame_rate: 30;
+  cta_position: "foreground_attention_v1" | "top_left_brand_rail_v1";
+  overlay_coordinate_space: "foreground_v1" | "canvas_v1";
+  cta_clearance: "faces_and_captions_clear_v1";
+  cta_left_permille: number;
+  cta_top_permille: number;
+  cta_width_permille: number;
+  cta_start_us: number;
+  cta_end_us: number;
+  watermark_asset_id: string;
+  watermark_asset_sha256: string;
+  watermark_asset_name: string;
+  watermark_mode: "alpha_v1";
+  watermark_position: "foreground_top_right_v1" | "top_right";
+  watermark_visibility: "overlay_required_v1" | "source_visible_v1";
+  watermark_width_permille: number;
+  sizing_method: "source_frame_scan_v1" | "legacy_fixed_v1";
+  sizing_measurement_sha256: string;
+  first_post_caption_line: "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic";
+};
+
 export type AdvancedHeroInput = {
   renderer_recipe_version?: "advanced-hero-renderer-v1" | "advanced-hero-renderer-clean-v1" | "advanced-hero-renderer-directed-v2" | "advanced-hero-renderer-directed-v3" | "advanced-hero-renderer-directed-v4";
   duration_in_frames: number;
   style_id?:
     | "legacy-v1"
     | "editorial-clean-v1"
+    | "quran-editorial-v1"
+    | "quran-readable-v2"
     | "concat-editorial-v1"
     | "kinetic-caption-v1"
     | "documentary-broll-v1"
@@ -124,6 +158,8 @@ export type AdvancedHeroInput = {
   style_fingerprint?: string;
   direction_id?: string;
   direction_sha256?: string;
+  quran_review_id?: string;
+  quran_review_sha256?: string;
   profile_fingerprint?: string;
   alignment_sha256?: string;
   hero_plan_sha256?: string;
@@ -135,6 +171,7 @@ export type AdvancedHeroInput = {
   reframing_strategy?: string;
   base_video_name?: string;
   speech_name?: string;
+  campaign_overlay?: CampaignOverlaySpec;
   captions?: TypeEvent[];
   typography?: TypeEvent[];
   diagrams?: DiagramEvent[];
@@ -251,6 +288,8 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const style = input.style_id ?? "legacy-v1";
   const productionStyles = new Set([
     "editorial-clean-v1",
+    "quran-editorial-v1",
+    "quran-readable-v2",
     "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
@@ -303,6 +342,25 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         throw new Error("production SFX requires source evidence, purpose, and relevance");
       }
     }
+    const contextLines = (input.typography ?? []).filter((event) => event.component_id === "context-line-v1");
+    if ((style === "quran-editorial-v1" || style === "quran-readable-v2") && contextLines.length !== 1) {
+      throw new Error("quran-editorial-v1 requires exactly one upper context line");
+    }
+    for (const line of contextLines) {
+      if (!line.emoji || !line.text?.trim() || /[\r\n]/u.test(line.text)) {
+        throw new Error("context line requires one non-empty line and an allowlisted emoji");
+      }
+      const largeContext = style === "quran-readable-v2";
+      if ((line.y ?? 120) < 120 || (line.y ?? 120) > (largeContext ? 360 : 260) || (line.font_size ?? 48) > (largeContext ? 96 : 60)) {
+        throw new Error("context line must stay in the upper blur safe lane");
+      }
+      const metrics = document.createElement("canvas").getContext("2d");
+      if (!metrics) throw new Error("context line font metrics unavailable");
+      metrics.font = `700 ${line.font_size ?? 48}px ${captionFontFamily(motionStyle?.font_identity, "typography")}`;
+      if (metrics.measureText(`${line.emoji} ${line.text}`).width + 36 > 936) {
+        throw new Error("context line does not fit on one line in the upper safe lane");
+      }
+    }
   }
   if (input.motion_style && input.motion_style.style_id !== style) {
     throw new Error("motion style payload does not match style_id");
@@ -319,6 +377,29 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     throw new Error(`advanced render does not support reframing strategy ${String(strategy)}`);
   }
   const names = input.asset_names ?? {};
+  if (input.campaign_overlay) {
+    if (input.campaign_overlay.sizing_method !== "source_frame_scan_v1" || !/^[0-9a-f]{64}$/.test(input.campaign_overlay.sizing_measurement_sha256)) {
+      throw new Error("Tarteel campaign overlay requires source-measured sizing evidence");
+    }
+    if ((style !== "quran-editorial-v1" && style !== "quran-readable-v2") || !input.quran_review_id || !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "")) {
+      throw new Error("Tarteel production requires reviewed Quran captions and quran-editorial-v1");
+    }
+    if (
+      input.campaign_overlay.campaign_id !== "tarteel" ||
+      input.campaign_overlay.cta_background_removal !== "chroma_key_v1" ||
+      (input.campaign_overlay.cta_render_mode !== "alpha_video_v1" && input.campaign_overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
+      (input.campaign_overlay.cta_position !== "foreground_attention_v1" && input.campaign_overlay.cta_position !== "top_left_brand_rail_v1") ||
+      input.campaign_overlay.overlay_coordinate_space !== "foreground_v1" ||
+      input.campaign_overlay.watermark_mode !== "alpha_v1" ||
+      input.campaign_overlay.sizing_method !== "source_frame_scan_v1" ||
+      !/^[0-9a-f]{64}$/.test(input.campaign_overlay.sizing_measurement_sha256) ||
+      (input.campaign_overlay.watermark_position !== "foreground_top_right_v1" && input.campaign_overlay.watermark_position !== "top_right") ||
+      names[input.campaign_overlay.cta_asset_id] !== (input.campaign_overlay.cta_render_mode === "alpha_video_v1" ? input.campaign_overlay.cta_asset_name : input.campaign_overlay.cta_frame_prefix) ||
+      names[input.campaign_overlay.watermark_asset_id] !== input.campaign_overlay.watermark_asset_name
+    ) {
+      throw new Error("invalid Tarteel campaign overlay binding");
+    }
+  }
   const captions = input.captions ?? [];
   const typography = input.typography ?? [];
   const visibleType = typography.filter(
@@ -367,6 +448,16 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const containBox = sourceWindow
     ? containRect(sourceWindow.frame_width, sourceWindow.frame_height, 1080, 1920)
     : containRect(1080, 1920, 1080, 1920);
+  // Directed contain layouts use a restrained foreground push-in so the
+  // source remains readable without returning to the old black-bar frame.
+  // Campaign overlays use the measured 1.08 scale; the no-overlay path still
+  // gets a smaller 1.04 scale, and legacy recipes remain byte-compatible.
+  const campaignForegroundTransform = legacyGeometry
+    ? {}
+    : {
+        transform: `scale(${input.campaign_overlay ? 1.08 : 1.04})`,
+        transformOrigin: "center center",
+      };
   const followed =
     strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
       ? placedVideo(windowAt(frame, input.windows ?? []))
@@ -386,7 +477,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             <AbsoluteFill style={sourceWindow ? { width: "100%", aspectRatio: `${sourceWindow.frame_width} / ${sourceWindow.frame_height}`, top: "50%", transform: "translateY(-50%)" } : { inset: 0 }}>
               <Video src={staticFile(picture)} durationInFrames={input.duration_in_frames} muted style={{ width: "100%", height: "100%", objectFit: "fill" }} />
             </AbsoluteFill>
-          ) : <div style={{ position: "absolute", ...containBox }}>
+          ) : <div style={{ position: "absolute", ...containBox, ...campaignForegroundTransform }}>
             <Video
               src={staticFile(picture)}
               durationInFrames={input.duration_in_frames}
@@ -410,6 +501,42 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         durationInFrames={input.duration_in_frames}
         volume={linearVolume(input.source_gain_db ?? 0)}
       />
+      {input.campaign_overlay ? (
+        <div
+          style={
+            followed === null && !legacyGeometry
+              ? { position: "absolute", ...containBox, ...campaignForegroundTransform, overflow: "hidden" }
+              : { position: "absolute", inset: 0, overflow: "hidden" }
+          }
+        >
+          {input.campaign_overlay.watermark_visibility === "source_visible_v1" ? null : (
+            <Img
+              src={staticFile(input.campaign_overlay.watermark_asset_name)}
+              style={{
+                position: "absolute",
+                top: 18,
+                right: 18,
+                width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+                height: "auto",
+                objectFit: "contain",
+                filter: "drop-shadow(0 4px 9px rgba(0,0,0,.6))",
+              }}
+            />
+          )}
+          <Sequence
+            from={frameAt(input.campaign_overlay.cta_start_us)}
+            durationInFrames={Math.max(
+              1,
+              Math.ceil(((input.campaign_overlay.cta_end_us - input.campaign_overlay.cta_start_us) * 30) / 1_000_000),
+            )}
+          >
+            <CampaignCta
+              overlay={input.campaign_overlay}
+              localFrame={frame - frameAt(input.campaign_overlay.cta_start_us)}
+            />
+          </Sequence>
+        </div>
+      ) : null}
       {names.narration && /^[A-Za-z0-9._-]{1,80}$/.test(names.narration) ? (
         <Audio
           src={staticFile(names.narration)}
@@ -554,13 +681,22 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           const activeWord =
             style !== "legacy-v1" &&
             motionStyle?.caption_mode === "phrase_active_word" &&
-            !language.startsWith("ar") &&
-            !language.startsWith("ja")
+            Boolean(item.words?.length)
               ? item.words?.find(
                   (word) =>
                     frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
                     frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
                 )?.text
+              : undefined;
+          const activeWordRecord =
+            style !== "legacy-v1" &&
+            motionStyle?.caption_mode === "phrase_active_word" &&
+            Boolean(item.words?.length)
+              ? item.words?.find(
+                  (word) =>
+                    frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
+                    frame < Number(word.output_end_frame_exclusive ?? frameAtOrAfter(word.output_end_us)),
+                )
               : undefined;
           return (
             <AbsoluteFill
@@ -572,6 +708,12 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 language={item.language || language}
                 variant="body"
                 emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
+                emphasisStatus={activeWordRecord?.verification_status}
+                activeWordId={activeWordRecord?.word_id}
+                centeredLarge={style === "quran-readable-v2"}
+                fontSize={style === "quran-readable-v2" ? item.font_size : undefined}
+                y={style === "quran-readable-v2" ? item.y : undefined}
+                wordStatuses={item.words}
                 style={modernLayout ? motionStyle : undefined}
                 layoutVersion={modernLayout ? "caption-layout-v2" : "caption-layout-v1"}
               />
@@ -592,6 +734,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         );
         const isHook = item.component_id === "hook-card-v1";
         const isPunch = item.component_id === "punch-card-v1";
+        const isContext = item.component_id === "context-line-v1";
         const left = item.x ?? 72;
         const top = item.y ?? (isHook ? 220 : isPunch ? 1450 : 360);
         const accent = motionStyle?.accent ?? "#ffcf4a";
@@ -600,7 +743,34 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             key={`${item.component_id ?? "type"}-${item.event_id ?? ""}-${item.text}`}
             style={{ pointerEvents: "none", ...motionFor(frame, item.interval, motionStyle) }}
           >
-            {duplicatesCaption || duplicatesNativeText ? (
+            {isContext ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left,
+                  top,
+                  width: 936,
+                  color: "#ffffff",
+                  fontFamily: captionFontFamily(motionStyle?.font_identity, "typography"),
+                  fontWeight: 700,
+                  fontSize: item.font_size ?? 48,
+                  lineHeight: 1.12,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "clip",
+                  textAlign: style === "quran-readable-v2" ? "center" : language.startsWith("ar") ? "right" : "left",
+                  textShadow: "0 3px 12px rgba(0,0,0,0.72)",
+                  background: "linear-gradient(90deg, rgba(7,10,18,0.78), rgba(7,10,18,0.22), transparent)",
+                  padding: "12px 18px",
+                  borderLeft: `5px solid ${accent}`,
+                  borderRadius: 10,
+                  boxSizing: "border-box",
+                }}
+              >
+                <span aria-hidden="true">{item.emoji} </span>{item.text}
+              </div>
+            ) : null}
+            {!isContext && (duplicatesCaption || duplicatesNativeText) ? (
               <div
                 style={{
                   position: "absolute",
@@ -627,7 +797,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
                 />
               </div>
             ) : null}
-            {!duplicatesCaption && !duplicatesNativeText ? (
+            {!isContext && !duplicatesCaption && !duplicatesNativeText ? (
               <CaptionPlate
                 text={item.text ?? ""}
                 language={item.language || language}
@@ -681,5 +851,51 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         />
       </AbsoluteFill> : null}
     </AbsoluteFill>
+  );
+}
+
+function CampaignCta({
+  overlay,
+  localFrame,
+}: {
+  overlay: NonNullable<AdvancedHeroInput["campaign_overlay"]>;
+  localFrame: number;
+}) {
+  const placement = {
+    position: "absolute" as const,
+    left: `${overlay.cta_left_permille / 10}%`,
+    top: `${overlay.cta_top_permille / 10}%`,
+    width: `${overlay.cta_width_permille / 10}%`,
+    height: "auto",
+    objectFit: "contain" as const,
+    zIndex: 12,
+  };
+  if (overlay.cta_render_mode === "alpha_video_v1") {
+    const durationInFrames = Math.max(
+      1,
+      Math.ceil(((overlay.cta_end_us - overlay.cta_start_us) * 30) / 1_000_000),
+    );
+    return (
+      <Video
+        src={staticFile(overlay.cta_asset_name)}
+        trimBefore={0}
+        durationInFrames={durationInFrames}
+        muted
+        style={placement}
+      />
+    );
+  }
+  if (overlay.cta_frame_prefix === undefined || overlay.cta_frame_count === undefined) {
+    throw new Error("PNG CTA overlay is missing its frame sequence");
+  }
+  const index = Math.min(overlay.cta_frame_count - 1, Math.max(0, localFrame));
+  const name = `${overlay.cta_frame_prefix}-${String(index + 1).padStart(4, "0")}.png`;
+  return (
+    <Img
+      src={staticFile(name)}
+      style={{
+        ...placement,
+      }}
+    />
   );
 }

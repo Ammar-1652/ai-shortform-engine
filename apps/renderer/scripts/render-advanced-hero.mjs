@@ -74,9 +74,49 @@ for (const item of batch.items) {
   if (input.debug_overlays === true) {
     throw new Error("production advanced render rejects debug overlays");
   }
+  if (input.campaign_overlay) {
+    const overlay = input.campaign_overlay;
+    if (
+      overlay.campaign_id !== "tarteel" ||
+      !["quran-editorial-v1", "quran-readable-v2"].includes(input.style_id) ||
+      typeof input.quran_review_id !== "string" ||
+      !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "") ||
+      overlay.cta_background_removal !== "chroma_key_v1" ||
+      (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
+      overlay.cta_frame_rate !== 30 ||
+      overlay.cta_position !== "foreground_attention_v1" ||
+      overlay.overlay_coordinate_space !== "foreground_v1" ||
+      overlay.cta_clearance !== "faces_and_captions_clear_v1" ||
+      overlay.sizing_method !== "source_frame_scan_v1" ||
+      !/^[0-9a-f]{64}$/.test(overlay.sizing_measurement_sha256 ?? "") ||
+      !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 80 || overlay.cta_width_permille > 600 ||
+      overlay.watermark_mode !== "alpha_v1" ||
+      overlay.watermark_position !== "foreground_top_right_v1" && overlay.watermark_position !== "top_right" ||
+      typeof overlay.cta_asset_name !== "string" ||
+      typeof overlay.watermark_asset_name !== "string" ||
+      !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_asset_name) ||
+      !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.watermark_asset_name) ||
+      !/^[0-9a-f]{64}$/.test(overlay.cta_asset_sha256) ||
+      !/^[0-9a-f]{64}$/.test(overlay.watermark_asset_sha256) ||
+      overlay.cta_end_us <= overlay.cta_start_us ||
+      overlay.cta_end_us > input.output_duration_us
+    ) {
+      throw new Error("invalid Tarteel campaign overlay contract");
+    }
+    const names = new Set(Object.values(input.asset_names ?? {}));
+    const ctaName = overlay.cta_render_mode === "alpha_video_v1" ? overlay.cta_asset_name : overlay.cta_frame_prefix;
+    if (!names.has(ctaName) || !names.has(overlay.watermark_asset_name)) {
+      throw new Error("campaign overlay files are not staged");
+    }
+    if (overlay.cta_render_mode === "alpha_png_sequence_v1" && (!/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_frame_prefix) || !Number.isInteger(overlay.cta_frame_count) || overlay.cta_frame_count < 1 || overlay.cta_frame_count > 600)) {
+      throw new Error("campaign overlay CTA frame sequence is invalid");
+    }
+  }
   const productionStyles = new Set([
     "editorial-clean-v1",
     "concat-editorial-v1",
+    "quran-editorial-v1",
+    "quran-readable-v2",
     "kinetic-caption-v1",
     "documentary-broll-v1",
     "data-explainer-v1",

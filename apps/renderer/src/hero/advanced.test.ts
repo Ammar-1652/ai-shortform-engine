@@ -30,6 +30,7 @@ describe("advanced hero composition", () => {
     expect(source).toContain("punch-card-v1");
     expect(source).toContain("activeEmphasis");
     expect(source).toContain("editorial-clean-v1");
+    expect(source).toContain("quran-editorial-v1");
     expect(source).toContain("concat-editorial-v1");
     expect(source).toContain("output_start_frame");
     expect(source).toContain("unsupported production diagram kind");
@@ -42,10 +43,19 @@ describe("advanced hero composition", () => {
     expect(source).toContain("source_native_text");
     expect(source).toContain("duplicatesNativeText");
     expect(source).toContain("complete caption style dependencies");
+    expect(source).toContain("exactly one upper context line");
+    expect(source).toContain("context-line-v1");
+    expect(source).toContain("allowlisted emoji");
+    expect(source).toContain("does not fit on one line");
     expect(source).toContain("concat_push_v1");
     expect(source).toContain("concat_blur_dissolve_v1");
     expect(source).toContain("useCurrentFrame");
     expect(source).not.toContain("top: 1720");
+    const rendererEntrypoint = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../../scripts/render-advanced-hero.mjs"),
+      "utf8",
+    );
+    expect(rendererEntrypoint).toContain('"quran-editorial-v1"');
     const captionPlate = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../captions/CaptionPlate.tsx"), "utf8");
     expect(captionPlate).toContain("hook || punch || typography");
     expect(captionPlate).toContain("whole shaped runs");

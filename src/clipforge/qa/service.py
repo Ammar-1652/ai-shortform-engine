@@ -441,6 +441,7 @@ def _campaign_checks(prepared: _Prepared) -> list[QACheck]:
         plans=prepared.plans,
         work_root=prepared.root,
         workspace=prepared.workspace,
+        profile_id=prepared.resolution.profile_id,
     )
     checks: list[QACheck] = []
     for policy in prepared.resolution.policies:

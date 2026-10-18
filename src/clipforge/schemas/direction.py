@@ -20,6 +20,8 @@ _SHA = r"^[0-9a-f]{64}$"
 
 DirectionStyleId = Literal[
     "editorial-clean-v1",
+    "quran-editorial-v1",
+    "quran-readable-v2",
     "concat-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
@@ -96,6 +98,35 @@ class DirectionBeat(Versioned):
             and self.output_end_us <= self.output_start_us
         ):
             raise ValueError("direction beat output interval must be positive")
+        return self
+
+
+class DirectionContextLine(Versioned):
+    """One reviewed, single-line context label in the upper blur lane.
+
+    This is optional for non-campaign directions.  When supplied it is a
+    declarative editorial summary, never executable copy: the direction
+    validator binds it to transcript evidence and requires a review note when
+    the wording is not an exact transcript phrase.
+    """
+
+    context_id: EntityId
+    text: str = Field(min_length=1, max_length=64)
+    emoji: Literal["📖", "💡", "🎯", "✨", "⚡", "🧠", "✅", "🔎", "🕌"]
+    evidence_ids: list[EntityId] = Field(min_length=1)
+    interval: OutputInterval
+    copy_mode: Literal["exact_evidence", "human_reviewed_summary"] = "exact_evidence"
+    reviewed_by: str | None = Field(default=None, min_length=1, max_length=200)
+    review_note: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def is_one_line_and_reviewed(self) -> Self:
+        if "\n" in self.text or "\r" in self.text:
+            raise ValueError("context line must be one line")
+        if self.copy_mode == "human_reviewed_summary" and (not self.reviewed_by or not self.review_note):
+            raise ValueError("human-reviewed context summaries require reviewer and review note")
+        if self.copy_mode == "exact_evidence" and (self.reviewed_by or self.review_note):
+            raise ValueError("exact context lines cannot carry summary review metadata")
         return self
 
 
@@ -184,6 +215,7 @@ class DirectionOption(Versioned):
     evidence: list[DirectionEvidence] = Field(min_length=1)
     asset_placements: list[DirectionAssetPlacement] = Field(default_factory=list, max_length=12)
     motion_graphics: list[DirectionMotionGraphic] = Field(default_factory=list, max_length=4)
+    context_line: DirectionContextLine | None = None
     source_native_text: list[SourceNativeText] = Field(default_factory=list, max_length=8)
     source_native_text_status: Literal["reviewed_absent", "annotated", "unavailable"] = "unavailable"
     segment_order: list[EntityId] = Field(min_length=1)
@@ -230,6 +262,8 @@ class DirectionOption(Versioned):
             raise ValueError("annotated source-native text status requires annotations")
         if self.source_native_text_status == "reviewed_absent" and self.source_native_text:
             raise ValueError("reviewed_absent source-native text status cannot carry annotations")
+        if self.style_id in {"quran-editorial-v1", "quran-readable-v2"} and self.context_line is None:
+            raise ValueError("quran-editorial-v1 requires a reviewed upper context line")
         graphics = sorted(self.motion_graphics, key=lambda item: item.interval.output_start_us)
         if any(
             left.interval.output_end_us > right.interval.output_start_us for left, right in pairwise(graphics)

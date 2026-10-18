@@ -17,7 +17,13 @@ from clipforge.hero.advanced_backend import (
     FakeAdvancedRenderBackend,
     RemotionAdvancedRenderBackend,
 )
-from clipforge.hero.advanced_build import _broll, _directed_typography, _sfx, _typography
+from clipforge.hero.advanced_build import (
+    _broll,
+    _directed_typography,
+    _effective_transition_style,
+    _sfx,
+    _typography,
+)
 from clipforge.hero.advanced_service import (
     _require_production_direction,
     default_advanced_profile,
@@ -40,6 +46,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroProfile,
     AdvancedHeroRenderInput,
     AudioMixEvent,
+    CaptionWordTiming,
     DiagramEvent,
     DiagramPayload,
     ReframingStrategy,
@@ -80,6 +87,35 @@ def test_manual_portrait_crop_uses_largest_integer_9_by_16_window(
 def test_manual_portrait_crop_rejects_empty_frame() -> None:
     with pytest.raises(ClipforgeError, match="too small"):
         _portrait_crop_size(0, 720)
+
+
+def test_caption_word_verification_status_is_typed_and_default_unverified() -> None:
+    word = CaptionWordTiming(
+        word_id="word-1",
+        text="الإنسان",
+        output_start_us=0,
+        output_end_us=100_000,
+        output_start_frame=0,
+        output_end_frame_exclusive=3,
+    )
+    assert word.verification_status == "unverified"
+    assert word.model_copy(update={"verification_status": "correct"}).verification_status == "correct"
+
+
+def test_directed_recuts_default_to_a_soft_bridge_but_keep_explicit_hard_cuts() -> None:
+    assert _effective_transition_style("", True) == "concat_blur_dissolve_v1"
+    assert _effective_transition_style("", False) == "none"
+    assert _effective_transition_style("none", True) == "none"
+    with pytest.raises(ValidationError):
+        CaptionWordTiming(
+            word_id="word-2",
+            text="خطأ",
+            output_start_us=0,
+            output_end_us=100_000,
+            output_start_frame=0,
+            output_end_frame_exclusive=3,
+            verification_status="guess",
+        )
 
 
 def test_manual_crop_trajectory_is_typed_and_fingerprinted() -> None:
@@ -331,6 +367,42 @@ def test_direction_accent_tracks_stay_below_face_space_and_above_captions() -> N
     line_width = {"hook-card-v1": 620, "body-card-v1": 520, "punch-card-v1": 760}
     assert [event.x + line_width[event.component_id] // 2 for event in events] == [540, 540, 540]
     assert all(event.y >= 1_212 for event in events)
+
+
+def test_direction_context_line_is_serialized_in_upper_lane() -> None:
+    words = [
+        SimpleNamespace(word_id="word-0", output_start_us=0, output_end_us=1_000_000),
+        SimpleNamespace(word_id="word-1", output_start_us=1_000_000, output_end_us=2_000_000),
+        SimpleNamespace(word_id="word-2", output_start_us=2_000_000, output_end_us=3_000_000),
+    ]
+    evidence = [
+        SimpleNamespace(evidence_id=f"evidence-{kind}", source_word_ids=[f"word-{index}"])
+        for index, kind in enumerate(("hook", "body", "punch"))
+    ]
+    beats = [
+        SimpleNamespace(
+            beat_id=f"beat-{kind}",
+            kind=kind,
+            display_text=f"source phrase {kind}",
+            evidence_ids=[f"evidence-{kind}"],
+        )
+        for kind in ("hook", "body", "punch")
+    ]
+    context = SimpleNamespace(
+        context_id="context-1",
+        text="Why this lesson matters",
+        emoji="📖",
+        interval=OutputInterval(output_start_us=0, output_end_us=3_000_000),
+    )
+    direction = SimpleNamespace(
+        direction_id="direction",
+        selected_option_id="selected",
+        options=[SimpleNamespace(option_id="selected", beats=beats, evidence=evidence, context_line=context)],
+    )
+    events = _directed_typography(direction, SimpleNamespace(words=words), "candidate")
+    assert events[0].component_id == "context-line-v1"
+    assert events[0].y == 120
+    assert events[0].emoji == "📖"
 
 
 def test_clean_production_requires_direction_before_remotion() -> None:

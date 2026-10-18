@@ -9,6 +9,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+from clipforge.campaign.quran import canonicalize_quran_alignment
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
 from clipforge.hero.captions import hero_caption_pieces
@@ -33,6 +34,7 @@ from clipforge.schemas.advanced import (
     TypographyEvent,
     advanced_fingerprint,
 )
+from clipforge.schemas.campaign import QuranCaptionReview
 from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
@@ -87,7 +89,10 @@ def build_advanced_plan(
     direction_sha256: str = "",
     editorial_arc_id: str = "",
     editorial_arc_sha256: str = "",
-    cut_transition_style: str = "none",
+    quran_review_id: str = "",
+    quran_review_sha256: str = "",
+    quran_review: QuranCaptionReview | None = None,
+    cut_transition_style: str = "",
     allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
@@ -126,7 +131,10 @@ def build_advanced_plan(
         if cursor_us != duration_us:
             raise MediaError("manual crop windows must cover the complete output without gaps")
     emphasis = _emphasis(alignment, candidate_id)
-    captions = _captions(alignment, candidate_id)
+    caption_alignment = alignment
+    if quran_review is not None:
+        caption_alignment = canonicalize_quran_alignment(alignment, quran_review)
+    captions = _captions(caption_alignment, candidate_id, style_id=direction.style_id if direction else "")
     if direction is not None:
         typography = _directed_typography(direction, alignment, candidate_id)
         typography = _drop_caption_duplicates(typography, captions)
@@ -142,7 +150,13 @@ def build_advanced_plan(
     diagrams: list[DiagramEvent] = []
     motion_graphics = _motion_graphics(direction)
     source_native_text = _source_native_text(direction)
-    transitions = _transitions(candidate_id, hero_plan.edit_plan.time_map, duration_us, cut_transition_style)
+    # A directed clean-production recut gets a soft bridge by default. An
+    # editorial arc that explicitly says `none` still retains that reviewed
+    # hard-cut decision; legacy/no-direction plans remain unchanged.
+    effective_transition_style = _effective_transition_style(cut_transition_style, direction is not None)
+    transitions = _transitions(
+        candidate_id, hero_plan.edit_plan.time_map, duration_us, effective_transition_style
+    )
     typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
     selected_placements = _selected_asset_placements(direction)
@@ -188,6 +202,11 @@ def build_advanced_plan(
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        campaign_profile_id = get_project(connection, project_id).profile_id
+    campaign_qa = ["tarteel-quran-caption-v1"] if campaign_profile_id == "profile-tarteel-campaign" else []
     bound_review_id = review_id
     bound_review_digest = review_digest
     if allow_unapproved:
@@ -221,6 +240,8 @@ def build_advanced_plan(
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
         editorial_arc_id=editorial_arc_id,
         editorial_arc_sha256=editorial_arc_sha256,
+        quran_review_id=quran_review_id,
+        quran_review_sha256=quran_review_sha256,
         profile_fingerprint=profile.fingerprint(),
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
@@ -241,7 +262,14 @@ def build_advanced_plan(
         broll=broll,
         sfx=sfx,
         assets=assets,
-        qa_requirements=["forced_alignment", "rights_cleared_assets", "no_speaker_inference", "no_music"],
+        qa_requirements=[
+            "forced_alignment",
+            "rights_cleared_assets",
+            "no_speaker_inference",
+            "no_music",
+            *campaign_qa,
+            *(["tarteel-editorial-arc-v1"] if editorial_arc_id else []),
+        ],
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,
@@ -308,7 +336,8 @@ def _drop_typography_graphic_collisions(
     return [
         item
         for item in typography
-        if not any(
+        if item.component_id == "context-line-v1"
+        or not any(
             item.interval.output_start_us < graphic.interval.output_end_us
             and graphic.interval.output_start_us < item.interval.output_end_us
             for graphic in motion_graphics
@@ -360,6 +389,23 @@ def _directed_typography(
     evidence = {item.evidence_id: item for item in option.evidence}
     words = {word.word_id: word for word in alignment.words}
     events: list[TypographyEvent] = []
+    context_line = getattr(option, "context_line", None)
+    if context_line is not None:
+        events.append(
+            TypographyEvent(
+                event_id=stable_id(
+                    "context-line", candidate_id, direction.direction_id, context_line.context_id
+                ),
+                interval=context_line.interval,
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id="context-line-v1",
+                text=context_line.text,
+                x=72,
+                y=280 if getattr(direction, "style_id", "") == "quran-readable-v2" else 120,
+                font_size=64 if getattr(direction, "style_id", "") == "quran-readable-v2" else 48,
+                emoji=context_line.emoji,
+            )
+        )
     for beat in option.beats:
         if beat.display_text is None:
             continue
@@ -505,7 +551,9 @@ def _phrase(words: list[AlignedWord]) -> str:
     return re.sub(r"\s+([,.;?!…。？！:])", r"\1", text).strip()  # noqa: RUF001
 
 
-def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[TypographyEvent]:
+def _captions(
+    alignment: ForcedAlignmentDocument, candidate_id: str, *, style_id: str = ""
+) -> list[TypographyEvent]:
     """Persist grouped forced captions separately from optional typography cards."""
     events: list[TypographyEvent] = []
     for index, piece in enumerate(hero_caption_pieces(alignment.words)):
@@ -520,8 +568,8 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                 component_id=f"caption-{index}",
                 text=text,
                 x=72,
-                y=1540,
-                font_size=54,
+                y=1560 if style_id == "quran-readable-v2" else 1540,
+                font_size=120 if style_id == "quran-readable-v2" else 54,
                 words=[
                     CaptionWordTiming(
                         word_id=word.word_id,
@@ -530,6 +578,8 @@ def _captions(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[Typ
                         output_end_us=word.output_end_us,
                         output_start_frame=word.output_start_frame,
                         output_end_frame_exclusive=word.output_end_frame_exclusive,
+                        verification_status=word.verification_status,
+                        source_word_ids=word.source_word_ids or [word.word_id],
                     )
                     for word in piece.words
                 ],
@@ -565,6 +615,13 @@ def _transitions(
             )
         )
     return events
+
+
+def _effective_transition_style(style: str, directed: bool) -> str:
+    """Resolve a new-plan default without overriding an explicit arc choice."""
+    if style:
+        return style
+    return "concat_blur_dissolve_v1" if directed else "none"
 
 
 def _windows(

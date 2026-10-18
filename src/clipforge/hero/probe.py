@@ -55,6 +55,12 @@ def probe_hero(path: Path, *, expected_duration_us: int) -> PreviewProbe:
             f"{path.name} audio duration differs from the time map by {audio_error} us, "
             f"past {DURATION_TOLERANCE_US} us; refusing an AV-unsynchronized output"
         )
+    av_delta = audio_duration - duration
+    if abs(av_delta) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"{path.name} audio/video streams differ by {av_delta} us, "
+            f"past {DURATION_TOLERANCE_US} us; refusing an AV-unsynchronized output"
+        )
     audio_start = seconds_text_to_us(audio.get("start_time"))
     if audio_start is not None and abs(audio_start) > DURATION_TOLERANCE_US:
         raise MediaError(f"{path.name} audio starts at {audio_start} us instead of zero")

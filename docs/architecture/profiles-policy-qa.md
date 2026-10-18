@@ -6,13 +6,34 @@ Organic and paid work use one production core. A profile selects compliance poli
 
 `clipforge profile doctor`, `list`, `show`, and `verify` read `configs/profiles/` and `configs/policies/`. The files are JSON contracts. They are not executed. The loader rejects malformed JSON, unknown keys, missing `schema_version`, duplicate ids, missing policies, absolute paths, `..`, symlinks, and symlinked parent directories. Profile and policy ids are sorted before the canonical SHA-256 is computed.
 
-`profile-organic` selects `policy-source-rights`. `profile-paid-campaign` selects `policy-source-rights` and `policy-asset-rights`. Unknown profiles and unknown policies fail closed.
+`profile-organic` selects `policy-source-rights`. `profile-paid-campaign` selects `policy-source-rights` and `policy-asset-rights`. `profile-tarteel-campaign` additionally selects `policy-tarteel-delivery`; this is the hard campaign contract for official CTA compositing inside the original foreground picture, source-logo-aware watermarking, the exact first-post caption line, and no added audio. Unknown profiles and unknown policies fail closed.
 
 `clipforge project create NAME --profile-id PROFILE_ID` validates the profile before inserting the row. `clipforge project set-profile PROJECT_ID PROFILE_ID` does the same for an existing project. A null `profile_id` stays readable. QA does not assign the organic profile by itself.
 
 ## Policy engine
 
 The evaluator registry maps known policy ids to Python functions. A policy file cannot name a module, a shell command, or a model. `policy-source-rights` reads the current source `AssetLicenseRecord`. `policy-asset-rights` reads every non-source asset on the current advanced plan. Cleared statuses are `owned`, `licensed`, and `campaign_provided`, and each one needs evidence. `unknown`, `prohibited`, a missing record, a hash mismatch, a symlink, and a remote URL are not passes. An unknown policy id is `insufficient_evidence`.
+
+`policy-tarteel-delivery` is not a creative score. It fails when the advanced
+plan has no `CampaignOverlaySpec`, when the CTA or watermark is not bound as a
+rights-cleared plan asset, when the CTA does not declare `chroma_key_v1`, when
+the alpha watermark or exact first-post line is absent, when the CTA interval
+falls outside the output, when `tarteel-overlay-v1` is not a QA requirement, or
+when SFX/music events are present. Green-screen CTA files are converted to a
+deterministic, audio-free VP9/WebM alpha video during staging; the source
+asset hash and safe-rail geometry remain bound to the plan. The renderer
+consumes the animated video with a muted Remotion `Video` layer and places
+the small (maximum 600-permille) CTA in `foreground_attention_v1`, relative to
+the contained source picture and outside reviewed face regions. A rough preview for
+this profile carries the same overlay contract and `preview verify` checks the
+staged alpha video and watermark, so the campaign gate cannot be bypassed by
+stopping before Advanced Hero. See [ADR 0088](../adr/0088-tarteel-animated-cta-safe-rail.md).
+
+Tarteel caption direction is also a hard rule: canonical Quran text is only
+rendered after source verification and forced alignment; reviewed correct
+words may turn green and reviewed incorrect words red, while ordinary dialogue
+uses the measured phrase/word timing without Quran styling. A plan that lacks
+the campaign caption-direction QA requirement is not deliverable.
 
 ## QA set
 

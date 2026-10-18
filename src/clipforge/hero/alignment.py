@@ -155,10 +155,10 @@ def production_alignment_backend(
     Unit tests inject ``FakeForcedAlignment`` themselves. A production campaign
     does not. A non-English request never falls back to the English checkpoint.
     """
-    from clipforge.language.providers import license_is_allowed, provider_for
+    from clipforge.language.providers import license_is_allowed, selected_clip_provider_for
 
     requested = "en-US" if language in {None, ""} else language
-    record = provider_for(requested)
+    record = selected_clip_provider_for(requested)
     if record.live_status in {"unsupported_language", "alignment_not_claimed"}:
         raise MediaError(record.live_status)
     if not license_is_allowed(record.model_license, record.model_id):
@@ -443,9 +443,9 @@ def _reject_transcript_language(transcript: Transcript, backend: ForcedAlignment
 def _stored_alignment_status(backend: ForcedAlignmentBackend) -> str:
     if backend.model_name == FAKE_MODEL_NAME:
         return "available_not_smoked"
-    from clipforge.language.providers import provider_for
+    from clipforge.language.providers import selected_clip_provider_for
 
-    record = provider_for(str(getattr(backend, "locale", "en-US")))
+    record = selected_clip_provider_for(str(getattr(backend, "locale", "en-US")))
     checkpoint = str(getattr(backend, "checkpoint_sha256", ""))
     if (
         record.live_status == "verified_live"
@@ -504,7 +504,7 @@ def expected_binding(
     aligner: ForcedAlignmentBackend | None,
 ) -> str:
     """Recompute the cache key. A missing production identity is incomplete."""
-    from clipforge.language.providers import canonical_locale, normalized_language, provider_for
+    from clipforge.language.providers import canonical_locale, normalized_language
 
     if aligner is not None:
         return _binding_for(
@@ -546,7 +546,9 @@ def expected_binding(
         or not alignment.manifest_sha256
     ):
         raise MediaError("stored alignment identity is incomplete")
-    record = provider_for(locale)
+    from clipforge.language.providers import selected_clip_provider_for
+
+    record = selected_clip_provider_for(locale)
     if record.provider_name != "whisperx":
         raise MediaError("alignment_not_claimed")
     if alignment.model_name != record.model_id or alignment.model_revision != record.model_revision:
@@ -594,10 +596,10 @@ def _measured_pair(backend: ForcedAlignmentBackend) -> tuple[str, str]:
     cached = getattr(backend, "_measured_pair", None)
     if isinstance(cached, tuple) and len(cached) == 2:
         return cached
-    from clipforge.language.providers import provider_for
+    from clipforge.language.providers import selected_clip_provider_for
 
     locale = str(getattr(backend, "locale", "en-US"))
-    record = provider_for(locale)
+    record = selected_clip_provider_for(locale)
     if record.model_id != backend.model_name:
         raise MediaError("stale_alignment")
     checkpoint, manifest = _measure_checkpoint_and_manifest(

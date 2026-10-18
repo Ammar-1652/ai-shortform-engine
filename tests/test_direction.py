@@ -10,6 +10,7 @@ from clipforge.hero.motion_style import style_for_id
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionBeat,
+    DirectionContextLine,
     DirectionDocument,
     DirectionEvidence,
     DirectionMotionGraphic,
@@ -241,6 +242,9 @@ def test_style_contract_is_fingerprintable_and_allowlisted() -> None:
     profile = style_for_id("data-explainer-v1")
     assert profile.contract().style_id == "data-explainer-v1"
     assert profile.max_travel_px <= 80
+    readable = style_for_id("quran-readable-v2")
+    assert readable.contract().style_id == "quran-readable-v2"
+    assert readable.max_scale_permille == 1000
     with pytest.raises(ValueError, match="unsupported motion style"):
         style_for_id("random-css")
 
@@ -253,6 +257,51 @@ def test_direction_evidence_binds_words_and_time_map() -> None:
         segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
     )
     validate_source_evidence(document, words, time_map, set())
+
+
+def test_quran_style_requires_a_context_line() -> None:
+    with pytest.raises(ValidationError, match="upper context line"):
+        _option("quran", "quran-editorial-v1", 0.8)
+
+
+def test_context_line_is_full_clip_reviewed_and_not_a_duplicate() -> None:
+    document = _document()
+    base = document.options[0]
+    line = DirectionContextLine(
+        context_id="context-1",
+        text="Why this lesson matters",
+        emoji="📖",
+        evidence_ids=[base.evidence[0].evidence_id],
+        interval=OutputInterval(output_start_us=0, output_end_us=3_000_000),
+        copy_mode="human_reviewed_summary",
+        reviewed_by="editor-1",
+        review_note="Summary is visibly related to the bound lesson and is not a caption duplicate.",
+    )
+    option = base.model_copy(update={"context_line": line})
+    valid = document.model_copy(update={"options": [option, *document.options[1:]]})
+    validate_source_evidence(
+        valid,
+        _aligned_words(),
+        TimeMapDocument(
+            time_map_id="map-1",
+            segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+        ),
+        set(),
+    )
+    duplicate = line.model_copy(update={"text": "The source"})
+    invalid = document.model_copy(
+        update={"options": [base.model_copy(update={"context_line": duplicate}), *document.options[1:]]}
+    )
+    with pytest.raises(MediaError, match="must not duplicate"):
+        validate_source_evidence(
+            invalid,
+            _aligned_words(),
+            TimeMapDocument(
+                time_map_id="map-1",
+                segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+            ),
+            set(),
+        )
 
 
 def test_direction_evidence_rejects_invented_display_text() -> None:

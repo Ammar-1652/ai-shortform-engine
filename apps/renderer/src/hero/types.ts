@@ -1,9 +1,11 @@
 /** Facts Python already decided for one Hero draft. This is not the rough preview. */
 
 export type HeroWord = {
+  readonly word_id?: string;
   readonly text: string;
   readonly output_start_frame: number;
   readonly output_end_frame_exclusive: number;
+  readonly verification_status?: "unverified" | "correct" | "incorrect";
 };
 
 export type HeroCaption = {

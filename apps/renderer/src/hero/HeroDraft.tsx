@@ -30,6 +30,9 @@ export function HeroDraft(raw: HeroDraftInput) {
   const scale = emphasisScale(input.motion_events, frame);
   const active = input.captions.find((item) => revealedCaption(item, frame).length > 0);
   const caption = active === undefined ? undefined : revealedCaption(active, frame);
+  const activeWord = active?.words.find(
+    (word) => frame >= word.output_start_frame && frame < word.output_end_frame_exclusive,
+  );
   const language = active?.language || input.language;
   const foreground = containRect(input.source_width, input.source_height, input.width, input.height);
   const legacy = input.renderer_recipe_version !== "hero-draft-renderer-v2";
@@ -78,7 +81,15 @@ export function HeroDraft(raw: HeroDraftInput) {
       </AbsoluteFill>
       {caption === undefined ? null : (
         <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center center" }}>
-          <CaptionPlate text={caption} language={language ?? ""} layoutVersion={legacy ? "caption-layout-v1" : "caption-layout-v2"} />
+          <CaptionPlate
+            text={caption}
+            language={language ?? ""}
+            emphasisText={activeWord?.text}
+            activeWordId={activeWord?.word_id}
+            emphasisStatus={activeWord?.verification_status}
+            wordStatuses={active?.words}
+            layoutVersion={legacy ? "caption-layout-v1" : "caption-layout-v2"}
+          />
         </AbsoluteFill>
       )}
     </AbsoluteFill>

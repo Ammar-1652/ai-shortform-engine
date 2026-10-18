@@ -34,10 +34,29 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Word Ids",
+          "type": "array"
+        },
         "text": {
           "maxLength": 200,
           "minLength": 1,
           "title": "Text",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "correct",
+            "incorrect"
+          ],
+          "title": "Verification Status",
           "type": "string"
         },
         "word_id": {
@@ -121,6 +140,29 @@
       "title": "Component Id",
       "type": "string"
     },
+    "emoji": {
+      "anyOf": [
+        {
+          "enum": [
+            "\ud83d\udcd6",
+            "\ud83d\udca1",
+            "\ud83c\udfaf",
+            "\u2728",
+            "\u26a1",
+            "\ud83e\udde0",
+            "\u2705",
+            "\ud83d\udd0e",
+            "\ud83d\udd4c"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Emoji"
+    },
     "event_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -128,7 +170,7 @@
       "type": "string"
     },
     "font_size": {
-      "maximum": 96,
+      "maximum": 160,
       "minimum": 24,
       "title": "Font Size",
       "type": "integer"

@@ -246,6 +246,20 @@ def remap_direction_intervals(
                     }
                 )
             )
+        context_line = option.context_line
+        if context_line is not None:
+            # The upper context label intentionally spans the complete new
+            # program. It is not a source-timed caption, so remapping it
+            # through a jump-cut interval would either fail at a discontinuity
+            # or leave the line stale after a recut.
+            context_line = context_line.model_copy(
+                update={
+                    "interval": OutputInterval(
+                        output_start_us=0,
+                        output_end_us=output_time_map.to_time_map().total_output_duration(),
+                    )
+                }
+            )
         option_updates.append(
             DirectionOption.model_validate(
                 {
@@ -253,6 +267,7 @@ def remap_direction_intervals(
                     "beats": beats,
                     "asset_placements": placements,
                     "motion_graphics": graphics,
+                    "context_line": None if context_line is None else context_line.model_dump(mode="json"),
                     "source_native_text": [
                         item.model_copy(
                             update={

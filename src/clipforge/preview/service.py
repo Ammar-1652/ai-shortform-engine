@@ -56,6 +56,8 @@ from clipforge.storage import (
     Database,
     find_artifact,
     get_job,
+    get_project,
+    get_source_asset,
     insert_artifact,
     insert_job,
     list_jobs,
@@ -100,6 +102,16 @@ def render_previews(
     """Render every selected candidate for ``source_asset_id``."""
     root = work_root.resolve()
     active = profile or default_profile()
+    if profile is None:
+        with database.connect() as connection:
+            source_record = get_source_asset(connection, source_asset_id)
+            project = get_project(connection, source_record.project_id)
+        if project.profile_id == "profile-tarteel-campaign":
+            # Tarteel review and delivery share one composition contract:
+            # blurred source canvas, contained source foreground, and a
+            # restrained zoom. The old neutral-dark/letterbox profile is kept
+            # available for non-campaign previews only.
+            active = active.model_copy(update={"campaign_id": "tarteel", "background": "blurred-source-v1"})
     renderer = backend if backend is not None else RemotionRoughRenderBackend()
     inputs = load_preview_inputs(
         database,
@@ -143,6 +155,7 @@ def render_previews(
             inputs = _confirm(database, source_asset_id, root, active, inputs)
             run_dir = inputs.pair.workspace.make_preview_run(preview_set_id)
             document, manifest = _render_run(
+                database,
                 inputs,
                 active,
                 renderer,
@@ -175,6 +188,7 @@ def render_previews(
 
 
 def _render_run(
+    database: Database,
     inputs: PreviewInputs,
     profile: RoughPreviewProfile,
     backend: RoughRenderBackend,
@@ -200,6 +214,7 @@ def _render_run(
         directory = inputs.pair.workspace.preview_candidate_dir(preview_set_id, candidate.candidate_id)
         directory.mkdir()
         rendered = _render_input(
+            database,
             inputs,
             candidate,
             profile,
@@ -267,6 +282,7 @@ def _selected(inputs: PreviewInputs, candidate_id: str | None) -> list[Candidate
 
 
 def _render_input(
+    database: Database,
     inputs: PreviewInputs,
     candidate: CandidateClip,
     profile: RoughPreviewProfile,
@@ -296,6 +312,17 @@ def _render_input(
     staged_video_sha = ""
     staged_audio_sha = ""
     staged_duration = 0
+    campaign_overlay = None
+    foreground_x: int = 0
+    foreground_y: int = 0
+    foreground_width: int = int(profile.width)
+    foreground_height: int = int(profile.height)
+    foreground_scale: int = 1000
+    if profile.campaign_id == "tarteel":
+        raise MediaError(
+            "Tarteel branded previews require forced alignment, canonical Quran review, "
+            "and quran-editorial-v1; render an Advanced Hero draft instead"
+        )
     if browser:
         from clipforge.preview.trim import stage_candidate_span
 
@@ -326,6 +353,16 @@ def _render_input(
         captions=captions,
         source_start_us=segment.source_start_us,
         source_end_us=segment.source_end_us,
+        background=profile.background,
+        campaign_overlay=campaign_overlay,
+        foreground_x_px=foreground_x,
+        foreground_y_px=foreground_y,
+        foreground_width_px=foreground_width,
+        foreground_height_px=foreground_height,
+        foreground_scale_permille=foreground_scale,
+        word_timing_source=(
+            "transcript-word-times-v1" if any(cue.words for cue in captions) else "segment-only-v1"
+        ),
         proxy_sha256=inputs.proxy_sha256,
         staged_video_sha256=staged_video_sha,
         staged_audio_sha256=staged_audio_sha,
@@ -446,7 +483,12 @@ def _link_or_copy(source: Path, destination: Path, root: Path) -> None:
         destination.write_bytes(source.read_bytes())
 
 
-def _cleanup_staging(run_dir: Path, root: Path) -> None:
+def _cleanup_staging(
+    run_dir: Path,
+    root: Path,
+    *,
+    preserve_names: frozenset[str] = frozenset(),
+) -> None:
     staging = run_dir / "staging"
     if not staging.exists():
         return
@@ -457,18 +499,36 @@ def _cleanup_staging(run_dir: Path, root: Path) -> None:
         if path.is_symlink() or not path.is_file():
             raise MediaError(f"refusing to clean unexpected staging path {path.name}")
         ensure_within(root, path)
+        if path.name in preserve_names:
+            continue
         path.unlink()
-    staging.rmdir()
+    if not any(staging.iterdir()):
+        staging.rmdir()
 
 
 def _cleanup_transients(run_dir: Path, root: Path) -> None:
-    """Remove staged media and the batch file; neither is a persistent preview artifact."""
-    _cleanup_staging(run_dir, root)
+    """Remove transient media while retaining campaign assets used by verify."""
+    _cleanup_staging(run_dir, root, preserve_names=_campaign_staging_names(run_dir))
     batch = run_dir / "render-batch.json"
     ensure_within(root, batch)
     if batch.is_symlink():
         raise MediaError("refusing to clean a symlinked preview render batch")
     safe_unlink(root, batch)
+
+
+def _campaign_staging_names(run_dir: Path) -> frozenset[str]:
+    """Return validated campaign overlay names that remain evidence for verify."""
+    names: set[str] = set()
+    for render_input in sorted(run_dir.glob("candidates/*/render-input.json")):
+        try:
+            document = RoughPreviewRenderInput.model_validate_json(render_input.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if document.campaign_overlay is None:
+            continue
+        names.add(document.campaign_overlay.cta_asset_name)
+        names.add(document.campaign_overlay.watermark_asset_name)
+    return frozenset(names)
 
 
 def _confirm(

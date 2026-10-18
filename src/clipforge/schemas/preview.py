@@ -13,6 +13,7 @@ from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
+from clipforge.schemas.campaign import CampaignOverlaySpec
 from clipforge.schemas.common import ContractModel, EntityId, Microseconds, Versioned
 from clipforge.schemas.provenance import ArtifactProvenance
 
@@ -33,10 +34,11 @@ class RoughPreviewProfile(Versioned):
     fps_numerator: Literal[30] = 30
     fps_denominator: Literal[1] = 1
     video_fit: Literal["contain"] = "contain"
-    background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    background: Literal["neutral-dark-v1", "blurred-source-v1"] = "neutral-dark-v1"
     caption_algorithm_version: Literal["provisional-caption-v1"] = "provisional-caption-v1"
     caption_style_version: Literal["rough-caption-style-v1"] = "rough-caption-style-v1"
     renderer_recipe_version: Literal["rough-preview-renderer-v1"] = "rough-preview-renderer-v1"
+    campaign_id: Literal["none", "tarteel"] = "none"
     video_codec: Literal["h264"] = "h264"
     pixel_format: Literal["yuv420p"] = "yuv420p"
     audio_enabled: Literal[True] = True
@@ -47,7 +49,32 @@ class RoughPreviewProfile(Versioned):
     max_caption_gap_us: Literal[1_250_000] = 1_250_000
 
     def fingerprint(self) -> str:
-        return preview_fingerprint(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        # Keep the legacy rough-preview fingerprint stable when no campaign
+        # overlay is requested. A named campaign is output-changing.
+        if self.campaign_id == "none":
+            payload.pop("campaign_id", None)
+        return preview_fingerprint(payload)
+
+
+class RoughCaptionWord(Versioned):
+    """One provisional word interval carried into a review preview."""
+
+    word_id: EntityId
+    text: str = Field(min_length=1, max_length=200)
+    output_start_us: Microseconds
+    output_end_us: Microseconds
+    output_start_frame: int = Field(ge=0)
+    output_end_frame_exclusive: int = Field(ge=1)
+    verification_status: Literal["unverified", "correct", "incorrect"] = "unverified"
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.output_end_us <= self.output_start_us:
+            raise ValueError("rough caption word interval must be positive")
+        if self.output_end_frame_exclusive <= self.output_start_frame:
+            raise ValueError("rough caption word frame interval must be positive")
+        return self
 
 
 class RoughCaptionCue(Versioned):
@@ -64,6 +91,7 @@ class RoughCaptionCue(Versioned):
     output_start_frame: int = Field(ge=0)
     output_end_frame_exclusive: int = Field(ge=1)
     timing_quality: Literal["provisional"] = "provisional"
+    words: list[RoughCaptionWord] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def ranges_are_half_open(self) -> Self:
@@ -91,7 +119,23 @@ class RoughPreviewRenderInput(Versioned):
     width: Literal[720] = 720
     height: Literal[1280] = 1280
     video_fit: Literal["contain"] = "contain"
-    background: Literal["neutral-dark-v1"] = "neutral-dark-v1"
+    background: Literal["neutral-dark-v1", "blurred-source-v1"] = "neutral-dark-v1"
+    campaign_overlay: CampaignOverlaySpec | None = None
+    font_identity: str = "dejavu-noto-local-v1"
+    video_scale_permille: int = Field(default=1000, ge=1000, le=1250)
+    video_offset_x_px: int = Field(default=0, ge=-120, le=120)
+    # The source picture is rendered in this explicit rectangle when the
+    # campaign asks for the blurred-background composition. Overlay layers use
+    # the same rectangle, so they cannot accidentally land on the blur rail.
+    foreground_x_px: int = Field(default=0, ge=0, le=720)
+    foreground_y_px: int = Field(default=0, ge=0, le=1280)
+    foreground_width_px: int = Field(default=720, ge=1, le=720)
+    foreground_height_px: int = Field(default=1280, ge=1, le=1280)
+    foreground_scale_permille: int = Field(default=1000, ge=1000, le=1150)
+    word_highlight_mode: Literal["off", "reviewed"] = "off"
+    word_timing_source: Literal["segment-only-v1", "transcript-word-times-v1", "reviewed-word-times-v1"] = (
+        "segment-only-v1"
+    )
     timing_quality: Literal["provisional"] = "provisional"
     captions: list[RoughCaptionCue] = Field(default_factory=list)
     source_start_us: int = Field(default=0, ge=0)
@@ -112,6 +156,23 @@ class RoughPreviewRenderInput(Versioned):
                 raise ValueError("caption output range extends past the candidate duration")
             if cue.output_end_frame_exclusive > self.duration_in_frames:
                 raise ValueError("caption frame range extends past duration_in_frames")
+        if (
+            self.word_highlight_mode == "reviewed"
+            and any(cue.words for cue in self.captions)
+            and self.word_timing_source == "segment-only-v1"
+        ):
+            raise ValueError("reviewed word highlighting requires an explicit word timing source")
+        if self.campaign_overlay is not None and self.campaign_overlay.cta_end_us > self._duration_hint_us():
+            raise ValueError("campaign CTA interval extends past the preview duration")
+        if self.foreground_x_px + self.foreground_width_px > self.width:
+            raise ValueError("foreground rectangle extends past the preview width")
+        if self.foreground_y_px + self.foreground_height_px > self.height:
+            raise ValueError("foreground rectangle extends past the preview height")
+        if (
+            self.campaign_overlay is not None
+            and self.campaign_overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            raise ValueError("campaign overlays must use the original foreground coordinate space")
         return self
 
     def _duration_hint_us(self) -> int:

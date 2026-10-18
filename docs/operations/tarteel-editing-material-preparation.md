@@ -11,8 +11,9 @@ current work-root preparation manifest is:
 
 - Amiri Quran and Amiri Regular are staged under the Tarteel work root with
   the Amiri OFL notice and hashes. Amiri Quran is reserved for canonical Quran
-  text after selected-audio review and forced alignment; a font does not prove
-  verse accuracy.
+  text after selected-audio review and forced alignment; the
+  `quran-editorial-v1` renderer style stages the reviewed local font through
+  `CLIPFORGE_QURAN_FONT_DIR`. A font does not prove verse accuracy.
 - Kenney Interface Sounds is staged as 100 CC0 OGG one-shots. The pack is
   suitable for restrained clicks, selects, confirmations, ticks, toggles, and
   interface accents. It is not a license to place an effect on every cut.

@@ -156,6 +156,18 @@
           "title": "Preview Size Bytes",
           "type": "integer"
         },
+        "quran_review_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Quran Review Id",
+          "type": "string"
+        },
+        "quran_review_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Quran Review Sha256",
+          "type": "string"
+        },
         "rank": {
           "minimum": 1,
           "title": "Rank",

@@ -224,8 +224,11 @@ mark or campaign rule requires them.
   line remains the visual focus.
 - App proof: gentle inset reveal or masked crop; avoid bounce and elastic UI
   motion unless the source itself has it.
-- Prefer hard semantic cuts and tiny deterministic audio boundary fades over
-  generic transition packs.
+- Prefer semantic cuts with a deterministic `concat_blur_dissolve_v1` bridge
+  for directed production recuts. A no-transition hard cut is still allowed
+  only when the reviewed arc explicitly selects `none`; the engine never
+  silently turns an explicit hard-cut decision into a dissolve. Audio and
+  picture remain on the same TimeMap clock.
 - All 22 references contain one mixed audio stream, so their files cannot prove
   which transient came from an SFX versus the source mix. Do not claim a
   specific SFX recipe from waveform peaks alone. In production, use SFX only

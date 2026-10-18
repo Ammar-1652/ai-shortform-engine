@@ -293,6 +293,104 @@
       "title": "DirectionBeat",
       "type": "object"
     },
+    "DirectionContextLine": {
+      "additionalProperties": false,
+      "description": "One reviewed, single-line context label in the upper blur lane.\n\nThis is optional for non-campaign directions.  When supplied it is a\ndeclarative editorial summary, never executable copy: the direction\nvalidator binds it to transcript evidence and requires a review note when\nthe wording is not an exact transcript phrase.",
+      "properties": {
+        "context_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Context Id",
+          "type": "string"
+        },
+        "copy_mode": {
+          "default": "exact_evidence",
+          "enum": [
+            "exact_evidence",
+            "human_reviewed_summary"
+          ],
+          "title": "Copy Mode",
+          "type": "string"
+        },
+        "emoji": {
+          "enum": [
+            "\ud83d\udcd6",
+            "\ud83d\udca1",
+            "\ud83c\udfaf",
+            "\u2728",
+            "\u26a1",
+            "\ud83e\udde0",
+            "\u2705",
+            "\ud83d\udd0e",
+            "\ud83d\udd4c"
+          ],
+          "title": "Emoji",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "review_note": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Note"
+        },
+        "reviewed_by": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed By"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "context_id",
+        "text",
+        "emoji",
+        "evidence_ids",
+        "interval"
+      ],
+      "title": "DirectionContextLine",
+      "type": "object"
+    },
     "DirectionEvidence": {
       "additionalProperties": false,
       "description": "Verifiable transcript/visual evidence for one editorial choice.",
@@ -470,6 +568,17 @@
           "title": "Beats",
           "type": "array"
         },
+        "context_line": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DirectionContextLine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "evidence": {
           "items": {
             "$ref": "#/$defs/DirectionEvidence"
@@ -541,6 +650,8 @@
         "style_id": {
           "enum": [
             "editorial-clean-v1",
+            "quran-editorial-v1",
+            "quran-readable-v2",
             "concat-editorial-v1",
             "kinetic-caption-v1",
             "documentary-broll-v1",
@@ -765,6 +876,8 @@
     "style_id": {
       "enum": [
         "editorial-clean-v1",
+        "quran-editorial-v1",
+        "quran-readable-v2",
         "concat-editorial-v1",
         "kinetic-caption-v1",
         "documentary-broll-v1",

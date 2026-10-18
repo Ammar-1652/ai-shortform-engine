@@ -1,6 +1,7 @@
 import { layoutCaption } from "./layout.js";
 import { captionFontFamily } from "./fonts.js";
 import { measuredLines } from "./measured-layout.js";
+import { captionTokenKey, captionWordIsActive, nextCaptionWord } from "./word-matching.js";
 
 /** Caption plate. The line is a React text node, not HTML. */
 
@@ -11,12 +12,33 @@ type CaptionPlateProps = {
   language: string;
   variant?: CaptionVariant;
   emphasisText?: string;
+  activeWordId?: string;
+  centeredLarge?: boolean;
   x?: number;
   y?: number;
   fontSize?: number;
   style?: CaptionStyle;
   layoutVersion?: "caption-layout-v1" | "caption-layout-v2";
+  wordStatuses?: readonly CaptionWordStatus[];
+  emphasisStatus?: CaptionWordStatus["verification_status"];
 };
+
+export type CaptionWordStatus = Readonly<{
+  word_id?: string;
+  text?: string;
+  verification_status?: "unverified" | "correct" | "incorrect";
+}>;
+
+export function captionWordColor(
+  status: CaptionWordStatus["verification_status"] | undefined,
+  active: boolean,
+  accent = "#ffcf4a",
+): string | undefined {
+  if (status === "incorrect") return "#ff4d5f";
+  if (status === "correct" && active) return "#42d487";
+  if (active) return accent;
+  return undefined;
+}
 
 export type CaptionStyle = Readonly<{
   contrast?: string;
@@ -31,11 +53,7 @@ export type CaptionStyle = Readonly<{
   max_scale_permille?: number;
 }>;
 
-function tokenKey(value: string): string {
-  return value.trim().toLocaleLowerCase().replace(/[\u2000-\u206f\u2e00-\u2e7f'"`]/g, "");
-}
-
-export function CaptionPlate({ text, language, variant = "body", emphasisText, x, y, fontSize, style, layoutVersion = "caption-layout-v1" }: CaptionPlateProps) {
+export function CaptionPlate({ text, language, variant = "body", emphasisText, activeWordId, centeredLarge = false, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
   const modern = layoutVersion === "caption-layout-v2";
   const safeMargins = {
     left: style?.safe_left ?? 64,
@@ -44,7 +62,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
     bottom: style?.safe_bottom ?? (modern ? 300 : 64),
   };
   const layout = layoutCaption(text, language, modern ? 22 : 12, safeMargins);
-  const emphasis = (style?.max_simultaneous_emphasis ?? 1) > 0 ? tokenKey(emphasisText ?? "") : "";
+  const emphasis = (style?.max_simultaneous_emphasis ?? 1) > 0 ? captionTokenKey(emphasisText ?? "") : "";
   const typography = variant === "typography";
   const hook = variant === "hook";
   const punch = variant === "punch";
@@ -60,11 +78,17 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
     return context.measureText(value).width;
   }) : { lines: layout.lines, fontSize: preferredSize, textWidth: 0 };
   const lines = measured.lines;
-  const plateHeight = Math.ceil(lines.length * measured.fontSize * (typography || hook || punch ? 1.08 : 1.25) + 56);
-  if (modern && y !== undefined && (y < layout.safe.top || y + plateHeight > layout.safe.bottom)) {
+  const lineHeight = centeredLarge ? 1.5 : typography || hook || punch ? 1.08 : 1.25;
+  const plateHeight = Math.ceil(lines.length * measured.fontSize * lineHeight + (centeredLarge ? 96 : 56));
+  const centeredTop = (y ?? 1560) - plateHeight / 2;
+  if (centeredLarge && (centeredTop < 1300 || centeredTop + plateHeight > layout.safe.bottom)) {
+    throw new Error("large caption exceeds the lower blurred safe lane; regroup the cue");
+  }
+  if (!centeredLarge && modern && y !== undefined && (y < layout.safe.top || y + plateHeight > layout.safe.bottom)) {
     throw new Error("caption card exceeds configured safe region; move or regroup it");
   }
   let highlightedTokenUsed = false;
+  let wordCursor = 0;
   return (
     <div
       style={{
@@ -87,10 +111,10 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
         // final caption.  Keep the legacy default when y is absent while
         // honoring an explicit safe-area placement.
         top:
-          hook || punch || typography
+          centeredLarge ? centeredTop : hook || punch || typography
             ? y ?? (modern ? hook ? layout.safe.top : layout.safe.bottom - plateHeight : hook ? 220 : 1420)
             : undefined,
-        bottom: hook || punch || typography ? undefined : modern ? 1920 - layout.safe.bottom + (style?.max_travel_px ?? 0) + 32 : 220,
+        bottom: centeredLarge || hook || punch || typography ? undefined : modern ? 1920 - layout.safe.bottom + (style?.max_travel_px ?? 0) + 32 : 220,
         direction: layout.direction,
         color: "#ffffff",
         fontFamily: modern
@@ -100,10 +124,10 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
             : "'DejaVu Sans', 'Arial', sans-serif",
         fontWeight: modern ? 700 : typography || hook || punch ? 900 : 750,
         fontSize: measured.fontSize,
-        lineHeight: typography || hook || punch ? 1.08 : 1.25,
+        lineHeight,
         letterSpacing: modern ? 0 : typography || hook ? 1.2 : 0,
         textTransform: !modern && typography ? "uppercase" : undefined,
-        textAlign: hook ? "left" : layout.direction === "rtl" ? "right" : "center",
+        textAlign: centeredLarge ? "center" : hook ? "left" : layout.direction === "rtl" ? "right" : "center",
         padding: 0,
       }}
     >
@@ -113,7 +137,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
           width: undefined,
           marginLeft: layout.direction === "rtl" ? "auto" : undefined,
           boxSizing: "border-box",
-          padding: typography ? "26px 30px" : hook ? "26px 30px 28px 28px" : punch ? "24px 26px" : "14px 22px",
+          padding: centeredLarge ? "36px 30px 48px" : typography ? "26px 30px" : hook ? "26px 30px 28px 28px" : punch ? "24px 26px" : "14px 22px",
           borderRadius: typography || hook || punch ? 24 : 18,
           background: typography
             ? "linear-gradient(135deg, rgba(11,18,32,0.94), rgba(24,35,62,0.88))"
@@ -137,18 +161,27 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, x
           // Keep RTL and CJK as whole shaped runs. Splitting their characters
           // into independently styled spans can change joining, grapheme
           // shaping, or punctuation placement in the browser.
-          if (layout.direction === "rtl" || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
+          if ((layout.direction === "rtl" && wordStatuses === undefined) || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
             return <div key={`${line}-${lineIndex}`}>{line}</div>;
           }
           return (
             <div key={`${line}-${lineIndex}`}>
               {line.split(/(\s+)/).map((part, partIndex) => {
-                const highlighted = Boolean(emphasis) && !highlightedTokenUsed && tokenKey(part) === emphasis;
+                const matched = wordStatuses === undefined
+                  ? { word: undefined, nextCursor: wordCursor }
+                  : nextCaptionWord(part, wordStatuses, wordCursor);
+                wordCursor = matched.nextCursor;
+                const status = matched.word?.verification_status;
+                const highlighted = captionWordIsActive(matched.word, activeWordId, part, emphasis, highlightedTokenUsed);
                 if (highlighted) highlightedTokenUsed = true;
-                return highlighted ? (
+                const statusColor = captionWordColor(status, highlighted, style?.accent);
+                return highlighted || statusColor !== undefined ? (
                   <span
                     key={`${part}-${partIndex}`}
-                    style={{ color: style?.accent ?? "#ffcf4a", textShadow: "0 2px 5px rgba(0,0,0,0.7)" }}
+                    style={{
+                      color: statusColor ?? (emphasisStatus === "incorrect" ? "#ff4d5f" : style?.accent ?? "#ffcf4a"),
+                      textShadow: "0 2px 5px rgba(0,0,0,0.7)",
+                    }}
                   >
                     {part}
                   </span>
