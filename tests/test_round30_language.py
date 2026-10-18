@@ -23,6 +23,7 @@ from clipforge.language.providers import (
     license_is_allowed,
     normalized_language,
     provider_for,
+    selected_clip_provider_for,
 )
 from clipforge.language.registry import alignment_claim, alignment_identity_matches, capability_for
 from clipforge.language.service import (
@@ -94,8 +95,10 @@ def test_locale_normalization_and_closed_failures() -> None:
     french_backend = production_alignment_backend("fr-FR")
     assert french_backend.language_code == "fr"
     assert french_backend.model_name.endswith("french")
-    with pytest.raises(MediaError, match="alignment_not_claimed"):
-        production_alignment_backend("ar")
+    arabic_backend = production_alignment_backend("ar")
+    assert arabic_backend.language_code == "ar"
+    assert arabic_backend.model_name.endswith("arabic")
+    assert arabic_backend.checkpoint_sha256 == selected_clip_provider_for("ar").checkpoint_sha256
     with pytest.raises(MediaError, match="unsupported_language"):
         production_alignment_backend("zh-CN")
 

@@ -12,13 +12,13 @@ SQLite schema version stays 6. Contract `schema_version` stays `1.0.0`. The new 
 | en-GB | same English checkpoint, `available_not_smoked` until it has its own speech record | `locale_not_smoked` |
 | fr-FR | `verified_live` only with its own external speech file and the measured French model | `unsupported_language` |
 | es-ES, de-DE | Apache-2.0 wav2vec2 catalog, evidence `model_missing` | `unsupported_language` |
-| ar | `alignment_not_claimed`, RTL captions | `unsupported_language` |
+| ar | Full-source claim remains `alignment_not_claimed`; selected Hero clips may use the pinned Arabic WhisperX model as `available_not_smoked`; RTL captions | `unsupported_language` |
 | ja | `verified_live` only with its own external speech file and the measured Japanese model, character wrap | `unsupported_language` |
 | zh-CN | `unsupported_language` | `unsupported_language` |
 
 `clipforge language doctor` prints this matrix. It also prints `full_source_runtime: not_configured`, `whop_live: not_configured`, and `publishing: deferred`.
 
-A fake aligner may be used in tests. Its document status is `available_not_smoked`. The model rejects `verified_live` when the provider id is `fake`.
+A fake aligner may be used in tests. Its document status is `available_not_smoked`. The model rejects `verified_live` when the provider id is `fake`. Arabic uses the Apache-2.0 `jonatasgrosman/wav2vec2-large-xlsr-53-arabic` checkpoint at the pinned revision recorded in the provider registry; a local model may align a selected clip as `available_not_smoked`, but it is not a `verified_live` language claim until a matching speech-evidence smoke is recorded.
 
 ## Alignment
 

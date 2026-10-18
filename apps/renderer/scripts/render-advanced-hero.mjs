@@ -115,6 +115,7 @@ for (const item of batch.items) {
   const productionStyles = new Set([
     "editorial-clean-v1",
     "concat-editorial-v1",
+    "quran-editorial-v1",
     "kinetic-caption-v1",
     "documentary-broll-v1",
     "data-explainer-v1",

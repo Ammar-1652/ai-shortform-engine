@@ -51,6 +51,11 @@ describe("advanced hero composition", () => {
     expect(source).toContain("concat_blur_dissolve_v1");
     expect(source).toContain("useCurrentFrame");
     expect(source).not.toContain("top: 1720");
+    const rendererEntrypoint = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../../scripts/render-advanced-hero.mjs"),
+      "utf8",
+    );
+    expect(rendererEntrypoint).toContain('"quran-editorial-v1"');
     const captionPlate = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../captions/CaptionPlate.tsx"), "utf8");
     expect(captionPlate).toContain("hook || punch || typography");
     expect(captionPlate).toContain("whole shaped runs");
