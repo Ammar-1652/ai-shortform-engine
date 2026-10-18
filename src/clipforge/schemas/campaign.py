@@ -101,6 +101,20 @@ class QuranVerificationPolicy(Versioned):
     font_sha256: str = Field(pattern=_SHA)
 
 
+class TarteelDisplayCorrection(Versioned):
+    """Reviewed source-text replacement for one forced word interval."""
+
+    source_word_id: EntityId
+    display_text: str = Field(min_length=1, max_length=120)
+
+    @field_validator("display_text")
+    @classmethod
+    def display_text_is_one_line(cls, value: str) -> str:
+        if "\n" in value or "\r" in value:
+            raise ValueError("Tarteel display correction must be one line")
+        return value
+
+
 class QuranCaptionReview(Versioned):
     review_kind: Literal["source_grounded_quran_caption"]
     campaign: Literal["tarteel"]
@@ -109,8 +123,11 @@ class QuranCaptionReview(Versioned):
     source_window_us: tuple[Microseconds, Microseconds]
     source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     transcript_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    display_evidence_relative_path: str = ""
+    display_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     canonical_source: QuranCanonicalSource
     source_audio_mapping: list[QuranAudioMapping] = Field(min_length=1)
+    display_corrections: list[TarteelDisplayCorrection] = Field(default_factory=list)
     verification_policy: QuranVerificationPolicy
     notes: list[str] = Field(default_factory=list)
 
@@ -118,6 +135,12 @@ class QuranCaptionReview(Versioned):
     def window_is_positive(self) -> Self:
         if self.source_window_us[1] <= self.source_window_us[0]:
             raise ValueError("Quran review source window must be positive")
+        if any((self.display_evidence_relative_path, self.display_evidence_sha256)) and not all(
+            (self.display_evidence_relative_path, self.display_evidence_sha256)
+        ):
+            raise ValueError("display evidence path and hash must be supplied together")
+        if self.display_evidence_relative_path:
+            _relative(self.display_evidence_relative_path)
         previous_end = self.source_window_us[0]
         for mapping in self.source_audio_mapping:
             if not self.canonical_source.ayah_start <= mapping.ayah <= self.canonical_source.ayah_end:

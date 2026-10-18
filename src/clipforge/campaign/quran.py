@@ -64,6 +64,15 @@ def load_tarteel_quran_review(
             if not review.source_sha256 or not review.transcript_sha256:
                 raise MediaError("automatic Quran text matching requires source and transcript hashes")
             validate_canonical_snapshot(root, review)
+        if review.display_corrections:
+            if not review.display_evidence_relative_path or not review.display_evidence_sha256:
+                raise MediaError("Tarteel display corrections require hashed source subtitle evidence")
+            evidence_path = _confined_regular_path(
+                root,
+                root / review.display_evidence_relative_path,
+            )
+            if sha256_file(evidence_path) != review.display_evidence_sha256:
+                raise MediaError("Tarteel display evidence hash changed")
         matches.append((review, sha256_file(path), path))
     if len(matches) != 1:
         raise MediaError(
@@ -128,6 +137,7 @@ def canonicalize_quran_alignment(
         raise MediaError("Quran caption mapping belongs to a different source or candidate")
     if review.transcript_sha256 and alignment.transcript_sha256 != review.transcript_sha256:
         raise MediaError("Quran caption mapping is stale against the alignment transcript")
+    alignment = _apply_display_corrections(alignment, review)
     replacements: dict[str, AlignedWord] = {}
     used_ids: set[str] = set()
     for mapping in review.source_audio_mapping:
@@ -155,9 +165,13 @@ def canonicalize_quran_alignment(
             statuses = {word.verification_status for word in span}
             if "incorrect" in statuses:
                 status = "incorrect"
-            elif review.verification_policy.pronunciation_status == "human_reviewed" and statuses == {
-                "correct"
-            }:
+            elif review.verification_policy.pronunciation_status in {
+                "canonical_match_verified",
+                "human_reviewed",
+            } and (
+                review.verification_policy.pronunciation_status == "canonical_match_verified"
+                or statuses == {"correct"}
+            ):
                 status = "correct"
             replacement = first.model_copy(
                 update={
@@ -184,6 +198,54 @@ def canonicalize_quran_alignment(
             corrected.append(word)
     if len(corrected) != len(alignment.words) - len(used_ids) + len(replacements):
         raise MediaError("Quran canonicalization lost an aligned word")
+    return ForcedAlignmentDocument.model_validate({**alignment.model_dump(), "words": corrected})
+
+
+def quran_review_for_alignment(
+    review: QuranCaptionReview,
+    *,
+    source_alignment: ForcedAlignmentDocument,
+    target_alignment: ForcedAlignmentDocument,
+) -> QuranCaptionReview:
+    """Bind reviewed dialogue corrections to a recut without losing provenance.
+
+    Corrections are authored against the full selected-clip alignment. A
+    reviewed editorial arc may omit some of those words; omitted corrections
+    must not block the recut, while an id absent from the source alignment is
+    still a hard evidence error.
+    """
+
+    source_ids = {word.word_id for word in source_alignment.words}
+    target_ids = {word.word_id for word in target_alignment.words}
+    corrections = review.display_corrections
+    unknown = [item.source_word_id for item in corrections if item.source_word_id not in source_ids]
+    if unknown:
+        raise MediaError(f"Tarteel display correction names an unknown forced word: {unknown[0]}")
+    return review.model_copy(
+        update={"display_corrections": [item for item in corrections if item.source_word_id in target_ids]}
+    )
+
+
+def _apply_display_corrections(
+    alignment: ForcedAlignmentDocument, review: QuranCaptionReview
+) -> ForcedAlignmentDocument:
+    if not review.display_corrections:
+        return alignment
+    by_id = {word.word_id: word for word in alignment.words}
+    seen: set[str] = set()
+    corrected: list[AlignedWord] = []
+    for correction in review.display_corrections:
+        if correction.source_word_id in seen:
+            raise MediaError("Tarteel display corrections reuse a source word")
+        word = by_id.get(correction.source_word_id)
+        if word is None:
+            raise MediaError("Tarteel display correction names an unknown forced word")
+        seen.add(correction.source_word_id)
+        by_id[correction.source_word_id] = word.model_copy(
+            update={"text": f" {correction.display_text.strip()}"}
+        )
+    for word in alignment.words:
+        corrected.append(by_id[word.word_id])
     return ForcedAlignmentDocument.model_validate({**alignment.model_dump(), "words": corrected})
 
 

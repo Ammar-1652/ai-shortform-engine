@@ -76,6 +76,7 @@ from clipforge.schemas.campaign import (
     SourceAcquisition,
     SourceInventoryManifest,
     SourceRightsEvidence,
+    TarteelDisplayCorrection,
 )
 from clipforge.schemas.campaign_operator import (
     CampaignImportSnapshot,
@@ -414,6 +415,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     QuranAudioMapping,
     QuranVerificationPolicy,
     QuranCaptionReview,
+    TarteelDisplayCorrection,
     CampaignPolicy,
     CampaignPolicyRule,
     CampaignSource,

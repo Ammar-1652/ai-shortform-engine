@@ -20,7 +20,11 @@ from clipforge.campaign.overlays import (
     measure_tarteel_overlay_sizing,
     stage_tarteel_overlay,
 )
-from clipforge.campaign.quran import canonicalize_quran_alignment, load_tarteel_quran_review
+from clipforge.campaign.quran import (
+    canonicalize_quran_alignment,
+    load_tarteel_quran_review,
+    quran_review_for_alignment,
+)
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
@@ -297,6 +301,22 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+        if project.profile_id == TARTEEL_PROFILE_ID:
+            selected_option = next(
+                item
+                for item in stored_direction.options
+                if item.option_id == stored_direction.selected_option_id
+            )
+            context_line = selected_option.context_line
+            if context_line is None or context_line.copy_mode != "human_reviewed_summary":
+                raise MediaError("Tarteel requires a human-reviewed, source-grounded upper context summary")
+            normalized_context = context_line.text.replace(" ", "")
+            if "؟" not in context_line.text or not any(
+                term in normalized_context for term in ("آية", "ايه", "يكمل", "تختفي", "حفظ", "قرآن", "ترتيل")
+            ):
+                raise MediaError(
+                    "Tarteel upper context summary must be a meaningful question about the reviewed challenge"
+                )
     quran_review_id = ""
     quran_review_sha256 = ""
     quran_review: QuranCaptionReview | None = None
@@ -348,6 +368,13 @@ def plan_advanced_candidate(
                 context.hero_plan.edit_plan.time_map,
                 editorial_arc.time_map,
             )
+    render_quran_review = quran_review
+    if quran_review is not None:
+        render_quran_review = quran_review_for_alignment(
+            quran_review,
+            source_alignment=context.alignment,
+            target_alignment=render_alignment,
+        )
     directed_broll_ids: list[str] = []
     directed_sfx_ids: list[str] = []
     if stored_direction is not None:
@@ -409,7 +436,7 @@ def plan_advanced_candidate(
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
         quran_review_id=quran_review_id,
         quran_review_sha256=quran_review_sha256,
-        quran_review=quran_review,
+        quran_review=render_quran_review,
         cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
@@ -1733,8 +1760,13 @@ def _require_plan_binding(
         )
         if plan.quran_review_sha256 != review_sha or plan.quran_review_id != f"quran-{review_sha[:24]}":
             raise MediaError("advanced plan is stale: Quran display-text evidence changed")
+        render_review = quran_review_for_alignment(
+            review,
+            source_alignment=context.alignment,
+            target_alignment=arc_alignment or context.alignment,
+        )
         expected_captions = _captions(
-            canonicalize_quran_alignment(arc_alignment or context.alignment, review), plan.candidate_id
+            canonicalize_quran_alignment(arc_alignment or context.alignment, render_review), plan.candidate_id
         )
         if plan.captions != expected_captions:
             raise MediaError("advanced plan is stale: Quran captions differ from canonical evidence")

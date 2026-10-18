@@ -62,10 +62,12 @@ Arabic layout is `rtl` and does not reverse characters, transliterate, or rewrit
 
 Tarteel Quran caption correction is a separate display-text evidence path. A
 hashed official Quran.com Uthmani snapshot may replace ASR spellings while
-retaining the forced alignment intervals. `canonical_match_verified` does not
-mean pronunciation verified: corrected words remain `unverified` unless a
-human pronunciation review is recorded. The snapshot and source/transcript
-hashes are checked offline; rendering never fetches canonical text.
+retaining the forced alignment intervals. `canonical_match_verified` permits
+the agreed green active-word display treatment, but does not mean pronunciation
+verified; human pronunciation review remains stronger evidence. Hashed campaign
+subtitle evidence may correct ordinary dialogue by exact forced-word id. The
+snapshot, subtitle evidence, and source/transcript hashes are checked offline;
+rendering never fetches canonical text.
 
 Forced caption words may carry an explicit review status: `unverified`,
 `correct`, or `incorrect`. An active reviewed-correct word is green and returns

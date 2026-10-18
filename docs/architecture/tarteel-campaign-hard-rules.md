@@ -20,11 +20,12 @@ These rules are delivery gates, not creative preferences.
 - Caption the exact spoken words with measured alignment. Quran text must be
   checked against canonical text before styling; do not trust raw ASR. A
   canonical-match verification may correct ASR spelling while retaining its
-  measured timing; a human pronunciation review remains stronger evidence.
-  Only canonical-matched or human-reviewed Quran words may be green. Ordinary
-  dialogue remains separate from Quran styling. Leading/trailing whitespace,
-  punctuation, Arabic joining, and `هههه` reactions must be preserved or
-  corrected from the source evidence.
+  measured timing; canonical-matched display words may use the agreed green
+  active-word treatment, but this is not a pronunciation claim. Human
+  pronunciation review remains stronger evidence. Ordinary dialogue remains
+  separate from Quran styling. Leading/trailing whitespace, punctuation,
+  Arabic joining, and `هههه` reactions must be preserved or corrected from
+  hashed campaign subtitle evidence.
 - Keep the lower timed caption lane separate from one optional upper context
   line in the blurred background. The context line is one short, source-related
   sentence with an allowlisted emoji (`📖`, `💡`, `🎯`, `✨`, `⚡`, `🧠`, `✅`,
@@ -34,6 +35,15 @@ These rules are delivery gates, not creative preferences.
   and review note; otherwise the wording must equal the bound evidence exactly.
   If no defensible line exists, the render is blocked rather than filled with
   invented copy.
+- The upper context line must be a reviewed, catchy, source-grounded summary
+  of the actual moment, not a verbatim filler fragment. It must explain the
+  challenge or payoff in one readable line, use only an allowlisted emoji, and
+  pass a semantic review for meaning, relevance, and non-duplication before
+  planning. A generic or context-free sentence blocks the render.
+- Before reporting a render, inspect the encoded MP4 and a contact sheet. The
+  check must confirm caption accuracy against the source evidence, active-word
+  styling, source-logo visibility after reframing, CTA placement after the
+  final scale, portrait fill, and absence of duplicate or meaningless text.
 - Keep the exact post-caption first line:
   `اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic`.
 - Do not portray children negatively, invent claims, use clickbait, or add

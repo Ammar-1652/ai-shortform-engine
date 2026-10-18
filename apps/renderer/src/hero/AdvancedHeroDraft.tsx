@@ -445,9 +445,16 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
   const containBox = sourceWindow
     ? containRect(sourceWindow.frame_width, sourceWindow.frame_height, 1080, 1920)
     : containRect(1080, 1920, 1080, 1920);
-  const campaignForegroundTransform = input.campaign_overlay
-    ? { transform: "scale(1.08)", transformOrigin: "center center" }
-    : {};
+  // Directed contain layouts use a restrained foreground push-in so the
+  // source remains readable without returning to the old black-bar frame.
+  // Campaign overlays use the measured 1.08 scale; the no-overlay path still
+  // gets a smaller 1.04 scale, and legacy recipes remain byte-compatible.
+  const campaignForegroundTransform = legacyGeometry
+    ? {}
+    : {
+        transform: `scale(${input.campaign_overlay ? 1.08 : 1.04})`,
+        transformOrigin: "center center",
+      };
   const followed =
     strategy === "face_follow" || strategy === "center_crop" || strategy === "manual_window"
       ? placedVideo(windowAt(frame, input.windows ?? []))
@@ -671,8 +678,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           const activeWord =
             style !== "legacy-v1" &&
             motionStyle?.caption_mode === "phrase_active_word" &&
-            (item.words?.some((word) => word.verification_status === "correct" || word.verification_status === "incorrect") ||
-              (!language.startsWith("ar") && !language.startsWith("ja")))
+            Boolean(item.words?.length)
               ? item.words?.find(
                   (word) =>
                     frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
@@ -682,8 +688,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
           const activeWordRecord =
             style !== "legacy-v1" &&
             motionStyle?.caption_mode === "phrase_active_word" &&
-            (item.words?.some((word) => word.verification_status === "correct" || word.verification_status === "incorrect") ||
-              (!language.startsWith("ar") && !language.startsWith("ja")))
+            Boolean(item.words?.length)
               ? item.words?.find(
                   (word) =>
                     frame >= Number(word.output_start_frame ?? frameAtOrAfter(word.output_start_us)) &&
