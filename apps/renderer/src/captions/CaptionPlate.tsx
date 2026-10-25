@@ -81,8 +81,13 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, a
   const lines = measured.lines;
   const lineHeight = centeredLarge ? 1.5 : typography || hook || punch ? 1.08 : 1.25;
   const plateHeight = Math.ceil(lines.length * measured.fontSize * lineHeight + (centeredLarge ? 96 : 56));
-  const centeredTop = (y ?? 1560) - plateHeight / 2;
-  if (centeredLarge && (centeredTop < 1300 || centeredTop + plateHeight > layout.safe.bottom)) {
+  const centeredTop = centeredLarge
+    ? Math.min(
+        Math.max((y ?? 1560) - plateHeight / 2, 1300),
+        layout.safe.bottom - plateHeight,
+      )
+    : (y ?? 1560) - plateHeight / 2;
+  if (centeredLarge && centeredTop < 1300) {
     throw new Error("large caption exceeds the lower blurred safe lane; regroup the cue");
   }
   if (!centeredLarge && modern && y !== undefined && (y < layout.safe.top || y + plateHeight > layout.safe.bottom)) {

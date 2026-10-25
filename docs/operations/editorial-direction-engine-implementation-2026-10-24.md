@@ -79,6 +79,10 @@
   muxed once after all video receipts pass, so a Chrome crash cannot discard
   completed work or create AAC drift at chunk boundaries. The operator can
   resume a failed run with `clipforge hero render --resume RUN_ID`.
+* Codex operator arc reviews and Tarteel overlay-clearance evidence can be
+  rebased append-only when source ranges, timing, geometry, and inspected
+  frames remain identical; stale alternatives are preserved and final human
+  playback remains separate.
 
 ## Validation
 
@@ -179,5 +183,23 @@ review of the Hero draft.
 The current release snapshot was captured and verified with
 `release_id=release-0af1f31a73f1a62f0b5766b1` and fingerprint
 `0af1f31a73f1a62f0b5766b1863339a0de9d55ce6d01d8e690fea57bc308a66c`.
+
+The current Codex-operated Tarteel draft was then rendered through the real
+Remotion path after automatic arc and overlay-proof revalidation:
+
+* Run/checkpoint: `afc710b4-b4da-4d7d-bc90-6a24fb70e374`
+* MP4: `var/work/projects/3865ea49-98ce-446e-ae4a-c4f384b0c9fe/sources/bdafcfaf-73c4-4584-8503-ba6ffb869711/advanced-hero/review-drafts/runs/afc710b4-b4da-4d7d-bc90-6a24fb70e374/candidates/89a5a2fa-ce33-5527-b78d-46a685696c9b/advanced.mp4`
+* MP4 SHA-256: `de0612c7f26aad5058f5bda9cb463fb2066164567714782764ca803aff9e61ac`
+* Encoded facts: 1080×1920, 30 fps, 1284 frames, 42.8s, H.264/AAC,
+  48 kHz stereo.
+* Loudness: −15.7 LUFS integrated, −2.5 dBFS true peak, 5.8 LU LRA.
+* Direction: `motion-quran-challenge-v1`, one bounded push-in camera event,
+  one native Quran graphic, and three declared transitions. No SFX asset was
+  selected because the campaign catalog has no current rights-cleared SFX.
+* Viewer evidence: `candidates/89a5a2fa-ce33-5527-b78d-46a685696c9b/viewer-evidence/bundle.json`
+
+Decoded-frame inspection confirmed the Quran illustration reaches encoded
+pixels, the camera route is present in the render input, captions remain in
+the lower lane, and branding/CTA proof is bound to the new transform.
 * The real Advanced Hero source run and the checkpointed Hero source run are
   technically verified. Human final playback and approval remain required.

@@ -12,6 +12,7 @@ import hashlib
 import json
 import statistics
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 from math import ceil, floor
@@ -22,15 +23,16 @@ import cv2
 import numpy as np
 
 from clipforge.errors import MediaError
-from clipforge.hero.advanced_assets import AssetCatalogEntry, load_catalog, require_asset
+from clipforge.hero.advanced_assets import AssetCatalogEntry, confine_work_path, load_catalog, require_asset
 from clipforge.media.clock import us_to_seconds_str
 from clipforge.media.hashing import sha256_file
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
-from clipforge.media.workspace import SourceWorkspace, ensure_within
+from clipforge.media.workspace import SourceWorkspace, ensure_within, mkdir_contained
 from clipforge.schemas.campaign import CampaignOverlaySpec, OverlayExclusionEvidence
 from clipforge.storage import Database
 from clipforge.timeline import FrameRate, frame_start_us
+from clipforge.transcription.io import publish_json
 
 if TYPE_CHECKING:
     from clipforge.schemas.advanced import AdvancedHeroRenderInput
@@ -83,6 +85,7 @@ def load_tarteel_overlay_exclusion(
     if not base.is_dir() or base.is_symlink():
         raise MediaError("Tarteel overlay exclusion directory is missing")
     matches: list[tuple[OverlayExclusionEvidence, str, Path]] = []
+    stale_labels: list[str] = []
     for path in sorted(base.rglob("overlay-exclusion.json")):
         if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
             raise MediaError("Tarteel overlay exclusion sidecar must be a regular file in the work root")
@@ -95,22 +98,103 @@ def load_tarteel_overlay_exclusion(
         if (evidence.source_asset_id, evidence.candidate_id) != (source_asset_id, candidate_id):
             continue
         if evidence.source_sha256 != source_sha256:
-            raise MediaError("Tarteel overlay exclusion evidence is stale: source hash differs")
+            stale_labels.append("source")
+            continue
         if evidence.time_map_sha256 != time_map_sha256:
-            raise MediaError("Tarteel overlay exclusion evidence is stale: TimeMap differs")
+            stale_labels.append("TimeMap")
+            continue
         if evidence.transform_sha256 != transform_sha256:
-            raise MediaError("Tarteel overlay exclusion evidence is stale: transform differs")
+            stale_labels.append("transform")
+            continue
         if evidence.overlay_spec_sha256 != overlay_spec_sha256(overlay):
-            raise MediaError("Tarteel overlay exclusion evidence is stale: overlay spec differs")
+            stale_labels.append("overlay spec")
+            continue
         if evidence.decision != "clear":
             raise MediaError("Tarteel overlay exclusion evidence is blocked")
         if (evidence.cta_start_us, evidence.cta_end_us) != (overlay.cta_start_us, overlay.cta_end_us):
-            raise MediaError("Tarteel overlay exclusion evidence has stale CTA timing")
+            stale_labels.append("CTA timing")
+            continue
         validate_overlay_sample_files(root, evidence)
         matches.append((evidence, sha256_file(path), path))
     if len(matches) != 1:
+        if stale_labels:
+            raise MediaError(f"Tarteel overlay exclusion evidence is stale: {stale_labels[-1]} differs")
         raise MediaError(f"Tarteel requires exactly one clear overlay exclusion sidecar for {candidate_id}")
     return matches[0]
+
+
+def rebase_codex_overlay_exclusion(
+    root: Path,
+    *,
+    source_asset_id: str,
+    candidate_id: str,
+    source_sha256: str,
+    time_map_sha256: str,
+    transform_sha256: str,
+    overlay: CampaignOverlaySpec,
+    expected_bounds: tuple[int, int, int, int],
+) -> tuple[OverlayExclusionEvidence, str, Path]:
+    """Rebind Codex clearance when only a deterministic transform hash changed.
+
+    The inspected decoded frames remain the authority. Rebase is allowed only
+    when source, TimeMap, CTA timing/spec, and every measured CTA rectangle
+    still match the current plan. A different rectangle or missing frame
+    requires fresh decoded evidence and remains blocked.
+    """
+    root = root.resolve()
+    base = root / "campaigns" / "Tarteel"
+    if not base.is_dir() or base.is_symlink():
+        raise MediaError("Tarteel overlay exclusion directory is missing")
+    candidates: list[tuple[OverlayExclusionEvidence, Path]] = []
+    for path in sorted(base.rglob("overlay-exclusion.json")):
+        if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
+            raise MediaError("Tarteel overlay exclusion sidecar must be a regular work-root file")
+        try:
+            evidence = OverlayExclusionEvidence.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"invalid Tarteel overlay exclusion sidecar {path.name}: {exc}") from exc
+        if (
+            evidence.source_asset_id != source_asset_id
+            or evidence.candidate_id != candidate_id
+            or evidence.decision != "clear"
+            or evidence.source_sha256 != source_sha256
+            or evidence.time_map_sha256 != time_map_sha256
+            or evidence.overlay_spec_sha256 != overlay_spec_sha256(overlay)
+            or (evidence.cta_start_us, evidence.cta_end_us) != (overlay.cta_start_us, overlay.cta_end_us)
+        ):
+            continue
+        validate_overlay_sample_files(root, evidence)
+        if any(
+            (sample.cta_left, sample.cta_top, sample.cta_width, sample.cta_height) != expected_bounds
+            for sample in evidence.samples
+        ):
+            continue
+        candidates.append((evidence, path))
+    if len(candidates) != 1:
+        raise MediaError(
+            "Tarteel overlay exclusion needs fresh decoded evidence; "
+            "no single Codex proof has the current geometry"
+        )
+    evidence, _old_path = candidates[0]
+    now = datetime.now(UTC)
+    rebased = evidence.model_copy(
+        update={
+            "evidence_id": f"{evidence.evidence_id}-rebase-{transform_sha256[:12]}",
+            "transform_sha256": transform_sha256,
+            "reviewer": "codex-editorial-operator",
+            "reviewed_at": now,
+            "provenance": evidence.provenance.model_copy(
+                update={"created_at": now, "created_by": "codex-editorial-operator"}
+            ),
+        }
+    )
+    relative_dir = f"campaigns/Tarteel/rebases/{candidate_id}/overlay-{transform_sha256[:16]}"
+    destination = confine_work_path(
+        root, f"{relative_dir}/overlay-exclusion.json", label="rebased overlay exclusion"
+    )
+    mkdir_contained(root, destination.parent)
+    publish_json(destination, rebased, root, root / f"{relative_dir}/overlay-exclusion.partial")
+    return rebased, sha256_file(destination), destination
 
 
 def validate_overlay_sample_files(root: Path, evidence: OverlayExclusionEvidence) -> None:

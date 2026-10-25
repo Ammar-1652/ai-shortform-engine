@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from clipforge.errors import MediaError
 from clipforge.hero.editorial_arc import (
     load_editorial_arc_review,
+    rebase_codex_arc_review,
     remap_alignment,
     validate_arc_review,
     validate_editorial_arc,
@@ -189,6 +190,60 @@ def test_arc_review_must_describe_the_exact_kept_cut(change: dict[str, object]) 
 
 def test_arc_review_matches_every_kept_segment() -> None:
     validate_arc_review(_review_for_arc(), _arc())
+
+
+def test_codex_arc_review_rebases_when_only_hero_plan_identity_changed(tmp_path) -> None:
+    import hashlib
+    from types import SimpleNamespace
+
+    base_arc = _arc()
+    arc = base_arc.model_copy(
+        update={
+            "segments": [segment.model_copy(update={"continuation": True}) for segment in base_arc.segments]
+        }
+    )
+    review = _review_for_arc().model_copy(update={"reviewer_role": "codex_operator"})
+    frame_sha = hashlib.sha256(b"frame").hexdigest()
+    review = review.model_copy(
+        update={
+            "beats": [
+                beat.model_copy(update={"representative_frame_sha256": frame_sha}) for beat in review.beats
+            ]
+        }
+    )
+    for beat in review.beats:
+        frame = tmp_path / beat.representative_frame_relative_path
+        frame.parent.mkdir(parents=True, exist_ok=True)
+        frame.write_bytes(b"frame")
+    sidecar = tmp_path / "campaigns/Tarteel/candidate-1/editorial-arc-review.json"
+    sidecar.parent.mkdir(parents=True)
+    sidecar.write_text(review.model_dump_json(), encoding="utf-8")
+    alignment = _alignment()
+    rebased, digest = rebase_codex_arc_review(
+        tmp_path,
+        arc=arc,
+        hero_plan=SimpleNamespace(edit_plan=SimpleNamespace(time_map=arc.time_map)),  # type: ignore[arg-type]
+        hero_plan_sha256="e" * 64,
+        source_sha256="a" * 64,
+        alignment=alignment,
+        alignment_sha256="c" * 64,
+        transcript_sha256="d" * 64,
+        visual_analysis_sha256="e" * 64,
+    )
+    assert rebased.hero_plan_sha256 == "e" * 64
+    assert rebased.arc_id.endswith("-rebase-eeeeeeeeeeee")
+    assert digest
+    current = load_editorial_arc_review(
+        tmp_path,
+        source_asset_id="source-1",
+        candidate_id="candidate-1",
+        source_sha256="a" * 64,
+        transcript_sha256="d" * 64,
+        visual_analysis_sha256="e" * 64,
+        arc_sha256=digest,
+        arc=rebased,
+    )
+    assert current[0].reviewer_role == "codex_operator"
 
 
 def test_arc_opening_boundary_must_match_the_first_hook_word() -> None:

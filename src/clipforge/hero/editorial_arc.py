@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.hero.alignment import alignment_binding_sha256
 from clipforge.media.hashing import sha256_file
+from clipforge.media.workspace import mkdir_contained
 from clipforge.preview.timing import frame_at_or_after
 from clipforge.schemas.arc import EditorialArcDocument, EditorialArcReview
 from clipforge.schemas.direction import (
@@ -24,6 +27,7 @@ from clipforge.schemas.editorial import OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
 from clipforge.timeline import FrameRate
+from clipforge.transcription.io import dump_json, publish_json
 
 _NAMESPACE = uuid.UUID("2d1c8f3f-3c53-4b7a-a01f-7c3a9d45c1e2")
 
@@ -60,6 +64,7 @@ def load_editorial_arc_review(
     if not base.is_dir() or base.is_symlink():
         raise MediaError("Tarteel editorial arc review directory is missing")
     matches: list[tuple[EditorialArcReview, str, Path]] = []
+    stale_labels: list[str] = []
     for path in sorted(base.rglob("editorial-arc-review.json")):
         if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
             raise MediaError("Tarteel editorial arc review must be a regular work-root file")
@@ -79,16 +84,105 @@ def load_editorial_arc_review(
             (review.visual_analysis_sha256, visual_analysis_sha256, "visual analysis"),
             (review.arc_sha256, arc_sha256, "arc"),
         )
-        for actual, expected, label in bindings:
-            if actual != expected:
-                raise MediaError(f"Tarteel editorial arc review is stale: {label} hash differs")
+        stale = next((label for actual, expected, label in bindings if actual != expected), None)
+        if stale is not None:
+            stale_labels.append(stale)
+            continue
         verify_arc_review_frames(root, review)
         if arc is not None:
             validate_arc_review(review, arc)
         matches.append((review, sha256_file(path), path))
     if len(matches) != 1:
+        if stale_labels:
+            raise MediaError(f"Tarteel editorial arc review is stale: {stale_labels[-1]} hash differs")
         raise MediaError(f"Tarteel requires exactly one accepted editorial arc review for {candidate_id}")
     return matches[0]
+
+
+def rebase_codex_arc_review(
+    root: Path,
+    *,
+    arc: EditorialArcDocument,
+    hero_plan: HeroPlanDocument,
+    hero_plan_sha256: str,
+    source_sha256: str,
+    alignment: ForcedAlignmentDocument,
+    alignment_sha256: str,
+    transcript_sha256: str,
+    visual_analysis_sha256: str,
+) -> tuple[EditorialArcDocument, str]:
+    """Rebind a Codex-approved arc when only the Hero plan identity changed.
+
+    A Hero plan refresh does not require a second human publication decision.
+    Codex may revalidate the exact retained source ranges and record a new
+    append-only operator review. If the ranges or evidence no longer match,
+    this function fails and requires a new editorial choice instead of
+    silently changing the story.
+    """
+    if arc.hero_plan_sha256 == hero_plan_sha256:
+        return arc, hashlib.sha256(dump_json(arc).encode("utf-8")).hexdigest()
+    root = root.resolve()
+    base = root / "campaigns" / "Tarteel"
+    if not base.is_dir() or base.is_symlink():
+        raise MediaError("Tarteel editorial arc review directory is missing")
+    candidate_reviews: list[tuple[EditorialArcReview, Path]] = []
+    for path in sorted(base.rglob("editorial-arc-review.json")):
+        if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
+            raise MediaError("Tarteel editorial arc review must be a regular work-root file")
+        try:
+            review = EditorialArcReview.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"invalid Tarteel editorial arc review {path.name}: {exc}") from exc
+        if (
+            review.source_asset_id == arc.source_asset_id
+            and review.candidate_id == arc.candidate_id
+            and review.decision == "accepted"
+            and review.reviewer_role == "codex_operator"
+            and review.source_sha256 == source_sha256
+            and review.transcript_sha256 == transcript_sha256
+            and review.visual_analysis_sha256 == visual_analysis_sha256
+        ):
+            verify_arc_review_frames(root, review)
+            validate_arc_review(review, arc)
+            candidate_reviews.append((review, path))
+    if not candidate_reviews:
+        raise MediaError("Tarteel editorial arc is stale and has no source-bound Codex review to revalidate")
+    if len(candidate_reviews) > 1:
+        raise MediaError("Tarteel has multiple Codex arc reviews eligible for rebasing")
+    review, _old_path = candidate_reviews[0]
+    rebased = arc.model_copy(
+        update={
+            "arc_id": f"{arc.arc_id}-rebase-{hero_plan_sha256[:12]}",
+            "hero_plan_sha256": hero_plan_sha256,
+        }
+    )
+    validate_editorial_arc(
+        rebased,
+        source_sha256=source_sha256,
+        hero_plan=hero_plan,
+        hero_plan_sha256=hero_plan_sha256,
+        alignment=alignment,
+        alignment_sha256=alignment_sha256,
+    )
+    arc_sha256 = hashlib.sha256(dump_json(rebased).encode("utf-8")).hexdigest()
+    now = datetime.now(UTC)
+    rebased_review = review.model_copy(
+        update={
+            "review_id": f"{review.review_id}-rebase-{hero_plan_sha256[:12]}",
+            "arc_sha256": arc_sha256,
+            "reviewed_at": now,
+            "provenance": review.provenance.model_copy(
+                update={"created_at": now, "created_by": "codex-editorial-operator"}
+            ),
+        }
+    )
+    relative_dir = f"campaigns/Tarteel/rebases/{arc.candidate_id}/{rebased.arc_id}"
+    destination = confine_work_path(
+        root, f"{relative_dir}/editorial-arc-review.json", label="rebased editorial arc review"
+    )
+    mkdir_contained(root, destination.parent)
+    publish_json(destination, rebased_review, root, root / f"{relative_dir}/editorial-arc-review.partial")
+    return rebased, arc_sha256
 
 
 def verify_arc_review_frames(root: Path, review: EditorialArcReview) -> None:
@@ -293,6 +387,25 @@ def remap_direction_intervals(
             continue
         evidence_by_id = {item.evidence_id: item for item in option.evidence}
 
+        def output_segment_ids(word_ids: list[str]) -> list[str]:
+            words = [output_words[word_id] for word_id in word_ids]
+            return [
+                segment.segment_id
+                for segment in output_time_map.segments
+                if any(
+                    segment.source_start_us <= word.source_start_us
+                    and word.source_end_us <= segment.source_end_us
+                    for word in words
+                )
+            ]
+
+        remapped_evidence = {
+            evidence_id: evidence.model_copy(
+                update={"source_segment_ids": output_segment_ids(evidence.source_word_ids)}
+            )
+            for evidence_id, evidence in evidence_by_id.items()
+        }
+
         beats = []
         for beat in option.beats:
             interval = _direction_interval(evidence_by_id, beat.evidence_ids, source_words, output_words)
@@ -308,6 +421,11 @@ def remap_direction_intervals(
             beats.append(
                 beat.model_copy(
                     update={
+                        "source_segment_ids": [
+                            segment_id
+                            for evidence_id in beat.evidence_ids
+                            for segment_id in remapped_evidence[evidence_id].source_segment_ids
+                        ],
                         "output_start_us": interval.output_start_us,
                         "output_end_us": interval.output_end_us,
                     }
@@ -368,6 +486,10 @@ def remap_direction_intervals(
                 {
                     **option.model_dump(mode="json"),
                     "beats": beats,
+                    "evidence": [
+                        remapped_evidence[item.evidence_id].model_dump(mode="json") for item in option.evidence
+                    ],
+                    "segment_order": [segment.segment_id for segment in output_time_map.segments],
                     "asset_placements": placements,
                     "motion_graphics": graphics,
                     "camera_motion": camera_motion,

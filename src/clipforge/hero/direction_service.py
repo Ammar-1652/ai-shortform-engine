@@ -273,6 +273,8 @@ def validate_source_evidence(
     words: Sequence[AlignedWord],
     time_map: TimeMapDocument,
     scene_ids: set[str],
+    *,
+    selected_only: bool = False,
 ) -> None:
     """Bind exact evidence ids, text, intervals and segment order; never guess."""
     aligned = list(words)
@@ -281,6 +283,8 @@ def validate_source_evidence(
     segment_ids = [segment.segment_id for segment in time_map.segments]
     segment_positions = {segment_id: index for index, segment_id in enumerate(segment_ids)}
     for option in document.options:
+        if selected_only and option.option_id != document.selected_option_id:
+            continue
         if any(segment_id not in segment_positions for segment_id in option.segment_order):
             raise MediaError("direction segment order names an unknown approved TimeMap segment")
         ordered_positions = [segment_positions[segment_id] for segment_id in option.segment_order]

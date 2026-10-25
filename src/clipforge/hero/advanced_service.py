@@ -17,9 +17,11 @@ from pydantic import ValidationError
 from clipforge import __version__
 from clipforge.campaign.overlays import (
     TARTEEL_PROFILE_ID,
+    campaign_cta_bounds,
     load_tarteel_overlay_exclusion,
     measure_tarteel_overlay_sizing,
     overlay_spec_sha256,
+    rebase_codex_overlay_exclusion,
     require_tarteel_overlay_matches_plan,
     stage_tarteel_overlay,
     validate_overlay_render_geometry,
@@ -59,6 +61,7 @@ from clipforge.hero.direction_service import load_direction
 from clipforge.hero.editorial_arc import (
     load_editorial_arc,
     load_editorial_arc_review,
+    rebase_codex_arc_review,
     remap_alignment,
     remap_direction_intervals,
     validate_arc_review,
@@ -303,6 +306,25 @@ def plan_advanced_candidate(
     if project.profile_id == TARTEEL_PROFILE_ID and editorial_arc is None:
         raise MediaError(
             "Tarteel Advanced Hero requires a reviewed hook/body/punch editorial arc before planning"
+        )
+    if (
+        project.profile_id == TARTEEL_PROFILE_ID
+        and editorial_arc is not None
+        and editorial_arc.hero_plan_sha256 != context.hero_plan_sha256
+    ):
+        # Codex owns editorial-arc decisions. Revalidate the exact retained
+        # ranges against the current Hero plan and append a fresh operator
+        # review instead of stopping on a stale identity.
+        editorial_arc, editorial_arc_sha256 = rebase_codex_arc_review(
+            root,
+            arc=editorial_arc,
+            hero_plan=context.hero_plan,
+            hero_plan_sha256=context.hero_plan_sha256,
+            source_sha256=context.source_sha256,
+            alignment=context.alignment,
+            alignment_sha256=context.alignment_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+            visual_analysis_sha256=context.visual_sha256,
         )
     _require_reviewed_tarteel_arc(project.profile_id, editorial_arc)
     stored_direction = direction
@@ -1337,15 +1359,46 @@ def _render_run(
         overlay_exclusion_sha256 = ""
         if campaign_overlay is not None:
             transform_sha256 = _plan_trajectory_sha256(workspace, plan) or plan.reframing_config_sha256
-            exclusion, _source_exclusion_sha256, _exclusion_path = load_tarteel_overlay_exclusion(
-                root,
-                source_asset_id=source_asset_id,
-                candidate_id=candidate_id,
-                source_sha256=plan.source_sha256,
-                time_map_sha256=plan.time_map_sha256,
-                transform_sha256=transform_sha256,
-                overlay=campaign_overlay,
-            )
+            try:
+                exclusion, _source_exclusion_sha256, _exclusion_path = load_tarteel_overlay_exclusion(
+                    root,
+                    source_asset_id=source_asset_id,
+                    candidate_id=candidate_id,
+                    source_sha256=plan.source_sha256,
+                    time_map_sha256=plan.time_map_sha256,
+                    transform_sha256=transform_sha256,
+                    overlay=campaign_overlay,
+                )
+            except MediaError as exc:
+                if "transform" not in str(exc):
+                    raise
+                bounds_input = AdvancedHeroRenderInput.model_construct(
+                    candidate_id=candidate_id,
+                    advanced_set_id=advanced_set_id,
+                    duration_in_frames=frame_count_for_duration(_output_end_us(plan)),
+                    campaign_overlay=campaign_overlay,
+                    reframing_strategy=plan.reframing_strategy,
+                    reframing_config_sha256=plan.reframing_config_sha256,
+                    renderer_recipe_version=profile.renderer_recipe_version,
+                    profile_fingerprint=plan.profile_fingerprint,
+                    safe_region_id=plan.safe_region_id,
+                    alignment_sha256=plan.alignment_sha256,
+                    hero_plan_sha256=plan.hero_plan_sha256,
+                    advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
+                    frame_style_id=plan.frame_style_id,
+                    frame_layout_id=plan.frame_layout_id,
+                    windows=plan.windows,
+                )
+                exclusion, _source_exclusion_sha256, _exclusion_path = rebase_codex_overlay_exclusion(
+                    root,
+                    source_asset_id=source_asset_id,
+                    candidate_id=candidate_id,
+                    source_sha256=plan.source_sha256,
+                    time_map_sha256=plan.time_map_sha256,
+                    transform_sha256=transform_sha256,
+                    overlay=campaign_overlay,
+                    expected_bounds=campaign_cta_bounds(bounds_input),
+                )
             exclusion_destination = output.parent / "overlay-exclusion.json"
             publish_json(
                 exclusion_destination,
@@ -2784,6 +2837,7 @@ def _require_plan_binding(
                 else context.hero_plan.edit_plan.time_map
             ),
             {scene.scene_id for scene in context.visual.scenes},
+            selected_only=True,
         )
         expected_transition_style = _effective_transition_style("", True)
     elif not plan.editorial_arc_id:
