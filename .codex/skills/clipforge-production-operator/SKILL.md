@@ -72,6 +72,11 @@ while retiring the prior release. Admission never approves a video artifact.
   requests, and omission or policy-block reasons before Advanced Hero planning.
   Generic campaigns may require a cleared asset; restricted campaigns record
   `blocked_by_policy` and never inherit a generic asset default.
+- For a preferred generic asset request, use the existing Envato/Openverse or
+  local provider boundary, register and verify the asset, then bind its
+  response/selection/acquisition/license evidence with
+  `clipforge editorial treatment bind-asset`. A request or provider search
+  alone never makes media eligible for a render.
 - Encoding uses `hero advanced render`; an interrupted run resumes only from
   matching receipts. QA uses `qa run` and `qa gate`.
 - Clean Advanced plans create a pilot receipt during planning. Verify it with

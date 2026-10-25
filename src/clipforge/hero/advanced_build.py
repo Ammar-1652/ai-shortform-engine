@@ -51,6 +51,7 @@ from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument
+from clipforge.schemas.treatment import TreatmentAudioMixResult
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import Database, get_source_manifest
 from clipforge.transcription.io import publish_json
@@ -276,6 +277,7 @@ def build_advanced_plan(
         bound_review_digest = hashlib.sha256(
             f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
         ).hexdigest()
+    treatment_audio_mix = _build_treatment_audio_mix(direction, sfx, profile)
     document = AdvancedHeroPlanDocument(
         workflow_roles=WorkflowRolePolicy(),
         plan_id=plan_id,
@@ -310,6 +312,7 @@ def build_advanced_plan(
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
         treatment_fingerprint="" if direction is None else direction.treatment_fingerprint or "",
+        treatment_audio_mix=treatment_audio_mix,
         preset_id="" if direction is None else direction.preset_id or "",
         motion_recipe_ids=motion_recipe_ids,
         motion_catalog_sha256=motion_catalog_sha256,
@@ -1142,6 +1145,36 @@ def _sfx(
             )
         )
     return events
+
+
+def _build_treatment_audio_mix(
+    direction: DirectionDocument | None,
+    events: list[AudioMixEvent],
+    profile: AdvancedHeroProfile,
+) -> TreatmentAudioMixResult | None:
+    """Bind requested/applied SFX values to the Advanced plan identity."""
+    if direction is None:
+        return None
+    treatment_sha = direction.treatment_fingerprint or "0" * 64
+    policy_sha = advanced_fingerprint(
+        {
+            "audio_mix_version": profile.audio_mix_version,
+            "sfx_default_gain_db": profile.sfx_default_gain_db,
+            "sfx_max_gain_db": profile.sfx_max_gain_db,
+            "sfx_fade_in_us": profile.sfx_fade_in_us,
+            "sfx_fade_out_us": profile.sfx_fade_out_us,
+            "narration_duck_db": profile.narration_duck_db,
+        }
+    )
+    return TreatmentAudioMixResult(
+        mix_id=stable_id("treatment-audio-mix", direction.direction_id, treatment_sha),
+        treatment_fingerprint=treatment_sha,
+        policy_fingerprint=policy_sha,
+        cue_event_ids=[event.event_id for event in events],
+        applied_gain_db=[event.gain_db for event in events],
+        duck_db=[abs(profile.narration_duck_db) for _event in events],
+        status="planned",
+    )
 
 
 def _tags_support_note(tags: tuple[str, ...], note: str) -> bool:

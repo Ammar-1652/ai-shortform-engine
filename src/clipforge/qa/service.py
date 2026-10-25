@@ -31,7 +31,11 @@ from clipforge.policy.loader import PolicyError, ProfileResolution, resolve_prof
 from clipforge.preview.inputs import PreviewInputs, load_preview_inputs
 from clipforge.preview.service import default_profile
 from clipforge.qa.technical import TechnicalInputs, technical_checks
-from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument, AdvancedHeroPlanDocument
+from clipforge.schemas.advanced import (
+    AdvancedHeroDraftSetDocument,
+    AdvancedHeroPlanDocument,
+    advanced_fingerprint,
+)
 from clipforge.schemas.governance import AssetLicenseRecord, ComplianceStatus
 from clipforge.schemas.jobs import JobRecord, QACheck, QAKind, QAResult, QAStatus
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -408,6 +412,18 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
     policies = [
         PolicyDigest(policy_id=item.policy_id, sha256=item.sha256) for item in prepared.resolution.policies
     ]
+    treatment_fingerprints = {
+        plan.treatment_fingerprint for plan in prepared.plans if plan.treatment_fingerprint
+    }
+    treatment_mix_fingerprints = {
+        advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
+        for plan in prepared.plans
+        if plan.treatment_audio_mix is not None
+    }
+    if len(treatment_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment fingerprints")
+    if len(treatment_mix_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment audio mix fingerprints")
     return QASetDocument(
         workflow_roles=WorkflowRolePolicy(),
         qa_set_id=str(uuid.uuid4()),
@@ -422,6 +438,8 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         technical=technical_result,
         campaign=campaign_result,
         status=status,
+        treatment_fingerprint=next(iter(treatment_fingerprints), ""),
+        treatment_summary_sha256=next(iter(treatment_mix_fingerprints), ""),
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,

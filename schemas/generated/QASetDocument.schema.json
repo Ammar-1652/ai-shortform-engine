@@ -338,6 +338,18 @@
     "technical": {
       "$ref": "#/$defs/QAResult"
     },
+    "treatment_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Fingerprint",
+      "type": "string"
+    },
+    "treatment_summary_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Summary Sha256",
+      "type": "string"
+    },
     "workflow_roles": {
       "anyOf": [
         {

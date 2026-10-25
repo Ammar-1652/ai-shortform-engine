@@ -217,6 +217,16 @@ CAPABILITIES = (
         execution="read",
     ),
     _tool(
+        "treatment-bind-asset",
+        "Bind verified provider and license evidence to a treatment placement",
+        "asset",
+        "editorial treatment bind-asset",
+        ["acquired treatment request", "registered local asset", "license evidence"],
+        ["request-bound DirectionAssetPlacement"],
+        "Does not download media; provider acquisition and rights checks remain separate typed tools.",
+        execution="read",
+    ),
+    _tool(
         "editorial-knowledge-doctor",
         "Validate the admitted editorial knowledge release",
         "decision",

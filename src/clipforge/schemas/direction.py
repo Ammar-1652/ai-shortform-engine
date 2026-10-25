@@ -168,6 +168,12 @@ class DirectionAssetPlacement(Versioned):
     # is editorial context, not semantic proof that a stock clip is relevant.
     asset_tags: list[str] = Field(default_factory=list, max_length=24)
     gain_db: float | None = Field(default=None, ge=-24, le=6)
+    request_id: EntityId | None = None
+    provider_response_sha256: str | None = Field(default=None, pattern=_SHA)
+    selection_id: EntityId | None = None
+    acquisition_id: EntityId | None = None
+    license_evidence_sha256: str | None = Field(default=None, pattern=_SHA)
+    asset_status: Literal["pending", "selected", "acquired", "blocked", "unavailable"] = "acquired"
 
 
 class DirectionMotionGraphic(Versioned):
@@ -407,6 +413,26 @@ class DirectionOption(Versioned):
             known_camera_ids = {item.motion_id for item in self.camera_motion}
             known_transition_ids = {item.transition_id for item in self.transitions}
             known_graphic_ids = {item.graphic_id for item in self.motion_graphics}
+            requests_by_id = {
+                request.request_id: request
+                for decision in self.treatment_decisions
+                for request in decision.asset_requests
+            }
+            for placement in self.asset_placements:
+                if placement.request_id is None:
+                    continue
+                request = requests_by_id.get(placement.request_id)
+                if request is None:
+                    raise ValueError("asset placement references an unknown treatment request")
+                if request.status != "acquired" or request.registered_asset_id != placement.asset_id:
+                    raise ValueError("asset placement request is not acquired for the selected asset")
+                if placement.provider_response_sha256 != request.provider_response_sha256:
+                    raise ValueError("asset placement provider response is stale")
+                if (
+                    placement.selection_id != request.selection_id
+                    or placement.acquisition_id != request.acquisition_id
+                ):
+                    raise ValueError("asset placement acquisition identity is stale")
             for decision in self.treatment_decisions:
                 for layer in (
                     decision.broll,

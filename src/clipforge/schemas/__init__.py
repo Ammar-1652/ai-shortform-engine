@@ -133,8 +133,10 @@ from clipforge.schemas.treatment import (
     SfxTreatmentDecision,
     TransitionTreatmentDecision,
     TreatmentAssetRequest,
+    TreatmentAudioMixResult,
     TreatmentLayerDecision,
     TreatmentPlanSummary,
+    TreatmentVisualEvidence,
 )
 
 __all__ = [
@@ -242,9 +244,11 @@ __all__ = [
     "TransitionPolicy",
     "TransitionTreatmentDecision",
     "TreatmentAssetRequest",
+    "TreatmentAudioMixResult",
     "TreatmentLayerDecision",
     "TreatmentPlanSummary",
     "TreatmentPolicy",
+    "TreatmentVisualEvidence",
     "Versioned",
     "assert_schemas_current",
     "digest_time_map",

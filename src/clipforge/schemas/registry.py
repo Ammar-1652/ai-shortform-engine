@@ -324,8 +324,10 @@ from clipforge.schemas.treatment import (
     SfxTreatmentDecision,
     TransitionTreatmentDecision,
     TreatmentAssetRequest,
+    TreatmentAudioMixResult,
     TreatmentLayerDecision,
     TreatmentPlanSummary,
+    TreatmentVisualEvidence,
 )
 from clipforge.schemas.vision import (
     ContactSheet,
@@ -512,6 +514,8 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     SfxTreatmentDecision,
     TreatmentLayerDecision,
     TreatmentPlanSummary,
+    TreatmentAudioMixResult,
+    TreatmentVisualEvidence,
     TreatmentAssetRequest,
     TransitionTreatmentDecision,
     PolicyDigest,

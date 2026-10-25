@@ -1,0 +1,73 @@
+{
+  "additionalProperties": false,
+  "description": "Measured visual and collision facts for one treatment decision.",
+  "properties": {
+    "collision_status": {
+      "default": "unknown",
+      "enum": [
+        "clear",
+        "blocked",
+        "unknown"
+      ],
+      "title": "Collision Status",
+      "type": "string"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Note",
+      "type": "string"
+    },
+    "protected_region_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Protected Region Ids",
+      "type": "array"
+    },
+    "relevance_status": {
+      "default": "unknown",
+      "enum": [
+        "related",
+        "unrelated",
+        "unknown"
+      ],
+      "title": "Relevance Status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "visual_scene_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Visual Scene Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "note"
+  ],
+  "title": "TreatmentVisualEvidence",
+  "type": "object"
+}

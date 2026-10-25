@@ -119,6 +119,38 @@ def lint_direction(
                                 message=f"{layer.layer} is used while the selected preset blocks it",
                             )
                         )
+                for decision in selected.treatment_decisions:
+                    if decision.broll.state == "use" and decision.visual_evidence is not None:
+                        if decision.visual_evidence.relevance_status != "related":
+                            findings.append(
+                                DirectionLintFinding(
+                                    severity="error",
+                                    code="broll_relevance_unproven",
+                                    message=f"B-roll relevance is not proven on beat {decision.beat_id}",
+                                )
+                            )
+                        if decision.visual_evidence.collision_status == "blocked":
+                            findings.append(
+                                DirectionLintFinding(
+                                    severity="error",
+                                    code="treatment_collision_blocked",
+                                    message=f"visual collision blocks treatment on beat {decision.beat_id}",
+                                )
+                            )
+                    beat_by_id = {beat.beat_id: beat for beat in selected.beats}
+                    if (
+                        policy.sfx.forbid_on_continuous_dialogue
+                        and decision.sfx.state == "use"
+                        and beat_by_id.get(decision.beat_id) is not None
+                        and beat_by_id[decision.beat_id].kind == "body"
+                    ):
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_sfx_continuous_dialogue",
+                                message=f"SFX is not allowed on continuous dialogue beat {decision.beat_id}",
+                            )
+                        )
                 if len(selected.camera_motion) > policy.camera.max_events:
                     findings.append(
                         DirectionLintFinding(
@@ -127,6 +159,37 @@ def lint_direction(
                             message="camera events exceed the selected preset policy",
                         )
                     )
+                if len(selected.camera_motion) < policy.camera.min_events:
+                    intentional_camera_omission = all(
+                        decision.camera.state in {"omit_with_reason", "blocked_by_policy"}
+                        for decision in selected.treatment_decisions
+                    )
+                    if not intentional_camera_omission:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_camera_minimum_missing",
+                                message="camera events do not meet the selected preset minimum",
+                            )
+                        )
+                for event in selected.camera_motion:
+                    scale_delta = abs(event.scale_end_permille - event.scale_start_permille) / 1000
+                    if scale_delta > policy.camera.max_scale_delta:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_camera_scale_exceeded",
+                                message=f"camera event exceeds preset scale delta: {event.motion_id}",
+                            )
+                        )
+                    if event.travel_px > policy.camera.max_subject_drift_px:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_camera_drift_exceeded",
+                                message=f"camera event exceeds preset subject drift: {event.motion_id}",
+                            )
+                        )
                 if len(selected.transitions) > policy.transitions.max_per_30s:
                     findings.append(
                         DirectionLintFinding(
@@ -135,6 +198,19 @@ def lint_direction(
                             message="transition events exceed the selected preset policy",
                         )
                     )
+                used_broll = [decision.broll.state == "use" for decision in selected.treatment_decisions]
+                consecutive = 0
+                for uses_broll in used_broll:
+                    consecutive = consecutive + 1 if uses_broll else 0
+                    if consecutive > policy.broll.max_consecutive_beats:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_broll_consecutive_limit",
+                                message="B-roll exceeds the selected preset consecutive-beat limit",
+                            )
+                        )
+                        break
                 audio_placements = [item for item in selected.asset_placements if item.kind == "audio"]
                 if len(audio_placements) > policy.sfx.max_cues_per_30s:
                     findings.append(
@@ -144,6 +220,53 @@ def lint_direction(
                             message="SFX placements exceed the selected preset policy",
                         )
                     )
+                for placement in audio_placements:
+                    if placement.gain_db is not None and placement.gain_db > policy.sfx.max_gain_db:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="preset_sfx_gain_exceeded",
+                                message=f"SFX placement exceeds preset gain limit: {placement.placement_id}",
+                            )
+                        )
+                request_by_id = {
+                    request.request_id: request
+                    for decision in selected.treatment_decisions
+                    for request in decision.asset_requests
+                }
+                for placement in selected.asset_placements:
+                    if placement.request_id is None:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="asset_request_binding_missing",
+                                message=(
+                                    "asset placement is not bound to a treatment request: "
+                                    f"{placement.placement_id}"
+                                ),
+                            )
+                        )
+                        continue
+                    request = request_by_id.get(placement.request_id)
+                    if request is None:
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="asset_request_unknown",
+                                message=(
+                                    "asset placement references an unknown treatment request: "
+                                    f"{placement.request_id}"
+                                ),
+                            )
+                        )
+                    elif request.status != "acquired" or placement.asset_status != "acquired":
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="asset_request_not_acquired",
+                                message=f"asset request is not acquired: {request.request_id}",
+                            )
+                        )
             except PresetCatalogError as exc:
                 findings.append(
                     DirectionLintFinding(

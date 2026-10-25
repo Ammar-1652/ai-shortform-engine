@@ -1464,6 +1464,7 @@ def _render_run(
             direction_id=plan.direction_id,
             direction_sha256=plan.direction_sha256,
             treatment_fingerprint=plan.treatment_fingerprint,
+            treatment_audio_mix=plan.treatment_audio_mix,
             preset_id=plan.preset_id,
             pilot_sha256=pilot_sha256,
             motion_recipe_ids=plan.motion_recipe_ids,
@@ -1739,6 +1740,7 @@ def _render_run(
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
                 treatment_fingerprint=plan.treatment_fingerprint,
+                treatment_audio_mix=plan.treatment_audio_mix,
                 preset_id=plan.preset_id,
                 motion_recipe_ids=plan.motion_recipe_ids,
                 motion_catalog_sha256=plan.motion_catalog_sha256,
@@ -2533,6 +2535,10 @@ def _pilot_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: b
 def _pilot_dependency_sha(plan: AdvancedHeroPlanDocument) -> str:
     payload = {
         "style_fingerprint": plan.style_fingerprint,
+        "treatment_fingerprint": plan.treatment_fingerprint,
+        "treatment_audio_mix": (
+            None if plan.treatment_audio_mix is None else plan.treatment_audio_mix.model_dump(mode="json")
+        ),
         "time_map_sha256": plan.time_map_sha256,
         "camera_motion": [item.model_dump(mode="json") for item in plan.camera_motion],
         "transitions": [item.model_dump(mode="json") for item in plan.transitions],
@@ -3589,6 +3595,7 @@ def _review_draft(
         binding = names.get(sound.asset_id)
         sfx.append(
             {
+                "event_id": sound.event_id,
                 "asset_id": sound.asset_id,
                 "display_name": None if binding is None else binding.display_name,
                 "rights_status": None if binding is None else binding.license_status,
@@ -3707,6 +3714,10 @@ def _review_draft(
         "plan_id": plan.hero_plan_id,
         "plan_sha256": plan.hero_plan_sha256,
         "advanced_plan_sha256": draft.advanced_plan_sha256,
+        "treatment_fingerprint": plan.treatment_fingerprint,
+        "treatment_audio_mix": (
+            None if plan.treatment_audio_mix is None else plan.treatment_audio_mix.model_dump(mode="json")
+        ),
         "reframing_strategy": document.reframing_strategy,
         "preview_url": f"/media/advanced-hero/{draft.candidate_id}",
         "broll": broll,

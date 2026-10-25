@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -22,6 +23,8 @@ TreatmentOmissionReason = Literal[
     "unsupported_capability",
     "missing_evidence",
 ]
+TreatmentAssetStatus = Literal["pending", "selected", "acquired", "blocked", "unavailable"]
+CollisionStatus = Literal["clear", "blocked", "unknown"]
 
 
 class TreatmentLayerDecision(Versioned):
@@ -134,6 +137,13 @@ class TreatmentAssetRequest(Versioned):
     interval: OutputInterval
     source_evidence_ids: list[EntityId] = Field(min_length=1, max_length=16)
     relevance_threshold: float = Field(default=0.85, ge=0, le=1)
+    status: TreatmentAssetStatus = "pending"
+    provider_response_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    selection_id: EntityId | None = None
+    acquisition_id: EntityId | None = None
+    license_evidence_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    registered_asset_id: EntityId | None = None
+    registered_asset_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def request_is_bounded(self) -> Self:
@@ -141,6 +151,38 @@ class TreatmentAssetRequest(Versioned):
             raise ValueError("asset request query terms must be short non-empty values")
         if self.kind == "audio" and "graphic" in self.provider_classes:
             raise ValueError("audio asset requests cannot use a graphic-only provider class")
+        if self.status in {"selected", "acquired"} and (
+            self.provider_response_sha256 is None or self.selection_id is None
+        ):
+            raise ValueError("selected asset requests require provider response and selection evidence")
+        if self.status == "acquired" and (
+            self.acquisition_id is None
+            or self.license_evidence_sha256 is None
+            or self.registered_asset_id is None
+            or self.registered_asset_sha256 is None
+        ):
+            raise ValueError(
+                "acquired asset requests require acquisition, license, and registered asset evidence"
+            )
+        return self
+
+
+class TreatmentVisualEvidence(Versioned):
+    """Measured visual and collision facts for one treatment decision."""
+
+    visual_scene_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    protected_region_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    collision_status: CollisionStatus = "unknown"
+    relevance_status: Literal["related", "unrelated", "unknown"] = "unknown"
+    evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def status_has_evidence(self) -> Self:
+        if self.collision_status == "clear" and not self.protected_region_ids:
+            raise ValueError("clear collision evidence requires protected region ids")
+        if self.relevance_status != "unknown" and not self.evidence_ids:
+            raise ValueError("relevance status requires evidence ids")
         return self
 
 
@@ -157,6 +199,8 @@ class BeatTreatmentDecision(Versioned):
     sfx: SfxTreatmentDecision
     motion_graphics: MotionGraphicsTreatmentDecision
     asset_requests: list[TreatmentAssetRequest] = Field(default_factory=list, max_length=8)
+    visual_evidence: TreatmentVisualEvidence | None = None
+    audio_mix_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     dependency_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -174,6 +218,42 @@ class BeatTreatmentDecision(Versioned):
             for evidence_id in request.source_evidence_ids
         ):
             raise ValueError("asset request references evidence outside its beat")
+        return self
+
+
+class TreatmentAudioMixResult(Versioned):
+    """Hash-bound requested/applied SFX mix policy and measured output facts."""
+
+    mix_id: EntityId
+    treatment_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    policy_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    cue_event_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    applied_gain_db: list[float] = Field(default_factory=list, max_length=32)
+    duck_db: list[float] = Field(default_factory=list, max_length=32)
+    measured_integrated_lufs: float | None = None
+    measured_true_peak_dbfs: float | None = None
+    measured_rms_windows: list[float] = Field(default_factory=list, max_length=128)
+    status: Literal["planned", "measured"] = "planned"
+
+    @model_validator(mode="after")
+    def measured_result_has_facts(self) -> Self:
+        if self.status == "measured" and (
+            self.measured_integrated_lufs is None
+            or self.measured_true_peak_dbfs is None
+            or not self.measured_rms_windows
+        ):
+            raise ValueError("measured audio mix results require loudness, true-peak, and RMS facts")
+        numeric = [
+            self.measured_integrated_lufs,
+            self.measured_true_peak_dbfs,
+            *self.measured_rms_windows,
+        ]
+        if any(value is not None and not math.isfinite(value) for value in numeric):
+            raise ValueError("audio mix measurements must be finite")
+        if len(self.applied_gain_db) != len(self.cue_event_ids):
+            raise ValueError("audio mix gain facts must match cue event ids")
+        if len(self.duck_db) != len(self.cue_event_ids):
+            raise ValueError("audio mix duck facts must match cue event ids")
         return self
 
 

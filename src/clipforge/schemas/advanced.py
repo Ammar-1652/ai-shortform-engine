@@ -20,6 +20,7 @@ from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterva
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
+from clipforge.schemas.treatment import TreatmentAudioMixResult
 
 _SHA = r"^[0-9a-f]{64}$"
 _SAFE_X = 48
@@ -445,6 +446,7 @@ class AdvancedHeroRenderInput(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
@@ -509,6 +511,14 @@ class AdvancedHeroRenderInput(Versioned):
             raise ValueError("knowledge decision trace requires a knowledge context")
         if self.motion_style is not None and self.motion_style.style_id != self.style_id:
             raise ValueError("render input motion style does not match style_id")
+        if self.treatment_audio_mix is not None and self.treatment_audio_mix.treatment_fingerprint != (
+            self.treatment_fingerprint or "0" * 64
+        ):
+            raise ValueError("render input audio mix is stale against treatment decisions")
+        if self.treatment_audio_mix is not None and self.treatment_audio_mix.cue_event_ids != [
+            event.event_id for event in self.sfx
+        ]:
+            raise ValueError("render input audio mix cues do not match SFX events")
         if self.style_id != "legacy-v1" and not self.style_fingerprint:
             raise ValueError("production motion style requires a fingerprint")
         if self.frame_style_id == "auto-source-palette-v1" and self.frame_palette is None:
@@ -553,6 +563,7 @@ class AdvancedHeroDraftOutput(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
@@ -676,6 +687,7 @@ class AdvancedHeroPlanDocument(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
@@ -739,6 +751,15 @@ class AdvancedHeroPlanDocument(Versioned):
                 raise ValueError("advanced plan motion style does not match style_id")
             if self.style_fingerprint == "":
                 raise ValueError("advanced plan motion style requires a fingerprint")
+        if self.treatment_audio_mix is not None and self.treatment_audio_mix.treatment_fingerprint != (
+            self.treatment_fingerprint or "0" * 64
+        ):
+            raise ValueError("advanced plan audio mix is stale against treatment decisions")
+        if self.treatment_audio_mix is not None:
+            if self.treatment_audio_mix.cue_event_ids != [event.event_id for event in self.sfx]:
+                raise ValueError("advanced plan audio mix cues do not match SFX events")
+            if self.treatment_audio_mix.applied_gain_db != [event.gain_db for event in self.sfx]:
+                raise ValueError("advanced plan audio mix gain facts do not match SFX events")
         if self.frame_style_id == "auto-source-palette-v1" and self.frame_palette is None:
             raise ValueError("auto-source-palette-v1 requires a source-bound frame palette")
         if self.frame_style_id == "auto-source-palette-v1" and self.frame_layout_id != "platform-bleed-v1":

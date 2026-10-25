@@ -53,6 +53,8 @@ def test_clean_final_watch_is_append_only_without_rewriting_render(tmp_path: Pat
         "pilot_sha256",
         "motion_recipe_ids",
         "motion_catalog_sha256",
+        "treatment_fingerprint",
+        "treatment_audio_mix_sha256",
         "knowledge_context_id",
         "knowledge_release_id",
         "knowledge_context_sha256",
@@ -99,6 +101,8 @@ def test_clean_final_watch_is_append_only_without_rewriting_render(tmp_path: Pat
     assert world.manifest.read_bytes() == manifest_before
     changed = {**evidence, "video_sha256": "f" * 64}
     assert approval_code(world.work, facts, [review], changed) == "stale_final_review"
+    changed_treatment = {**evidence, "treatment_fingerprint": "e" * 64}
+    assert approval_code(world.work, facts, [review], changed_treatment) == "stale_final_review"
     payload = json.loads(sidecar.read_text())
     payload["playback"]["watch"]["observations"] = ["altered after approval"]
     sidecar.write_text(json.dumps(payload))

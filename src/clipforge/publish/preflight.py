@@ -24,6 +24,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroDraftSetDocument,
     AdvancedHeroPlanDocument,
     AdvancedHeroRenderInput,
+    advanced_fingerprint,
 )
 from clipforge.schemas.governance import ReviewDecision, RightsStatus
 from clipforge.schemas.hero import ForcedAlignmentDocument
@@ -120,6 +121,8 @@ class DeliveryFacts:
     narration_requested: bool = False
     direction_id: str = ""
     direction_sha256: str = ""
+    treatment_fingerprint: str = ""
+    treatment_audio_mix_sha256: str = ""
     style_id: str = "legacy-v1"
     style_fingerprint: str = ""
     safe_region_id: str = "portrait-safe-v1"
@@ -281,6 +284,12 @@ def preflight_delivery(
         advanced_plan_sha256=draft.advanced_plan_sha256,
         direction_id=plan.direction_id,
         direction_sha256=plan.direction_sha256,
+        treatment_fingerprint=plan.treatment_fingerprint,
+        treatment_audio_mix_sha256=(
+            advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
+            if plan.treatment_audio_mix is not None
+            else ""
+        ),
         style_id=plan.style_id,
         style_fingerprint=plan.style_fingerprint,
         safe_region_id=plan.safe_region_id,
@@ -373,6 +382,8 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "profile_fingerprint": facts.profile_fingerprint,
         "direction_id": facts.direction_id,
         "direction_sha256": facts.direction_sha256,
+        "treatment_fingerprint": facts.treatment_fingerprint,
+        "treatment_audio_mix_sha256": facts.treatment_audio_mix_sha256,
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
         "safe_region_id": facts.safe_region_id,
@@ -492,6 +503,7 @@ def _reject_render_strategy(
         if (
             rendered.direction_id != plan.direction_id
             or rendered.direction_sha256 != plan.direction_sha256
+            or rendered.treatment_fingerprint != plan.treatment_fingerprint
             or rendered.style_id != plan.style_id
             or rendered.style_fingerprint != plan.style_fingerprint
             or rendered.safe_region_id != plan.safe_region_id
@@ -1085,6 +1097,17 @@ def _qa(
         raise PublishError("QA is not bound to the current advanced plan", category="qa_stale")
     if plan_row is not None and sha256_file(_artifact_file(root, plan_row)) != plan_sha256:
         raise PublishError("QA plan hash changed", category="qa_stale")
+    if plan_row is not None:
+        try:
+            plan = AdvancedHeroPlanDocument.model_validate_json(
+                _artifact_file(root, plan_row).read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise PublishError(
+                "advanced plan could not be read for treatment binding", category="qa_stale"
+            ) from exc
+        if qa.treatment_fingerprint != plan.treatment_fingerprint:
+            raise PublishError("QA treatment fingerprint changed", category="qa_stale")
     return qa.qa_set_id, digest
 
 

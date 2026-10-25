@@ -51,10 +51,36 @@
   "additionalProperties": false,
   "description": "A reviewed, source-grounded placement for one local asset.\n\nAsset timing is never inferred from the number of assets. The selected\noption must name the exact output interval, the source evidence that makes\nthe asset relevant, and a plain-language editorial reason. The renderer\nconsumes this declarative record; it cannot execute operator code.",
   "properties": {
+    "acquisition_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Acquisition Id"
+    },
     "asset_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Asset Id",
+      "type": "string"
+    },
+    "asset_status": {
+      "default": "acquired",
+      "enum": [
+        "pending",
+        "selected",
+        "acquired",
+        "blocked",
+        "unavailable"
+      ],
+      "title": "Asset Status",
       "type": "string"
     },
     "asset_tags": {
@@ -90,11 +116,37 @@
       "title": "Kind",
       "type": "string"
     },
+    "license_evidence_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Evidence Sha256"
+    },
     "placement_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Placement Id",
       "type": "string"
+    },
+    "provider_response_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Response Sha256"
     },
     "purpose": {
       "$ref": "#/$defs/MotionPurpose"
@@ -105,11 +157,39 @@
       "title": "Relevance Note",
       "type": "string"
     },
+    "request_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request Id"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "selection_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selection Id"
     },
     "source_evidence_ids": {
       "items": {

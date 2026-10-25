@@ -149,6 +149,8 @@
     "SfxTreatmentDecision",
     "TreatmentLayerDecision",
     "TreatmentPlanSummary",
+    "TreatmentAudioMixResult",
+    "TreatmentVisualEvidence",
     "TreatmentAssetRequest",
     "TransitionTreatmentDecision",
     "PolicyDigest",

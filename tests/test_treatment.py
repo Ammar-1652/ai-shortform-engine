@@ -5,6 +5,8 @@ from pydantic import ValidationError
 
 from clipforge.editorial.presets import PresetCatalog
 from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
+from clipforge.schemas.direction import DirectionAssetPlacement
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
     BrollTreatmentDecision,
     SfxTreatmentDecision,
@@ -70,3 +72,36 @@ def test_treatment_fingerprint_changes_when_camera_changes() -> None:
         }
     )
     assert treatment_fingerprint(treated) != treatment_fingerprint(changed)
+
+
+def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
+    option = _document().options[0]
+    placement = DirectionAssetPlacement(
+        placement_id="placement-1",
+        asset_id="asset-1",
+        kind="graphic",
+        interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_evidence_ids=[option.evidence[0].evidence_id],
+        purpose=MotionPurpose.CONCEPT,
+        relevance_note="source context",
+        asset_tags=["source"],
+    )
+    preset = PresetCatalog.load().find("clean_explainer")
+    related = materialize_treatment(
+        option.model_copy(update={"asset_placements": [placement]}),
+        _aligned_words(),
+        preset,
+        require_asset_selection=False,
+    )
+    assert related.treatment_decisions[0].visual_evidence is not None
+    assert related.treatment_decisions[0].visual_evidence.relevance_status == "related"
+    unrelated = materialize_treatment(
+        option.model_copy(
+            update={"asset_placements": [placement.model_copy(update={"asset_tags": ["ocean"]})]}
+        ),
+        _aligned_words(),
+        preset,
+        require_asset_selection=False,
+    )
+    assert unrelated.treatment_decisions[0].visual_evidence is not None
+    assert unrelated.treatment_decisions[0].visual_evidence.relevance_status == "unrelated"

@@ -35,6 +35,7 @@ from clipforge.editorial.reference_analysis import (
 )
 from clipforge.errors import ClipforgeError, MediaError
 from clipforge.hero.treatment import summarize_treatment, treatment_fingerprint
+from clipforge.hero.treatment_assets import bind_acquired_request, bind_placement_to_request
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.editorial_knowledge import (
     ContextFact,
@@ -340,6 +341,45 @@ def treatment_lint(
     typer.echo(json.dumps({"status": "fail" if findings else "pass", "findings": findings}, sort_keys=True))
     if findings:
         raise typer.Exit(1)
+
+
+@treatment_app.command("bind-asset")
+def treatment_bind_asset(
+    request: Annotated[Path, typer.Argument(exists=True, readable=True, help="Treatment asset request JSON.")],
+    placement: Annotated[Path, typer.Argument(exists=True, readable=True, help="Draft placement JSON.")],
+    provider_response_sha256: Annotated[str, typer.Option("--provider-response-sha256")],
+    selection_id: Annotated[str, typer.Option("--selection-id")],
+    acquisition_id: Annotated[str, typer.Option("--acquisition-id")],
+    license_evidence_sha256: Annotated[str, typer.Option("--license-evidence-sha256")],
+    registered_asset_id: Annotated[str, typer.Option("--registered-asset-id")],
+    registered_asset_sha256: Annotated[str, typer.Option("--registered-asset-sha256")],
+) -> None:
+    """Bind verified provider/acquisition evidence to one treatment placement."""
+    from clipforge.schemas.direction import DirectionAssetPlacement
+    from clipforge.schemas.treatment import TreatmentAssetRequest
+
+    try:
+        request_doc = TreatmentAssetRequest.model_validate_json(request.read_text(encoding="utf-8"))
+        placement_doc = DirectionAssetPlacement.model_validate_json(placement.read_text(encoding="utf-8"))
+        acquired = bind_acquired_request(
+            request_doc,
+            provider_response_sha256=provider_response_sha256,
+            selection_id=selection_id,
+            acquisition_id=acquisition_id,
+            license_evidence_sha256=license_evidence_sha256,
+            registered_asset_id=registered_asset_id,
+            registered_asset_sha256=registered_asset_sha256,
+        )
+        bound = bind_placement_to_request(placement_doc, acquired)
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(
+        json.dumps(
+            {"request": acquired.model_dump(mode="json"), "placement": bound.model_dump(mode="json")},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
 
 
 @motion_app.command("doctor")

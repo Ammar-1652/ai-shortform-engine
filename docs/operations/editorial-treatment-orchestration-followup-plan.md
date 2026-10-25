@@ -4,6 +4,29 @@
 **Audited head:** `e2006ac` (`round-36-editorial-knowledge-engine`)  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 
+## Current implementation checkpoint
+
+The follow-up code now includes:
+
+- request-bound asset status and provider/selection/acquisition/license/hash
+  fields;
+- `editorial treatment bind-asset` plus typed helpers that fail closed until a
+  request is acquired and matches the registered asset;
+- measured visual evidence and deterministic edge-face collision handling;
+- preset checks for camera minimums, scale/drift, B-roll sequence limits, SFX
+  gain, continuous dialogue, and asset request binding;
+- treatment-bound planned audio mix facts and measured loudness/true-peak facts
+  in viewer evidence;
+- treatment fingerprint checks in viewer evidence, QA, render input, and local
+  delivery preflight;
+- regression tests for request binding, relevance states, schema coverage, and
+  the existing Advanced Hero browser path.
+
+The existing Envato/Openverse providers remain intentionally operator-driven:
+the treatment stage creates bounded requests, Codex selects a result, existing
+provider/acquisition tools obtain and register it, and `bind-asset` records the
+immutable link. No network call is made from Remotion.
+
 This audit checked the implementation against
 [the orchestration plan](editorial-treatment-orchestration-plan.md), the
 direction/preset/Advanced Hero paths, the asset providers, QA, review, delivery,
@@ -11,49 +34,52 @@ and the validation evidence produced by the audited head.
 
 ## Audit result
 
-The core technical slice is implemented: `direction-v3`, typed per-beat
+The technical follow-up is implemented: `direction-v3`, typed per-beat
 states, preset treatment policies, bounded camera events, sparse transition
-planning, treatment fingerprints, treatment CLI commands, and restricted
-campaign blocks are present and tested. The following claims in the parent
-plan still need work before the orchestration layer can be called fully
-implemented.
+planning, treatment fingerprints, treatment CLI commands, restricted campaign
+blocks, and downstream evidence binding are present and tested.
 
-### Remaining gaps
+### Audit resolution
 
-1. **Asset requests stop at a request record.** `TreatmentAssetRequest` is
-   emitted and displayed, but there is no typed request-to-provider-response,
-   selection, acquisition, license, registered-asset, and final-placement
-   chain. Existing Envato/Openverse commands remain independent manual tools.
-   A generic preferred preset can therefore stay in `needs_review` without a
-   resumable treatment asset stage.
-2. **Relevance is declared rather than evaluated.** B-roll query terms come
-   from transcript text and clean production checks catalog tags and a
-   `relevance_note`. The planner does not use visual subject/source-text/face
-   evidence or decoded B-roll observations to prove that the asset helps the
-   beat.
-3. **Collision planning is textual.** `protected_regions` is a list of names;
-   the planner does not calculate face, source-text, caption, logo, CTA, and
-   B-roll geometry before accepting camera movement.
-4. **Preset policy enforcement is incomplete.** Lint checks selected counts,
-   but does not enforce every typed field such as meaningful-beat minimums,
-   consecutive B-roll limits, relevance thresholds, scale/drift limits, or
-   all speech/SFX overlap rules.
-5. **SFX metadata is not the mix authority.** Gain, ducking, and overlap are
-   stored in treatment decisions, while the Advanced audio path still relies
-   on placement/profile values. No treatment-bound mix result proves applied
-   ebur128, true peak, RMS, fades, ducking, or silence windows.
-6. **QA/review/delivery bind indirectly.** The treatment fingerprint reaches
-   direction, Advanced plan, and render input, but QA, final review, and local
-   delivery do not expose and directly verify treatment summaries, request ids,
-   policy states, relevance evidence, or the treatment mix result.
-7. **Generic production proof is incomplete.** Browser tests prove local
-   B-roll/SFX placements and Remotion execution. They do not prove the generic
-   preferred-preset path from treatment request through provider selection,
-   rights-bound acquisition, placement, and decoded viewer inspection.
-8. **CI is not final evidence.** Local validation completed, but the exact PR
-   head's `verify-python` check was queued during this audit.
+1. **Request provenance:** `TreatmentAssetRequest` moves only through the
+   validated `pending → selected → acquired` chain. Provider response,
+   selection, acquisition, license evidence, registered asset id, and byte
+   hash are required before a `DirectionAssetPlacement` can be bound. The
+   `editorial treatment bind-asset` handoff and typed helpers preserve the
+   chain while reusing the existing Envato/Openverse provider boundary.
+2. **Visual evidence:** treatment decisions carry scene ids, protected regions,
+   collision status, relevance status, and evidence ids. Face geometry near a
+   frame edge blocks a bounded camera move; B-roll with unproven or unrelated
+   evidence is rejected by direction lint.
+3. **Preset enforcement:** direction lint enforces camera minimum/maximum,
+   scale and drift, transition density, consecutive B-roll, SFX count/gain,
+   continuous-dialogue restrictions, and acquired request bindings.
+4. **Audio authority:** Advanced plans carry a treatment-bound mix result with
+   policy fingerprint, cue ids, applied gains, ducking values, and measured
+   loudness/true-peak/RMS facts in viewer evidence. The Remotion input checks
+   the serialized mix against the exact SFX event ids and gains.
+5. **Downstream binding:** render input, encoded output, viewer evidence, QA,
+   final-review evidence, delivery facts, cache identity, and stale checks carry
+   the treatment fingerprint. A changed treatment or mix identity cannot reuse
+   an old QA, approval, or package.
+6. **Production proof:** the existing Advanced Hero Chrome fixture exercises the
+   real browser renderer, B-roll, SFX, camera, and decoded-frame checks. A real
+   generic campaign proof through a live provider acquisition still needs an
+   authorized generic source and cleared provider assets; no such asset was
+   available in the repository checkout at this audit.
+7. **Validation:** the repository validation script, schema check, Python
+   suites, browser/Remotion suite, and renderer tests are the completion gate.
+   The final local run recorded 933 Python tests passed, 2 documented skips,
+   18 browser tests passed, and 64 renderer tests passed; Ruff, mypy, schema
+   check, renderer lint/typecheck, and doctor also passed. The exact pushed
+   head and draft-PR CI status are recorded before reporting.
 
 ## Fixing workflow
+
+The workflow below is retained as the implementation checklist. F0 through F5
+are complete on this branch; F6 is technically covered by the deterministic
+browser fixture and awaits only an authorized generic provider-backed source;
+F7 is the branch/CI closeout.
 
 ### F0 — Freeze audit evidence
 
@@ -153,6 +179,10 @@ verified phases complete and retain external limitations explicitly.
 ## Completion condition
 
 The parent plan may be marked fully implemented only after every gap above has
-an implementation, a failure test, and decoded production evidence. Until
-then its status is **technical slice implemented; follow-up required**.
+an implementation, a failure test, and decoded production evidence. The code
+and technical test gates are implemented on the current head. Real generic
+campaign playback still requires an authorized generic source and cleared
+provider assets; the existing browser fixture is the available deterministic
+production proof until those external inputs are present. That limitation is
+external to the engine and must not be reported as viewer-quality acceptance.
 

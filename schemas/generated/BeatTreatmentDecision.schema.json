@@ -849,6 +849,20 @@
       "additionalProperties": false,
       "description": "A bounded provider request produced from a source-grounded beat.",
       "properties": {
+        "acquisition_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquisition Id"
+        },
         "beat_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -865,6 +879,19 @@
           ],
           "title": "Kind",
           "type": "string"
+        },
+        "license_evidence_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Evidence Sha256"
         },
         "negative_terms": {
           "items": {
@@ -888,6 +915,19 @@
           "title": "Provider Classes",
           "type": "array"
         },
+        "provider_response_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Response Sha256"
+        },
         "query_terms": {
           "items": {
             "type": "string"
@@ -896,6 +936,33 @@
           "minItems": 1,
           "title": "Query Terms",
           "type": "array"
+        },
+        "registered_asset_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registered Asset Id"
+        },
+        "registered_asset_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registered Asset Sha256"
         },
         "relevance_threshold": {
           "default": 0.85,
@@ -922,6 +989,20 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "selection_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selection Id"
+        },
         "source_evidence_ids": {
           "items": {
             "description": "Stable id. UUID text is the usual value.",
@@ -932,6 +1013,18 @@
           "minItems": 1,
           "title": "Source Evidence Ids",
           "type": "array"
+        },
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "selected",
+            "acquired",
+            "blocked",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
         }
       },
       "required": [
@@ -946,6 +1039,79 @@
       ],
       "title": "TreatmentAssetRequest",
       "type": "object"
+    },
+    "TreatmentVisualEvidence": {
+      "additionalProperties": false,
+      "description": "Measured visual and collision facts for one treatment decision.",
+      "properties": {
+        "collision_status": {
+          "default": "unknown",
+          "enum": [
+            "clear",
+            "blocked",
+            "unknown"
+          ],
+          "title": "Collision Status",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "protected_region_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Protected Region Ids",
+          "type": "array"
+        },
+        "relevance_status": {
+          "default": "unknown",
+          "enum": [
+            "related",
+            "unrelated",
+            "unknown"
+          ],
+          "title": "Relevance Status",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "title": "TreatmentVisualEvidence",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -958,6 +1124,19 @@
       "maxItems": 8,
       "title": "Asset Requests",
       "type": "array"
+    },
+    "audio_mix_fingerprint": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Mix Fingerprint"
     },
     "beat_id": {
       "description": "Stable id. UUID text is the usual value.",
@@ -1018,6 +1197,17 @@
     },
     "transition": {
       "$ref": "#/$defs/TransitionTreatmentDecision"
+    },
+    "visual_evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TreatmentVisualEvidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

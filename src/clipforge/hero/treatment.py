@@ -27,7 +27,9 @@ from clipforge.schemas.treatment import (
     TreatmentAssetRequest,
     TreatmentLayer,
     TreatmentPlanSummary,
+    TreatmentVisualEvidence,
 )
+from clipforge.schemas.vision import VisualAnalysisDocument
 
 if TYPE_CHECKING:
     from clipforge.schemas.direction import DirectionOption, DirectionTransitionSpec
@@ -75,6 +77,7 @@ def materialize_treatment(
     restricted_profile: bool = False,
     require_asset_selection: bool = True,
     time_map: TimeMapDocument | None = None,
+    visual: VisualAnalysisDocument | None = None,
 ) -> DirectionOption:
     """Create explicit treatment decisions for an existing direction option.
 
@@ -203,6 +206,23 @@ def materialize_treatment(
             )
 
         camera = _camera_decision(option, beat, interval, source_ids, cameras, preset, restricted_profile)
+        visual_evidence = _visual_evidence(option, beat, visual)
+        if broll.state == "use" and visual_evidence.relevance_status == "unknown":
+            visual_evidence = visual_evidence.model_copy(
+                update={
+                    "relevance_status": _placement_relevance_status(option, beat, broll_placements),
+                    "evidence_ids": source_ids,
+                }
+            )
+        if camera.state == "use" and visual_evidence.collision_status == "blocked":
+            camera = CameraTreatmentDecision(
+                state="omit_with_reason",
+                rationale="camera move would leave a protected visual subject unsafe",
+                source_evidence_ids=source_ids,
+                omission_reason="face_collision",
+                protected_regions=visual_evidence.protected_region_ids,
+                fallback="hold",
+            )
         transition = _transition_decision(planning_option, beat, interval, source_ids, preset)
         graphics = MotionGraphicsTreatmentDecision(
             state="blocked_by_policy",
@@ -221,6 +241,7 @@ def materialize_treatment(
             sfx=sfx,
             motion_graphics=graphics,
             asset_requests=requests,
+            visual_evidence=visual_evidence,
             dependency_fingerprint="0" * 64,
         )
         decisions.append(decision)
@@ -231,6 +252,67 @@ def materialize_treatment(
     digest = treatment_fingerprint(candidate)
     decisions = [item.model_copy(update={"dependency_fingerprint": digest}) for item in decisions]
     return candidate.model_copy(update={"treatment_decisions": decisions, "camera_motion": cameras})
+
+
+def _visual_evidence(
+    option: DirectionOption,
+    beat: Any,
+    visual: VisualAnalysisDocument | None,
+) -> TreatmentVisualEvidence:
+    evidence = {item.evidence_id: item for item in option.evidence}
+    scene_ids = sorted(
+        {scene_id for evidence_id in beat.evidence_ids for scene_id in evidence[evidence_id].visual_scene_ids}
+    )
+    if visual is None or not scene_ids:
+        return TreatmentVisualEvidence(
+            visual_scene_ids=scene_ids,
+            collision_status="unknown",
+            relevance_status="unknown",
+            note="visual geometry was not available for deterministic treatment planning",
+        )
+    faces = [item for item in visual.face_detection_samples if item.scene_id in scene_ids]
+    protected = [f"face:{scene_id}" for scene_id in sorted({item.scene_id for item in faces})]
+    if not faces:
+        return TreatmentVisualEvidence(
+            visual_scene_ids=scene_ids,
+            protected_region_ids=["platform-safe-region"],
+            collision_status="clear",
+            relevance_status="unknown",
+            note="reviewed scenes contain no detected face geometry",
+        )
+    edge_face = any(
+        item.bounding_box.x < 0.12
+        or item.bounding_box.y < 0.12
+        or item.bounding_box.x + item.bounding_box.width > 0.88
+        or item.bounding_box.y + item.bounding_box.height > 0.88
+        for item in faces
+    )
+    return TreatmentVisualEvidence(
+        visual_scene_ids=scene_ids,
+        protected_region_ids=protected,
+        collision_status="blocked" if edge_face else "clear",
+        relevance_status="unknown",
+        note=(
+            "face geometry is too close to a frame edge for a bounded camera move"
+            if edge_face
+            else "face geometry remains inside the camera protection envelope"
+        ),
+    )
+
+
+def _placement_relevance_status(
+    option: DirectionOption,
+    beat: Any,
+    placements: Sequence[Any],
+) -> Literal["related", "unrelated", "unknown"]:
+    if not placements:
+        return "unknown"
+    evidence = {item.evidence_id: item for item in option.evidence}
+    source_terms = set(_terms(" ".join(evidence[item].source_text for item in beat.evidence_ids)))
+    asset_terms = {term.casefold() for placement in placements for term in placement.asset_tags if term.strip()}
+    if not source_terms or not asset_terms:
+        return "unknown"
+    return "related" if source_terms.intersection(asset_terms) else "unrelated"
 
 
 def summarize_treatment(option: DirectionOption) -> TreatmentPlanSummary:

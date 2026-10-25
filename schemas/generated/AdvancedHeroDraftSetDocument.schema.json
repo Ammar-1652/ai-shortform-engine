@@ -297,6 +297,17 @@
           "title": "Style Id",
           "type": "string"
         },
+        "treatment_audio_mix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TreatmentAudioMixResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "treatment_fingerprint": {
           "default": "",
           "pattern": "^$|^[0-9a-f]{64}$",
@@ -808,6 +819,108 @@
         "frame_height"
       ],
       "title": "ReframingWindow",
+      "type": "object"
+    },
+    "TreatmentAudioMixResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound requested/applied SFX mix policy and measured output facts.",
+      "properties": {
+        "applied_gain_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Applied Gain Db",
+          "type": "array"
+        },
+        "cue_event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Cue Event Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Duck Db",
+          "type": "array"
+        },
+        "measured_integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Integrated Lufs"
+        },
+        "measured_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 128,
+          "title": "Measured Rms Windows",
+          "type": "array"
+        },
+        "measured_true_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured True Peak Dbfs"
+        },
+        "mix_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Mix Id",
+          "type": "string"
+        },
+        "policy_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Fingerprint",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "measured"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix_id",
+        "treatment_fingerprint",
+        "policy_fingerprint"
+      ],
+      "title": "TreatmentAudioMixResult",
       "type": "object"
     },
     "WorkflowRolePolicy": {

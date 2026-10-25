@@ -36,6 +36,20 @@
   "additionalProperties": false,
   "description": "A bounded provider request produced from a source-grounded beat.",
   "properties": {
+    "acquisition_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Acquisition Id"
+    },
     "beat_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -52,6 +66,19 @@
       ],
       "title": "Kind",
       "type": "string"
+    },
+    "license_evidence_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Evidence Sha256"
     },
     "negative_terms": {
       "items": {
@@ -75,6 +102,19 @@
       "title": "Provider Classes",
       "type": "array"
     },
+    "provider_response_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Response Sha256"
+    },
     "query_terms": {
       "items": {
         "type": "string"
@@ -83,6 +123,33 @@
       "minItems": 1,
       "title": "Query Terms",
       "type": "array"
+    },
+    "registered_asset_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Registered Asset Id"
+    },
+    "registered_asset_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Registered Asset Sha256"
     },
     "relevance_threshold": {
       "default": 0.85,
@@ -109,6 +176,20 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "selection_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selection Id"
+    },
     "source_evidence_ids": {
       "items": {
         "description": "Stable id. UUID text is the usual value.",
@@ -119,6 +200,18 @@
       "minItems": 1,
       "title": "Source Evidence Ids",
       "type": "array"
+    },
+    "status": {
+      "default": "pending",
+      "enum": [
+        "pending",
+        "selected",
+        "acquired",
+        "blocked",
+        "unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
     }
   },
   "required": [

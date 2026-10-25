@@ -1,10 +1,9 @@
 # Editorial treatment orchestration plan
 
-**Status:** technical treatment slice implemented; follow-up required before
-the full T0–T8 claim is closed. See the
+**Status:** follow-up code and technical gates implemented. Real generic
+campaign playback still depends on an authorized generic source and cleared
+provider assets; human visual acceptance remains separate. See the
 [follow-up fixing plan](editorial-treatment-orchestration-followup-plan.md).
-Exact encoded generic-campaign playback and human visual acceptance remain
-separate review gates.
 
 **Prepared:** 2026-10-25
 **Parent plans:**
@@ -39,12 +38,12 @@ campaign with preferred B-roll/SFX receives bounded requests and remains in
 restricted direction records a clean omission or policy block. This is an
 intentional gate in the current asset workflow, not a renderer fallback.
 
-The post-implementation audit found remaining gaps in request-to-acquisition
-binding, visual relevance and collision evidence, complete preset enforcement,
-treatment-authoritative audio mixing, direct QA/review/delivery treatment
-binding, and generic production proof. Those gaps and their exit tests are
-documented in the [follow-up fixing plan](editorial-treatment-orchestration-followup-plan.md)
-and must be resolved before this document is marked fully implemented.
+The follow-up implementation closed the request binding, visual evidence,
+preset enforcement, treatment audio facts, and QA/review/delivery binding
+gaps. The remaining external input is a real authorized generic campaign
+source plus cleared provider assets for full user-facing playback; the
+deterministic browser fixture remains the technical proof until those inputs
+are available.
 
 ## Purpose
 

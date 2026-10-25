@@ -361,6 +361,60 @@
       "title": "Transition Event Ids",
       "type": "array"
     },
+    "treatment_audio_integrated_lufs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Treatment Audio Integrated Lufs"
+    },
+    "treatment_audio_mix_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Audio Mix Sha256",
+      "type": "string"
+    },
+    "treatment_audio_mix_status": {
+      "default": "",
+      "enum": [
+        "",
+        "planned",
+        "measured"
+      ],
+      "title": "Treatment Audio Mix Status",
+      "type": "string"
+    },
+    "treatment_audio_rms_windows": {
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 128,
+      "title": "Treatment Audio Rms Windows",
+      "type": "array"
+    },
+    "treatment_audio_true_peak_dbfs": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Treatment Audio True Peak Dbfs"
+    },
+    "treatment_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Fingerprint",
+      "type": "string"
+    },
     "true_peak_dbfs": {
       "title": "True Peak Dbfs",
       "type": "number"

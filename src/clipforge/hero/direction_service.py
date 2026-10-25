@@ -130,6 +130,7 @@ def save_direction_brief(
             restricted_profile=restricted_profile,
             require_asset_selection=not compatibility_direction,
             time_map=context.hero_plan.edit_plan.time_map,
+            visual=context.visual,
         )
         for option in document.options
     ]

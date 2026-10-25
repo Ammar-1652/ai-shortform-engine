@@ -65,6 +65,7 @@ type BrollEvent = {
 };
 
 type SfxEvent = {
+  event_id?: string;
   asset_id?: string;
   interval?: Interval;
   gain_db?: number;
@@ -251,6 +252,14 @@ export type AdvancedHeroInput = {
   audio_true_peak_dbfs?: number;
   audio_lra_lu?: number;
   audio_mix_version?: string;
+  treatment_audio_mix?: {
+    treatment_fingerprint?: string;
+    policy_fingerprint?: string;
+    cue_event_ids?: string[];
+    applied_gain_db?: number[];
+    duck_db?: number[];
+    status?: "planned" | "measured";
+  };
   debug_overlays?: boolean;
 };
 
@@ -536,6 +545,23 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
     for (const event of input.sfx ?? []) {
       if (!event.source_evidence_ids?.length || !event.relevance_note?.trim() || !event.purpose) {
         throw new Error("production SFX requires source evidence, purpose, and relevance");
+      }
+    }
+    if (input.treatment_audio_mix) {
+      const mix = input.treatment_audio_mix;
+      const sfx = input.sfx ?? [];
+      const ids = sfx.map((event) => event.event_id ?? "");
+      if (!mix.treatment_fingerprint || !/^[0-9a-f]{64}$/.test(mix.treatment_fingerprint)) {
+        throw new Error("treatment audio mix requires a treatment fingerprint");
+      }
+      if (!mix.policy_fingerprint || !/^[0-9a-f]{64}$/.test(mix.policy_fingerprint)) {
+        throw new Error("treatment audio mix requires a policy fingerprint");
+      }
+      if (!Array.isArray(mix.cue_event_ids) || JSON.stringify(mix.cue_event_ids) !== JSON.stringify(ids)) {
+        throw new Error("treatment audio mix cues do not match SFX events");
+      }
+      if (!Array.isArray(mix.applied_gain_db) || JSON.stringify(mix.applied_gain_db) !== JSON.stringify(sfx.map((event) => event.gain_db))) {
+        throw new Error("treatment audio mix gains do not match SFX events");
       }
     }
     const contextLines = (input.typography ?? []).filter((event) => event.component_id === "context-line-v1");

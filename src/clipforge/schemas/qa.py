@@ -109,6 +109,12 @@ class ViewerEvidenceBundle(Versioned):
     encoded_media_sha256: str = Field(pattern=_SHA)
     render_input_sha256: str = Field(pattern=_SHA)
     pilot_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_audio_mix_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_audio_mix_status: Literal["", "planned", "measured"] = ""
+    treatment_audio_integrated_lufs: float | None = None
+    treatment_audio_true_peak_dbfs: float | None = None
+    treatment_audio_rms_windows: list[float] = Field(default_factory=list, max_length=128)
     style_fingerprint: str = Field(pattern=_SHA)
     font_dependency_sha256: str = Field(pattern=_SHA)
     width: int = Field(ge=1)
@@ -163,6 +169,8 @@ class QASetDocument(Versioned):
     technical: QAResult
     campaign: QAResult
     status: QAStatus
+    treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_summary_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     provenance: ArtifactProvenance
     workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 

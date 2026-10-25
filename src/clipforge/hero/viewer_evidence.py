@@ -24,15 +24,16 @@ from clipforge.media.hashing import sha256_file
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.preview.timing import frame_at_or_after
-from clipforge.schemas.advanced import AdvancedHeroRenderInput
+from clipforge.schemas.advanced import AdvancedHeroRenderInput, advanced_fingerprint
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.qa import ViewerEvidenceBundle, ViewerEvidenceFile
 from clipforge.transcription.io import publish_json
 from clipforge.vision.images import write_contact_sheet
 
-VIEWER_EVIDENCE_RECIPE = "decoded-viewer-evidence-v2"
+VIEWER_EVIDENCE_RECIPE = "decoded-viewer-evidence-v3"
 _LOUDNESS_RE = re.compile(r"Integrated loudness:\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", re.S)
 _TRUE_PEAK_RE = re.compile(r"True peak:\s*Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", re.S)
+_RMS_RE = re.compile(r"RMS level dB:\s*(-?\d+(?:\.\d+)?)", re.S)
 
 
 def _safe(root: Path, path: Path) -> Path:
@@ -142,7 +143,7 @@ def _decode(
     return decoded
 
 
-def _measured_loudness(root: Path, output: Path, log_path: Path) -> tuple[float, float]:
+def _measured_audio(root: Path, output: Path, log_path: Path) -> tuple[float, float, list[float]]:
     result = ProcessRunner().run(
         [
             resolve_ffmpeg(),
@@ -153,7 +154,7 @@ def _measured_loudness(root: Path, output: Path, log_path: Path) -> tuple[float,
             "-map",
             "0:a:0",
             "-af",
-            "ebur128=peak=true",
+            "ebur128=peak=true,astats=metadata=1:reset=1",
             "-f",
             "null",
             "-",
@@ -165,9 +166,10 @@ def _measured_loudness(root: Path, output: Path, log_path: Path) -> tuple[float,
     )
     loudness = _LOUDNESS_RE.search(result.stderr_tail)
     peak = _TRUE_PEAK_RE.search(result.stderr_tail)
-    if loudness is None or peak is None:
-        raise MediaError("viewer evidence could not measure encoded loudness")
-    return float(loudness.group(1)), float(peak.group(1))
+    rms = [float(value) for value in _RMS_RE.findall(result.stderr_tail)]
+    if loudness is None or peak is None or not rms:
+        raise MediaError("viewer evidence could not measure encoded loudness, peak, and RMS")
+    return float(loudness.group(1)), float(peak.group(1)), rms[:128]
 
 
 def _files(
@@ -263,10 +265,20 @@ def write_viewer_evidence_bundle(
         *list(zip(crops_lateral, range(len(crops_lateral)), timestamps, strict=True)),
     ]
     crop_contacts = _contact_pages(contacts_dir, "platform-crops", crop_tiles)
-    integrated_lufs, true_peak_dbfs = _measured_loudness(
+    integrated_lufs, true_peak_dbfs, rms_windows = _measured_audio(
         root, output, log_path.with_name(log_path.stem + ".loudness.log")
     )
     evidence_path = _safe(root, output.parent / "viewer-evidence" / "bundle.json")
+    measured_mix = None
+    if render_input.treatment_audio_mix is not None:
+        measured_mix = render_input.treatment_audio_mix.model_copy(
+            update={
+                "status": "measured",
+                "measured_integrated_lufs": integrated_lufs,
+                "measured_true_peak_dbfs": true_peak_dbfs,
+                "measured_rms_windows": rms_windows,
+            }
+        )
     bundle = ViewerEvidenceBundle(
         evidence_id=str(uuid.uuid4()),
         project_id=project_id,
@@ -277,6 +289,14 @@ def write_viewer_evidence_bundle(
         encoded_media_sha256=actual_media_sha256,
         render_input_sha256=render_input_sha256,
         pilot_sha256=render_input.pilot_sha256,
+        treatment_fingerprint=render_input.treatment_fingerprint,
+        treatment_audio_mix_sha256=(
+            advanced_fingerprint(measured_mix.model_dump(mode="json")) if measured_mix is not None else ""
+        ),
+        treatment_audio_mix_status="measured" if measured_mix is not None else "",
+        treatment_audio_integrated_lufs=integrated_lufs if measured_mix is not None else None,
+        treatment_audio_true_peak_dbfs=true_peak_dbfs if measured_mix is not None else None,
+        treatment_audio_rms_windows=rms_windows if measured_mix is not None else [],
         style_fingerprint=render_input.style_fingerprint,
         font_dependency_sha256=_font_dependency_sha256(render_input),
         width=OUTPUT_WIDTH,
