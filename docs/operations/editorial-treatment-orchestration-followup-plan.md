@@ -6,6 +6,11 @@
 
 ## Current implementation checkpoint
 
+**Post-implementation audit:** the first follow-up implementation is
+technically validated but not fully complete. The round-2 fixing plan is
+[editorial-treatment-orchestration-followup-round2-plan.md](editorial-treatment-orchestration-followup-round2-plan.md).
+Its findings supersede the earlier completion wording below.
+
 The follow-up code now includes:
 
 - request-bound asset status and provider/selection/acquisition/license/hash

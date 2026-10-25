@@ -1,9 +1,10 @@
 # Editorial treatment orchestration plan
 
-**Status:** follow-up code and technical gates implemented. Real generic
-campaign playback still depends on an authorized generic source and cleared
-provider assets; human visual acceptance remains separate. See the
-[follow-up fixing plan](editorial-treatment-orchestration-followup-plan.md).
+**Status:** first follow-up code and technical gates are validated, but a
+post-implementation audit found remaining production-path gaps. See the
+[round-2 fixing plan](editorial-treatment-orchestration-followup-round2-plan.md).
+Real generic playback still depends on an authorized generic source and
+cleared provider assets; human visual acceptance remains separate.
 
 **Prepared:** 2026-10-25
 **Parent plans:**
