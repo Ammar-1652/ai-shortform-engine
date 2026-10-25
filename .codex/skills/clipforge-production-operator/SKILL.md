@@ -55,6 +55,9 @@ while retiring the prior release. Admission never approves a video artifact.
 - Illustrations use allowlisted Remotion motion-graphic events with a purpose,
   source evidence, interval, and safe geometry. Do not write JSX or arbitrary
   animation into a plan.
+- Current temporary production default: do not select or render motion-graphic
+  events. Keep `motion_graphics` empty unless the operator explicitly requests
+  a later motion-graphics pass and the campaign policy permits it.
 - Camera movement uses the selected direction option's bounded `camera_motion`
   events. Bind each move to a source evidence interval, keep its scale/travel
   inside the preset envelope, and fall back to a hold when tracking or safe

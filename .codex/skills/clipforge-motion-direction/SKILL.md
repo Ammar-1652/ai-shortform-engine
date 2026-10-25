@@ -24,6 +24,11 @@ send speech work to transcript/alignment services, cuts to an
 the licensed asset catalog, and graphics through allowlisted Remotion motion
 graphic events. Do not make a skill a second renderer or a second cache.
 
+Until the operator explicitly re-enables the motion-graphics pass, leave
+`motion_graphics` empty in every new production brief. This is a temporary
+production default: the renderer must not add graphics implicitly, and an
+older artifact containing a graphic is not rewritten.
+
 ## Read before planning
 
 Read the campaign policy and rights restrictions, source manifest, transcript,

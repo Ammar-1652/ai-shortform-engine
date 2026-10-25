@@ -63,6 +63,11 @@ The role policy is persisted in campaign and Advanced Hero documents. Candidate
 and Hero editorial decisions may be recorded with `--reviewer-role
 codex_operator`; final review always requires `human_reviewer`.
 
+Temporary production default: omit `motion_graphics` from new direction briefs
+and render inputs. The renderer must not add a graphic implicitly. A future
+motion-graphics pass requires an explicit operator request and a campaign-policy
+check; previously rendered artifacts remain immutable.
+
 ## Capability routing
 
 | Codex decision | System tool or contract | Output |
@@ -75,7 +80,7 @@ codex_operator`; final review always requires `human_reviewer`.
 | Frame faces and important source content | `advanced plan --reframing` and typed crop windows | Hash-bound portrait transform |
 | Add captions | shared caption builders and Remotion `CaptionPlate` | Word-timed caption events |
 | Add B-roll, images, fonts, or SFX | asset registration, license records, typed direction placements | Rights-cleared asset bindings |
-| Add illustrations and motion graphics | allowlisted Remotion motion-graphic events and motion recipes | Source-grounded graphics |
+| Add illustrations and motion graphics | **Disabled by default**; only an explicit operator request may select an allowlisted Remotion event after policy review | Source-grounded graphics |
 | Add camera movement and transitions | typed `camera_motion` and `transitions` in the selected direction option | Bounded output-space camera events and word-safe transition events |
 | Encode and resume | `hero advanced render`, `--resume` | Checkpointed MP4 and manifest |
 | Prove the result | `qa run`, decoded viewer evidence, ffprobe/ebur128 | Technical and viewer evidence |
