@@ -70,6 +70,12 @@ schemas, and 9 doctor checks passed with one CPU-only GPU warning**.
 - [Editorial Direction Engine integration plan](editorial-direction-engine-integration-plan.md)
 - [Editorial knowledge and direction layer](editorial-knowledge-layer-plan.md)
 - [Editorial system upgrade plan](editorial-system-upgrade-plan.md)
+- [Editorial treatment orchestration plan](editorial-treatment-orchestration-plan.md)
+
+The treatment-orchestration plan is the focused follow-on for making B-roll,
+SFX, camera movement, zooms, and transitions deliberate per-beat choices. It
+preserves this plan's policy, rights, TimeMap, renderer, and human-review
+boundaries.
 
 ## What this plan is for
 

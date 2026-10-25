@@ -12,6 +12,12 @@ The directional-assistant expansion is defined in [the deep integration plan](ed
 and future reference videos must form a durable source of direction for Codex.
 Installing files or adding a few prompt sentences does not satisfy this plan.
 
+The knowledge layer supplies the evidence and guidance used by the
+[treatment-orchestration plan](editorial-treatment-orchestration-plan.md).
+That plan turns the guidance into per-beat B-roll, SFX, camera, zoom,
+transition, or explicit-omission decisions; this knowledge layer does not
+itself force decorative treatment into a render.
+
 ## Responsibility and location
 
 This layer lives in Clipforge's existing AI decision plane. Codex reads it,

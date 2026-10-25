@@ -53,6 +53,12 @@ than a larger prompt or a flat catalog. It also defines the camera, transition,
 sound, B-roll, and motion-graphics contracts that the deterministic renderer
 must execute.
 
+The focused follow-on implementation is documented in the
+[editorial treatment orchestration plan](editorial-treatment-orchestration-plan.md).
+It defines how a generic campaign receives explicit per-beat decisions and how
+restricted campaigns record policy blocks instead of inheriting generic
+treatment defaults.
+
 ## Required editorial knowledge layer
 
 The [editorial knowledge and direction specification](editorial-knowledge-layer-plan.md)
