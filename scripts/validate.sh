@@ -9,7 +9,12 @@ cd "$root"
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
-uv run pytest
+# Match CI's process boundary: release inference/media test allocations before
+# Chrome starts. Both marker partitions are mandatory; no tests are omitted.
+echo "Validation: Python tests (non-browser)"
+uv run pytest -m "not browser" -ra
+echo "Validation: real browser and Remotion tests"
+uv run pytest -m browser -ra
 uv run clipforge schema check
 
 if ! command -v pnpm >/dev/null 2>&1; then

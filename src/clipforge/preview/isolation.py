@@ -46,7 +46,13 @@ def chrome_socket_fits(directory: Path) -> bool:
     return len(os.fsencode(directory / _SOCKET_TAIL)) < _SOCKET_LIMIT
 
 
-def run_remotion_script(script: Path, batch_path: Path, *, log_path: Path) -> None:
+def run_remotion_script(
+    script: Path,
+    batch_path: Path,
+    *,
+    log_path: Path,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     """Launch one renderer. Temp files stay private and Chrome is reaped."""
     if not script.is_file():
         raise MediaError(f"renderer script is missing at {script.name}")
@@ -61,6 +67,8 @@ def run_remotion_script(script: Path, batch_path: Path, *, log_path: Path) -> No
         env["TMPDIR"] = str(isolation)
         env["TMP"] = str(isolation)
         env["TEMP"] = str(isolation)
+        if extra_env:
+            env.update(extra_env)
         deadline_s = _remotion_process_deadline_s(batch_path)
         with browser_render_lock():
             ProcessRunner().run(

@@ -1,0 +1,186 @@
+{
+  "schema_version": "1.0.0",
+  "presets": [
+    {
+      "preset_id": "clean_explainer",
+      "narrative_structure": [
+        "question",
+        "explanation",
+        "takeaway"
+      ],
+      "camera_language": [
+        "subject_safe_hold",
+        "gentle_push"
+      ],
+      "motion_recipe_ids": [
+        "motion-context-reveal-v1",
+        "motion-caption-emphasis-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Speech remains dominant; one accent per beat."
+      ],
+      "reject_when": [
+        "No clear explanation or takeaway."
+      ],
+      "preset_sha256": "a2af94f40f5a708f6889e72a444f173f5eb7ab0c19724191a62b2dd41f8001f6"
+    },
+    {
+      "preset_id": "proof_comparison",
+      "narrative_structure": [
+        "claim",
+        "evidence",
+        "difference",
+        "conclusion"
+      ],
+      "camera_language": [
+        "stable_state",
+        "match_cut"
+      ],
+      "motion_recipe_ids": [
+        "motion-graphic-data-v1",
+        "motion-concat-dissolve-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Impact only at evidence reveal; no music."
+      ],
+      "reject_when": [
+        "No comparable facts or units."
+      ],
+      "preset_sha256": "ef6f65ef4c5e382412fb1afdccbfb9f21de1e0984672f72c1c11492a5148f32b"
+    },
+    {
+      "preset_id": "story_reveal",
+      "narrative_structure": [
+        "curiosity",
+        "context",
+        "reveal",
+        "reaction"
+      ],
+      "camera_language": [
+        "restrained_push",
+        "settle"
+      ],
+      "motion_recipe_ids": [
+        "motion-hook-card-v1",
+        "motion-punch-card-v1",
+        "motion-concat-dissolve-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Keep silence before the reveal when source supports it."
+      ],
+      "reject_when": [
+        "Hook and payoff are unrelated."
+      ],
+      "preset_sha256": "63b02cbf7dad877c69a9a676ac46db689b33212bee2d83fd6d7c486167b31ce3"
+    },
+    {
+      "preset_id": "transformation",
+      "narrative_structure": [
+        "problem",
+        "steps",
+        "result"
+      ],
+      "camera_language": [
+        "progressive_crop",
+        "directional_move"
+      ],
+      "motion_recipe_ids": [
+        "motion-caption-emphasis-process-v1",
+        "motion-graphic-concept-v1",
+        "motion-concat-push-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Step accents are sparse and speech-safe."
+      ],
+      "reject_when": [
+        "No visible sequence or result."
+      ],
+      "preset_sha256": "0ee145817cde465122747b53b54824621d92accbf02ef3ce3fffe9647dc96c23"
+    },
+    {
+      "preset_id": "quote_emotion",
+      "narrative_structure": [
+        "strong_quote",
+        "context",
+        "reaction",
+        "close"
+      ],
+      "camera_language": [
+        "face_safe_hold",
+        "minimal_drift"
+      ],
+      "motion_recipe_ids": [
+        "motion-caption-emphasis-payoff-v1",
+        "motion-context-reveal-takeaway-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_whole_run",
+      "audio_rules": [
+        "Voice-first mix; sparse accents."
+      ],
+      "reject_when": [
+        "Quote needs invented context."
+      ],
+      "preset_sha256": "bc3bd37d2061bfc2e5094202f609c8a3a9a52c65f796d9cf812830404f3c27c6"
+    },
+    {
+      "preset_id": "product_cta",
+      "narrative_structure": [
+        "problem",
+        "demonstration",
+        "benefit",
+        "action"
+      ],
+      "camera_language": [
+        "product_safe_follow",
+        "cta_hold"
+      ],
+      "motion_recipe_ids": [
+        "motion-hook-card-proof-v1",
+        "motion-punch-card-result-v1",
+        "motion-context-reveal-takeaway-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "CTA cue is short, restrained, and clear."
+      ],
+      "reject_when": [
+        "CTA would obscure faces or proof."
+      ],
+      "preset_sha256": "9235e883081fd9f01c46403ab26c9e84bc29488e898dc9b2078b0a0aa52819be"
+    }
+  ]
+}

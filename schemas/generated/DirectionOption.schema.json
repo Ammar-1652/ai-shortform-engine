@@ -205,6 +205,137 @@
       "title": "DirectionBeat",
       "type": "object"
     },
+    "DirectionCameraMotion": {
+      "additionalProperties": false,
+      "description": "A bounded, source-grounded camera move for one output interval.",
+      "properties": {
+        "easing": {
+          "default": "ease_in_out_cubic",
+          "enum": [
+            "linear",
+            "ease_out_cubic",
+            "ease_in_out_cubic"
+          ],
+          "title": "Easing",
+          "type": "string"
+        },
+        "fallback": {
+          "default": "hold",
+          "enum": [
+            "hold",
+            "contain"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "intensity": {
+          "default": "gentle",
+          "enum": [
+            "quiet",
+            "gentle",
+            "active",
+            "peak"
+          ],
+          "title": "Intensity",
+          "type": "string"
+        },
+        "intent": {
+          "enum": [
+            "orient",
+            "follow",
+            "reveal",
+            "emphasize",
+            "transition",
+            "settle"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "motion_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Motion Id",
+          "type": "string"
+        },
+        "path": {
+          "enum": [
+            "hold",
+            "push_in",
+            "pull_out",
+            "pan_x",
+            "pan_y",
+            "drift",
+            "parallax",
+            "match_cut"
+          ],
+          "title": "Path",
+          "type": "string"
+        },
+        "scale_end_permille": {
+          "default": 1000,
+          "maximum": 1140,
+          "minimum": 1000,
+          "title": "Scale End Permille",
+          "type": "integer"
+        },
+        "scale_start_permille": {
+          "default": 1000,
+          "maximum": 1140,
+          "minimum": 1000,
+          "title": "Scale Start Permille",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "target_x_permille": {
+          "default": 500,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Target X Permille",
+          "type": "integer"
+        },
+        "target_y_permille": {
+          "default": 500,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Target Y Permille",
+          "type": "integer"
+        },
+        "travel_px": {
+          "default": 0,
+          "maximum": 194,
+          "minimum": 0,
+          "title": "Travel Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "motion_id",
+        "intent",
+        "path",
+        "interval",
+        "source_evidence_ids"
+      ],
+      "title": "DirectionCameraMotion",
+      "type": "object"
+    },
     "DirectionContextLine": {
       "additionalProperties": false,
       "description": "One reviewed, single-line context label in the upper blur lane.\n\nThis is optional for non-campaign directions.  When supplied it is a\ndeclarative editorial summary, never executable copy: the direction\nvalidator binds it to transcript evidence and requires a review note when\nthe wording is not an exact transcript phrase.",
@@ -219,7 +350,8 @@
           "default": "exact_evidence",
           "enum": [
             "exact_evidence",
-            "human_reviewed_summary"
+            "human_reviewed_summary",
+            "operator_reviewed_summary"
           ],
           "title": "Copy Mode",
           "type": "string"
@@ -420,7 +552,8 @@
             "credit_card",
             "travel_postcard",
             "business_identity",
-            "business_spotlight"
+            "business_spotlight",
+            "quran_challenge"
           ],
           "title": "Template",
           "type": "string"
@@ -457,6 +590,81 @@
         "height"
       ],
       "title": "DirectionMotionGraphic",
+      "type": "object"
+    },
+    "DirectionTransitionSpec": {
+      "additionalProperties": false,
+      "description": "A narrative transition selected for one reviewed cut.",
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "enum": [
+            "cut",
+            "time_shift",
+            "location_change",
+            "reveal",
+            "emphasis",
+            "settle"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx_placement_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sfx Placement Id"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "style": {
+          "enum": [
+            "clean_cut_v1",
+            "concat_push_v1",
+            "concat_blur_dissolve_v1"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "transition_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Transition Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transition_id",
+        "interval",
+        "purpose",
+        "style",
+        "source_evidence_ids"
+      ],
+      "title": "DirectionTransitionSpec",
       "type": "object"
     },
     "MotionPurpose": {
@@ -579,6 +787,14 @@
       "title": "Beats",
       "type": "array"
     },
+    "camera_motion": {
+      "items": {
+        "$ref": "#/$defs/DirectionCameraMotion"
+      },
+      "maxItems": 12,
+      "title": "Camera Motion",
+      "type": "array"
+    },
     "context_line": {
       "anyOf": [
         {
@@ -606,11 +822,34 @@
       "title": "Motion Graphics",
       "type": "array"
     },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
     "option_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Option Id",
       "type": "string"
+    },
+    "preset_id": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Preset Id"
     },
     "schema_version": {
       "const": "1.0.0",
@@ -678,6 +917,14 @@
       "minLength": 1,
       "title": "Title",
       "type": "string"
+    },
+    "transitions": {
+      "items": {
+        "$ref": "#/$defs/DirectionTransitionSpec"
+      },
+      "maxItems": 12,
+      "title": "Transitions",
+      "type": "array"
     }
   },
   "required": [

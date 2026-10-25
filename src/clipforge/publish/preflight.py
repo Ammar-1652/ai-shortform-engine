@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from clipforge.errors import ClipforgeError, MediaError, StorageError
@@ -123,6 +123,18 @@ class DeliveryFacts:
     style_id: str = "legacy-v1"
     style_fingerprint: str = ""
     safe_region_id: str = "portrait-safe-v1"
+    # Creative dependencies are repeated here so final review and local
+    # delivery cannot reuse an approval after a direction-layer dependency
+    # changes. These mirror the bound Advanced Hero plan fields.
+    preset_id: str = ""
+    pilot_sha256: str = ""
+    motion_recipe_ids: tuple[str, ...] = field(default_factory=tuple)
+    motion_catalog_sha256: str = ""
+    knowledge_context_id: str = ""
+    knowledge_release_id: str = ""
+    knowledge_context_sha256: str = ""
+    knowledge_decision_trace_id: str = ""
+    knowledge_decision_trace_sha256: str = ""
 
 
 def preflight_delivery(
@@ -272,6 +284,15 @@ def preflight_delivery(
         style_id=plan.style_id,
         style_fingerprint=plan.style_fingerprint,
         safe_region_id=plan.safe_region_id,
+        preset_id=plan.preset_id,
+        pilot_sha256=plan.pilot_sha256,
+        motion_recipe_ids=tuple(plan.motion_recipe_ids),
+        motion_catalog_sha256=plan.motion_catalog_sha256,
+        knowledge_context_id=plan.knowledge_context_id,
+        knowledge_release_id=plan.knowledge_release_id,
+        knowledge_context_sha256=plan.knowledge_context_sha256,
+        knowledge_decision_trace_id=plan.knowledge_decision_trace_id,
+        knowledge_decision_trace_sha256=plan.knowledge_decision_trace_sha256,
         alignment_id=alignment_id,
         alignment_sha256=alignment_sha,
         qa_set_id=qa_set_id,
@@ -355,6 +376,15 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
         "safe_region_id": facts.safe_region_id,
+        "preset_id": facts.preset_id,
+        "pilot_sha256": facts.pilot_sha256,
+        "motion_recipe_ids": list(facts.motion_recipe_ids),
+        "motion_catalog_sha256": facts.motion_catalog_sha256,
+        "knowledge_context_id": facts.knowledge_context_id,
+        "knowledge_release_id": facts.knowledge_release_id,
+        "knowledge_context_sha256": facts.knowledge_context_sha256,
+        "knowledge_decision_trace_id": facts.knowledge_decision_trace_id,
+        "knowledge_decision_trace_sha256": facts.knowledge_decision_trace_sha256,
         "qa_set_id": facts.qa_set_id,
         "qa_set_sha256": facts.qa_set_sha256,
         "reframing_strategy": facts.reframing_strategy,

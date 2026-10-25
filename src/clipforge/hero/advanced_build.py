@@ -8,11 +8,14 @@ import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
+from clipforge.campaign.overlays import TARTEEL_PROFILE_ID
 from clipforge.campaign.quran import canonicalize_quran_alignment
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
-from clipforge.hero.captions import hero_caption_pieces
+from clipforge.hero.captions import hero_caption_pieces, validate_caption_word_coverage
+from clipforge.hero.frame_palette import analyze_frame_palette
 from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.reframe import (
     ReframeError,
@@ -25,6 +28,7 @@ from clipforge.schemas.advanced import (
     AdvancedHeroProfile,
     AssetBinding,
     AudioMixEvent,
+    CameraMotionEvent,
     CaptionWordTiming,
     DiagramEvent,
     EmphasisEvent,
@@ -35,11 +39,17 @@ from clipforge.schemas.advanced import (
     advanced_fingerprint,
 )
 from clipforge.schemas.campaign import QuranCaptionReview
-from clipforge.schemas.direction import DirectionAssetPlacement, DirectionDocument, SourceNativeText
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionDocument,
+    DirectionTransitionSpec,
+    SourceNativeText,
+)
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import Database, get_source_manifest
@@ -89,9 +99,11 @@ def build_advanced_plan(
     direction_sha256: str = "",
     editorial_arc_id: str = "",
     editorial_arc_sha256: str = "",
+    editorial_arc_review_sha256: str = "",
     quran_review_id: str = "",
     quran_review_sha256: str = "",
     quran_review: QuranCaptionReview | None = None,
+    caption_alignment_override: ForcedAlignmentDocument | None = None,
     cut_transition_style: str = "",
     allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
@@ -131,9 +143,9 @@ def build_advanced_plan(
         if cursor_us != duration_us:
             raise MediaError("manual crop windows must cover the complete output without gaps")
     emphasis = _emphasis(alignment, candidate_id)
-    caption_alignment = alignment
+    caption_alignment = caption_alignment_override or alignment
     if quran_review is not None:
-        caption_alignment = canonicalize_quran_alignment(alignment, quran_review)
+        caption_alignment = canonicalize_quran_alignment(caption_alignment, quran_review)
     captions = _captions(caption_alignment, candidate_id, style_id=direction.style_id if direction else "")
     if direction is not None:
         typography = _directed_typography(direction, alignment, candidate_id)
@@ -149,13 +161,26 @@ def build_advanced_plan(
     # supplies a source-grounded diagram instruction, the safe plan is none.
     diagrams: list[DiagramEvent] = []
     motion_graphics = _motion_graphics(direction)
+    camera_motion = _camera_motion(direction)
     source_native_text = _source_native_text(direction)
+    motion_recipe_ids = []
+    motion_catalog_sha256 = ""
+    if direction is not None:
+        selected_direction = next(
+            item for item in direction.options if item.option_id == direction.selected_option_id
+        )
+        motion_recipe_ids = list(selected_direction.motion_recipe_ids)
+        motion_catalog_sha256 = direction.motion_catalog_sha256 or ""
     # A directed clean-production recut gets a soft bridge by default. An
     # editorial arc that explicitly says `none` still retains that reviewed
     # hard-cut decision; legacy/no-direction plans remain unchanged.
     effective_transition_style = _effective_transition_style(cut_transition_style, direction is not None)
     transitions = _transitions(
-        candidate_id, hero_plan.edit_plan.time_map, duration_us, effective_transition_style
+        candidate_id,
+        hero_plan.edit_plan.time_map,
+        duration_us,
+        effective_transition_style,
+        _selected_transition_specs(direction),
     )
     typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
@@ -192,21 +217,52 @@ def build_advanced_plan(
         if direction is not None
         else style_for_renderer_version(profile.renderer_recipe_version)
     )
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        campaign_profile_id = get_project(connection, project_id).profile_id
+    frame_style_id = "none-v1"
+    frame_backdrop_id: Literal["blurred-source-v1", "palette-solid-v1"] = "blurred-source-v1"
+    frame_layout_id: Literal["standard-card-v1", "platform-bleed-v1"] = "standard-card-v1"
+    frame_palette = None
+    if (
+        campaign_profile_id == TARTEEL_PROFILE_ID
+        and direction is not None
+        and direction.safe_region_id == "platform-resilient-portrait-v1"
+    ):
+        frame_palette = analyze_frame_palette(
+            workspace.proxy_file("analysis.mp4"),
+            source_sha256=source_sha256,
+            duration_us=duration_us,
+        )
+        frame_style_id = "auto-source-palette-v1"
+        frame_backdrop_id = "palette-solid-v1"
+        frame_layout_id = "platform-bleed-v1"
     config: dict[str, object] = {
         "manual_window": manual,
         "manual_windows": manual_windows,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
         "motion_style": asdict(motion_style),
+        "frame_style_id": frame_style_id,
+        "frame_backdrop_id": frame_backdrop_id,
+        "frame_layout_id": frame_layout_id,
+        "frame_palette": None if frame_palette is None else frame_palette.model_dump(mode="json"),
     }
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
-    with database.connect() as connection:
-        from clipforge.storage import get_project
-
-        campaign_profile_id = get_project(connection, project_id).profile_id
-    campaign_qa = ["tarteel-quran-caption-v1"] if campaign_profile_id == "profile-tarteel-campaign" else []
+    campaign_qa = (
+        [
+            "tarteel-overlay-v1",
+            "tarteel-face-clearance-v1",
+            "tarteel-caption-direction-v1",
+            "tarteel-quran-caption-v1",
+            "tarteel-frame-palette-v1",
+        ]
+        if campaign_profile_id == TARTEEL_PROFILE_ID
+        else []
+    )
     bound_review_id = review_id
     bound_review_digest = review_digest
     if allow_unapproved:
@@ -215,6 +271,7 @@ def build_advanced_plan(
             f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
         ).hexdigest()
     document = AdvancedHeroPlanDocument(
+        workflow_roles=WorkflowRolePolicy(),
         plan_id=plan_id,
         project_id=project_id,
         source_asset_id=source_asset_id,
@@ -240,15 +297,34 @@ def build_advanced_plan(
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
         editorial_arc_id=editorial_arc_id,
         editorial_arc_sha256=editorial_arc_sha256,
+        editorial_arc_review_sha256=editorial_arc_review_sha256,
         quran_review_id=quran_review_id,
         quran_review_sha256=quran_review_sha256,
         profile_fingerprint=profile.fingerprint(),
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
+        preset_id="" if direction is None else direction.preset_id or "",
+        motion_recipe_ids=motion_recipe_ids,
+        motion_catalog_sha256=motion_catalog_sha256,
+        knowledge_context_id="" if direction is None else direction.knowledge_context_id or "",
+        knowledge_release_id="" if direction is None else direction.knowledge_release_id or "",
+        knowledge_context_sha256="" if direction is None else direction.knowledge_context_sha256 or "",
+        knowledge_decision_trace_id="" if direction is None else direction.knowledge_decision_trace_id or "",
+        knowledge_decision_trace_sha256=(
+            "" if direction is None else direction.knowledge_decision_trace_sha256 or ""
+        ),
         style_id=motion_style.style_id,
         style_fingerprint=motion_style.fingerprint(),
-        safe_region_id="portrait-safe-v1",
+        # A direction may opt into the cross-platform portrait treatment when
+        # reviewed edge content (for example a source-native logo) must survive
+        # both TikTok and Instagram viewers. Undirected/legacy plans retain
+        # the immutable full-width region.
+        safe_region_id=(direction.safe_region_id if direction is not None else "portrait-safe-v1"),
         motion_style=motion_style.contract(),
+        frame_style_id=frame_style_id,
+        frame_backdrop_id=frame_backdrop_id,
+        frame_layout_id=frame_layout_id,
+        frame_palette=frame_palette,
         reframing_strategy=profile.reframing.strategy_id,
         reframing_config_sha256=advanced_fingerprint(config),
         windows=windows,
@@ -256,6 +332,7 @@ def build_advanced_plan(
         typography=typography,
         diagrams=diagrams,
         motion_graphics=motion_graphics,
+        camera_motion=camera_motion,
         source_native_text=source_native_text,
         emphasis=emphasis,
         transitions=transitions,
@@ -295,6 +372,37 @@ def _selected_asset_placements(direction: DirectionDocument | None) -> list[Dire
         return []
     option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
     return list(option.asset_placements)
+
+
+def _selected_transition_specs(direction: DirectionDocument | None) -> list[DirectionTransitionSpec]:
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.transitions)
+
+
+def _camera_motion(direction: DirectionDocument | None) -> list[CameraMotionEvent]:
+    """Convert validated direction camera choices into render events."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return [
+        CameraMotionEvent(
+            event_id=stable_id("direction-camera", direction.direction_id, item.motion_id),
+            interval=item.interval,
+            intent=item.intent,
+            path=item.path,
+            target_x_permille=item.target_x_permille,
+            target_y_permille=item.target_y_permille,
+            scale_start_permille=item.scale_start_permille,
+            scale_end_permille=item.scale_end_permille,
+            travel_px=item.travel_px,
+            intensity=item.intensity,
+            easing=item.easing,
+            source_evidence_ids=item.source_evidence_ids,
+        )
+        for item in option.camera_motion
+    ]
 
 
 def _motion_graphics(direction: DirectionDocument | None) -> list[MotionGraphicEvent]:
@@ -391,6 +499,9 @@ def _directed_typography(
     events: list[TypographyEvent] = []
     context_line = getattr(option, "context_line", None)
     if context_line is not None:
+        platform_resilient = (
+            getattr(direction, "safe_region_id", "portrait-safe-v1") == "platform-resilient-portrait-v1"
+        )
         events.append(
             TypographyEvent(
                 event_id=stable_id(
@@ -400,9 +511,14 @@ def _directed_typography(
                 purpose=MotionPurpose.KEY_PHRASE,
                 component_id="context-line-v1",
                 text=context_line.text,
-                x=72,
-                y=280 if getattr(direction, "style_id", "") == "quran-readable-v2" else 120,
-                font_size=64 if getattr(direction, "style_id", "") == "quran-readable-v2" else 48,
+                x=96 if platform_resilient else 72,
+                # Keep the context sentence below search/header chrome for
+                # every production style. The context line is a shared
+                # platform-safe lane, not a Quran-only special case.
+                y=280 if platform_resilient else 270,
+                font_size=(64 if platform_resilient else 80)
+                if getattr(direction, "style_id", "") == "quran-readable-v2"
+                else 48,
                 emoji=context_line.emoji,
             )
         )
@@ -556,7 +672,19 @@ def _captions(
 ) -> list[TypographyEvent]:
     """Persist grouped forced captions separately from optional typography cards."""
     events: list[TypographyEvent] = []
-    for index, piece in enumerate(hero_caption_pieces(alignment.words)):
+    modern = style_id not in {"", "legacy-v1"}
+    readable = style_id == "quran-readable-v2"
+    style = style_for_id(style_id) if modern else None
+    pieces = hero_caption_pieces(
+        alignment.words,
+        # Production styles carry a one-line contract. This is a plan-time
+        # grouping constraint, not a renderer fallback: captions stop before
+        # they can wrap, while retaining exact word timing and full coverage.
+        max_words=style.caption_max_words if style is not None else 8,
+        max_chars=style.caption_max_chars if style is not None else 42,
+        max_duration_us=2_500_000 if modern else 3_000_000,
+    )
+    for index, piece in enumerate(pieces):
         text = piece.cue.text.strip()
         if not text:
             continue
@@ -568,8 +696,8 @@ def _captions(
                 component_id=f"caption-{index}",
                 text=text,
                 x=72,
-                y=1560 if style_id == "quran-readable-v2" else 1540,
-                font_size=120 if style_id == "quran-readable-v2" else 54,
+                y=style.caption_y if style is not None else (1560 if readable else 1540),
+                font_size=66 if readable else 54,
                 words=[
                     CaptionWordTiming(
                         word_id=word.word_id,
@@ -585,6 +713,10 @@ def _captions(
                 ],
             )
         )
+    validate_caption_word_coverage(
+        alignment.words,
+        [word for event in events for word in event.words],
+    )
     return events
 
 
@@ -593,12 +725,31 @@ def _transitions(
     time_map: TimeMapDocument,
     duration_us: int,
     style: str,
+    directed_specs: list[DirectionTransitionSpec] | None = None,
 ) -> list[TransitionEvent]:
     """Create restrained bridges only where the reviewed TimeMap actually cuts."""
     mapped = time_map.to_time_map().segments
     events: list[TransitionEvent] = []
     if style not in {"none", "clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"}:
         raise MediaError(f"unsupported cut transition style: {style}")
+    if directed_specs:
+        interior_cut_starts = {segment.output_start_us for segment in mapped[1:]}
+        for spec in directed_specs:
+            if spec.interval.output_start_us not in interior_cut_starts:
+                raise MediaError("directed transition must remain on an interior TimeMap cut")
+            if spec.interval.output_end_us > duration_us:
+                raise MediaError("directed transition extends past the output")
+        return [
+            TransitionEvent(
+                event_id=stable_id("transition", candidate_id, spec.transition_id),
+                interval=spec.interval,
+                style=spec.style,
+                source_evidence_ids=spec.source_evidence_ids,
+                direction_purpose=spec.purpose,
+                sfx_placement_id=spec.sfx_placement_id,
+            )
+            for spec in directed_specs
+        ]
     if style == "none":
         return events
     for index, segment in enumerate(mapped[1:], start=1):

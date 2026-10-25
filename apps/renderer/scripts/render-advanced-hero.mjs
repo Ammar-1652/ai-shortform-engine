@@ -10,6 +10,8 @@ import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageCaptionFonts } from "./caption-fonts.mjs";
+import { validateRenderAuthorization } from "./render-authorization.mjs";
+import { withRenderStage } from "./render-stage.mjs";
 
 const isolationDir = process.argv[4];
 if (typeof isolationDir === "string" && isolationDir.length > 0) {
@@ -18,8 +20,6 @@ if (typeof isolationDir === "string" && isolationDir.length > 0) {
   process.env.TMP = isolationDir;
   process.env.TEMP = isolationDir;
 }
-const { bundle } = await import("@remotion/bundler");
-const { renderMedia, selectComposition } = await import("@remotion/renderer");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entryPoint = path.resolve(here, "../src/hero/index.tsx");
@@ -28,6 +28,12 @@ const batchPath = process.argv[2];
 const browserExecutable = process.argv[3];
 if (!batchPath || !browserExecutable) {
   throw new Error("usage: node render-hero.mjs BATCH_JSON BROWSER_EXECUTABLE");
+}
+if (process.env.CLIPFORGE_RENDER_AUTHORITY !== "advanced_service") {
+  throw new Error(
+    "production Advanced Hero renders must be launched by the Clipforge advanced service; " +
+      "direct renderer batches are diagnostic-only",
+  );
 }
 
 const batch = JSON.parse(readFileSync(batchPath, "utf8"));
@@ -38,6 +44,15 @@ if (!batch || !Array.isArray(batch.items) || batch.items.length !== 1) {
 const runDir = path.resolve(path.dirname(batchPath));
 const stagingDir = path.join(runDir, "staging");
 const chromiumOptions = { gl: "swangle" };
+// Browser startup on the constrained local worker can exceed Remotion's
+// 30-second default while another process is exiting. Keep the wait bounded,
+// but do not turn a slow startup into a failed render that leaves a resumable
+// run looking like an encoder defect.
+const browserSetupTimeoutMs = 90_000;
+validateRenderAuthorization(batchPath, batch);
+const [{ bundle }, { renderMedia, selectComposition }] = await withRenderStage("imports", () => Promise.all([
+  import("@remotion/bundler"), import("@remotion/renderer"),
+]));
 
 function contained(filePath, root) {
   const resolved = path.resolve(filePath);
@@ -60,6 +75,9 @@ for (const item of batch.items) {
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
   }
+  if (typeof item.input_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(item.input_sha256)) {
+    throw new Error("service render batch item is missing its canonical input digest");
+  }
   if (item.frameRange !== undefined && (
     !Array.isArray(item.frameRange) || item.frameRange.length !== 2 ||
     !item.frameRange.every(Number.isSafeInteger) || item.frameRange[0] < 0 ||
@@ -76,11 +94,23 @@ for (const item of batch.items) {
   }
   if (input.campaign_overlay) {
     const overlay = input.campaign_overlay;
+    if (input.style_id !== "legacy-v1" && (
+      !/^[0-9a-f]{64}$/.test(input.speech_review_sha256 ?? "") ||
+      !/^[0-9a-f]{64}$/.test(input.caption_alignment_sha256 ?? "")
+    )) throw new Error("clean Tarteel rendering requires reviewed speech and caption alignment");
+    if (input.style_id !== "legacy-v1" && !/^[0-9a-f]{64}$/.test(input.overlay_exclusion_sha256 ?? "")) {
+      throw new Error("clean Tarteel overlays require transformed exclusion evidence");
+    }
+    if (input.style_id !== "legacy-v1" && !/^[0-9a-f]{64}$/.test(input.editorial_arc_review_sha256 ?? "")) {
+      throw new Error("clean Tarteel overlays require an accepted editorial arc review");
+    }
     if (
       overlay.campaign_id !== "tarteel" ||
       !["quran-editorial-v1", "quran-readable-v2"].includes(input.style_id) ||
-      typeof input.quran_review_id !== "string" ||
-      !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "") ||
+      ((input.quran_review_id || input.quran_review_sha256) && (
+        typeof input.quran_review_id !== "string" || input.quran_review_id.length === 0 ||
+        !/^[0-9a-f]{64}$/.test(input.quran_review_sha256 ?? "")
+      )) ||
       overlay.cta_background_removal !== "chroma_key_v1" ||
       (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") ||
       overlay.cta_frame_rate !== 30 ||
@@ -141,6 +171,7 @@ for (const item of batch.items) {
       "advanced_plan_sha256",
       "time_map_sha256",
       "source_sha256",
+      "pilot_sha256",
     ]) {
       if (typeof input[key] !== "string" || !sha.test(input[key])) {
         throw new Error(`production advanced render requires ${key}`);
@@ -153,6 +184,48 @@ for (const item of batch.items) {
       !sha.test(input.direction_sha256)
     ) {
       throw new Error("production advanced render requires a persisted direction binding");
+    }
+    const knowledgeFields = [
+      input.knowledge_context_id,
+      input.knowledge_release_id,
+      input.knowledge_context_sha256,
+      input.knowledge_decision_trace_id,
+      input.knowledge_decision_trace_sha256,
+    ];
+    const hasKnowledge = knowledgeFields.some((value) => value !== undefined && value !== "");
+    const hasTrace = input.knowledge_decision_trace_id !== undefined && input.knowledge_decision_trace_id !== "";
+    if (hasKnowledge && (
+      typeof input.knowledge_context_id !== "string" ||
+      typeof input.knowledge_release_id !== "string" ||
+      !sha.test(input.knowledge_context_sha256) ||
+      (hasTrace && (typeof input.knowledge_decision_trace_id !== "string" || !sha.test(input.knowledge_decision_trace_sha256))) ||
+      (!hasTrace && input.knowledge_decision_trace_sha256 !== undefined && input.knowledge_decision_trace_sha256 !== "")
+    )) {
+      throw new Error("production advanced render requires a complete knowledge binding");
+    }
+  }
+  const frameStyle = input.frame_style_id ?? "none-v1";
+  const frameBackdrop = input.frame_backdrop_id ?? "blurred-source-v1";
+  const frameLayout = input.frame_layout_id ?? "standard-card-v1";
+  const frameStyles = new Set([
+    "none-v1",
+    "tarteel-card-olive-gold-v1",
+    "tarteel-card-sage-gold-v1",
+    "tarteel-card-charcoal-gold-v1",
+    "auto-source-palette-v1",
+  ]);
+  if (!frameStyles.has(frameStyle)) {
+    throw new Error(`unsupported frame style ${frameStyle}`);
+  }
+  if (frameBackdrop !== "blurred-source-v1" && frameBackdrop !== "palette-solid-v1") {
+    throw new Error(`unsupported frame backdrop ${frameBackdrop}`);
+  }
+  if (frameLayout !== "standard-card-v1" && frameLayout !== "platform-bleed-v1") {
+    throw new Error(`unsupported frame layout ${frameLayout}`);
+  }
+  if (frameStyle === "auto-source-palette-v1") {
+    if (frameBackdrop !== "palette-solid-v1" || frameLayout !== "platform-bleed-v1" || !input.frame_palette || input.frame_palette.source_sha256 !== input.source_sha256) {
+      throw new Error("auto-source-palette-v1 requires a source-bound palette backdrop");
     }
   }
   for (const event of [...(input.typography ?? []), ...(input.captions ?? []), ...(input.diagrams ?? [])]) {
@@ -179,6 +252,7 @@ for (const item of batch.items) {
     "travel_postcard",
     "business_identity",
     "business_spotlight",
+    "quran_challenge",
   ]);
   for (const graphic of input.motion_graphics ?? []) {
     if (!graphic || !motionGraphicTemplates.has(graphic.template)) {
@@ -366,7 +440,7 @@ function assertFaceFollow(input) {
 }
 
 const bundleStarted = Date.now();
-const serveUrl = await bundle({
+const serveUrl = await withRenderStage("bundle", () => bundle({
   entryPoint,
   webpackOverride: (config) => {
     config.resolve = config.resolve ?? {};
@@ -378,19 +452,20 @@ const serveUrl = await bundle({
   publicDir: stagingDir,
   symlinkPublicDir: true,
   enableCaching: false,
-});
+}));
 const bundleSeconds = (Date.now() - bundleStarted) / 1000;
 
 let renderSeconds = 0;
 for (const item of batch.items) {
   const started = Date.now();
-  const composition = await selectComposition({
+  const composition = await withRenderStage("select", () => selectComposition({
     serveUrl,
     id: "AdvancedHeroDraft",
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
-  });
+    timeoutInMilliseconds: browserSetupTimeoutMs,
+  }));
   if (composition.durationInFrames !== item.input.duration_in_frames) {
     throw new Error(
       `composition duration ${composition.durationInFrames} does not match Python duration_in_frames ${item.input.duration_in_frames}`,
@@ -400,7 +475,7 @@ for (const item of batch.items) {
     throw new Error(`composition size ${composition.width}x${composition.height} is not 1080x1920`);
   }
   const audioOnly = item.renderMode === "audio";
-  await renderMedia({
+  await withRenderStage("render", () => renderMedia({
     composition,
     serveUrl,
     codec: audioOnly ? "wav" : "h264",
@@ -408,6 +483,7 @@ for (const item of batch.items) {
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
+    timeoutInMilliseconds: browserSetupTimeoutMs,
     concurrency: 1,
     crf: audioOnly ? undefined : item.h264Crf,
     pixelFormat: audioOnly ? undefined : "yuv420p",
@@ -416,7 +492,7 @@ for (const item of batch.items) {
     frameRange: item.frameRange,
     overwrite: true,
     muted: item.renderMode === "video",
-  });
+  }));
   renderSeconds += (Date.now() - started) / 1000;
 }
 

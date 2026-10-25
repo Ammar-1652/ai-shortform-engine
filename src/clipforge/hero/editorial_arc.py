@@ -6,16 +6,19 @@ import uuid
 from pathlib import Path
 
 from clipforge.errors import MediaError
+from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.hero.alignment import alignment_binding_sha256
 from clipforge.media.hashing import sha256_file
 from clipforge.preview.timing import frame_at_or_after
-from clipforge.schemas.arc import EditorialArcDocument
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcReview
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
+    DirectionCameraMotion,
     DirectionDocument,
     DirectionEvidence,
     DirectionMotionGraphic,
     DirectionOption,
+    DirectionTransitionSpec,
 )
 from clipforge.schemas.editorial import OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
@@ -38,6 +41,88 @@ def load_editorial_arc(path: Path) -> tuple[EditorialArcDocument, str]:
     # publishes the immutable work-root copy; whitespace changes to that copy
     # must still invalidate a plan rather than being silently accepted.
     return document, sha256_file(path)
+
+
+def load_editorial_arc_review(
+    root: Path,
+    *,
+    source_asset_id: str,
+    candidate_id: str,
+    source_sha256: str,
+    transcript_sha256: str,
+    visual_analysis_sha256: str,
+    arc_sha256: str,
+    arc: EditorialArcDocument | None = None,
+) -> tuple[EditorialArcReview, str, Path]:
+    """Load exactly one accepted, source-bound arc review sidecar."""
+    root = root.resolve()
+    base = root / "campaigns" / "Tarteel"
+    if not base.is_dir() or base.is_symlink():
+        raise MediaError("Tarteel editorial arc review directory is missing")
+    matches: list[tuple[EditorialArcReview, str, Path]] = []
+    for path in sorted(base.rglob("editorial-arc-review.json")):
+        if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
+            raise MediaError("Tarteel editorial arc review must be a regular work-root file")
+        if any(parent.is_symlink() for parent in path.parents if parent != root):
+            raise MediaError("Tarteel editorial arc review path cannot contain symlinks")
+        try:
+            review = EditorialArcReview.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"invalid Tarteel editorial arc review {path.name}: {exc}") from exc
+        if (review.source_asset_id, review.candidate_id) != (source_asset_id, candidate_id):
+            continue
+        if review.decision != "accepted":
+            raise MediaError("Tarteel editorial arc review is not accepted")
+        bindings = (
+            (review.source_sha256, source_sha256, "source"),
+            (review.transcript_sha256, transcript_sha256, "transcript"),
+            (review.visual_analysis_sha256, visual_analysis_sha256, "visual analysis"),
+            (review.arc_sha256, arc_sha256, "arc"),
+        )
+        for actual, expected, label in bindings:
+            if actual != expected:
+                raise MediaError(f"Tarteel editorial arc review is stale: {label} hash differs")
+        verify_arc_review_frames(root, review)
+        if arc is not None:
+            validate_arc_review(review, arc)
+        matches.append((review, sha256_file(path), path))
+    if len(matches) != 1:
+        raise MediaError(f"Tarteel requires exactly one accepted editorial arc review for {candidate_id}")
+    return matches[0]
+
+
+def verify_arc_review_frames(root: Path, review: EditorialArcReview) -> None:
+    """Recheck inspectable source frames at render, cache, and QA boundaries."""
+    for beat in review.beats:
+        frame = confine_work_path(root, beat.representative_frame_relative_path, label="arc review frame")
+        if not frame.is_file():
+            raise MediaError("Tarteel arc review representative frame is missing or unsafe")
+        if sha256_file(frame) != beat.representative_frame_sha256:
+            raise MediaError("Tarteel arc review representative frame hash changed")
+
+
+def validate_arc_review(review: EditorialArcReview, arc: EditorialArcDocument) -> None:
+    """A review must describe the exact retained ranges and forced-word order."""
+    if (
+        review.decision != "accepted"
+        or review.source_asset_id != arc.source_asset_id
+        or review.candidate_id != arc.candidate_id
+        or review.source_sha256 != arc.source_sha256
+        or len(review.beats) != len(arc.segments)
+    ):
+        raise MediaError("arc review does not describe this candidate and cut")
+    for index, (beat, segment) in enumerate(zip(review.beats, arc.segments, strict=True)):
+        if (
+            beat.segment_id != segment.segment_id
+            or beat.beat != segment.beat
+            or beat.source_start_us != segment.source_start_us
+            or beat.source_end_us != segment.source_end_us
+            or beat.transcript_word_ids != segment.word_ids
+        ):
+            raise MediaError("arc review beat differs from the actual kept ranges or forced words")
+        expected_continuity = "accepted" if index < len(arc.segments) - 1 else "not_applicable"
+        if beat.continuity_to_next != expected_continuity:
+            raise MediaError("arc review must accept every interior transition and close the final beat")
 
 
 def validate_editorial_arc(
@@ -246,6 +331,24 @@ def remap_direction_intervals(
                     }
                 )
             )
+        camera_motion: list[DirectionCameraMotion] = []
+        for camera in option.camera_motion:
+            camera_motion.append(
+                camera.model_copy(
+                    update={
+                        "interval": remap_output_interval(camera.interval, source_time_map, output_time_map)
+                    }
+                )
+            )
+        transitions: list[DirectionTransitionSpec] = []
+        for transition in option.transitions:
+            transitions.append(
+                transition.model_copy(
+                    update={
+                        "interval": remap_output_interval(transition.interval, source_time_map, output_time_map)
+                    }
+                )
+            )
         context_line = option.context_line
         if context_line is not None:
             # The upper context label intentionally spans the complete new
@@ -267,6 +370,8 @@ def remap_direction_intervals(
                     "beats": beats,
                     "asset_placements": placements,
                     "motion_graphics": graphics,
+                    "camera_motion": camera_motion,
+                    "transitions": transitions,
                     "context_line": None if context_line is None else context_line.model_dump(mode="json"),
                     "source_native_text": [
                         item.model_copy(

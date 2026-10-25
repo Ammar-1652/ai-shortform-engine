@@ -10,6 +10,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageCaptionFonts } from "./caption-fonts.mjs";
+import { withRenderStage } from "./render-stage.mjs";
 
 const isolationDir = process.argv[4];
 if (typeof isolationDir === "string" && isolationDir.length > 0) {
@@ -18,8 +19,9 @@ if (typeof isolationDir === "string" && isolationDir.length > 0) {
   process.env.TMP = isolationDir;
   process.env.TEMP = isolationDir;
 }
-const { bundle } = await import("@remotion/bundler");
-const { renderMedia, selectComposition } = await import("@remotion/renderer");
+const [{ bundle }, { renderMedia, selectComposition }] = await withRenderStage("imports", () => Promise.all([
+  import("@remotion/bundler"), import("@remotion/renderer"),
+]));
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entryPoint = path.resolve(here, "../src/hero/index.tsx");
@@ -68,6 +70,14 @@ for (const item of batch.items) {
   if (!input || typeof input !== "object") {
     throw new Error("hero render batch item is missing input");
   }
+  if (item.renderMode !== undefined && !["video", "audio"].includes(item.renderMode)) {
+    throw new Error("unsupported hero render unit mode");
+  }
+  if (item.frameRange !== undefined && (
+    !Array.isArray(item.frameRange) || item.frameRange.length !== 2 ||
+    !item.frameRange.every(Number.isSafeInteger) || item.frameRange[0] < 0 ||
+    item.frameRange[1] < item.frameRange[0] || item.frameRange[1] >= input.duration_in_frames
+  )) throw new Error("hero render unit frame range is invalid");
   if (input.renderer_recipe_version === "hero-draft-renderer-v2") {
     stageCaptionFonts(stagingDir, input.caption_font_sha256);
   }
@@ -94,7 +104,7 @@ for (const item of batch.items) {
 }
 
 const bundleStarted = Date.now();
-const serveUrl = await bundle({
+const serveUrl = await withRenderStage("bundle", () => bundle({
   entryPoint,
   webpackOverride: (config) => {
     config.resolve = config.resolve ?? {};
@@ -106,19 +116,19 @@ const serveUrl = await bundle({
   publicDir: stagingDir,
   symlinkPublicDir: true,
   enableCaching: false,
-});
+}));
 const bundleSeconds = (Date.now() - bundleStarted) / 1000;
 
 let renderSeconds = 0;
 for (const item of batch.items) {
   const started = Date.now();
-  const composition = await selectComposition({
+  const composition = await withRenderStage("select", () => selectComposition({
     serveUrl,
     id: "HeroDraft",
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
-  });
+  }));
   if (composition.durationInFrames !== item.input.duration_in_frames) {
     throw new Error(
       `composition duration ${composition.durationInFrames} does not match Python duration_in_frames ${item.input.duration_in_frames}`,
@@ -127,22 +137,24 @@ for (const item of batch.items) {
   if (composition.width !== 1080 || composition.height !== 1920) {
     throw new Error(`composition size ${composition.width}x${composition.height} is not 1080x1920`);
   }
-  await renderMedia({
+  await withRenderStage("render", () => renderMedia({
     composition,
     serveUrl,
-    codec: "h264",
+    codec: item.renderMode === "audio" ? "wav" : "h264",
     outputLocation: path.resolve(item.outputPath),
     inputProps: item.input,
     browserExecutable,
     chromiumOptions,
     concurrency: 1,
     timeoutInMilliseconds: Math.min(90_000, Math.max(20_000, Number(item.input.duration_in_frames) * 80)),
-    crf: item.h264Crf,
-    pixelFormat: "yuv420p",
-    audioCodec: "aac",
+    crf: item.renderMode === "audio" ? undefined : item.h264Crf,
+    pixelFormat: item.renderMode === "audio" ? undefined : "yuv420p",
+    audioCodec: item.renderMode === "audio" ? "pcm-16" : "aac",
+    sampleRate: 48000,
+    frameRange: item.frameRange,
     overwrite: true,
-    muted: false,
-  });
+    muted: item.renderMode === "video",
+  }));
   renderSeconds += (Date.now() - started) / 1000;
 }
 

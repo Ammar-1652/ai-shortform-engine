@@ -36,6 +36,19 @@
   "additionalProperties": false,
   "description": "A short, deterministic bridge at a reviewed TimeMap cut.",
   "properties": {
+    "direction_purpose": {
+      "default": "cut",
+      "enum": [
+        "cut",
+        "time_shift",
+        "location_change",
+        "reveal",
+        "emphasis",
+        "settle"
+      ],
+      "title": "Direction Purpose",
+      "type": "string"
+    },
     "event_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -56,6 +69,30 @@
       "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "sfx_placement_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sfx Placement Id"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Source Evidence Ids",
+      "type": "array"
     },
     "style": {
       "default": "clean_cut_v1",

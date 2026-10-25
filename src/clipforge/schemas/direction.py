@@ -30,6 +30,12 @@ DirectionStyleId = Literal[
     "premium-minimal-v1",
 ]
 
+# New directed plans use the platform-resilient inner band by default. This
+# keeps text, logos, and context away from changing TikTok/Instagram/Shorts
+# viewer chrome. Legacy plans retain their persisted region and remain
+# immutable; this default only governs newly created direction documents.
+SafeRegionId = Literal["portrait-safe-v1", "platform-resilient-portrait-v1"]
+
 
 class MotionStyleSpec(Versioned):
     """Serializable numeric style choices consumed by Python and Remotion."""
@@ -50,6 +56,12 @@ class MotionStyleSpec(Versioned):
     safe_top: int = Field(ge=0, le=400)
     safe_bottom: int = Field(ge=0, le=500)
     max_simultaneous_emphasis: int = Field(ge=0, le=2)
+    # Platform-aware production defaults. Caption grouping happens before the
+    # browser so a caption never wraps, clips, or hides words under viewer UI.
+    caption_max_lines: Literal[1] = 1
+    caption_max_words: int = Field(ge=1, le=8)
+    caption_max_chars: int = Field(ge=16, le=64)
+    caption_y: int = Field(ge=300, le=1700)
 
     @model_validator(mode="after")
     def safe_region_is_portrait_usable(self) -> Self:
@@ -115,7 +127,9 @@ class DirectionContextLine(Versioned):
     emoji: Literal["📖", "💡", "🎯", "✨", "⚡", "🧠", "✅", "🔎", "🕌"]
     evidence_ids: list[EntityId] = Field(min_length=1)
     interval: OutputInterval
-    copy_mode: Literal["exact_evidence", "human_reviewed_summary"] = "exact_evidence"
+    copy_mode: Literal["exact_evidence", "human_reviewed_summary", "operator_reviewed_summary"] = (
+        "exact_evidence"
+    )
     reviewed_by: str | None = Field(default=None, min_length=1, max_length=200)
     review_note: str | None = Field(default=None, min_length=1, max_length=500)
 
@@ -123,8 +137,10 @@ class DirectionContextLine(Versioned):
     def is_one_line_and_reviewed(self) -> Self:
         if "\n" in self.text or "\r" in self.text:
             raise ValueError("context line must be one line")
-        if self.copy_mode == "human_reviewed_summary" and (not self.reviewed_by or not self.review_note):
-            raise ValueError("human-reviewed context summaries require reviewer and review note")
+        if self.copy_mode in {"human_reviewed_summary", "operator_reviewed_summary"} and (
+            not self.reviewed_by or not self.review_note
+        ):
+            raise ValueError("reviewed context summaries require reviewer and review note")
         if self.copy_mode == "exact_evidence" and (self.reviewed_by or self.review_note):
             raise ValueError("exact context lines cannot carry summary review metadata")
         return self
@@ -169,6 +185,7 @@ class DirectionMotionGraphic(Versioned):
         "travel_postcard",
         "business_identity",
         "business_spotlight",
+        "quran_challenge",
     ]
     interval: OutputInterval
     source_evidence_ids: list[EntityId] = Field(min_length=1)
@@ -187,6 +204,70 @@ class DirectionMotionGraphic(Versioned):
         # leave it free rather than relying on opacity or layer order.
         if self.y + self.height > 1480:
             raise ValueError("motion graphic extends into the reserved caption lane")
+        return self
+
+
+class DirectionCameraMotion(Versioned):
+    """A bounded, source-grounded camera move for one output interval."""
+
+    motion_id: EntityId
+    intent: Literal["orient", "follow", "reveal", "emphasize", "transition", "settle"]
+    path: Literal["hold", "push_in", "pull_out", "pan_x", "pan_y", "drift", "parallax", "match_cut"]
+    interval: OutputInterval
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    target_x_permille: int = Field(default=500, ge=0, le=1000)
+    target_y_permille: int = Field(default=500, ge=0, le=1000)
+    scale_start_permille: int = Field(default=1000, ge=1000, le=1140)
+    scale_end_permille: int = Field(default=1000, ge=1000, le=1140)
+    travel_px: int = Field(default=0, ge=0, le=194)
+    intensity: Literal["quiet", "gentle", "active", "peak"] = "gentle"
+    easing: Literal["linear", "ease_out_cubic", "ease_in_out_cubic"] = "ease_in_out_cubic"
+    fallback: Literal["hold", "contain"] = "hold"
+
+    @model_validator(mode="after")
+    def motion_is_bounded(self) -> Self:
+        if self.path == "hold" and (
+            self.scale_start_permille != 1000 or self.scale_end_permille != 1000 or self.travel_px != 0
+        ):
+            raise ValueError("hold camera motion cannot change scale or travel")
+        envelopes = {
+            "quiet": (64, 1060),
+            "gentle": (96, 1080),
+            "active": (144, 1110),
+            "peak": (194, 1140),
+        }
+        max_travel, max_scale = envelopes[self.intensity]
+        if self.travel_px > max_travel or max(self.scale_start_permille, self.scale_end_permille) > max_scale:
+            raise ValueError(f"{self.intensity} camera motion exceeds its envelope")
+        if self.path == "push_in" and self.scale_end_permille < self.scale_start_permille:
+            raise ValueError("push_in camera motion must not zoom out")
+        if self.path == "pull_out" and self.scale_end_permille > self.scale_start_permille:
+            raise ValueError("pull_out camera motion must not zoom in")
+        if self.path in {"pan_x", "pan_y", "drift", "parallax", "match_cut"} and (
+            self.scale_start_permille != self.scale_end_permille and self.path != "parallax"
+        ):
+            raise ValueError(f"{self.path} camera motion cannot change scale")
+        if self.path != "hold" and self.travel_px == 0 and self.scale_start_permille == self.scale_end_permille:
+            raise ValueError("a non-hold camera motion must have a bounded movement")
+        return self
+
+
+class DirectionTransitionSpec(Versioned):
+    """A narrative transition selected for one reviewed cut."""
+
+    transition_id: EntityId
+    interval: OutputInterval
+    purpose: Literal["cut", "time_shift", "location_change", "reveal", "emphasis", "settle"]
+    style: Literal["clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"]
+    source_evidence_ids: list[EntityId] = Field(min_length=1)
+    sfx_placement_id: EntityId | None = None
+
+    @model_validator(mode="after")
+    def transition_has_positive_interval(self) -> Self:
+        if self.interval.output_end_us <= self.interval.output_start_us:
+            raise ValueError("direction transition interval must be positive")
+        if self.style == "clean_cut_v1" and self.purpose not in {"cut", "settle"}:
+            raise ValueError("clean cut transition must have cut or settle purpose")
         return self
 
 
@@ -215,6 +296,10 @@ class DirectionOption(Versioned):
     evidence: list[DirectionEvidence] = Field(min_length=1)
     asset_placements: list[DirectionAssetPlacement] = Field(default_factory=list, max_length=12)
     motion_graphics: list[DirectionMotionGraphic] = Field(default_factory=list, max_length=4)
+    camera_motion: list[DirectionCameraMotion] = Field(default_factory=list, max_length=12)
+    transitions: list[DirectionTransitionSpec] = Field(default_factory=list, max_length=12)
+    motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    preset_id: str | None = Field(default=None, max_length=64)
     context_line: DirectionContextLine | None = None
     source_native_text: list[SourceNativeText] = Field(default_factory=list, max_length=8)
     source_native_text_status: Literal["reviewed_absent", "annotated", "unavailable"] = "unavailable"
@@ -255,6 +340,45 @@ class DirectionOption(Versioned):
             for evidence_id in graphic.source_evidence_ids
         ):
             raise ValueError("every motion graphic evidence id must be declared by the option")
+        camera_ids = [item.motion_id for item in self.camera_motion]
+        if len(set(camera_ids)) != len(camera_ids):
+            raise ValueError("direction camera motion ids must be unique")
+        if any(
+            evidence_id not in evidence_ids
+            for item in self.camera_motion
+            for evidence_id in item.source_evidence_ids
+        ):
+            raise ValueError("every camera motion evidence id must be declared by the option")
+        camera_sorted = sorted(self.camera_motion, key=lambda item: item.interval.output_start_us)
+        if any(
+            left.interval.output_end_us > right.interval.output_start_us
+            for left, right in pairwise(camera_sorted)
+        ):
+            raise ValueError("overlapping camera motion intervals are rejected")
+        transition_ids = [item.transition_id for item in self.transitions]
+        if len(set(transition_ids)) != len(transition_ids):
+            raise ValueError("direction transition ids must be unique")
+        placement_by_id = {placement.placement_id: placement for placement in self.asset_placements}
+        for transition in self.transitions:
+            if transition.sfx_placement_id is not None:
+                placement_ref = placement_by_id.get(transition.sfx_placement_id)
+                if placement_ref is None:
+                    raise ValueError("transition SFX must reference an asset placement in the same option")
+                if placement_ref.kind != "audio":
+                    raise ValueError("transition SFX placement must be an audio asset")
+        if any(
+            evidence_id not in evidence_ids
+            for item in self.transitions
+            for evidence_id in item.source_evidence_ids
+        ):
+            raise ValueError("every transition evidence id must be declared by the option")
+        if any(
+            left.interval.output_end_us > right.interval.output_start_us
+            for left, right in pairwise(
+                sorted(self.transitions, key=lambda item: item.interval.output_start_us)
+            )
+        ):
+            raise ValueError("overlapping direction transitions are rejected")
         native_ids = [item.region_id for item in self.source_native_text]
         if len(set(native_ids)) != len(native_ids):
             raise ValueError("source-native text region ids must be unique")
@@ -291,8 +415,20 @@ class DirectionDocument(Versioned):
     selection_mode: Literal["automatic", "operator_override"]
     style_id: DirectionStyleId
     style_fingerprint: str = Field(pattern=_SHA)
-    safe_region_id: Literal["portrait-safe-v1"] = "portrait-safe-v1"
-    direction_recipe_version: Literal["direction-v1"] = "direction-v1"
+    safe_region_id: SafeRegionId = "platform-resilient-portrait-v1"
+    direction_recipe_version: Literal["direction-v1", "direction-v2"] = "direction-v2"
+    motion_catalog_sha256: str | None = Field(
+        default=None, pattern=_SHA, exclude_if=lambda value: value is None
+    )
+    preset_id: str | None = Field(default=None, max_length=64, exclude_if=lambda value: value is None)
+    knowledge_context_id: EntityId | None = Field(default=None, exclude_if=lambda value: value is None)
+    knowledge_release_id: EntityId | None = Field(default=None, exclude_if=lambda value: value is None)
+    knowledge_context_sha256: str | None = Field(default=None, pattern=_SHA)
+    knowledge_decision_trace_id: EntityId | None = Field(default=None, exclude_if=lambda value: value is None)
+    knowledge_decision_trace_sha256: str | None = Field(default=None, pattern=_SHA)
+    operator_role: Literal["codex_operator", "human_reviewer"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     provenance: ArtifactProvenance
 
     @model_validator(mode="after")
@@ -308,6 +444,52 @@ class DirectionDocument(Versioned):
             raise ValueError("selected direction option is not present")
         if selected.style_id != self.style_id:
             raise ValueError("selected direction style does not match the selected option")
+        if selected.preset_id != self.preset_id:
+            raise ValueError("selected direction preset does not match the selected option")
+        if self.direction_recipe_version == "direction-v2" and selected.context_line is None:
+            raise ValueError("direction-v2 requires one reviewed upper context line")
+        if self.safe_region_id == "platform-resilient-portrait-v1":
+            for graphic in selected.motion_graphics:
+                if graphic.y < 270 or graphic.y + graphic.height > 1320:
+                    raise ValueError(
+                        "platform-resilient motion graphics must stay above the caption/UI safe lane"
+                    )
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("direction provenance must include source_asset_id")
+        context_fields = (
+            self.knowledge_context_id,
+            self.knowledge_release_id,
+            self.knowledge_context_sha256,
+            self.knowledge_decision_trace_id,
+            self.knowledge_decision_trace_sha256,
+        )
+        if any(value is not None for value in context_fields[:3]) and not all(
+            value is not None for value in context_fields[:3]
+        ):
+            raise ValueError("knowledge context binding requires id, release, and hash")
+        if any(value is not None for value in context_fields[3:]) and not all(
+            value is not None for value in context_fields[3:]
+        ):
+            raise ValueError("knowledge decision trace binding requires id and hash")
+        if any(value is not None for value in context_fields[3:]) and any(
+            value is None for value in context_fields[:3]
+        ):
+            raise ValueError("knowledge decision trace requires a bound knowledge context")
         return self
+
+
+class DirectionLintFinding(Versioned):
+    """One deterministic direction-lint finding."""
+
+    severity: Literal["error", "warning", "info"]
+    code: str = Field(pattern=r"^[a-z][a-z0-9_.:-]{1,80}$")
+    message: str = Field(min_length=1, max_length=500)
+
+
+class DirectionLintReport(Versioned):
+    """Reviewable direction lint output bound to one immutable direction."""
+
+    direction_id: EntityId
+    direction_sha256: str = Field(pattern=_SHA)
+    status: Literal["pass", "fail"]
+    findings: list[DirectionLintFinding] = Field(default_factory=list, max_length=64)

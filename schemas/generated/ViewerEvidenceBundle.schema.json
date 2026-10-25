@@ -1,0 +1,398 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "HumanWatchRecord": {
+      "additionalProperties": false,
+      "description": "A separate human playback observation; automation cannot create approval.",
+      "properties": {
+        "decision": {
+          "enum": [
+            "needs_changes",
+            "reviewed_pending_final",
+            "accepted_for_final_review"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "observations": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 40,
+          "minItems": 1,
+          "title": "Observations",
+          "type": "array"
+        },
+        "player": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Player",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "format": "date-time",
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "reviewer": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "watched_muted": {
+          "title": "Watched Muted",
+          "type": "boolean"
+        },
+        "watched_with_audio": {
+          "title": "Watched With Audio",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reviewer",
+        "watched_with_audio",
+        "watched_muted",
+        "observations",
+        "decision",
+        "reviewed_at"
+      ],
+      "title": "HumanWatchRecord",
+      "type": "object"
+    },
+    "ViewerEvidenceFile": {
+      "additionalProperties": false,
+      "description": "One decoded image/contact sheet bound to the current encoded draft.",
+      "properties": {
+        "frame_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame Index"
+        },
+        "kind": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "relative_path": {
+          "pattern": "^candidates/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}/viewer-evidence/[A-Za-z0-9][A-Za-z0-9._-]{0,100}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,100})*$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "relative_path",
+        "sha256",
+        "kind"
+      ],
+      "title": "ViewerEvidenceFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Decoded viewer-facing evidence for one exact Advanced Hero artifact.",
+  "properties": {
+    "artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Artifact Id",
+      "type": "string"
+    },
+    "camera_motion_event_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Camera Motion Event Ids",
+      "type": "array"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "contact_sheets": {
+      "items": {
+        "$ref": "#/$defs/ViewerEvidenceFile"
+      },
+      "minItems": 1,
+      "title": "Contact Sheets",
+      "type": "array"
+    },
+    "decoded_frames": {
+      "items": {
+        "$ref": "#/$defs/ViewerEvidenceFile"
+      },
+      "minItems": 1,
+      "title": "Decoded Frames",
+      "type": "array"
+    },
+    "duration_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Duration Us",
+      "type": "integer"
+    },
+    "encoded_media_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Encoded Media Sha256",
+      "type": "string"
+    },
+    "evidence_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "font_dependency_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Font Dependency Sha256",
+      "type": "string"
+    },
+    "frame_rate": {
+      "pattern": "^[0-9]+/[0-9]+$",
+      "title": "Frame Rate",
+      "type": "string"
+    },
+    "height": {
+      "minimum": 1,
+      "title": "Height",
+      "type": "integer"
+    },
+    "human_watch": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HumanWatchRecord"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "integrated_lufs": {
+      "title": "Integrated Lufs",
+      "type": "number"
+    },
+    "manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
+    "pilot_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Pilot Sha256",
+      "type": "string"
+    },
+    "platform_crop_previews": {
+      "items": {
+        "$ref": "#/$defs/ViewerEvidenceFile"
+      },
+      "minItems": 1,
+      "title": "Platform Crop Previews",
+      "type": "array"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "render_input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Render Input Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "style_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Style Fingerprint",
+      "type": "string"
+    },
+    "transition_event_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Transition Event Ids",
+      "type": "array"
+    },
+    "true_peak_dbfs": {
+      "title": "True Peak Dbfs",
+      "type": "number"
+    },
+    "width": {
+      "minimum": 1,
+      "title": "Width",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "artifact_id",
+    "manifest_sha256",
+    "encoded_media_sha256",
+    "render_input_sha256",
+    "style_fingerprint",
+    "font_dependency_sha256",
+    "width",
+    "height",
+    "frame_rate",
+    "duration_us",
+    "integrated_lufs",
+    "true_peak_dbfs",
+    "decoded_frames",
+    "contact_sheets",
+    "platform_crop_previews",
+    "provenance"
+  ],
+  "title": "ViewerEvidenceBundle",
+  "type": "object"
+}

@@ -7,7 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from clipforge.campaign.quran import load_tarteel_quran_review
+from clipforge.campaign.quran import load_tarteel_quran_review, load_tarteel_speech_review
+from clipforge.campaign.speech import retained_recitation
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import require_asset
 from clipforge.media.hashing import sha256_file
@@ -208,9 +209,29 @@ def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
             problems.append("Tarteel captions require the quran-editorial-v1 style")
         if "tarteel-quran-caption-v1" not in plan.qa_requirements:
             problems.append("plan does not require the canonical Quran caption gate")
-        if not getattr(plan, "quran_review_id", "") or not getattr(plan, "quran_review_sha256", ""):
+        needs_quran = True
+        if (
+            getattr(plan, "speech_review_sha256", "")
+            and context.workspace is not None
+            and plan.time_map is not None
+        ):
+            try:
+                speech = load_tarteel_speech_review(
+                    context.work_root,
+                    source_asset_id=plan.source_asset_id,
+                    candidate_id=plan.candidate_id,
+                    source_sha256=plan.source_sha256,
+                )
+                if speech is None or speech[1] != plan.speech_review_sha256:
+                    raise MediaError("Tarteel speech review is missing or stale against the plan")
+                needs_quran = retained_recitation(speech[0], plan.time_map)
+            except MediaError as exc:
+                problems.append(str(exc))
+        if needs_quran and (
+            not getattr(plan, "quran_review_id", "") or not getattr(plan, "quran_review_sha256", "")
+        ):
             problems.append("Tarteel plan is missing the source-bound Quran review evidence")
-        elif context.workspace is not None:
+        elif getattr(plan, "quran_review_id", "") and context.workspace is not None:
             try:
                 _review, review_sha256, _path = load_tarteel_quran_review(
                     context.work_root,

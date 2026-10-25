@@ -246,6 +246,24 @@ def direction_plan(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     style: Annotated[str, typer.Option("--style", help="auto or one allowlisted preset id.")] = "auto",
+    knowledge_context: Annotated[
+        Path | None,
+        typer.Option(
+            "--knowledge-context",
+            exists=True,
+            readable=True,
+            help="Hash-bound editorial knowledge context produced by the editorial knowledge command.",
+        ),
+    ] = None,
+    knowledge_decision_trace: Annotated[
+        Path | None,
+        typer.Option(
+            "--knowledge-decision-trace",
+            exists=True,
+            readable=True,
+            help="Decision trace matching the selected knowledge context.",
+        ),
+    ] = None,
     draft_only: Annotated[
         bool,
         typer.Option(
@@ -266,6 +284,10 @@ def direction_plan(
             brief_path=brief.resolve(),
             style=style,
             allow_unapproved=draft_only,
+            knowledge_context_path=knowledge_context.resolve() if knowledge_context is not None else None,
+            knowledge_decision_trace_path=(
+                knowledge_decision_trace.resolve() if knowledge_decision_trace is not None else None
+            ),
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
@@ -273,6 +295,11 @@ def direction_plan(
     typer.echo(f"selected_option_id: {document.selected_option_id}")
     typer.echo(f"style_id: {document.style_id}")
     typer.echo(f"direction_sha256: {digest}")
+    if document.knowledge_context_id is not None:
+        typer.echo(f"knowledge_context_id: {document.knowledge_context_id}")
+        typer.echo(f"knowledge_release_id: {document.knowledge_release_id}")
+    if document.knowledge_decision_trace_id is not None:
+        typer.echo(f"knowledge_decision_trace_id: {document.knowledge_decision_trace_id}")
     typer.echo(f"path: {destination}")
     typer.echo("blocker: none")
 
@@ -284,7 +311,7 @@ def direction_doctor() -> None:
 
     typer.echo("PASS direction_contract: direction-v1")
     typer.echo("PASS options: exactly_three")
-    typer.echo("PASS safe_region: portrait-safe-v1")
+    typer.echo("PASS safe_regions: portrait-safe-v1,platform-resilient-portrait-v1")
     typer.echo(f"styles: {','.join(production_style_ids())}")
     for style_id in production_style_ids():
         profile = style_for_id(style_id)
@@ -340,7 +367,12 @@ def direction_verify(
 ) -> None:
     """Verify direction evidence and binding to the current promoted Hero plan."""
     from clipforge.hero.advanced_service import _context
-    from clipforge.hero.direction_service import load_direction, validate_source_evidence
+    from clipforge.hero.direction_service import (
+        load_direction,
+        validate_motion_recipe_bindings,
+        validate_preset_binding,
+        validate_source_evidence,
+    )
     from clipforge.hero.motion_style import style_for_id
 
     try:
@@ -377,11 +409,96 @@ def direction_verify(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+        validate_motion_recipe_bindings(document)
+        validate_preset_binding(document)
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
     typer.echo("PASS direction")
     typer.echo(f"style_id: {document.style_id}")
     typer.echo(f"direction_sha256: {digest}")
+
+
+@direction_app.command("lint")
+def direction_lint_command(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    draft_only: Annotated[bool, typer.Option("--draft-only")] = False,
+) -> None:
+    """Run semantic direction lint without writing or rendering."""
+    from clipforge.hero.advanced_service import _context
+    from clipforge.hero.direction_lint import lint_direction
+    from clipforge.hero.direction_service import load_direction
+
+    try:
+        root = resolve_work_dir(work_dir)
+        database = Database(resolve_db_path(db))
+        context = _context(
+            database,
+            source_asset_id,
+            candidate_id,
+            root,
+            require_hero_approval=not draft_only,
+        )
+        loaded = load_direction(context.workspace, candidate_id, review_only=draft_only)
+        if loaded is None:
+            raise ClipforgeError("no direction document for candidate")
+        document, digest = loaded
+        report = lint_direction(
+            document,
+            direction_sha256=digest,
+            words=context.alignment.words,
+            time_map=context.hero_plan.edit_plan.time_map,
+            scene_ids={scene.scene_id for scene in context.visual.scenes},
+        )
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(report.model_dump_json(indent=2))
+    if report.status == "fail":
+        raise typer.Exit(1)
+
+
+@advanced_app.command("pilot")
+def advanced_pilot(
+    source_asset_id: Annotated[str, typer.Argument(help="Ingested source id.")],
+    candidate_id: Annotated[str, typer.Argument(help="Advanced Hero candidate id.")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    draft_only: Annotated[bool, typer.Option("--draft-only")] = False,
+) -> None:
+    """Verify the hash-bound pilot preflight before browser encoding."""
+    from clipforge.hero.advanced_service import (
+        _advanced_plan_path,
+        _context,
+        _pilot_path,
+        _read_model,
+        _require_plan_binding,
+    )
+    from clipforge.media.hashing import sha256_file
+    from clipforge.schemas.advanced import AdvancedHeroPlanDocument, advanced_fingerprint
+
+    try:
+        root = resolve_work_dir(work_dir)
+        database = Database(resolve_db_path(db))
+        context = _context(
+            database,
+            source_asset_id,
+            candidate_id,
+            root,
+            require_hero_approval=not draft_only,
+        )
+        plan_path = _advanced_plan_path(context.workspace, candidate_id, review_only=draft_only)
+        plan = _read_model(plan_path, AdvancedHeroPlanDocument, "Advanced Hero plan")
+        _require_plan_binding(database, plan, context, allow_unapproved=draft_only)
+    except (ClipforgeError, ValidationError) as exc:
+        _fail(exc)
+    plan_digest = advanced_fingerprint(plan.model_dump(mode="json"))
+    pilot_digest = sha256_file(_pilot_path(context.workspace, candidate_id, review_only=draft_only))
+    typer.echo("PASS advanced_pilot")
+    typer.echo(f"candidate_id: {candidate_id}")
+    typer.echo(f"plan_sha256: {plan_digest}")
+    typer.echo(f"pilot_sha256: {pilot_digest}")
 
 
 @advanced_app.command("render")

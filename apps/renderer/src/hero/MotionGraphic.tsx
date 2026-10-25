@@ -3,7 +3,7 @@ import { frameAtOrAfter } from "./program-frames.js";
 
 export type MotionGraphic = {
   event_id?: string;
-  template?: "credit_card" | "travel_postcard" | "business_identity" | "business_spotlight";
+  template?: "credit_card" | "travel_postcard" | "business_identity" | "business_spotlight" | "quran_challenge";
   interval?: { output_start_us?: number; output_end_us?: number };
   purpose?: string;
   source_evidence_ids?: string[];
@@ -67,6 +67,9 @@ export function MotionGraphicCard({ graphic, accent, fontFamily, showLabel = tru
   }
   if (graphic.template === "business_identity") {
     return <BusinessIdentity graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
+  }
+  if (graphic.template === "quran_challenge") {
+    return <QuranChallenge graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
   }
   return <BusinessSpotlight graphic={graphic} accent={accent} fontFamily={fontFamily} text={text} style={base} local={local} showLabel={showLabel} />;
 }
@@ -219,6 +222,45 @@ function BusinessSpotlight({
         <path d={`M604 ${rise + 6} L632 ${rise} L618 ${rise + 28}`} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 42%, rgba(4,9,20,.8))" }} />
+      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
+    </div>
+  );
+}
+
+function QuranChallenge({
+  accent,
+  fontFamily,
+  text,
+  style,
+  local,
+  showLabel,
+}: {
+  graphic: MotionGraphic;
+  accent: string;
+  fontFamily?: string;
+  text: string;
+  style: Record<string, string | number>;
+  local: number;
+  showLabel: boolean;
+}) {
+  const reveal = clamp(local / 22);
+  const page = 1 - Math.pow(1 - reveal, 3);
+  return (
+    <div style={{ ...style, borderRadius: 28, overflow: "hidden", background: "linear-gradient(135deg,#102a24,#1b4739)", border: `2px solid ${accent}aa` }}>
+      <svg viewBox="0 0 720 440" width="100%" height="100%" aria-label="Animated Quran challenge illustration">
+        <rect width="720" height="440" fill="#153a2e" />
+        <circle cx="600" cy="94" r="82" fill={accent} opacity=".16" />
+        <g transform={`translate(${(1 - page) * 36} 0)`} opacity={0.25 + page * 0.75}>
+          <path d="M92 112 Q180 72 342 126 V348 Q194 302 92 338Z" fill="#fbf3d1" stroke={accent} strokeWidth="5" />
+          <path d="M628 112 Q540 72 378 126 V348 Q526 302 628 338Z" fill="#fbf3d1" stroke={accent} strokeWidth="5" />
+          <path d="M360 120V352" stroke="#b88a43" strokeWidth="5" />
+          {[160,198,236,274].map((y) => <path key={y} d={`M132 ${y} Q210 ${y - 18} 306 ${y} M414 ${y} Q510 ${y - 18} 588 ${y}`} stroke="#6e8a68" strokeWidth="7" strokeLinecap="round" opacity=".8" />)}
+        </g>
+        <g transform={`translate(${page * 16} ${-page * 12})`}>
+          <circle cx="598" cy="306" r="42" fill={accent} opacity=".94" />
+          <path d="M578 306l14 14 28-34" stroke="#153a2e" strokeWidth="9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      </svg>
       <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );

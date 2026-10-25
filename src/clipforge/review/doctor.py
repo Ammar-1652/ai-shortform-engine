@@ -31,6 +31,8 @@ def review_doctor() -> list[DoctorLine]:
             "review_contract",
             "ReviewDecision fields: " + ", ".join(sorted(ReviewDecision.model_fields)),
         ),
+        DoctorLine("PASS", "editorial_operator", "codex_operator may record candidate and Hero decisions"),
+        DoctorLine("PASS", "final_reviewer", "human_reviewer is required for final playback approval"),
         DoctorLine("PASS", "preview_recipe", f"{RECIPE_NAME} v{RECIPE_VERSION}"),
         DoctorLine("PASS", "loopback", f"review open binds to {LOOPBACK_HOST} only"),
         DoctorLine(

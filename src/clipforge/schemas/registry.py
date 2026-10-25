@@ -28,10 +28,12 @@ from clipforge.schemas.advanced import (
     AdvancedRenderProgress,
     AssetBinding,
     AudioMixEvent,
+    CameraMotionEvent,
     CaptionWordTiming,
     DiagramEvent,
     DiagramPayload,
     EmphasisEvent,
+    FramePaletteSpec,
     MotionGraphicEvent,
     ReframingStrategy,
     ReframingWindow,
@@ -56,7 +58,12 @@ from clipforge.schemas.analytics import (
     PerformanceMetrics,
     PerformanceOutcome,
 )
-from clipforge.schemas.arc import EditorialArcDocument, EditorialArcSegment
+from clipforge.schemas.arc import (
+    EditorialArcDocument,
+    EditorialArcReview,
+    EditorialArcReviewBeat,
+    EditorialArcSegment,
+)
 from clipforge.schemas.assets import AssetDownloadRequest, AssetSearchHit
 from clipforge.schemas.batch import BatchChild, BatchManifest
 from clipforge.schemas.benchmark import BenchmarkRun, BenchmarkStage, V1ReadinessReport
@@ -67,6 +74,9 @@ from clipforge.schemas.campaign import (
     CampaignPolicyRule,
     CampaignSource,
     OperatorAction,
+    OverlayExclusionEvidence,
+    OverlayExclusionRegion,
+    OverlayExclusionSample,
     PolicyDecision,
     ProbeSummary,
     QuranAudioMapping,
@@ -76,7 +86,11 @@ from clipforge.schemas.campaign import (
     SourceAcquisition,
     SourceInventoryManifest,
     SourceRightsEvidence,
+    TarteelArabicCorrection,
+    TarteelArabicCorrectionDocument,
     TarteelDisplayCorrection,
+    TarteelSpeechInterval,
+    TarteelSpeechReview,
 )
 from clipforge.schemas.campaign_operator import (
     CampaignImportSnapshot,
@@ -101,14 +115,23 @@ from clipforge.schemas.candidates import (
     EditOpportunityWeights,
     QualityWeights,
 )
+from clipforge.schemas.caption_evidence import (
+    CaptionAudioCoverageReport,
+    CaptionCoverageFrame,
+    CaptionFrameObservation,
+)
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionBeat,
+    DirectionCameraMotion,
     DirectionContextLine,
     DirectionDocument,
     DirectionEvidence,
+    DirectionLintFinding,
+    DirectionLintReport,
     DirectionMotionGraphic,
     DirectionOption,
+    DirectionTransitionSpec,
     MotionStyleSpec,
     SourceNativeText,
 )
@@ -122,12 +145,33 @@ from clipforge.schemas.editorial import (
     MotionEvent,
     OutputInterval,
 )
+from clipforge.schemas.editorial_knowledge import (
+    ContextFact,
+    DecisionAlternative,
+    DirectionContextBundle,
+    EditorialDecisionTrace,
+    EditorialFeedback,
+    EditorialGuidanceCard,
+    EditorialStyleCard,
+    KnowledgeConflict,
+    KnowledgeEvaluationCase,
+    KnowledgeLibraryDocument,
+    KnowledgeRelease,
+    KnowledgeScope,
+    KnowledgeSource,
+    NarrativePattern,
+    ReferenceAnalysis,
+    ReferenceMetric,
+    ReferenceObservation,
+)
+from clipforge.schemas.editorial_preset import EditorialPresetCatalog, PresetDefinition
 from clipforge.schemas.envato_asset import (
     EnvatoAssetCacheRecord,
     EnvatoAssetRegistration,
     EnvatoAssetRequest,
     EnvatoAssetVerification,
 )
+from clipforge.schemas.execution import ProductionExecutionCheckpoint, RunStageReceipt
 from clipforge.schemas.governance import (
     AssetLicenseRecord,
     AssetReference,
@@ -181,6 +225,12 @@ from clipforge.schemas.media import (
     TranscriptSegment,
     TranscriptWord,
 )
+from clipforge.schemas.motion_catalog import (
+    MotionCatalogDocument,
+    MotionParameter,
+    MotionRecipe,
+    MotionReference,
+)
 from clipforge.schemas.multilingual import (
     AlignmentProfile,
     AlignmentRuntimeIdentity,
@@ -190,6 +240,15 @@ from clipforge.schemas.multilingual import (
     MultilingualNarrationDocument,
     NarrationCapability,
 )
+from clipforge.schemas.openverse import (
+    OpenverseAcquisitionManifest,
+    OpenverseLicenseEvidence,
+    OpenverseMediaRecord,
+    OpenverseSearchRequest,
+    OpenverseSearchResponse,
+    OpenverseSelection,
+)
+from clipforge.schemas.operator import ExtensionBoundary, OperatorCapability
 from clipforge.schemas.preview import (
     CandidateRoughPreview,
     RoughCaptionCue,
@@ -221,7 +280,17 @@ from clipforge.schemas.publish import (
     PublishRequest,
     PublishTarget,
 )
-from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument
+from clipforge.schemas.qa import (
+    EditorialPilotReceipt,
+    HumanPlaybackReview,
+    HumanPlaybackTarget,
+    HumanWatchRecord,
+    PolicyDigest,
+    QACacheRecord,
+    QASetDocument,
+    ViewerEvidenceBundle,
+    ViewerEvidenceFile,
+)
 from clipforge.schemas.reframe import (
     FaceFollowSample,
     FaceFollowTrajectory,
@@ -229,7 +298,14 @@ from clipforge.schemas.reframe import (
     ReframeEvidenceDigest,
     ReframePlanDocument,
 )
-from clipforge.schemas.render_checkpoint import CandidateRenderCheckpoint, RenderUnitReceipt
+from clipforge.schemas.release import ProductionRelease, ReleaseFile
+from clipforge.schemas.render_checkpoint import (
+    AdvancedRenderAuthorization,
+    CandidateRenderCheckpoint,
+    RenderAuthorizationItem,
+    RenderUnitReceipt,
+)
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
 from clipforge.schemas.vision import (
@@ -268,6 +344,8 @@ from clipforge.schemas.whop_discovery import (
 )
 
 CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
+    ProductionRelease,
+    ReleaseFile,
     Project,
     SourceAsset,
     MediaProbe,
@@ -320,6 +398,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     HeroCacheRecord,
     HeroPlanDocument,
     AdvancedHeroProfile,
+    FramePaletteSpec,
     ReframingStrategy,
     ReframingWindow,
     FaceFollowSample,
@@ -333,6 +412,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     MotionGraphicEvent,
     AssetBinding,
     AudioMixEvent,
+    CameraMotionEvent,
     CaptionWordTiming,
     EmphasisEvent,
     TransitionEvent,
@@ -341,20 +421,31 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     AdvancedHeroDraftSetDocument,
     AdvancedHeroCacheRecord,
     AdvancedHeroPlanDocument,
+    CaptionCoverageFrame,
+    CaptionAudioCoverageReport,
+    CaptionFrameObservation,
     EditorialArcSegment,
+    EditorialArcReviewBeat,
+    EditorialArcReview,
     AdvancedRenderProgress,
     CandidateRenderCheckpoint,
+    AdvancedRenderAuthorization,
+    RenderAuthorizationItem,
     RenderUnitReceipt,
     EditorialArcDocument,
     MotionStyleSpec,
     DirectionEvidence,
     DirectionBeat,
+    DirectionCameraMotion,
     DirectionContextLine,
     DirectionAssetPlacement,
     DirectionMotionGraphic,
+    DirectionTransitionSpec,
     SourceNativeText,
     DirectionOption,
     DirectionDocument,
+    DirectionLintFinding,
+    DirectionLintReport,
     CandidateEvidence,
     CandidateClip,
     CampaignProfile,
@@ -366,15 +457,38 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     BrollEvent,
     AudioEvent,
     OutputInterval,
+    KnowledgeScope,
+    KnowledgeSource,
+    ReferenceObservation,
+    KnowledgeEvaluationCase,
+    EditorialGuidanceCard,
+    NarrativePattern,
+    EditorialStyleCard,
+    KnowledgeConflict,
+    KnowledgeRelease,
+    KnowledgeLibraryDocument,
+    ContextFact,
+    DirectionContextBundle,
+    DecisionAlternative,
+    EditorialDecisionTrace,
+    EditorialFeedback,
     AssetReference,
     AssetLicenseRecord,
     RenderJob,
     RenderArtifact,
     QACheck,
     QAResult,
+    EditorialPilotReceipt,
+    EditorialPresetCatalog,
+    PresetDefinition,
     PolicyDigest,
     QASetDocument,
     QACacheRecord,
+    ViewerEvidenceFile,
+    HumanWatchRecord,
+    HumanPlaybackTarget,
+    HumanPlaybackReview,
+    ViewerEvidenceBundle,
     PublishProfile,
     PublishFile,
     PublishPackageDocument,
@@ -411,10 +525,17 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     VoiceProviderProfile,
     Campaign,
     CampaignOverlaySpec,
+    OverlayExclusionEvidence,
+    OverlayExclusionRegion,
+    OverlayExclusionSample,
     QuranCanonicalSource,
     QuranAudioMapping,
     QuranVerificationPolicy,
     QuranCaptionReview,
+    TarteelArabicCorrection,
+    TarteelArabicCorrectionDocument,
+    TarteelSpeechInterval,
+    TarteelSpeechReview,
     TarteelDisplayCorrection,
     CampaignPolicy,
     CampaignPolicyRule,
@@ -423,6 +544,8 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     CampaignCandidateRecord,
     CampaignSourceRun,
     CampaignProductionRun,
+    RunStageReceipt,
+    ProductionExecutionCheckpoint,
     CampaignSourceChoice,
     CampaignSelectionDocument,
     CampaignImportSnapshot,
@@ -479,6 +602,9 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     ReviewDecision,
     JobRecord,
     ArtifactProvenance,
+    WorkflowRolePolicy,
+    OperatorCapability,
+    ExtensionBoundary,
     AudioStreamInfo,
     ColorMetadata,
     DerivativeCacheRecord,
@@ -492,6 +618,18 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     StreamDisposition,
     StreamSelection,
     VideoStreamInfo,
+    MotionReference,
+    MotionParameter,
+    MotionRecipe,
+    MotionCatalogDocument,
+    ReferenceAnalysis,
+    ReferenceMetric,
+    OpenverseSearchRequest,
+    OpenverseMediaRecord,
+    OpenverseSearchResponse,
+    OpenverseLicenseEvidence,
+    OpenverseSelection,
+    OpenverseAcquisitionManifest,
 )
 
 

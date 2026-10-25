@@ -42,6 +42,7 @@ from clipforge.hero.identity import alignment_identity_config, digest_candidate,
 from clipforge.hero.integrity import hero_problems
 from clipforge.hero.plan import build_hero_plan
 from clipforge.hero.probe import probe_hero
+from clipforge.hero.render_checkpoint import render_checkpointed_hero_candidate, renderer_dependency_sha256
 from clipforge.hero.selection import approved_candidates, review_digest
 from clipforge.media.clock import seconds_text_to_us, us_to_seconds_str
 from clipforge.media.disk import read_disk, require_disk_budget
@@ -158,6 +159,7 @@ def render_hero_drafts(
     alignment_backend: ForcedAlignmentBackend | None = None,
     allow_model_download: bool = False,
     created_by: str | None = None,
+    resume_hero_set_id: str | None = None,
 ) -> HeroRenderResult:
     """Render approved candidates. No approval is a no-op and writes nothing."""
     root = work_root.resolve()
@@ -203,7 +205,11 @@ def render_hero_drafts(
         if not chosen:
             return _noop(source_asset_id, tuple(excluded), started)
         identity = _live_identity(alignment_backend)
-        if not force and _cache_ready(database, inputs, current, reviews, active, identity):
+        if (
+            not force
+            and resume_hero_set_id is None
+            and _cache_ready(database, inputs, current, reviews, active, identity)
+        ):
             return _cache_result(database, inputs, current, tuple(excluded), started)
         if renderer.requires_browser:
             from clipforge.preview.browser import resolve_browser
@@ -216,7 +222,7 @@ def render_hero_drafts(
         job = _running_job(inputs, current, active, aligner, len(chosen), now)
         with database.transaction() as connection:
             insert_job(connection, job)
-        hero_set_id = str(uuid.uuid4())
+        hero_set_id = resume_hero_set_id or str(uuid.uuid4())
         run_dir: Path | None = None
         try:
             current = require_current_preview(database, source_asset_id, root)
@@ -227,7 +233,14 @@ def render_hero_drafts(
                 profile_fingerprint=rough.fingerprint(),
                 create_workspace=True,
             )
-            run_dir = inputs.pair.workspace.make_hero_run(hero_set_id)
+            if resume_hero_set_id is not None:
+                run_dir = inputs.pair.workspace.hero_run_dir(hero_set_id)
+                if run_dir.is_symlink() or not run_dir.is_dir():
+                    raise MediaError(f"Hero resume run {hero_set_id} is missing")
+                if (run_dir / "manifest.json").is_file():
+                    raise MediaError(f"Hero resume run {hero_set_id} is already complete")
+            else:
+                run_dir = inputs.pair.workspace.make_hero_run(hero_set_id)
             document, manifest = _render_run(
                 inputs,
                 current.artifact_id,
@@ -615,7 +628,18 @@ def _render_one(
         + "\n",
         encoding="utf-8",
     )
-    renderer.render_batch(batch, log_path=run_dir / "logs" / f"{job.job_id}.log")
+    if renderer.requires_browser:
+        render_checkpointed_hero_candidate(
+            workspace=inputs.pair.workspace,
+            root=root,
+            run_dir=run_dir,
+            renderer=renderer,
+            render_input=rendered,
+            output=partial,
+            dependency_sha256=renderer_dependency_sha256(),
+        )
+    else:
+        renderer.render_batch(batch, log_path=run_dir / "logs" / f"{job.job_id}.log")
     if not partial.is_file() or partial.is_symlink():
         raise MediaError(f"renderer did not produce a Hero file for {candidate.candidate_id}")
     duration = candidate.time_map.to_time_map().total_output_duration()

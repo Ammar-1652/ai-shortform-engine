@@ -26,6 +26,7 @@ from clipforge.hero.advanced_build import (
 )
 from clipforge.hero.advanced_service import (
     _require_production_direction,
+    _require_reviewed_tarteel_arc,
     default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
@@ -64,6 +65,29 @@ from tests.candidate_support import PROJECT_ID, SOURCE_ID
 from tests.test_hero_service import CountingAligner, _hero, _reviewed
 
 pytestmark = pytest.mark.hero
+
+
+def test_tarteel_arc_cannot_use_an_operator_override() -> None:
+    with pytest.raises(MediaError, match="selection_mode=reviewed"):
+        _require_reviewed_tarteel_arc(
+            "profile-tarteel-campaign",
+            SimpleNamespace(selection_mode="operator_override"),
+        )
+
+
+def test_tarteel_arc_requires_an_explicit_opening_boundary() -> None:
+    with pytest.raises(MediaError, match="explicit reviewed opening boundary"):
+        _require_reviewed_tarteel_arc(
+            "profile-tarteel-campaign",
+            SimpleNamespace(selection_mode="reviewed", opening_word_id=None, opening_boundary_note=""),
+        )
+
+
+def test_non_tarteel_arc_keeps_existing_selection_modes() -> None:
+    _require_reviewed_tarteel_arc(
+        "profile-organic",
+        SimpleNamespace(selection_mode="operator_override"),
+    )
 
 
 @pytest.mark.parametrize(
@@ -234,9 +258,61 @@ def test_advanced_plan_and_render_keep_hero_v1(tmp_path: Path, monkeypatch: pyte
     before = sorted(fixture.work.rglob("render-input.json"))
     assert before
     assert all('"narration.wav"' not in path.read_text(encoding="utf-8") for path in before)
-    render_input = json.loads(before[-1].read_text(encoding="utf-8"))
+    render_input = next(
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in reversed(before)
+        if json.loads(path.read_text(encoding="utf-8")).get("composition_id") == "AdvancedHeroDraft"
+    )
     with pytest.raises(ValidationError, match="debug_overlays"):
         AdvancedHeroRenderInput.model_validate({**render_input, "debug_overlays": True})
+    with pytest.raises(ValidationError, match="requires a source-bound frame palette"):
+        AdvancedHeroRenderInput.model_validate(
+            {
+                **render_input,
+                "frame_style_id": "auto-source-palette-v1",
+                "frame_backdrop_id": "palette-solid-v1",
+            }
+        )
+    palette = {
+        "analyzer_version": "source-frame-palette-v1",
+        "source_sha256": render_input["source_sha256"],
+        "family": "sage",
+        "dominant_hex": "#808050",
+        "primary_hex": "#a7ad72",
+        "accent_hex": "#d2aa45",
+        "backdrop_hex": "#2e3a2c",
+        "backdrop_alt_hex": "#161e1a",
+        "sample_times_us": [0, 1_000_000],
+    }
+    framed = AdvancedHeroRenderInput.model_validate(
+        {
+            **render_input,
+            "frame_style_id": "auto-source-palette-v1",
+            "frame_backdrop_id": "palette-solid-v1",
+            "frame_layout_id": "platform-bleed-v1",
+            "frame_palette": palette,
+        }
+    )
+    assert framed.frame_palette is not None
+    assert framed.frame_palette.family == "sage"
+    camera = AdvancedHeroRenderInput.model_validate(
+        {
+            **render_input,
+            "camera_motion": [
+                {
+                    "event_id": "camera-test",
+                    "interval": {"output_start_us": 0, "output_end_us": 500_000},
+                    "intent": "emphasize",
+                    "path": "push_in",
+                    "scale_start_permille": 1000,
+                    "scale_end_permille": 1040,
+                    "travel_px": 24,
+                    "source_evidence_ids": ["evidence-test"],
+                }
+            ],
+        }
+    )
+    assert camera.camera_motion[0].scale_end_permille == 1040
 
 
 def test_editorial_arc_persists_remapped_alignment_and_time_map(tmp_path: Path) -> None:
@@ -401,8 +477,19 @@ def test_direction_context_line_is_serialized_in_upper_lane() -> None:
     )
     events = _directed_typography(direction, SimpleNamespace(words=words), "candidate")
     assert events[0].component_id == "context-line-v1"
-    assert events[0].y == 120
+    assert events[0].y == 270
     assert events[0].emoji == "📖"
+
+    platform_direction = SimpleNamespace(
+        direction_id="direction-platform",
+        safe_region_id="platform-resilient-portrait-v1",
+        style_id="quran-readable-v2",
+        selected_option_id="selected",
+        options=[SimpleNamespace(option_id="selected", beats=beats, evidence=evidence, context_line=context)],
+    )
+    platform_events = _directed_typography(platform_direction, SimpleNamespace(words=words), "candidate")
+    assert platform_events[0].y == 280
+    assert platform_events[0].font_size == 64
 
 
 def test_clean_production_requires_direction_before_remotion() -> None:
@@ -670,6 +757,9 @@ def test_remote_url_and_music_are_rejected() -> None:
 
 def test_editorial_clean_style_is_versioned_and_cache_distinct() -> None:
     assert EDITORIAL_CLEAN_V1.style_id == "editorial-clean-v1"
+    assert EDITORIAL_CLEAN_V1.caption_max_lines == 1
+    assert EDITORIAL_CLEAN_V1.safe_top == 270
+    assert EDITORIAL_CLEAN_V1.safe_bottom == 360
     assert EDITORIAL_CLEAN_V1.fingerprint() != LEGACY_V1.fingerprint()
     assert CONCAT_EDITORIAL_V1.style_id == "concat-editorial-v1"
     assert CONCAT_EDITORIAL_V1.fingerprint() != EDITORIAL_CLEAN_V1.fingerprint()
@@ -1468,13 +1558,7 @@ def test_rights_change_and_old_hero_set_block_render(tmp_path: Path) -> None:
     stored["hero_set_id"] = review_board(fixture.database, SOURCE_ID, fixture.work)["hero"]["hero_set_id"]
     stored["reframing_strategy"] = "center_crop"
     stored_path.write_text(json.dumps(stored), encoding="utf-8")
-    render_advanced_drafts(
-        database=fixture.database,
-        source_asset_id=SOURCE_ID,
-        work_root=fixture.work,
-        backend=FakeAdvancedRenderBackend(),
-        force=True,
-    )
+    _assert_render_blocked(fixture, "pilot receipt")
 
 
 def test_profile_disallows_music() -> None:

@@ -8,6 +8,20 @@
       "title": "Advanced Set Id",
       "type": "string"
     },
+    "artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Id"
+    },
     "batch_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Batch Sha256",

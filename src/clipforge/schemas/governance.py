@@ -1,4 +1,4 @@
-"""Profiles, hard compliance gates, rights, and human review.
+"""Profiles, hard compliance gates, rights, and role-labelled review.
 
 Compliance is not a weight. ``require_compliance_cleared`` fails closed when
 evidence is missing or any rule fails.
@@ -123,7 +123,12 @@ class AssetReference(Versioned):
 
 
 class ReviewDecision(Versioned):
-    """A human review. ``automated`` cannot be true in this schema version."""
+    """A review decision with an explicit operator role.
+
+    Codex may record source-grounded candidate, Hero, caption, and framing
+    decisions while operating the pipeline. Final approval remains human-only.
+    ``automated`` cannot be true in this schema version.
+    """
 
     review_id: EntityId
     project_id: EntityId
@@ -132,6 +137,7 @@ class ReviewDecision(Versioned):
     subject_kind: Literal["candidate", "hero", "caption", "framing", "final"]
     decision: Literal["approved", "rejected", "changes_requested"]
     reviewer_id: str = Field(min_length=1, max_length=200)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] = "human_reviewer"
     created_at: AwareDatetime
     notes: str = ""
     automated: Literal[False] = False
@@ -154,6 +160,8 @@ class ReviewDecision(Versioned):
                 f"subject_kind {self.subject_kind} requires artifact_id. "
                 "The review is of a specific media version, including when the decision is rejected."
             )
+        if self.subject_kind == "final" and self.reviewer_role != "human_reviewer":
+            raise ValueError("final approval requires reviewer_role human_reviewer")
         return self
 
 

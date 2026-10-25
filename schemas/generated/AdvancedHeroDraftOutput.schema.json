@@ -18,10 +18,34 @@
       "title": "Alignment Sha256",
       "type": "string"
     },
+    "arabic_corrections_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Arabic Corrections Sha256",
+      "type": "string"
+    },
     "candidate_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Candidate Id",
+      "type": "string"
+    },
+    "caption_alignment_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Caption Alignment Sha256",
+      "type": "string"
+    },
+    "caption_coverage_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Caption Coverage Relative Path",
+      "type": "string"
+    },
+    "caption_coverage_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Caption Coverage Sha256",
       "type": "string"
     },
     "detected_audio_codec": {
@@ -76,6 +100,12 @@
       "title": "Editorial Arc Id",
       "type": "string"
     },
+    "editorial_arc_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Review Sha256",
+      "type": "string"
+    },
     "editorial_arc_sha256": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",
@@ -119,6 +149,52 @@
       "title": "Hero Review Status",
       "type": "string"
     },
+    "knowledge_context_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Context Id",
+      "type": "string"
+    },
+    "knowledge_context_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Knowledge Context Sha256",
+      "type": "string"
+    },
+    "knowledge_decision_trace_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Decision Trace Id",
+      "type": "string"
+    },
+    "knowledge_decision_trace_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Knowledge Decision Trace Sha256",
+      "type": "string"
+    },
+    "knowledge_release_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Release Id",
+      "type": "string"
+    },
+    "motion_catalog_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Motion Catalog Sha256",
+      "type": "string"
+    },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
     "output_duration_us": {
       "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
       "maximum": 604800000000,
@@ -137,6 +213,30 @@
       "default": 30,
       "title": "Output Fps Numerator",
       "type": "integer"
+    },
+    "overlay_exclusion_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Overlay Exclusion Relative Path",
+      "type": "string"
+    },
+    "overlay_exclusion_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Overlay Exclusion Sha256",
+      "type": "string"
+    },
+    "pilot_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Pilot Sha256",
+      "type": "string"
+    },
+    "preset_id": {
+      "default": "",
+      "maxLength": 64,
+      "title": "Preset Id",
+      "type": "string"
     },
     "preview_relative_path": {
       "maxLength": 512,
@@ -182,11 +282,29 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "speech_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Speech Review Sha256",
+      "type": "string"
+    },
     "style_id": {
       "default": "legacy-v1",
       "maxLength": 64,
       "minLength": 1,
       "title": "Style Id",
+      "type": "string"
+    },
+    "viewer_evidence_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Viewer Evidence Relative Path",
+      "type": "string"
+    },
+    "viewer_evidence_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Viewer Evidence Sha256",
       "type": "string"
     },
     "width": {

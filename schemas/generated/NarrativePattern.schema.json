@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "KnowledgeScope": {
+      "additionalProperties": false,
+      "description": "Scope limits keep a useful pattern from becoming a universal claim.",
+      "properties": {
+        "campaign_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Campaign Ids",
+          "type": "array"
+        },
+        "genres": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Genres",
+          "type": "array"
+        },
+        "languages": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Languages",
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Platforms",
+          "type": "array"
+        },
+        "profile_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Profile Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "KnowledgeScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A source-grounded hook/body/payoff structure.",
+  "properties": {
+    "body_shape": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Body Shape",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "continuity_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Continuity Rules",
+      "type": "array"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "guidance_card_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Guidance Card Ids",
+      "type": "array"
+    },
+    "hook_shape": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Hook Shape",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "pattern_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Pattern Id",
+      "type": "string"
+    },
+    "payoff_shape": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Payoff Shape",
+      "type": "string"
+    },
+    "reject_when": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Reject When",
+      "type": "array"
+    },
+    "repetition_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Repetition Rules",
+      "type": "array"
+    },
+    "required_source_facts": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Required Source Facts",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/KnowledgeScope"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "captured",
+        "analyzed",
+        "proposed",
+        "evaluated",
+        "active",
+        "superseded",
+        "withdrawn"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pattern_id",
+    "name",
+    "state",
+    "source_ids",
+    "hook_shape",
+    "body_shape",
+    "payoff_shape",
+    "required_source_facts",
+    "continuity_rules",
+    "reject_when",
+    "content_sha256"
+  ],
+  "title": "NarrativePattern",
+  "type": "object"
+}

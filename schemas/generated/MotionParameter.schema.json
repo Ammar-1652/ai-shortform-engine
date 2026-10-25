@@ -1,0 +1,76 @@
+{
+  "additionalProperties": false,
+  "description": "A bounded declarative parameter; arbitrary code is not a parameter type.",
+  "properties": {
+    "default_value": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Default Value"
+    },
+    "maximum": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maximum"
+    },
+    "minimum": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Minimum"
+    },
+    "name": {
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "required": {
+      "default": false,
+      "title": "Required",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "value_type": {
+      "enum": [
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "color"
+      ],
+      "title": "Value Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "value_type"
+  ],
+  "title": "MotionParameter",
+  "type": "object"
+}

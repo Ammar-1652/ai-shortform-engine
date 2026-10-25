@@ -35,6 +35,8 @@ from clipforge.review.service import (
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionBeat,
+    DirectionCameraMotion,
+    DirectionContextLine,
     DirectionDocument,
     DirectionEvidence,
     DirectionMotionGraphic,
@@ -61,6 +63,7 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
     segment_order = [segment.segment_id for segment in context.hero_plan.edit_plan.time_map.segments]
     options: list[DirectionOption] = []
     styles = ("editorial-clean-v1", "kinetic-caption-v1", "premium-minimal-v1")
+    output_duration_us = context.hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
     for option_index, (option_id, style_id) in enumerate(
         zip(("option-a", "option-b", "option-c"), styles, strict=True)
     ):
@@ -119,6 +122,7 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
             ),
         ]
         graphics = []
+        camera_motion = []
         if option_id == "option-b":
             graphic_evidence = DirectionEvidence(
                 evidence_id=f"{option_id}-credit-card-evidence",
@@ -142,6 +146,22 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                     height=260,
                 )
             )
+            camera_motion.append(
+                DirectionCameraMotion(
+                    motion_id=f"{option_id}-camera",
+                    intent="emphasize",
+                    path="push_in",
+                    interval=OutputInterval(
+                        output_start_us=groups[0][0].output_start_us,
+                        output_end_us=groups[0][-1].output_end_us,
+                    ),
+                    source_evidence_ids=[evidence[0].evidence_id],
+                    scale_start_permille=1000,
+                    scale_end_permille=1040,
+                    travel_px=24,
+                    intensity="quiet",
+                )
+            )
         options.append(
             DirectionOption(
                 option_id=option_id,
@@ -151,6 +171,18 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
                 evidence=evidence,
                 asset_placements=placements,
                 motion_graphics=graphics,
+                motion_recipe_ids=["motion-hook-card-v1"],
+                camera_motion=camera_motion,
+                context_line=DirectionContextLine(
+                    context_id=f"{option_id}-context",
+                    text="What does this moment reveal?",
+                    emoji="✨",
+                    evidence_ids=[evidence[0].evidence_id],
+                    interval=OutputInterval(output_start_us=0, output_end_us=output_duration_us),
+                    copy_mode="human_reviewed_summary",
+                    reviewed_by="chrome-test",
+                    review_note="The upper sentence is a truthful summary of the selected source moment.",
+                ),
                 source_native_text_status="reviewed_absent",
                 segment_order=segment_order,
                 selection_score=(0.72, 0.91, 0.81)[option_index],
@@ -566,8 +598,10 @@ def _caption_ink(path: Path, seconds: float) -> bool:
         ["ffmpeg", "-v", "error", "-i", str(frame), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     )
     width = 1080
-    for y in range(1500, 1860):
-        for x in range(64, 1016, 4):
+    # Modern directions use the shared platform-safe caption lane above the
+    # bottom description/action rail.
+    for y in range(1280, 1560):
+        for x in range(96, 920, 4):
             offset = (y * width + x) * 3
             red, green, blue = raw[offset], raw[offset + 1], raw[offset + 2]
             if red > 200 and green > 200 and blue > 200:

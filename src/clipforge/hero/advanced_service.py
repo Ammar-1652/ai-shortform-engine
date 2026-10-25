@@ -10,22 +10,37 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import TypeVar, cast
+from typing import Literal, TypeVar, cast
 
 from pydantic import ValidationError
 
 from clipforge import __version__
 from clipforge.campaign.overlays import (
     TARTEEL_PROFILE_ID,
+    load_tarteel_overlay_exclusion,
     measure_tarteel_overlay_sizing,
+    overlay_spec_sha256,
+    require_tarteel_overlay_matches_plan,
     stage_tarteel_overlay,
+    validate_overlay_render_geometry,
+    validate_overlay_sample_files,
 )
 from clipforge.campaign.quran import (
     canonicalize_quran_alignment,
     load_tarteel_quran_review,
+    load_tarteel_speech_review,
     quran_review_for_alignment,
+    reviewed_quran_font,
+    validate_tarteel_speech_review_ranges,
 )
-from clipforge.errors import MediaError, StorageError
+from clipforge.campaign.speech import (
+    apply_arabic_corrections,
+    load_arabic_corrections,
+    retained_recitation,
+    validate_speech_captions,
+)
+from clipforge.errors import AmbiguousTimeError, MediaError, StorageError, TimeNotMappedError
+from clipforge.hero.advanced_assets import binding_for, confine_work_path, require_asset
 from clipforge.hero.advanced_backend import AdvancedRenderBackend, RemotionAdvancedRenderBackend
 from clipforge.hero.advanced_build import (
     _captions,
@@ -33,14 +48,22 @@ from clipforge.hero.advanced_build import (
     _face_follow_windows,
     _transitions,
     build_advanced_plan,
+    stable_id,
+)
+from clipforge.hero.caption_evidence import (
+    verify_caption_coverage_report,
+    write_caption_coverage_report,
 )
 from clipforge.hero.constants import KIND_HERO
 from clipforge.hero.direction_service import load_direction
 from clipforge.hero.editorial_arc import (
     load_editorial_arc,
+    load_editorial_arc_review,
     remap_alignment,
     remap_direction_intervals,
+    validate_arc_review,
     validate_editorial_arc,
+    verify_arc_review_frames,
 )
 from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.probe import probe_hero
@@ -49,9 +72,11 @@ from clipforge.hero.reframe import (
     frame_period_tolerance_us,
     windows_follow_trajectory,
 )
+from clipforge.hero.render_authorization import authorize_render_candidate
 from clipforge.hero.render_checkpoint import render_checkpointed_candidate, renderer_dependency_sha256
 from clipforge.hero.selection import review_digest
 from clipforge.hero.show import CurrentHero, load_current_hero
+from clipforge.hero.viewer_evidence import write_viewer_evidence_bundle
 from clipforge.media.clock import us_to_seconds_str
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
@@ -84,16 +109,25 @@ from clipforge.schemas.advanced import (
     ReframingStrategy,
     advanced_fingerprint,
 )
-from clipforge.schemas.arc import EditorialArcDocument
-from clipforge.schemas.campaign import QuranCaptionReview
-from clipforge.schemas.direction import DirectionDocument
+from clipforge.schemas.arc import EditorialArcDocument, EditorialArcReview
+from clipforge.schemas.campaign import (
+    CampaignOverlaySpec,
+    OverlayExclusionEvidence,
+    QuranCaptionReview,
+    TarteelSpeechReview,
+)
+from clipforge.schemas.caption_evidence import CaptionAudioCoverageReport
+from clipforge.schemas.direction import DirectionDocument, DirectionTransitionSpec
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.qa import EditorialPilotReceipt, ViewerEvidenceBundle
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.render_checkpoint import AdvancedRenderAuthorization
+from clipforge.schemas.roles import WorkflowRole, WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
-from clipforge.schemas.vision import VisualAnalysisDocument
+from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import (
     ArtifactRow,
     Database,
@@ -106,7 +140,7 @@ from clipforge.storage import (
     update_artifact,
     update_job,
 )
-from clipforge.transcription.io import publish_json
+from clipforge.transcription.io import dump_json, publish_json
 
 _ModelT = TypeVar("_ModelT")
 KIND_ADVANCED = "advanced_hero_draft_set_json"
@@ -270,6 +304,7 @@ def plan_advanced_candidate(
         raise MediaError(
             "Tarteel Advanced Hero requires a reviewed hook/body/punch editorial arc before planning"
         )
+    _require_reviewed_tarteel_arc(project.profile_id, editorial_arc)
     stored_direction = direction
     direction_sha256 = ""
     if stored_direction is None:
@@ -293,6 +328,7 @@ def plan_advanced_candidate(
     ):
         raise MediaError("direction is stale against the current promoted Hero plan")
     if stored_direction is not None:
+        from clipforge.hero.direction_lint import lint_direction
         from clipforge.hero.direction_service import validate_source_evidence
 
         validate_source_evidence(
@@ -301,6 +337,16 @@ def plan_advanced_candidate(
             context.hero_plan.edit_plan.time_map,
             {scene.scene_id for scene in context.visual.scenes},
         )
+        lint_report = lint_direction(
+            stored_direction,
+            direction_sha256=direction_sha256,
+            words=context.alignment.words,
+            time_map=context.hero_plan.edit_plan.time_map,
+            scene_ids={scene.scene_id for scene in context.visual.scenes},
+        )
+        if lint_report.status == "fail":
+            errors = "; ".join(item.message for item in lint_report.findings if item.severity == "error")
+            raise MediaError(f"direction lint failed before Advanced Hero planning: {errors}")
         if project.profile_id == TARTEEL_PROFILE_ID:
             selected_option = next(
                 item
@@ -308,8 +354,11 @@ def plan_advanced_candidate(
                 if item.option_id == stored_direction.selected_option_id
             )
             context_line = selected_option.context_line
-            if context_line is None or context_line.copy_mode != "human_reviewed_summary":
-                raise MediaError("Tarteel requires a human-reviewed, source-grounded upper context summary")
+            if context_line is None or context_line.copy_mode not in {
+                "human_reviewed_summary",
+                "operator_reviewed_summary",
+            }:
+                raise MediaError("Tarteel requires an operator-reviewed, source-grounded upper context summary")
             normalized_context = context_line.text.replace(" ", "")
             if "؟" not in context_line.text or not any(
                 term in normalized_context for term in ("آية", "ايه", "يكمل", "تختفي", "حفظ", "قرآن", "ترتيل")
@@ -319,23 +368,57 @@ def plan_advanced_candidate(
                 )
     quran_review_id = ""
     quran_review_sha256 = ""
+    editorial_arc_review_sha256 = ""
+    speech_review_sha256 = ""
+    arabic_corrections_sha256 = ""
+    speech_review: TarteelSpeechReview | None = None
+    corrected_alignment = context.alignment
     quran_review: QuranCaptionReview | None = None
     if project.profile_id == TARTEEL_PROFILE_ID:
+        if editorial_arc is None:
+            raise MediaError("Tarteel Advanced Hero requires an editorial arc review")
         if stored_direction is None or stored_direction.style_id not in {
             "quran-editorial-v1",
             "quran-readable-v2",
         }:
             raise MediaError("Tarteel Advanced Hero requires a versioned Quran caption style")
-        quran_review, quran_review_sha256, _quran_review_path = load_tarteel_quran_review(
+        loaded_speech = load_tarteel_speech_review(
             root,
             source_asset_id=source_asset_id,
             candidate_id=candidate_id,
             source_sha256=context.source_sha256,
+            raw_asr_sha256=context.alignment.asr_audio_sha256,
             transcript_sha256=context.alignment.transcript_sha256,
         )
-        quran_review_id = f"quran-{quran_review_sha256[:24]}"
-        if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
-            raise MediaError("Tarteel Quran review must bind the local Amiri Quran font")
+        if loaded_speech is None:
+            raise MediaError("Tarteel planning requires a reviewed speech inventory before rendering")
+        speech_review, speech_review_sha256, _speech_path = loaded_speech
+        corrections = load_arabic_corrections(
+            root,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            source_sha256=context.source_sha256,
+            raw_asr_sha256=context.alignment.asr_audio_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+        )
+        if corrections is not None:
+            corrected_alignment = apply_arabic_corrections(
+                context.alignment,
+                corrections[0],
+                source_sha256=context.source_sha256,
+            )
+            arabic_corrections_sha256 = corrections[1]
+        if retained_recitation(speech_review, editorial_arc.time_map):
+            quran_review, quran_review_sha256, _quran_review_path = load_tarteel_quran_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=context.source_sha256,
+                transcript_sha256=context.alignment.transcript_sha256,
+            )
+            quran_review_id = f"quran-{quran_review_sha256[:24]}"
+            if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
+                raise MediaError("Tarteel Quran review must bind the local Amiri Quran font")
     render_alignment = context.alignment
     render_hero_plan = context.hero_plan
     render_direction = stored_direction
@@ -348,6 +431,20 @@ def plan_advanced_candidate(
             alignment=context.alignment,
             alignment_sha256=context.alignment_sha256,
         )
+        if project.profile_id == TARTEEL_PROFILE_ID:
+            # Validate all reviews before replacing the current plan's arc or
+            # alignment sidecars. A failed replan must leave its predecessor usable.
+            editorial_arc_sha256 = hashlib.sha256(dump_json(editorial_arc).encode("utf-8")).hexdigest()
+            _arc_review, editorial_arc_review_sha256, _arc_review_path = load_editorial_arc_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=context.source_sha256,
+                transcript_sha256=context.alignment.transcript_sha256,
+                visual_analysis_sha256=context.visual_sha256,
+                arc_sha256=editorial_arc_sha256,
+                arc=editorial_arc,
+            )
         render_alignment = remap_alignment(
             context.alignment,
             editorial_arc,
@@ -378,6 +475,16 @@ def plan_advanced_candidate(
             source_alignment=context.alignment,
             target_alignment=render_alignment,
         )
+    caption_alignment = corrected_alignment
+    if editorial_arc is not None:
+        caption_alignment = remap_alignment(
+            corrected_alignment, editorial_arc, source_sha256=context.source_sha256
+        )
+    # Keep raw forced alignment immutable. Display corrections and canonical
+    # Quran words form a separately hashed derivation used only for captions.
+    canonical_caption_alignment = caption_alignment
+    if render_quran_review is not None:
+        canonical_caption_alignment = canonicalize_quran_alignment(caption_alignment, render_quran_review)
     directed_broll_ids: list[str] = []
     directed_sfx_ids: list[str] = []
     if stored_direction is not None:
@@ -437,12 +544,44 @@ def plan_advanced_candidate(
         direction_sha256=direction_sha256,
         editorial_arc_id="" if editorial_arc is None else editorial_arc.arc_id,
         editorial_arc_sha256="" if editorial_arc is None else editorial_arc_sha256,
+        editorial_arc_review_sha256=editorial_arc_review_sha256,
         quran_review_id=quran_review_id,
         quran_review_sha256=quran_review_sha256,
         quran_review=render_quran_review,
+        caption_alignment_override=caption_alignment,
         cut_transition_style="" if editorial_arc is None else editorial_arc.transition_style,
         allow_unapproved=allow_unapproved,
     )
+    if speech_review is not None:
+        validate_speech_captions(
+            speech_review,
+            alignment=canonical_caption_alignment,
+            time_map=render_hero_plan.edit_plan.time_map,
+            captions=plan.captions,
+        )
+        plan = AdvancedHeroPlanDocument.model_validate(
+            {
+                **plan.model_dump(mode="json"),
+                "speech_review_sha256": speech_review_sha256,
+                "arabic_corrections_sha256": arabic_corrections_sha256,
+                "caption_alignment_sha256": hashlib.sha256(
+                    dump_json(canonical_caption_alignment).encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+    if project.profile_id == TARTEEL_PROFILE_ID:
+        overlay, overlay_bindings = _prepare_tarteel_plan_overlay(
+            database=database,
+            context=context,
+            plan=plan,
+            work_root=root,
+        )
+        plan = plan.model_copy(
+            update={
+                "campaign_overlay": overlay,
+                "assets": [*plan.assets, *overlay_bindings],
+            }
+        )
     review_only = allow_unapproved
     destination = _advanced_plan_path(context.workspace, candidate_id, review_only=review_only)
     prepare = (
@@ -484,10 +623,41 @@ def plan_advanced_candidate(
                 "alignment_id": render_alignment.alignment_id,
                 "alignment_sha256": alignment_sha256,
                 "editorial_arc_sha256": arc_sha256,
+                "editorial_arc_review_sha256": editorial_arc_review_sha256,
             }
         )
     publish_json(destination, plan, root, context.workspace.partial_for(destination))
+    if plan.style_id != "legacy-v1":
+        _write_pilot_receipt(
+            plan=plan,
+            workspace=context.workspace,
+            root=root,
+            review_only=review_only,
+            direction_sha256=direction_sha256,
+        )
     return plan
+
+
+def _require_reviewed_tarteel_arc(
+    profile_id: str | None,
+    editorial_arc: EditorialArcDocument | None,
+) -> None:
+    """Keep idea-library/operator shortcuts out of Tarteel production plans."""
+    if (
+        profile_id == TARTEEL_PROFILE_ID
+        and editorial_arc is not None
+        and editorial_arc.selection_mode != "reviewed"
+    ):
+        raise MediaError(
+            "Tarteel Advanced Hero requires selection_mode=reviewed for its editorial arc; "
+            "operator_override is not a production story decision"
+        )
+    if (
+        profile_id == TARTEEL_PROFILE_ID
+        and editorial_arc is not None
+        and (editorial_arc.opening_word_id is None or not editorial_arc.opening_boundary_note.strip())
+    ):
+        raise MediaError("Tarteel Advanced Hero requires an explicit reviewed opening boundary")
 
 
 def render_advanced_drafts(
@@ -556,7 +726,16 @@ def render_advanced_drafts(
             narration_artifact_id is None
             and not force
             and resume_advanced_set_id is None
-            and _cache_ready(database, inputs.pair.workspace, hero, chosen, root, review_only=draft_only)
+            and _cache_ready(
+                database,
+                inputs.pair.workspace,
+                hero,
+                chosen,
+                root,
+                review_only=draft_only,
+                require_caption_evidence=renderer.requires_browser,
+                require_viewer_evidence=renderer.requires_browser,
+            )
         ):
             current = _current_manifest(inputs.pair.workspace, review_only=draft_only)
             return AdvancedRenderResult(
@@ -606,6 +785,12 @@ def render_advanced_drafts(
                     if draft_only
                     else inputs.pair.workspace.make_advanced_run(advanced_set_id)
                 )
+            existing_progress = _load_render_progress(run_dir)
+            advanced_artifact_id = (
+                existing_progress.artifact_id
+                if existing_progress is not None and existing_progress.artifact_id
+                else str(uuid.uuid4())
+            )
             document, manifest = _render_run(
                 database,
                 inputs.pair.workspace,
@@ -621,6 +806,7 @@ def render_advanced_drafts(
                 run_dir,
                 source_asset_id,
                 narration,
+                advanced_artifact_id,
                 review_only=draft_only,
                 resume_only=resume_advanced_set_id is not None,
             )
@@ -634,6 +820,7 @@ def render_advanced_drafts(
                 manifest,
                 record,
                 root,
+                artifact_id=advanced_artifact_id,
                 review_only=draft_only,
             )
         except KeyboardInterrupt:
@@ -774,6 +961,131 @@ def _context(
     )
 
 
+def _prepare_tarteel_plan_overlay(
+    *,
+    database: Database,
+    context: _Context,
+    plan: AdvancedHeroPlanDocument,
+    work_root: Path,
+) -> tuple[CampaignOverlaySpec, list[AssetBinding]]:
+    """Create the measured Tarteel overlay contract during planning.
+
+    The previous workflow only staged the CTA when a hand-edited plan already
+    contained an overlay. That allowed a fresh plan to render without the
+    mandatory CTA/watermark. Planning now measures the source and binds both
+    cleared campaign assets before the plan is published; rendering still
+    re-stages the alpha files in its own resumable run directory.
+    """
+    inputs = load_preview_inputs(
+        database,
+        plan.source_asset_id,
+        work_root,
+        profile_fingerprint=default_profile().fingerprint(),
+        create_workspace=False,
+    )
+    time_map = plan.time_map
+    if time_map is None or not time_map.segments:
+        raise MediaError("Tarteel overlay planning requires a non-empty TimeMap")
+    segments = time_map.segments
+    measure_dir = context.workspace.advanced_review_plan_file(plan.candidate_id).parent / "overlay-staging"
+    measure_dir.mkdir(parents=True, exist_ok=True)
+    sizing = measure_tarteel_overlay_sizing(
+        source_proxy_path=inputs.proxy_path,
+        source_ranges_us=[(segment.source_start_us, segment.source_end_us) for segment in segments],
+        source_proxy_sha256=inputs.proxy_sha256,
+        staging_dir=measure_dir,
+        log_path=measure_dir / "branding-measure.log",
+    )
+    staged = stage_tarteel_overlay(
+        database=database,
+        workspace=context.workspace,
+        project_id=context.project_id,
+        work_root=work_root,
+        staging_dir=measure_dir,
+        duration_us=time_map.to_time_map().total_output_duration(),
+        caption_intervals=[
+            (item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
+        ],
+        face_boxes_by_time=_tarteel_face_samples_for_plan(
+            plan,
+            context.visual.face_detection_samples,
+        ),
+        source_logo_visible=sizing.source_logo_visible,
+        sizing=sizing,
+    )
+    bindings: list[AssetBinding] = []
+    for asset_id, expected_kind in (
+        (staged.spec.cta_asset_id, "graphic"),
+        (staged.spec.watermark_asset_id, "graphic"),
+    ):
+        entry, license_record, _path = require_asset(
+            database,
+            context.workspace,
+            project_id=context.project_id,
+            asset_id=asset_id,
+            expected_kind=expected_kind,
+            work_root=work_root,
+        )
+        bindings.append(binding_for(entry, license_record))
+    return staged.spec, bindings
+
+
+def _tarteel_face_samples_for_plan(
+    plan: AdvancedHeroPlanDocument,
+    samples: list[FaceDetectionSample],
+) -> list[tuple[int, float, float, float, float]]:
+    """Map face samples through the final crop onto the output foreground."""
+    if plan.time_map is None:
+        raise MediaError("Tarteel CTA clearance requires the plan TimeMap")
+    mapper = plan.time_map.to_time_map()
+    mapped: list[tuple[int, float, float, float, float]] = []
+    for sample in samples:
+        # A detector box clipped exactly against the top edge is not a
+        # reliable placement exclusion after the portrait transform: it can
+        # describe a partial source-native graphic or a false face. Keep the
+        # sample out of automatic placement and require the decoded overlay
+        # proof to inspect that frame explicitly.
+        if sample.bounding_box.y < 0.05:
+            continue
+        try:
+            output_us = mapper.source_to_output(sample.timestamp_us)
+        except (MediaError, TimeNotMappedError, AmbiguousTimeError):
+            continue
+        window = next(
+            (item for item in plan.windows if item.output_start_us <= output_us < item.output_end_us),
+            None,
+        )
+        if window is None:
+            continue
+        box = sample.bounding_box
+        source_left = box.x * window.frame_width
+        source_top = box.y * window.frame_height
+        source_right = source_left + box.width * window.frame_width
+        source_bottom = source_top + box.height * window.frame_height
+        crop_left = window.source_x
+        crop_top = window.source_y
+        crop_right = crop_left + window.source_width
+        crop_bottom = crop_top + window.source_height
+        visible_left = max(source_left, crop_left)
+        visible_top = max(source_top, crop_top)
+        visible_right = min(source_right, crop_right)
+        visible_bottom = min(source_bottom, crop_bottom)
+        if visible_right <= visible_left or visible_bottom <= visible_top:
+            continue
+        mapped.append(
+            (
+                output_us,
+                (visible_left - crop_left) / window.source_width,
+                (visible_top - crop_top) / window.source_height,
+                (visible_right - visible_left) / window.source_width,
+                (visible_bottom - visible_top) / window.source_height,
+            )
+        )
+    if not mapped:
+        raise MediaError("Tarteel CTA clearance requires frame-level face samples")
+    return mapped
+
+
 def _require_production_direction(
     plan: AdvancedHeroPlanDocument,
     renderer: AdvancedRenderBackend,
@@ -910,16 +1222,20 @@ def _render_run(
     run_dir: Path,
     source_asset_id: str,
     narration: tuple[str, Path] | None = None,
+    artifact_id: str = "",
     *,
     review_only: bool = False,
     resume_only: bool = False,
 ) -> tuple[AdvancedHeroDraftSetDocument, Path]:
     if not isinstance(hero, CurrentHero):
         raise MediaError("current Hero draft is missing")
+    if not artifact_id:
+        raise MediaError("advanced render requires a preallocated artifact id")
     rough = default_profile()
     inputs = load_preview_inputs(
         database, source_asset_id, root, profile_fingerprint=rough.fingerprint(), create_workspace=False
     )
+    speech_reviews: dict[str, tuple[TarteelSpeechReview, str, Path] | None] = {}
     staging = run_dir / "staging"
     renderer_dependency = renderer_dependency_sha256()
     if renderer.requires_browser:
@@ -929,9 +1245,27 @@ def _render_run(
         _link(inputs.asr_path, staging / "asr.flac", root)
     items: list[dict[str, object]] = []
     prepared: list[tuple[int, str, AdvancedHeroPlanDocument, AdvancedHeroRenderInput, Path]] = []
+    overlay_exclusions: dict[str, tuple[str, str]] = {}
     for rank, (candidate_id, plan) in enumerate(chosen, start=1):
         staged = {item.asset_id: _staged_name(item) for item in plan.assets}
         campaign_overlay = plan.campaign_overlay
+        if plan.campaign_overlay is not None:
+            source_ranges = (
+                [(segment.source_start_us, segment.source_end_us) for segment in plan.time_map.segments]
+                if plan.time_map is not None
+                else []
+            )
+            speech_review = load_tarteel_speech_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=plan.source_sha256,
+                raw_asr_sha256=inputs.asr_sha256,
+                transcript_sha256=inputs.pair.transcript_sha256,
+            )
+            if speech_review is not None:
+                validate_tarteel_speech_review_ranges(speech_review[0], source_ranges)
+            speech_reviews[candidate_id] = speech_review
         if narration is not None:
             _link(narration[1], staging / "narration.wav", root)
             staged["narration"] = "narration.wav"
@@ -941,12 +1275,11 @@ def _render_run(
         if campaign_overlay is not None:
             sizing = measure_tarteel_overlay_sizing(
                 source_proxy_path=inputs.proxy_path,
-                source_start_us=min(segment.source_start_us for segment in plan.time_map.segments)
+                source_ranges_us=[
+                    (segment.source_start_us, segment.source_end_us) for segment in plan.time_map.segments
+                ]
                 if plan.time_map is not None
-                else 0,
-                source_end_us=max(segment.source_end_us for segment in plan.time_map.segments)
-                if plan.time_map is not None
-                else inputs.pair.manifest.canonical_duration_us,
+                else [],
                 source_proxy_sha256=inputs.proxy_sha256,
                 staging_dir=staging,
                 log_path=run_dir / "logs" / f"{candidate_id}.branding.log",
@@ -964,32 +1297,106 @@ def _render_run(
                 caption_intervals=[
                     (item.interval.output_start_us, item.interval.output_end_us) for item in plan.captions
                 ],
-                face_boxes=[
-                    (
-                        sample.bounding_box.x,
-                        sample.bounding_box.y,
-                        sample.bounding_box.width,
-                        sample.bounding_box.height,
-                    )
-                    for sample in inputs.pair.visual.face_detection_samples
-                ],
+                face_boxes_by_time=_tarteel_face_samples_for_plan(
+                    plan,
+                    inputs.pair.visual.face_detection_samples,
+                ),
                 source_logo_visible=sizing.source_logo_visible,
                 sizing=sizing,
             )
-            if (
-                staged_overlay.spec.cta_asset_id != campaign_overlay.cta_asset_id
-                or staged_overlay.spec.watermark_asset_id != campaign_overlay.watermark_asset_id
-            ):
-                raise MediaError("Tarteel overlay staging did not preserve the reviewed asset bindings")
+            require_tarteel_overlay_matches_plan(campaign_overlay, staged_overlay.spec)
             staged[campaign_overlay.cta_asset_id] = staged_overlay.spec.cta_asset_name
             staged[campaign_overlay.watermark_asset_id] = staged_overlay.spec.watermark_asset_name
             campaign_overlay = staged_overlay.spec
+        output = run_dir / "candidates" / candidate_id / "advanced.mp4"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if plan.speech_review_sha256:
+            current_context = _context(
+                database, source_asset_id, candidate_id, root, require_hero_approval=not review_only
+            )
+            caption_alignment = _reviewed_caption_alignment(plan, current_context)
+            caption_path = output.parent / "caption-alignment.json"
+            digest, _ = publish_json(caption_path, caption_alignment, root, workspace.partial_for(caption_path))
+            if digest != plan.caption_alignment_sha256:
+                raise MediaError("caption alignment evidence changed after planning")
+            assert plan.time_map is not None
+            map_path = output.parent / "caption-time-map.json"
+            publish_json(map_path, plan.time_map, root, workspace.partial_for(map_path))
+            if plan.arabic_corrections_sha256:
+                corrections = load_arabic_corrections(
+                    root,
+                    source_asset_id=source_asset_id,
+                    candidate_id=candidate_id,
+                    source_sha256=plan.source_sha256,
+                    raw_asr_sha256=inputs.asr_sha256,
+                    transcript_sha256=inputs.pair.transcript_sha256,
+                )
+                if corrections is None or corrections[1] != plan.arabic_corrections_sha256:
+                    raise MediaError("Arabic correction evidence changed after planning")
+                _link(corrections[2], output.parent / "arabic-corrections.json", root)
+        overlay_exclusion_sha256 = ""
+        if campaign_overlay is not None:
+            transform_sha256 = _plan_trajectory_sha256(workspace, plan) or plan.reframing_config_sha256
+            exclusion, _source_exclusion_sha256, _exclusion_path = load_tarteel_overlay_exclusion(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=plan.source_sha256,
+                time_map_sha256=plan.time_map_sha256,
+                transform_sha256=transform_sha256,
+                overlay=campaign_overlay,
+            )
+            exclusion_destination = output.parent / "overlay-exclusion.json"
+            publish_json(
+                exclusion_destination,
+                exclusion,
+                root,
+                workspace.partial_for(exclusion_destination),
+            )
+            overlay_exclusion_sha256 = sha256_file(exclusion_destination)
+            overlay_exclusions[candidate_id] = (
+                exclusion_destination.relative_to(run_dir).as_posix(),
+                overlay_exclusion_sha256,
+            )
+        if plan.editorial_arc_review_sha256:
+            _arc_review, arc_review_sha256, _arc_review_path = load_editorial_arc_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=plan.source_sha256,
+                transcript_sha256=inputs.pair.transcript_sha256,
+                visual_analysis_sha256=inputs.pair.visual_sha256,
+                arc_sha256=plan.editorial_arc_sha256,
+                arc=load_editorial_arc(_advanced_arc_path(workspace, candidate_id, review_only=review_only))[0],
+            )
+            if arc_review_sha256 != plan.editorial_arc_review_sha256:
+                raise MediaError("editorial arc review hash changed after planning")
+            arc_review_destination = output.parent / "editorial-arc-review.json"
+            _link(_arc_review_path, arc_review_destination, root)
         selected_style = (
             style_for_id(plan.style_id)
             if plan.style_id != "legacy-v1"
             else style_for_renderer_version(profile.renderer_recipe_version)
         )
+        pilot_sha256 = ""
+        if plan.style_id != "legacy-v1":
+            pilot_sha256 = sha256_file(_pilot_path(workspace, candidate_id, review_only=review_only))
+        if renderer.requires_browser and plan.quran_review_sha256:
+            review, review_sha256, _ = load_tarteel_quran_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=plan.source_sha256,
+                transcript_sha256=inputs.pair.transcript_sha256,
+            )
+            if review_sha256 != plan.quran_review_sha256:
+                raise MediaError("Quran font evidence changed after planning")
+            font = reviewed_quran_font(root, review.verification_policy)
+            if review.verification_policy.font_sha256 not in selected_style.contract().font_sha256:
+                raise MediaError("reviewed Quran font differs from the selected motion recipe")
+            _link(font, staging / "AmiriQuran.ttf", root)
         render_input = AdvancedHeroRenderInput(
+            workflow_roles=plan.workflow_roles,
             candidate_id=candidate_id,
             renderer_recipe_version=profile.renderer_recipe_version,
             advanced_set_id=advanced_set_id,
@@ -1002,21 +1409,40 @@ def _render_run(
             motion_style=selected_style.contract(),
             direction_id=plan.direction_id,
             direction_sha256=plan.direction_sha256,
+            preset_id=plan.preset_id,
+            pilot_sha256=pilot_sha256,
+            motion_recipe_ids=plan.motion_recipe_ids,
+            motion_catalog_sha256=plan.motion_catalog_sha256,
+            knowledge_context_id=plan.knowledge_context_id,
+            knowledge_release_id=plan.knowledge_release_id,
+            knowledge_context_sha256=plan.knowledge_context_sha256,
+            knowledge_decision_trace_id=plan.knowledge_decision_trace_id,
+            knowledge_decision_trace_sha256=plan.knowledge_decision_trace_sha256,
             editorial_arc_id=plan.editorial_arc_id,
             editorial_arc_sha256=plan.editorial_arc_sha256,
+            editorial_arc_review_sha256=plan.editorial_arc_review_sha256,
             quran_review_id=plan.quran_review_id,
             quran_review_sha256=plan.quran_review_sha256,
+            speech_review_sha256=plan.speech_review_sha256,
+            arabic_corrections_sha256=plan.arabic_corrections_sha256,
+            caption_alignment_sha256=plan.caption_alignment_sha256,
             safe_region_id=plan.safe_region_id,
+            frame_style_id=plan.frame_style_id,
+            frame_backdrop_id=plan.frame_backdrop_id,
+            frame_layout_id=plan.frame_layout_id,
+            frame_palette=plan.frame_palette,
             alignment_sha256=plan.alignment_sha256,
             hero_plan_sha256=plan.hero_plan_sha256,
             advanced_plan_sha256=advanced_fingerprint(plan.model_dump(mode="json")),
             hero_review_status=plan.hero_review_status,
             language=_alignment_locale(workspace, plan, review_only=review_only),
             campaign_overlay=campaign_overlay,
+            overlay_exclusion_sha256=overlay_exclusion_sha256,
             captions=plan.captions,
             typography=plan.typography,
             diagrams=plan.diagrams,
             motion_graphics=plan.motion_graphics,
+            camera_motion=plan.camera_motion,
             source_native_text=plan.source_native_text,
             emphasis=plan.emphasis,
             transitions=plan.transitions,
@@ -1035,12 +1461,13 @@ def _render_run(
             audio_lra_lu=profile.audio_lra_lu,
             audio_mix_version=profile.audio_mix_version,
         )
-        output = run_dir / "candidates" / candidate_id / "advanced.mp4"
-        output.parent.mkdir(parents=True, exist_ok=True)
+        if campaign_overlay is not None:
+            validate_overlay_render_geometry(exclusion, render_input)
         items.append(
             {
                 "outputPath": str(output),
                 "h264Crf": 18,
+                "input_sha256": advanced_fingerprint(render_input.model_dump(mode="json")),
                 "input": render_input.model_dump(mode="json"),
             }
         )
@@ -1065,6 +1492,13 @@ def _render_run(
             or progress.renderer_dependency_sha256 != renderer_dependency
         ):
             raise MediaError("advanced render progress does not match the requested resume state")
+        if progress.artifact_id is not None and progress.artifact_id != artifact_id:
+            raise MediaError(
+                "advanced render progress artifact binding does not match the requested resume state"
+            )
+        if progress.artifact_id is None:
+            progress = progress.model_copy(update={"artifact_id": artifact_id, "updated_at": datetime.now(UTC)})
+            _write_render_progress(workspace, run_dir, progress, root)
         # A previous process may have marked the run complete just before a
         # worker crash or an operator removed one output. Re-open the
         # checkpoint as running; the candidate receipts below still decide
@@ -1075,6 +1509,7 @@ def _render_run(
     else:
         progress = AdvancedRenderProgress(
             advanced_set_id=advanced_set_id,
+            artifact_id=artifact_id,
             source_asset_id=source_asset_id,
             source_sha256=hero.document.source_sha256,
             hero_review_status=chosen[0][1].hero_review_status,
@@ -1113,6 +1548,17 @@ def _render_run(
                 run_dir / "logs" / f"{candidate_id}.trim.log",
             )
         if renderer.requires_browser:
+            authorize_render_candidate(
+                workspace=workspace,
+                root=root,
+                run_dir=run_dir,
+                render_input=render_input,
+                output=output,
+                dependency_sha256=renderer_dependency,
+                job_id=job.job_id,
+                parent_artifact_id=hero.artifact_id,
+                actor=actor,
+            )
             render_checkpointed_candidate(
                 workspace=workspace,
                 root=root,
@@ -1144,7 +1590,6 @@ def _render_run(
             }
         )
         _write_render_progress(workspace, run_dir, progress, root)
-    _cleanup_dir(staging, root)
     outputs: list[AdvancedHeroDraftOutput] = []
     for rank, candidate_id, plan, render_input, output in prepared:
         probed = probe_hero(output, expected_duration_us=_output_end_us(plan))
@@ -1156,6 +1601,72 @@ def _render_run(
         (output.parent / "render-input.json").write_text(
             render_input.model_dump_json(indent=2) + "\n", encoding="utf-8"
         )
+        render_input_sha256 = sha256_file(output.parent / "render-input.json")
+        coverage_relative_path = ""
+        coverage_sha256 = ""
+        viewer_relative_path = ""
+        viewer_sha256 = ""
+        if renderer.requires_browser and plan.style_id != "legacy-v1":
+            authorization_path = output.parent / "authorization.json"
+            authorization = _read_model(
+                authorization_path, AdvancedRenderAuthorization, "candidate render authorization"
+            )
+            authorized = next(
+                (entry for entry in authorization.items if entry.candidate_id == candidate_id), None
+            )
+            if authorized is None or authorized.input_sha256 != advanced_fingerprint(
+                render_input.model_dump(mode="json")
+            ):
+                raise MediaError("caption evidence requires this candidate's current authorization")
+            staged_speech_sha256 = ""
+            speech_review_relative_path = ""
+            speech_coverage_status: Literal["insufficient_evidence", "complete"] = "insufficient_evidence"
+            if plan.speech_review_sha256 and speech_reviews.get(candidate_id) is not None:
+                speech_path = output.parent / "speech-review.json"
+                speech_review = speech_reviews[candidate_id]
+                assert speech_review is not None
+                if speech_review[1] != plan.speech_review_sha256:
+                    raise MediaError("speech inventory changed after planning")
+                _link(speech_review[2], speech_path, root)
+                staged_speech_sha256 = sha256_file(speech_path)
+                speech_review_relative_path = speech_path.relative_to(run_dir).as_posix()
+                speech_coverage_status = "complete"
+            coverage_path, _coverage = write_caption_coverage_report(
+                root=root,
+                run_dir=run_dir,
+                output=output,
+                render_input=render_input,
+                source_asset_id=source_asset_id,
+                staged_audio_sha256=authorized.staged_sha256[render_input.speech_name],
+                render_input_sha256=render_input_sha256,
+                speech_review_relative_path=speech_review_relative_path,
+                speech_review_sha256=staged_speech_sha256,
+                speech_coverage_status=speech_coverage_status,
+                job_id=job.job_id,
+                actor=actor,
+                parent_artifact_id=hero.artifact_id,
+                log_path=run_dir / "logs" / f"{candidate_id}.caption-coverage.log",
+            )
+            coverage_relative_path = coverage_path.relative_to(run_dir).as_posix()
+            coverage_sha256 = sha256_file(coverage_path)
+            viewer_path, _viewer = write_viewer_evidence_bundle(
+                root=root,
+                run_dir=run_dir,
+                output=output,
+                render_input=render_input,
+                source_asset_id=source_asset_id,
+                project_id=hero.project_id,
+                artifact_id=artifact_id,
+                manifest_sha256=batch_sha256,
+                encoded_media_sha256=sha256_file(output),
+                render_input_sha256=render_input_sha256,
+                parent_artifact_ids=[hero.artifact_id],
+                job_id=job.job_id,
+                actor=actor,
+                log_path=run_dir / "logs" / f"{candidate_id}.viewer-evidence.log",
+            )
+            viewer_relative_path = viewer_path.relative_to(run_dir).as_posix()
+            viewer_sha256 = sha256_file(viewer_path)
         outputs.append(
             AdvancedHeroDraftOutput(
                 candidate_id=candidate_id,
@@ -1172,14 +1683,28 @@ def _render_run(
                 ),
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
+                preset_id=plan.preset_id,
+                motion_recipe_ids=plan.motion_recipe_ids,
+                motion_catalog_sha256=plan.motion_catalog_sha256,
+                knowledge_context_id=plan.knowledge_context_id,
+                knowledge_release_id=plan.knowledge_release_id,
+                knowledge_context_sha256=plan.knowledge_context_sha256,
+                knowledge_decision_trace_id=plan.knowledge_decision_trace_id,
+                knowledge_decision_trace_sha256=plan.knowledge_decision_trace_sha256,
                 editorial_arc_id=plan.editorial_arc_id,
                 editorial_arc_sha256=plan.editorial_arc_sha256,
+                editorial_arc_review_sha256=plan.editorial_arc_review_sha256,
+                quran_review_id=plan.quran_review_id,
+                quran_review_sha256=plan.quran_review_sha256,
+                speech_review_sha256=plan.speech_review_sha256,
+                arabic_corrections_sha256=plan.arabic_corrections_sha256,
+                caption_alignment_sha256=plan.caption_alignment_sha256,
                 style_id=(
                     style_for_id(plan.style_id).style_id
                     if plan.style_id != "legacy-v1"
                     else style_for_renderer_version(profile.renderer_recipe_version).style_id
                 ),
-                render_input_sha256=sha256_file(output.parent / "render-input.json"),
+                render_input_sha256=render_input_sha256,
                 preview_relative_path=f"candidates/{candidate_id}/advanced.mp4",
                 preview_sha256=sha256_file(output),
                 preview_size_bytes=output.stat().st_size,
@@ -1190,10 +1715,18 @@ def _render_run(
                 detected_audio_sample_rate=sample_rate,
                 detected_duration_us=probed.duration_us,
                 duration_error_us=probed.duration_error_us,
+                caption_coverage_relative_path=coverage_relative_path,
+                caption_coverage_sha256=coverage_sha256,
+                viewer_evidence_relative_path=viewer_relative_path,
+                viewer_evidence_sha256=viewer_sha256,
+                overlay_exclusion_relative_path=overlay_exclusions.get(candidate_id, ("", ""))[0],
+                overlay_exclusion_sha256=overlay_exclusions.get(candidate_id, ("", ""))[1],
             )
         )
+    _cleanup_dir(staging, root)
     identity = _input_digest(hero, profile, outputs)
     document = AdvancedHeroDraftSetDocument(
+        workflow_roles=WorkflowRolePolicy(),
         advanced_set_id=advanced_set_id,
         project_id=hero.project_id,
         source_asset_id=source_asset_id,
@@ -1215,6 +1748,12 @@ def _render_run(
         advanced_input_sha256=identity,
         renderer_dependency_sha256=renderer_dependency,
         direction_sha256s=sorted({item.direction_sha256 for item in outputs if item.direction_sha256}),
+        knowledge_context_sha256s=sorted(
+            {item.knowledge_context_sha256 for item in outputs if item.knowledge_context_sha256}
+        ),
+        knowledge_decision_trace_sha256s=sorted(
+            {item.knowledge_decision_trace_sha256 for item in outputs if item.knowledge_decision_trace_sha256}
+        ),
         style_ids=sorted({item.style_id for item in outputs}),
         drafts=outputs,
         provenance=ArtifactProvenance(
@@ -1354,6 +1893,8 @@ def _input_digest(
                 "candidate_id": item.candidate_id,
                 "advanced_plan_sha256": item.advanced_plan_sha256,
                 "direction_sha256": item.direction_sha256,
+                "knowledge_context_sha256": item.knowledge_context_sha256,
+                "knowledge_decision_trace_sha256": item.knowledge_decision_trace_sha256,
                 "style_id": item.style_id,
                 "hero_review_status": item.hero_review_status,
             }
@@ -1378,6 +1919,7 @@ def _commit(
     record: AdvancedHeroCacheRecord,
     root: Path,
     *,
+    artifact_id: str,
     review_only: bool = False,
 ) -> None:
     kind = _advanced_kind(review_only=review_only)
@@ -1391,16 +1933,29 @@ def _commit(
         }
     )
     with database.transaction() as connection:
-        insert_artifact(
-            connection,
-            artifact_id=str(uuid.uuid4()),
-            project_id=document.project_id,
-            job_id=job.job_id,
-            source_asset_id=document.source_asset_id,
-            kind=kind,
-            uri=path_to_file_uri(manifest),
-            provenance=provenance,
-        )
+        existing = find_artifact(connection, document.project_id, document.source_asset_id, kind)
+        if existing is not None and existing.artifact_id == artifact_id:
+            update_artifact(
+                connection,
+                artifact_id=artifact_id,
+                project_id=document.project_id,
+                job_id=job.job_id,
+                source_asset_id=document.source_asset_id,
+                kind=kind,
+                uri=path_to_file_uri(manifest),
+                provenance=provenance,
+            )
+        else:
+            insert_artifact(
+                connection,
+                artifact_id=artifact_id,
+                project_id=document.project_id,
+                job_id=job.job_id,
+                source_asset_id=document.source_asset_id,
+                kind=kind,
+                uri=path_to_file_uri(manifest),
+                provenance=provenance,
+            )
         update_job(connection, succeeded)
     try:
         sidecar = _advanced_sidecar(workspace, review_only=review_only)
@@ -1416,6 +1971,7 @@ def _cache_record(
     document: AdvancedHeroDraftSetDocument, job_id: str, digest: str, size: int
 ) -> AdvancedHeroCacheRecord:
     return AdvancedHeroCacheRecord(
+        workflow_roles=document.workflow_roles,
         project_id=document.project_id,
         source_asset_id=document.source_asset_id,
         advanced_set_id=document.advanced_set_id,
@@ -1437,6 +1993,8 @@ def _cache_record(
         advanced_input_sha256=document.advanced_input_sha256,
         renderer_dependency_sha256=document.renderer_dependency_sha256,
         direction_sha256s=document.direction_sha256s,
+        knowledge_context_sha256s=document.knowledge_context_sha256s,
+        knowledge_decision_trace_sha256s=document.knowledge_decision_trace_sha256s,
         manifest_sha256=digest,
         manifest_size_bytes=size,
         rendered_count=len(document.drafts),
@@ -1472,6 +2030,8 @@ def _cache_ready(
     root: Path,
     *,
     review_only: bool = False,
+    require_caption_evidence: bool = False,
+    require_viewer_evidence: bool = False,
 ) -> bool:
     sidecar = _advanced_sidecar(workspace, review_only=review_only)
     if not sidecar.is_file() or sidecar.is_symlink():
@@ -1488,10 +2048,35 @@ def _cache_ready(
         return False
     if record.visual_analysis_sha256 != hero.document.visual_analysis_sha256:
         return False
+    expected_contexts = sorted(
+        {plan.knowledge_context_sha256 for _candidate_id, plan in chosen if plan.knowledge_context_sha256}
+    )
+    expected_traces = sorted(
+        {
+            plan.knowledge_decision_trace_sha256
+            for _candidate_id, plan in chosen
+            if plan.knowledge_decision_trace_sha256
+        }
+    )
+    if record.knowledge_context_sha256s != expected_contexts:
+        return False
+    if record.knowledge_decision_trace_sha256s != expected_traces:
+        return False
     current_renderer_dependency = renderer_dependency_sha256()
     if record.renderer_dependency_sha256 != current_renderer_dependency:
         return False
     from clipforge.hero.advanced_assets import confine_work_path
+
+    with database.connect() as connection:
+        current_artifact = find_artifact(
+            connection,
+            record.project_id,
+            record.source_asset_id,
+            _advanced_kind(review_only=review_only),
+        )
+    if current_artifact is None:
+        return False
+    current_artifact_id = current_artifact.artifact_id
 
     manifest = (
         workspace.advanced_review_run_dir(record.advanced_set_id)
@@ -1535,6 +2120,168 @@ def _cache_ready(
             return False
         if sha256_file(plan_path) != matched.advanced_plan_sha256:
             return False
+        if require_caption_evidence and plan.style_id != "legacy-v1":
+            if not matched.caption_coverage_relative_path or not matched.caption_coverage_sha256:
+                return False
+            try:
+                evidence_path = confine_work_path(
+                    root,
+                    (manifest.parent / matched.caption_coverage_relative_path).relative_to(root).as_posix(),
+                    label="cached caption evidence",
+                )
+                render_path = confine_work_path(
+                    root,
+                    (evidence_path.parent / "render-input.json").relative_to(root).as_posix(),
+                    label="cached render input",
+                )
+                if (
+                    not evidence_path.is_file()
+                    or sha256_file(evidence_path) != matched.caption_coverage_sha256
+                    or not render_path.is_file()
+                    or sha256_file(render_path) != matched.render_input_sha256
+                ):
+                    return False
+                report = CaptionAudioCoverageReport.model_validate_json(
+                    evidence_path.read_text(encoding="utf-8")
+                )
+                render_input = AdvancedHeroRenderInput.model_validate_json(
+                    render_path.read_text(encoding="utf-8")
+                )
+                if (
+                    render_input.captions != plan.captions
+                    or render_input.alignment_sha256 != plan.alignment_sha256
+                    or render_input.time_map_sha256 != plan.time_map_sha256
+                    or render_input.knowledge_context_sha256 != plan.knowledge_context_sha256
+                    or render_input.knowledge_decision_trace_sha256 != plan.knowledge_decision_trace_sha256
+                    or render_input.speech_review_sha256 != plan.speech_review_sha256
+                    or render_input.arabic_corrections_sha256 != plan.arabic_corrections_sha256
+                    or render_input.caption_alignment_sha256 != plan.caption_alignment_sha256
+                ):
+                    return False
+                verify_caption_coverage_report(
+                    root=root,
+                    run_dir=manifest.parent,
+                    output=video,
+                    report=report,
+                    render_input=render_input,
+                    render_input_sha256=matched.render_input_sha256,
+                    source_asset_id=document.source_asset_id,
+                )
+            except (MediaError, OSError, UnicodeError, ValidationError, ValueError):
+                return False
+        if require_viewer_evidence and plan.style_id != "legacy-v1":
+            if not matched.viewer_evidence_relative_path or not matched.viewer_evidence_sha256:
+                return False
+            try:
+                evidence_path = confine_work_path(
+                    root,
+                    (manifest.parent / matched.viewer_evidence_relative_path).relative_to(root).as_posix(),
+                    label="cached viewer evidence",
+                )
+                if (
+                    not evidence_path.is_file()
+                    or evidence_path.is_symlink()
+                    or sha256_file(evidence_path) != matched.viewer_evidence_sha256
+                ):
+                    return False
+                bundle = ViewerEvidenceBundle.model_validate_json(evidence_path.read_text(encoding="utf-8"))
+                if (
+                    bundle.source_asset_id != document.source_asset_id
+                    or bundle.candidate_id != plan.candidate_id
+                    or bundle.artifact_id != current_artifact_id
+                    or bundle.encoded_media_sha256 != matched.preview_sha256
+                    or bundle.render_input_sha256 != matched.render_input_sha256
+                ):
+                    return False
+                for evidence_file in [
+                    *bundle.decoded_frames,
+                    *bundle.contact_sheets,
+                    *bundle.platform_crop_previews,
+                ]:
+                    path = confine_work_path(
+                        root,
+                        (manifest.parent / evidence_file.relative_path).relative_to(root).as_posix(),
+                        label="cached viewer evidence file",
+                    )
+                    if not path.is_file() or path.is_symlink() or sha256_file(path) != evidence_file.sha256:
+                        return False
+            except (MediaError, OSError, UnicodeError, ValidationError, ValueError):
+                return False
+        if plan.campaign_overlay is not None and plan.style_id != "legacy-v1":
+            if not matched.overlay_exclusion_relative_path or not matched.overlay_exclusion_sha256:
+                return False
+            try:
+                exclusion_path = confine_work_path(
+                    root,
+                    (manifest.parent / matched.overlay_exclusion_relative_path).relative_to(root).as_posix(),
+                    label="cached overlay exclusion evidence",
+                )
+                render_input_path = confine_work_path(
+                    root,
+                    (manifest.parent / "candidates" / plan.candidate_id / "render-input.json")
+                    .relative_to(root)
+                    .as_posix(),
+                    label="cached overlay render input",
+                )
+                if (
+                    not exclusion_path.is_file()
+                    or exclusion_path.is_symlink()
+                    or sha256_file(exclusion_path) != matched.overlay_exclusion_sha256
+                    or not render_input_path.is_file()
+                ):
+                    return False
+                evidence = OverlayExclusionEvidence.model_validate_json(
+                    exclusion_path.read_text(encoding="utf-8")
+                )
+                render_input = AdvancedHeroRenderInput.model_validate_json(
+                    render_input_path.read_text(encoding="utf-8")
+                )
+                validate_overlay_sample_files(root, evidence)
+                validate_overlay_render_geometry(evidence, render_input)
+                if (
+                    render_input.overlay_exclusion_sha256 != matched.overlay_exclusion_sha256
+                    or evidence.source_asset_id != document.source_asset_id
+                    or evidence.candidate_id != plan.candidate_id
+                    or evidence.source_sha256 != plan.source_sha256
+                    or evidence.time_map_sha256 != plan.time_map_sha256
+                    or evidence.overlay_spec_sha256 != overlay_spec_sha256(plan.campaign_overlay)
+                    or evidence.transform_sha256
+                    != (render_input.trajectory_sha256 or plan.reframing_config_sha256)
+                ):
+                    return False
+            except (MediaError, OSError, UnicodeError, ValidationError, ValueError):
+                return False
+        if plan.editorial_arc_review_sha256 and plan.style_id != "legacy-v1":
+            try:
+                arc_review_path = confine_work_path(
+                    root,
+                    (manifest.parent / "candidates" / plan.candidate_id / "editorial-arc-review.json")
+                    .relative_to(root)
+                    .as_posix(),
+                    label="cached editorial arc review",
+                )
+                if (
+                    not arc_review_path.is_file()
+                    or arc_review_path.is_symlink()
+                    or sha256_file(arc_review_path) != plan.editorial_arc_review_sha256
+                ):
+                    return False
+                arc_review = EditorialArcReview.model_validate_json(arc_review_path.read_text(encoding="utf-8"))
+                arc, _arc_digest = load_editorial_arc(
+                    _advanced_arc_path(workspace, candidate_id, review_only=review_only)
+                )
+                validate_arc_review(arc_review, arc)
+                verify_arc_review_frames(root, arc_review)
+                if (
+                    arc_review.decision != "accepted"
+                    or arc_review.source_asset_id != document.source_asset_id
+                    or arc_review.candidate_id != plan.candidate_id
+                    or arc_review.source_sha256 != plan.source_sha256
+                    or arc_review.arc_sha256 != plan.editorial_arc_sha256
+                ):
+                    return False
+            except (MediaError, OSError, UnicodeError, ValidationError, ValueError):
+                return False
         if plan.reframing_strategy == "face_follow" and not _reframe_sidecar_current(workspace, plan):
             return False
         for binding in plan.assets:
@@ -1662,6 +2409,148 @@ def _reframe_sidecar_current(workspace: SourceWorkspace, plan: AdvancedHeroPlanD
     return document.trajectory_sha256 == document.trajectory.digest()
 
 
+def _reviewed_caption_alignment(plan: AdvancedHeroPlanDocument, context: _Context) -> ForcedAlignmentDocument:
+    """Rebuild the reviewed display derivation without rewriting forced evidence."""
+    root = context.workspace.root
+    alignment = context.alignment
+    corrections = load_arabic_corrections(
+        root,
+        source_asset_id=plan.source_asset_id,
+        candidate_id=plan.candidate_id,
+        source_sha256=plan.source_sha256,
+        raw_asr_sha256=alignment.asr_audio_sha256,
+        transcript_sha256=alignment.transcript_sha256,
+    )
+    if (corrections[1] if corrections else "") != plan.arabic_corrections_sha256:
+        raise MediaError("advanced plan is stale: Arabic correction evidence changed")
+    if corrections is not None:
+        alignment = apply_arabic_corrections(alignment, corrections[0], source_sha256=plan.source_sha256)
+    if plan.editorial_arc_id:
+        arc, _digest = load_editorial_arc(
+            _advanced_arc_path(
+                context.workspace, plan.candidate_id, review_only=plan.hero_review_status == "pending"
+            )
+        )
+        alignment = remap_alignment(alignment, arc, source_sha256=plan.source_sha256)
+    if plan.quran_review_id:
+        review, review_sha, _path = load_tarteel_quran_review(
+            root,
+            source_asset_id=plan.source_asset_id,
+            candidate_id=plan.candidate_id,
+            source_sha256=plan.source_sha256,
+            transcript_sha256=alignment.transcript_sha256,
+        )
+        if review_sha != plan.quran_review_sha256:
+            raise MediaError("advanced plan is stale: Quran display-text evidence changed")
+        render_review = quran_review_for_alignment(
+            review, source_alignment=context.alignment, target_alignment=alignment
+        )
+        alignment = canonicalize_quran_alignment(alignment, render_review)
+    if hashlib.sha256(dump_json(alignment).encode("utf-8")).hexdigest() != plan.caption_alignment_sha256:
+        raise MediaError("advanced plan is stale: reviewed caption alignment changed")
+    speech = load_tarteel_speech_review(
+        root,
+        source_asset_id=plan.source_asset_id,
+        candidate_id=plan.candidate_id,
+        source_sha256=plan.source_sha256,
+        raw_asr_sha256=alignment.asr_audio_sha256,
+        transcript_sha256=alignment.transcript_sha256,
+    )
+    if speech is None or speech[1] != plan.speech_review_sha256 or plan.time_map is None:
+        raise MediaError("advanced plan is stale: reviewed speech inventory is missing or changed")
+    if retained_recitation(speech[0], plan.time_map) and not plan.quran_review_sha256:
+        raise MediaError("retained Quran recitation requires canonical review evidence")
+    validate_speech_captions(speech[0], alignment=alignment, time_map=plan.time_map, captions=plan.captions)
+    if _captions(alignment, plan.candidate_id, style_id=plan.style_id) != plan.captions:
+        raise MediaError("advanced plan captions differ from reviewed display evidence")
+    return alignment
+
+
+def _pilot_path(workspace: SourceWorkspace, candidate_id: str, *, review_only: bool) -> Path:
+    return (
+        workspace.advanced_review_pilot_file(candidate_id)
+        if review_only
+        else workspace.advanced_pilot_file(candidate_id)
+    )
+
+
+def _pilot_dependency_sha(plan: AdvancedHeroPlanDocument) -> str:
+    payload = {
+        "style_fingerprint": plan.style_fingerprint,
+        "time_map_sha256": plan.time_map_sha256,
+        "camera_motion": [item.model_dump(mode="json") for item in plan.camera_motion],
+        "transitions": [item.model_dump(mode="json") for item in plan.transitions],
+        "motion_graphics": [item.model_dump(mode="json") for item in plan.motion_graphics],
+        "captions": [item.model_dump(mode="json") for item in plan.captions],
+        "sfx": [item.model_dump(mode="json") for item in plan.sfx],
+    }
+    return advanced_fingerprint(payload)
+
+
+def _write_pilot_receipt(
+    *,
+    plan: AdvancedHeroPlanDocument,
+    workspace: SourceWorkspace,
+    root: Path,
+    review_only: bool,
+    direction_sha256: str,
+) -> Path:
+    """Record the deterministic peak-scene preflight before browser encoding."""
+    destination = _pilot_path(workspace, plan.candidate_id, review_only=review_only)
+    prepare = workspace.prepare_advanced_review_file if review_only else workspace.prepare_advanced_file
+    prepare(destination)
+    plan_sha256 = advanced_fingerprint(plan.model_dump(mode="json"))
+    event_ids = [
+        *(item.event_id for item in plan.camera_motion),
+        *(item.event_id for item in plan.transitions),
+        *(item.event_id for item in plan.motion_graphics),
+        *(item.event_id for item in plan.captions),
+        *(item.event_id for item in plan.sfx),
+    ]
+    intervals = [
+        *(item.interval for item in plan.camera_motion),
+        *(item.interval for item in plan.transitions),
+        *(item.interval for item in plan.motion_graphics),
+        *(item.interval for item in plan.captions),
+        *(item.interval for item in plan.sfx),
+    ]
+    receipt = EditorialPilotReceipt(
+        pilot_id=stable_id("pilot", plan.plan_id),
+        project_id=plan.project_id,
+        source_asset_id=plan.source_asset_id,
+        candidate_id=plan.candidate_id,
+        plan_sha256=plan_sha256,
+        direction_sha256=direction_sha256 or "0" * 64,
+        dependency_sha256=_pilot_dependency_sha(plan),
+        status="passed",
+        checked_event_ids=sorted(set(event_ids)),
+        inspected_intervals=intervals,
+        findings=[],
+        created_at=datetime.now(UTC),
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="system_enforcer",
+            tool="clipforge advanced pilot",
+            tool_version=__version__,
+            source_asset_ids=[plan.source_asset_id],
+            inputs_sha256=plan_sha256,
+        ),
+    )
+    if destination.exists():
+        try:
+            existing = EditorialPilotReceipt.model_validate_json(destination.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError("existing Advanced Hero pilot receipt is invalid") from exc
+        if (
+            existing.plan_sha256 != receipt.plan_sha256
+            or existing.dependency_sha256 != receipt.dependency_sha256
+        ):
+            raise MediaError("Advanced Hero pilot receipt is stale; create a new plan")
+    else:
+        publish_json(destination, receipt, root, workspace.partial_for(destination))
+    return destination
+
+
 def _require_plan_binding(
     database: Database,
     plan: AdvancedHeroPlanDocument,
@@ -1673,6 +2562,7 @@ def _require_plan_binding(
     if plan.reframing_strategy not in {"contain", "center_crop", "face_follow", "manual_window"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")
+    _require_knowledge_binding(plan, context)
     if plan.editorial_arc_id and plan.reframing_strategy == "face_follow":
         raise MediaError("editorial arc requires a reviewed crop trajectory; face_follow is stale")
     if plan.reframing_strategy == "face_follow":
@@ -1709,6 +2599,7 @@ def _require_plan_binding(
         raise MediaError("advanced plan is stale: TimeMap digest does not match stored map")
     arc_alignment: ForcedAlignmentDocument | None = None
     expected_transition_style = ""
+    direction_transition_specs: list[DirectionTransitionSpec] = []
     review_only = plan.hero_review_status == "pending"
     if plan.editorial_arc_id:
         arc_path = _advanced_arc_path(context.workspace, plan.candidate_id, review_only=review_only)
@@ -1753,7 +2644,11 @@ def _require_plan_binding(
             )
             if evidence.status != "verified_live":
                 raise MediaError(evidence.blocker or evidence.status)
-    if plan.quran_review_id or plan.campaign_overlay is not None:
+    if plan.speech_review_sha256:
+        _reviewed_caption_alignment(plan, context)
+    elif plan.campaign_overlay is not None and plan.style_id != "legacy-v1":
+        raise MediaError("clean Tarteel plan requires reviewed speech evidence; replan the candidate")
+    elif plan.quran_review_id or plan.campaign_overlay is not None:
         review, review_sha, _ = load_tarteel_quran_review(
             context.workspace.root,
             source_asset_id=plan.source_asset_id,
@@ -1788,24 +2683,109 @@ def _require_plan_binding(
             raise MediaError("advanced plan is stale: direction changed after planning")
         if direction.style_id != plan.style_id or direction.style_fingerprint != plan.style_fingerprint:
             raise MediaError("advanced plan is stale: selected motion style changed")
+        if direction.motion_catalog_sha256 is not None or any(
+            option.motion_recipe_ids for option in direction.options
+        ):
+            from clipforge.editorial.motion_catalog import MotionCatalog, MotionCatalogError
+
+            try:
+                catalog_sha256 = MotionCatalog.load().fingerprint()
+            except MotionCatalogError as exc:
+                raise MediaError(str(exc)) from exc
+            if direction.motion_catalog_sha256 != catalog_sha256:
+                raise MediaError("advanced plan is stale: motion catalog changed")
+        effective_direction = direction
+        if plan.editorial_arc_id:
+            if arc_alignment is None or plan.time_map is None:
+                raise MediaError("advanced plan is missing the effective editorial alignment")
+            original_alignment = _read_model(
+                context.workspace.hero_alignment_file(plan.candidate_id),
+                ForcedAlignmentDocument,
+                "alignment",
+            )
+            effective_direction = remap_direction_intervals(
+                direction,
+                original_alignment,
+                arc_alignment,
+                context.hero_plan.edit_plan.time_map,
+                plan.time_map,
+            )
         selected_direction = next(
-            item for item in direction.options if item.option_id == direction.selected_option_id
+            item
+            for item in effective_direction.options
+            if item.option_id == effective_direction.selected_option_id
         )
+        if not (
+            selected_direction.motion_graphics
+            or selected_direction.asset_placements
+            or selected_direction.camera_motion
+            or selected_direction.transitions
+        ):
+            raise MediaError(
+                "clean Advanced Hero direction has no purposeful motion layer; replan the direction"
+            )
+        if plan.motion_recipe_ids != selected_direction.motion_recipe_ids:
+            raise MediaError("advanced plan is stale: motion recipe selection differs from direction")
+        if plan.preset_id != (effective_direction.preset_id or ""):
+            raise MediaError("advanced plan is stale: editorial preset differs from direction")
+        if plan.motion_catalog_sha256 != (direction.motion_catalog_sha256 or ""):
+            raise MediaError("advanced plan is stale: motion catalog binding differs from direction")
+        direction_transition_specs = list(selected_direction.transitions)
+        expected_cameras = [
+            {
+                "event_id": stable_id("direction-camera", effective_direction.direction_id, item.motion_id),
+                "interval": item.interval.model_dump(mode="json"),
+                "intent": item.intent,
+                "path": item.path,
+                "target_x_permille": item.target_x_permille,
+                "target_y_permille": item.target_y_permille,
+                "scale_start_permille": item.scale_start_permille,
+                "scale_end_permille": item.scale_end_permille,
+                "travel_px": item.travel_px,
+                "intensity": item.intensity,
+                "easing": item.easing,
+                "source_evidence_ids": item.source_evidence_ids,
+                "schema_version": "1.0.0",
+            }
+            for item in selected_direction.camera_motion
+        ]
+        actual_cameras = [item.model_dump(mode="json") for item in plan.camera_motion]
+        if actual_cameras != expected_cameras:
+            raise MediaError("advanced plan is stale: camera motion differs from the direction plan")
+        if selected_direction.transitions:
+            expected_transitions = [
+                {
+                    "event_id": stable_id("transition", plan.candidate_id, item.transition_id),
+                    "interval": item.interval.model_dump(mode="json"),
+                    "purpose": "visual_reveal",
+                    "style": item.style,
+                    "source_evidence_ids": item.source_evidence_ids,
+                    "direction_purpose": item.purpose,
+                    "sfx_placement_id": item.sfx_placement_id,
+                    "schema_version": "1.0.0",
+                }
+                for item in selected_direction.transitions
+            ]
+            actual_transitions = [item.model_dump(mode="json") for item in plan.transitions]
+            if actual_transitions != expected_transitions:
+                raise MediaError("advanced plan is stale: transitions differ from the direction plan")
         if plan.reframing_strategy == "center_crop" and selected_direction.source_native_text:
             raise MediaError(
                 "center_crop would crop reviewed source-native text; use auto, contain, or face_follow"
             )
         from clipforge.hero.direction_service import validate_source_evidence
 
-        if not plan.editorial_arc_id:
-            validate_source_evidence(
-                direction,
-                context.alignment.words,
-                context.hero_plan.edit_plan.time_map,
-                {scene.scene_id for scene in context.visual.scenes},
-            )
-        if not plan.editorial_arc_id:
-            expected_transition_style = _effective_transition_style("", True)
+        validate_source_evidence(
+            effective_direction,
+            arc_alignment.words if arc_alignment is not None else context.alignment.words,
+            (
+                plan.time_map
+                if arc_alignment is not None and plan.time_map is not None
+                else context.hero_plan.edit_plan.time_map
+            ),
+            {scene.scene_id for scene in context.visual.scenes},
+        )
+        expected_transition_style = _effective_transition_style("", True)
     elif not plan.editorial_arc_id:
         expected_transition_style = _effective_transition_style("", False)
     checks = (
@@ -1850,14 +2830,90 @@ def _require_plan_binding(
         if end != expected_duration:
             raise MediaError("advanced plan is stale: TimeMap duration changed after planning")
     if plan.time_map is not None:
-        expected_transitions = _transitions(
+        expected_transition_events = _transitions(
             plan.candidate_id,
             plan.time_map,
             plan.time_map.to_time_map().total_output_duration(),
             expected_transition_style,
+            direction_transition_specs,
         )
-        if plan.transitions != expected_transitions:
+        if plan.transitions != expected_transition_events:
             raise MediaError("advanced plan is stale: cut transition recipe changed")
+    if plan.style_id != "legacy-v1":
+        pilot_path = _pilot_path(
+            context.workspace,
+            plan.candidate_id,
+            review_only=plan.hero_review_status == "pending",
+        )
+        if pilot_path.is_symlink() or not pilot_path.is_file():
+            raise MediaError("clean Advanced Hero render requires a current pilot receipt")
+        try:
+            pilot = EditorialPilotReceipt.model_validate_json(pilot_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError("Advanced Hero pilot receipt is invalid") from exc
+        if (
+            pilot.status != "passed"
+            or pilot.plan_sha256 != advanced_fingerprint(plan.model_dump(mode="json"))
+            or pilot.direction_sha256 != (plan.direction_sha256 or "0" * 64)
+            or pilot.dependency_sha256 != _pilot_dependency_sha(plan)
+        ):
+            raise MediaError("Advanced Hero pilot receipt is stale")
+
+
+def _require_knowledge_binding(plan: AdvancedHeroPlanDocument, context: _Context) -> None:
+    """Re-read the immutable knowledge context and decision trace at render time."""
+    fields = (
+        plan.knowledge_context_id,
+        plan.knowledge_release_id,
+        plan.knowledge_context_sha256,
+        plan.knowledge_decision_trace_id,
+        plan.knowledge_decision_trace_sha256,
+    )
+    if not any(fields):
+        return
+    if not plan.knowledge_context_id or not plan.knowledge_release_id or not plan.knowledge_context_sha256:
+        raise MediaError("advanced plan has a partial knowledge context binding")
+    from clipforge.editorial.knowledge import KnowledgeError, load_context
+    from clipforge.schemas.editorial_knowledge import EditorialDecisionTrace
+
+    context_path = confine_work_path(
+        context.workspace.root,
+        f"editorial/contexts/{plan.knowledge_context_id}.json",
+        label="knowledge context",
+    )
+    try:
+        bundle, _ = load_context(context_path)
+    except KnowledgeError as exc:
+        raise MediaError(f"advanced plan knowledge context is stale: {exc}") from exc
+    if (
+        bundle.context_id != plan.knowledge_context_id
+        or bundle.knowledge_release_id != plan.knowledge_release_id
+        or bundle.context_sha256 != plan.knowledge_context_sha256
+        or bundle.project_id != context.project_id
+        or bundle.source_asset_id != plan.source_asset_id
+        or bundle.candidate_id != plan.candidate_id
+        or bundle.source_sha256 != context.source_sha256
+    ):
+        raise MediaError("advanced plan knowledge context is bound to different source evidence")
+    if not plan.knowledge_decision_trace_id:
+        if plan.knowledge_decision_trace_sha256:
+            raise MediaError("advanced plan has a partial knowledge decision trace binding")
+        return
+    if not plan.knowledge_decision_trace_sha256:
+        raise MediaError("advanced plan has a partial knowledge decision trace binding")
+    trace_path = confine_work_path(
+        context.workspace.root,
+        f"editorial/traces/{plan.knowledge_decision_trace_id}.json",
+        label="knowledge decision trace",
+    )
+    try:
+        trace = EditorialDecisionTrace.model_validate_json(trace_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+        raise MediaError(f"advanced plan knowledge decision trace is invalid: {exc}") from exc
+    if sha256_file(trace_path) != plan.knowledge_decision_trace_sha256:
+        raise MediaError("advanced plan knowledge decision trace is stale")
+    if trace.context_id != bundle.context_id or trace.context_sha256 != bundle.context_sha256:
+        raise MediaError("advanced plan knowledge decision trace does not match its context")
 
 
 def _require_face_follow(database: Database, plan: AdvancedHeroPlanDocument, context: _Context) -> None:
@@ -2091,6 +3147,7 @@ def _abandon(
     run_dir: Path | None,
     root: Path,
 ) -> None:
+    checkpoint_error: str | None = None
     if run_dir is not None:
         progress_path = _render_progress_path(run_dir)
         if progress_path.is_file() and not progress_path.is_symlink():
@@ -2099,11 +3156,10 @@ def _abandon(
                 failed_progress = progress.model_copy(
                     update={"state": "failed", "updated_at": datetime.now(UTC)}
                 )
-                partial = progress_path.with_suffix(".json.partial")
-                partial.write_text(failed_progress.model_dump_json() + "\n", encoding="utf-8")
-                partial.replace(progress_path)
-            except (OSError, ValidationError, ValueError):
-                pass
+                partial = progress_path.with_name(f"{progress_path.name}.failed.partial")
+                publish_json(progress_path, failed_progress, root, partial)
+            except (OSError, MediaError, ValidationError, ValueError) as exc:
+                checkpoint_error = str(exc)
         staging = run_dir / "staging"
         if staging.exists():
             _cleanup_dir(staging, root)
@@ -2112,7 +3168,13 @@ def _abandon(
         if partial.exists() and not manifest.exists():
             partial.unlink()
     updated = job.model_copy(
-        update={"status": status, "updated_at": datetime.now(UTC), "error_message": message[:2000]}
+        update={
+            "status": status,
+            "updated_at": datetime.now(UTC),
+            "error_message": (
+                f"{message}; checkpoint persistence failed: {checkpoint_error}" if checkpoint_error else message
+            )[:2000],
+        }
     )
     with database.transaction() as connection:
         update_job(connection, updated)
@@ -2529,6 +3591,33 @@ def _review_draft(
         }
         for item in plan.emphasis
     ]
+    camera_motion = [
+        {
+            "event_id": item.event_id,
+            "intent": item.intent,
+            "path": item.path,
+            "output_start_us": item.interval.output_start_us,
+            "output_end_us": item.interval.output_end_us,
+            "scale_start_permille": item.scale_start_permille,
+            "scale_end_permille": item.scale_end_permille,
+            "travel_px": item.travel_px,
+            "intensity": item.intensity,
+            "source_evidence_ids": item.source_evidence_ids,
+        }
+        for item in plan.camera_motion
+    ]
+    transitions = [
+        {
+            "event_id": item.event_id,
+            "style": item.style,
+            "direction_purpose": item.direction_purpose,
+            "output_start_us": item.interval.output_start_us,
+            "output_end_us": item.interval.output_end_us,
+            "source_evidence_ids": item.source_evidence_ids,
+            "sfx_placement_id": item.sfx_placement_id,
+        }
+        for item in plan.transitions
+    ]
     effective = (
         None
         if artifact_id is None
@@ -2558,6 +3647,9 @@ def _review_draft(
         "typography": typography,
         "diagrams": diagrams,
         "motion_graphics": motion_graphics,
+        "camera_motion": camera_motion,
+        "motion_recipe_ids": plan.motion_recipe_ids,
+        "transitions": transitions,
         "emphasis": emphasis,
         "current_decision": None if effective is None else effective.decision,
         "history": [
@@ -2565,6 +3657,7 @@ def _review_draft(
                 "review_id": item.review_id,
                 "decision": item.decision,
                 "reviewer_id": item.reviewer_id,
+                "reviewer_role": item.reviewer_role,
                 "notes": item.notes,
                 "artifact_id": item.artifact_id,
                 "current_artifact": item.artifact_id == artifact_id,
@@ -2587,6 +3680,7 @@ def record_advanced_decision(
     decision: str,
     reviewer_id: str,
     notes: str,
+    reviewer_role: str = WorkflowRole.HUMAN_REVIEWER.value,
 ) -> str:
     """Append one review of the current advanced artifact. It does not render."""
     from clipforge.review.service import NOTES_MAX
@@ -2594,6 +3688,8 @@ def record_advanced_decision(
     from clipforge.storage import insert_review
 
     reviewer = reviewer_id.strip()
+    if reviewer_role not in {WorkflowRole.CODEX_OPERATOR.value, WorkflowRole.HUMAN_REVIEWER.value}:
+        raise MediaError("reviewer_role must be codex_operator or human_reviewer")
     if decision not in {"approved", "rejected", "changes_requested"}:
         raise MediaError(f"decision must be approved, rejected, or changes_requested, got {decision!r}")
     if not reviewer:
@@ -2612,6 +3708,7 @@ def record_advanced_decision(
         subject_kind="hero",
         decision=decision,  # type: ignore[arg-type]
         reviewer_id=reviewer,
+        reviewer_role=cast(Literal["codex_operator", "human_reviewer"], reviewer_role),
         created_at=datetime.now(UTC),
         notes=notes,
         automated=False,

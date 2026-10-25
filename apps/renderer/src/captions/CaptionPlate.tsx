@@ -14,6 +14,7 @@ type CaptionPlateProps = {
   emphasisText?: string;
   activeWordId?: string;
   centeredLarge?: boolean;
+  maxLines?: number;
   x?: number;
   y?: number;
   fontSize?: number;
@@ -53,7 +54,7 @@ export type CaptionStyle = Readonly<{
   max_scale_permille?: number;
 }>;
 
-export function CaptionPlate({ text, language, variant = "body", emphasisText, activeWordId, centeredLarge = false, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
+export function CaptionPlate({ text, language, variant = "body", emphasisText, activeWordId, centeredLarge = false, maxLines, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
   const modern = layoutVersion === "caption-layout-v2";
   const safeMargins = {
     left: style?.safe_left ?? 64,
@@ -76,7 +77,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, a
     if (!context) throw new Error("caption font metrics unavailable");
     context.font = `${typography || hook || punch ? 700 : 600} ${size}px ${fontFamily}`;
     return context.measureText(value).width;
-  }) : { lines: layout.lines, fontSize: preferredSize, textWidth: 0 };
+  }, maxLines ?? 3) : { lines: layout.lines, fontSize: preferredSize, textWidth: 0 };
   const lines = measured.lines;
   const lineHeight = centeredLarge ? 1.5 : typography || hook || punch ? 1.08 : 1.25;
   const plateHeight = Math.ceil(lines.length * measured.fontSize * lineHeight + (centeredLarge ? 96 : 56));

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 
 from clipforge.errors import MediaError
+from clipforge.schemas.advanced import CaptionWordTiming
 from clipforge.schemas.editorial import CaptionCue, OutputInterval
 from clipforge.schemas.hero import AlignedWord
 
@@ -18,6 +20,52 @@ _PUNCT = frozenset(".?!…。？！:")  # noqa: RUF001
 def hero_caption_cues(words: list[AlignedWord]) -> list[CaptionCue]:
     """Chunk forced words. Overlapping cues fail. Text is copied."""
     return [item.cue for item in hero_caption_pieces(words)]
+
+
+def validate_caption_word_coverage(
+    alignment_words: Iterable[AlignedWord],
+    caption_words: Iterable[CaptionWordTiming],
+) -> None:
+    """Require a one-to-one mapping from forced words to rendered captions.
+
+    A non-empty caption list is not coverage.  This check is intentionally
+    independent of the renderer: it catches copied/manual inputs that omit a
+    spoken span, duplicate a word id, or move a word outside its measured
+    interval before a browser render is started.
+    """
+    expected = list(alignment_words)
+    rendered = list(caption_words)
+    if not expected:
+        raise MediaError("caption coverage requires at least one forced word")
+    if any(word.alignment_quality != "forced" for word in expected):
+        raise MediaError("caption coverage refuses provisional alignment")
+    expected_ids = [word.word_id for word in expected]
+    if len(expected_ids) != len(set(expected_ids)):
+        raise MediaError("caption coverage alignment contains a duplicate forced word id")
+    rendered_ids = [word.word_id for word in rendered]
+    if len(rendered_ids) != len(set(rendered_ids)):
+        raise MediaError("caption coverage contains a duplicate forced word id")
+    if rendered_ids != expected_ids:
+        missing = [word_id for word_id in expected_ids if word_id not in set(rendered_ids)]
+        extra = [word_id for word_id in rendered_ids if word_id not in set(expected_ids)]
+        details = []
+        if missing:
+            details.append("missing=" + ",".join(missing[:5]))
+        if extra:
+            details.append("extra=" + ",".join(extra[:5]))
+        raise MediaError("caption coverage does not match forced-word order (" + "; ".join(details) + ")")
+    by_id = {word.word_id: word for word in expected}
+    for item in rendered:
+        source = by_id[item.word_id]
+        if item.text.strip() != source.text.strip() or item.verification_status != source.verification_status:
+            raise MediaError(f"caption word text or verification differs from forced alignment {item.word_id}")
+        if (
+            item.output_start_us != source.output_start_us
+            or item.output_end_us != source.output_end_us
+            or item.output_start_frame != source.output_start_frame
+            or item.output_end_frame_exclusive != source.output_end_frame_exclusive
+        ):
+            raise MediaError(f"caption word interval does not match forced alignment {item.word_id}")
 
 
 class HeroCaptionPiece:
@@ -41,8 +89,22 @@ class HeroCaptionPiece:
         self.words = words
 
 
-def hero_caption_pieces(words: list[AlignedWord]) -> list[HeroCaptionPiece]:
-    """Chunk forced words. Overlapping cues fail. Text is copied."""
+def hero_caption_pieces(
+    words: list[AlignedWord],
+    *,
+    max_words: int = _MAX_WORDS,
+    max_chars: int = _MAX_CHARS,
+    max_duration_us: int = _MAX_DURATION_US,
+) -> list[HeroCaptionPiece]:
+    """Chunk forced words. Overlapping cues fail. Text is copied.
+
+    The readable Quran preset uses a stricter word/character budget than the
+    general caption path.  Keeping the budget here (rather than relying on a
+    renderer's emergency font shrink) means the persisted cue itself remains a
+    readable, single-line unit in every production renderer.
+    """
+    if max_words < 1 or max_chars < 1 or max_duration_us < 1:
+        raise MediaError("Hero caption grouping limits must be positive")
     if not words:
         raise MediaError("Hero captions require forced words. Provisional captions were not used.")
     if any(word.alignment_quality != "forced" for word in words):
@@ -64,7 +126,13 @@ def hero_caption_pieces(words: list[AlignedWord]) -> list[HeroCaptionPiece]:
         if current and word.source_start_us - current[-1].source_end_us > _MAX_GAP_US:
             chunks.append(current)
             current = []
-        if current and _exceeds(current, word):
+        if current and _exceeds(
+            current,
+            word,
+            max_words=max_words,
+            max_chars=max_chars,
+            max_duration_us=max_duration_us,
+        ):
             chunks.append(current)
             current = []
         current.append(word)
@@ -107,10 +175,17 @@ def hero_caption_pieces(words: list[AlignedWord]) -> list[HeroCaptionPiece]:
     return pieces
 
 
-def _exceeds(current: list[AlignedWord], word: AlignedWord) -> bool:
-    if len(current) >= _MAX_WORDS:
+def _exceeds(
+    current: list[AlignedWord],
+    word: AlignedWord,
+    *,
+    max_words: int = _MAX_WORDS,
+    max_chars: int = _MAX_CHARS,
+    max_duration_us: int = _MAX_DURATION_US,
+) -> bool:
+    if len(current) >= max_words:
         return True
     text = "".join(item.text for item in current) + word.text
-    if len(text.strip()) > _MAX_CHARS:
+    if len(text.strip()) > max_chars:
         return True
-    return word.output_end_us - current[0].output_start_us > _MAX_DURATION_US
+    return word.output_end_us - current[0].output_start_us > max_duration_us

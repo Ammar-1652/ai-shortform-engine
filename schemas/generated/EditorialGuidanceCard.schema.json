@@ -1,0 +1,278 @@
+{
+  "$defs": {
+    "KnowledgeScope": {
+      "additionalProperties": false,
+      "description": "Scope limits keep a useful pattern from becoming a universal claim.",
+      "properties": {
+        "campaign_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Campaign Ids",
+          "type": "array"
+        },
+        "genres": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Genres",
+          "type": "array"
+        },
+        "languages": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Languages",
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Platforms",
+          "type": "array"
+        },
+        "profile_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Profile Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "KnowledgeScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "An actionable, bounded editorial instruction for Codex.",
+  "properties": {
+    "authority": {
+      "enum": [
+        "system_invariant",
+        "campaign_policy",
+        "upstream_guidance",
+        "operator_observation",
+        "human_feedback",
+        "analytics"
+      ],
+      "title": "Authority",
+      "type": "string"
+    },
+    "avoid_when": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Avoid When",
+      "type": "array"
+    },
+    "capability_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Capability Ids",
+      "type": "array"
+    },
+    "card_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Card Id",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "coordination": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Coordination",
+      "type": "array"
+    },
+    "evaluation_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evaluation Ids",
+      "type": "array"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "implementation": {
+      "enum": [
+        "guidance_only",
+        "supported",
+        "needs_component",
+        "incompatible",
+        "retired"
+      ],
+      "title": "Implementation",
+      "type": "string"
+    },
+    "intent": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Intent",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Limitations",
+      "type": "array"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "maxProperties": 32,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "prerequisites": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "title": "Prerequisites",
+      "type": "array"
+    },
+    "revision": {
+      "default": 1,
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/KnowledgeScope"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "captured",
+        "analyzed",
+        "proposed",
+        "evaluated",
+        "active",
+        "superseded",
+        "withdrawn"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "supersedes_card_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Supersedes Card Id"
+    },
+    "title": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "triggers": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Triggers",
+      "type": "array"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "card_id",
+    "title",
+    "authority",
+    "state",
+    "implementation",
+    "source_ids",
+    "intent",
+    "triggers",
+    "steps",
+    "avoid_when",
+    "limitations",
+    "content_sha256",
+    "updated_at"
+  ],
+  "title": "EditorialGuidanceCard",
+  "type": "object"
+}

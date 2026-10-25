@@ -46,7 +46,8 @@
       "default": "exact_evidence",
       "enum": [
         "exact_evidence",
-        "human_reviewed_summary"
+        "human_reviewed_summary",
+        "operator_reviewed_summary"
       ],
       "title": "Copy Mode",
       "type": "string"

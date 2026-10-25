@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.provenance import ArtifactProvenance
 
 _SHA = r"^[0-9a-f]{64}$"
 _SECRET = ("bearer ", "password=", "token=", "api_key", "authorization:", "cookie=", "secret=")
@@ -113,6 +114,117 @@ class TarteelDisplayCorrection(Versioned):
         if "\n" in value or "\r" in value:
             raise ValueError("Tarteel display correction must be one line")
         return value
+
+
+class TarteelArabicCorrection(Versioned):
+    """A reviewed spelling correction that keeps the observed source word."""
+
+    correction_id: EntityId
+    source_word_id: EntityId
+    source_window_us: tuple[Microseconds, Microseconds]
+    original_text: str = Field(min_length=1, max_length=200)
+    corrected_text: str = Field(min_length=1, max_length=200)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    evidence_kind: Literal["listening_context", "campaign_subtitle", "canonical_quran"]
+    reviewer: str = Field(min_length=1, max_length=120)
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def correction_is_bounded(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("Arabic correction source window must be positive")
+        if "\n" in self.corrected_text or "\r" in self.corrected_text:
+            raise ValueError("Arabic correction must stay one line")
+        return self
+
+
+class TarteelArabicCorrectionDocument(Versioned):
+    """Immutable source-bound ordinary-Arabic correction evidence."""
+
+    correction_set_id: EntityId
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    raw_asr_sha256: str = Field(pattern=_SHA)
+    transcript_sha256: str = Field(pattern=_SHA)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    corrections: list[TarteelArabicCorrection] = Field(default_factory=list)
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def is_source_bound(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("Arabic correction provenance must include its source")
+        ids = [item.correction_id for item in self.corrections]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Arabic correction ids must be unique")
+        return self
+
+
+class TarteelSpeechInterval(Versioned):
+    """Reviewed inventory of audible source material for caption coverage."""
+
+    span_id: EntityId
+    source_start_us: Microseconds
+    source_end_us: Microseconds
+    kind: Literal["dialogue", "recitation", "reaction", "nasheed", "silence", "uncertain"]
+    caption_decision: Literal["captioned", "reviewed_excluded"]
+    observed_text: str = ""
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def interval_is_reviewed(self) -> Self:
+        if self.source_end_us <= self.source_start_us:
+            raise ValueError("speech inventory interval must be positive")
+        if self.caption_decision == "reviewed_excluded" and not self.review_note.strip():
+            raise ValueError("excluded speech requires a review note")
+        if (
+            self.kind in {"dialogue", "recitation", "reaction", "nasheed"}
+            and self.caption_decision == "captioned"
+            and not self.observed_text.strip()
+        ):
+            raise ValueError("captioned audible speech requires observed text")
+        return self
+
+
+class TarteelSpeechReview(Versioned):
+    """Reviewed source speech inventory used to upgrade caption coverage."""
+
+    review_id: EntityId
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    raw_asr_sha256: str = Field(pattern=_SHA)
+    transcript_sha256: str = Field(pattern=_SHA)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    intervals: list[TarteelSpeechInterval] = Field(min_length=1)
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def intervals_are_ordered(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("speech review provenance must include its source")
+        ids = [item.span_id for item in self.intervals]
+        if len(ids) != len(set(ids)):
+            raise ValueError("speech review span ids must be unique")
+        previous = -1
+        for item in sorted(self.intervals, key=lambda value: value.source_start_us):
+            if item.source_start_us < previous:
+                raise ValueError("speech review intervals must not overlap")
+            previous = item.source_end_us
+        return self
 
 
 class QuranCaptionReview(Versioned):
@@ -285,6 +397,150 @@ class CampaignOverlaySpec(Versioned):
             ):
                 raise ValueError(f"campaign {label} asset name must be a safe staging filename")
         return self
+
+
+class OverlayExclusionRegion(Versioned):
+    """One transformed region that a campaign overlay must avoid."""
+
+    kind: Literal[
+        "face",
+        "child_body",
+        "tablet",
+        "caption",
+        "context_line",
+        "source_logo",
+        "watermark",
+        "platform_rail",
+    ]
+    status: Literal["present", "absent_reviewed", "unknown"]
+    left: int | None = Field(default=None, ge=0, le=1080)
+    top: int | None = Field(default=None, ge=0, le=1920)
+    width: int | None = Field(default=None, ge=1, le=1080)
+    height: int | None = Field(default=None, ge=1, le=1920)
+    annotation_id: EntityId | None = None
+
+    @model_validator(mode="after")
+    def bounds_match_status(self) -> Self:
+        bounds = (self.left, self.top, self.width, self.height)
+        if self.status == "present":
+            if any(value is None for value in bounds):
+                raise ValueError("present overlay exclusion requires output bounds")
+            assert self.left is not None and self.top is not None
+            assert self.width is not None and self.height is not None
+            if self.left + self.width > 1080 or self.top + self.height > 1920:
+                raise ValueError("overlay exclusion extends past the portrait output")
+        elif any(value is not None for value in bounds):
+            raise ValueError("absent or unknown overlay exclusion cannot declare bounds")
+        if self.status == "unknown" and self.annotation_id is not None:
+            raise ValueError("unknown overlay exclusion cannot claim an annotation")
+        return self
+
+
+class OverlayExclusionSample(Versioned):
+    """One decoded or reviewed sample over the complete CTA animation."""
+
+    sample_id: EntityId
+    phase: Literal["entrance", "hold", "exit", "maximum_extent"]
+    output_frame_index: int = Field(ge=0)
+    output_time_us: Microseconds
+    sample_frame_sha256: str = Field(pattern=_SHA)
+    sample_frame_relative_path: str = Field(default="", max_length=512)
+    cta_left: int = Field(ge=0, le=1080)
+    cta_top: int = Field(ge=0, le=1920)
+    cta_width: int = Field(ge=1, le=1080)
+    cta_height: int = Field(ge=1, le=1920)
+    exclusions: list[OverlayExclusionRegion] = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def sample_is_complete(self) -> Self:
+        if self.cta_left + self.cta_width > 1080 or self.cta_top + self.cta_height > 1920:
+            raise ValueError("CTA sample extends past the portrait output")
+        kinds = [item.kind for item in self.exclusions]
+        required = {
+            "face",
+            "child_body",
+            "tablet",
+            "caption",
+            "context_line",
+            "source_logo",
+            "watermark",
+            "platform_rail",
+        }
+        if set(kinds) != required:
+            raise ValueError("overlay exclusion sample must account for every required region kind")
+        for kind in required:
+            regions = [region for region in self.exclusions if region.kind == kind]
+            if len(regions) > 1:
+                ids = [region.annotation_id for region in regions]
+                if (
+                    any(region.status != "present" for region in regions)
+                    or None in ids
+                    or len(ids) != len(set(ids))
+                ):
+                    raise ValueError("multiple exclusion regions need unique present annotations")
+        if self.sample_frame_relative_path:
+            _relative(self.sample_frame_relative_path)
+        return self
+
+
+class OverlayExclusionEvidence(Versioned):
+    """Source-bound clearance proof for a moving campaign overlay."""
+
+    evidence_id: EntityId
+    campaign: Literal["tarteel"] = "tarteel"
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    time_map_sha256: str = Field(pattern=_SHA)
+    overlay_spec_sha256: str = Field(pattern=_SHA)
+    transform_sha256: str = Field(pattern=_SHA)
+    cta_start_us: Microseconds
+    cta_end_us: Microseconds
+    samples: list[OverlayExclusionSample] = Field(min_length=4, max_length=32)
+    decision: Literal["clear", "blocked"]
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def clearance_is_safe(self) -> Self:
+        if self.cta_end_us <= self.cta_start_us:
+            raise ValueError("overlay exclusion CTA interval must be positive")
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("overlay exclusion provenance must include its source")
+        phases = [sample.phase for sample in self.samples]
+        if set(phases) != {"entrance", "hold", "exit", "maximum_extent"}:
+            raise ValueError("overlay exclusion evidence needs entrance, hold, exit, and maximum samples")
+        if len({sample.sample_id for sample in self.samples}) != len(self.samples):
+            raise ValueError("overlay exclusion sample ids must be unique")
+        for sample in self.samples:
+            if not self.cta_start_us <= sample.output_time_us < self.cta_end_us:
+                raise ValueError("overlay exclusion sample lies outside the CTA interval")
+            if self.decision == "clear":
+                if any(region.status == "unknown" for region in sample.exclusions):
+                    raise ValueError("clear overlay exclusion evidence cannot contain unknown regions")
+                cta = (
+                    sample.cta_left,
+                    sample.cta_top,
+                    sample.cta_width,
+                    sample.cta_height,
+                )
+                for region in sample.exclusions:
+                    if region.status != "present":
+                        continue
+                    assert region.left is not None and region.top is not None
+                    assert region.width is not None and region.height is not None
+                    if _rectangles_overlap(cta, (region.left, region.top, region.width, region.height)):
+                        raise ValueError(f"clear overlay exclusion intersects {region.kind}")
+        return self
+
+
+def _rectangles_overlap(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> bool:
+    left_x, left_y, left_width, left_height = left
+    right_x, right_y, right_width, right_height = right
+    return max(left_x, right_x) < min(left_x + left_width, right_x + right_width) and max(
+        left_y, right_y
+    ) < min(left_y + left_height, right_y + right_height)
 
 
 class CampaignPolicyRule(Versioned):

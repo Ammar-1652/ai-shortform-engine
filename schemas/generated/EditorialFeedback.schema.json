@@ -1,0 +1,120 @@
+{
+  "additionalProperties": false,
+  "description": "Append-only feedback tied to an exact plan/render/scene.",
+  "properties": {
+    "artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Id"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_paths": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Evidence Paths",
+      "type": "array"
+    },
+    "feedback_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Feedback Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "defect",
+        "preference",
+        "acceptance",
+        "rejection",
+        "performance"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "observation": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Observation",
+      "type": "string"
+    },
+    "plan_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "proposed_card_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Proposed Card Ids",
+      "type": "array"
+    },
+    "reviewer_role": {
+      "enum": [
+        "codex_operator",
+        "human_reviewer"
+      ],
+      "title": "Reviewer Role",
+      "type": "string"
+    },
+    "scene_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scene Id"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "required": [
+    "feedback_id",
+    "plan_id",
+    "reviewer_role",
+    "kind",
+    "severity",
+    "observation",
+    "created_at"
+  ],
+  "title": "EditorialFeedback",
+  "type": "object"
+}

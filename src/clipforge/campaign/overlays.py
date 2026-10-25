@@ -13,7 +13,10 @@ import json
 import statistics
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from fractions import Fraction
+from math import ceil, floor
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -25,8 +28,12 @@ from clipforge.media.hashing import sha256_file
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
 from clipforge.media.workspace import SourceWorkspace, ensure_within
-from clipforge.schemas.campaign import CampaignOverlaySpec
+from clipforge.schemas.campaign import CampaignOverlaySpec, OverlayExclusionEvidence
 from clipforge.storage import Database
+from clipforge.timeline import FrameRate, frame_start_us
+
+if TYPE_CHECKING:
+    from clipforge.schemas.advanced import AdvancedHeroRenderInput
 
 TARTEEL_PROFILE_ID = "profile-tarteel-campaign"
 TARTEEL_CTA_TAG = "cta"
@@ -54,26 +61,185 @@ class TarteelOverlaySizing:
     measurement_sha256: str
 
 
+def overlay_spec_sha256(spec: CampaignOverlaySpec) -> str:
+    """Digest the reviewed declarative CTA/logo spec without local paths."""
+    raw = json.dumps(spec.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def load_tarteel_overlay_exclusion(
+    root: Path,
+    *,
+    source_asset_id: str,
+    candidate_id: str,
+    source_sha256: str,
+    time_map_sha256: str,
+    transform_sha256: str,
+    overlay: CampaignOverlaySpec,
+) -> tuple[OverlayExclusionEvidence, str, Path]:
+    """Load the one reviewed, source-bound exclusion record for a candidate."""
+    root = root.resolve()
+    base = root / "campaigns" / "Tarteel"
+    if not base.is_dir() or base.is_symlink():
+        raise MediaError("Tarteel overlay exclusion directory is missing")
+    matches: list[tuple[OverlayExclusionEvidence, str, Path]] = []
+    for path in sorted(base.rglob("overlay-exclusion.json")):
+        if path.is_symlink() or not path.is_file() or not path.is_relative_to(root):
+            raise MediaError("Tarteel overlay exclusion sidecar must be a regular file in the work root")
+        if any(parent.is_symlink() for parent in path.parents if parent != root):
+            raise MediaError("Tarteel overlay exclusion path cannot contain symlinks")
+        try:
+            evidence = OverlayExclusionEvidence.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"invalid Tarteel overlay exclusion sidecar {path.name}: {exc}") from exc
+        if (evidence.source_asset_id, evidence.candidate_id) != (source_asset_id, candidate_id):
+            continue
+        if evidence.source_sha256 != source_sha256:
+            raise MediaError("Tarteel overlay exclusion evidence is stale: source hash differs")
+        if evidence.time_map_sha256 != time_map_sha256:
+            raise MediaError("Tarteel overlay exclusion evidence is stale: TimeMap differs")
+        if evidence.transform_sha256 != transform_sha256:
+            raise MediaError("Tarteel overlay exclusion evidence is stale: transform differs")
+        if evidence.overlay_spec_sha256 != overlay_spec_sha256(overlay):
+            raise MediaError("Tarteel overlay exclusion evidence is stale: overlay spec differs")
+        if evidence.decision != "clear":
+            raise MediaError("Tarteel overlay exclusion evidence is blocked")
+        if (evidence.cta_start_us, evidence.cta_end_us) != (overlay.cta_start_us, overlay.cta_end_us):
+            raise MediaError("Tarteel overlay exclusion evidence has stale CTA timing")
+        validate_overlay_sample_files(root, evidence)
+        matches.append((evidence, sha256_file(path), path))
+    if len(matches) != 1:
+        raise MediaError(f"Tarteel requires exactly one clear overlay exclusion sidecar for {candidate_id}")
+    return matches[0]
+
+
+def validate_overlay_sample_files(root: Path, evidence: OverlayExclusionEvidence) -> None:
+    """A frame hash without inspectable frame bytes cannot certify clearance."""
+    from clipforge.hero.advanced_assets import confine_work_path
+
+    for sample in evidence.samples:
+        if sample.output_time_us != frame_start_us(sample.output_frame_index, FrameRate(30, 1)):
+            raise MediaError("overlay exclusion sample frame and output clock differ")
+        if not sample.sample_frame_relative_path:
+            raise MediaError("overlay exclusion requires inspectable sample frame files")
+        path = confine_work_path(root, sample.sample_frame_relative_path, label="overlay exclusion frame")
+        if not path.is_file() or sha256_file(path) != sample.sample_frame_sha256:
+            raise MediaError("overlay exclusion sample frame hash is stale")
+        decoded = cv2.imread(str(path), cv2.IMREAD_COLOR)
+        if decoded is None or decoded.shape[:2] != (1920, 1080):
+            raise MediaError("overlay exclusion sample must decode in final 1080x1920 coordinates")
+
+
+def campaign_cta_bounds(render_input: AdvancedHeroRenderInput) -> tuple[int, int, int, int]:
+    """Conservative raster bounds of the actual CTA container after transform.
+
+    The pinned keying recipe produces a 640x240 video. Fraction arithmetic
+    mirrors the production layout; the envelope includes subpixel coverage.
+    """
+    overlay = render_input.campaign_overlay
+    if overlay is None:
+        raise MediaError("CTA bounds require a campaign overlay")
+    left, top, width, height = Fraction(0), Fraction(0), Fraction(1080), Fraction(1920)
+    if (
+        render_input.reframing_strategy == "contain"
+        and render_input.renderer_recipe_version == "advanced-hero-renderer-directed-v4"
+    ):
+        if not render_input.windows:
+            raise MediaError("CTA geometry requires source dimensions")
+        source = render_input.windows[0]
+        scale = min(Fraction(1080, source.frame_width), Fraction(1920, source.frame_height))
+        width = Fraction(floor(source.frame_width * scale + Fraction(1, 2)))
+        height = Fraction(floor(source.frame_height * scale + Fraction(1, 2)))
+        left, top = Fraction((1080 - width) // 2), Fraction((1920 - height) // 2)
+        if render_input.frame_style_id != "none-v1" and render_input.frame_layout_id == "platform-bleed-v1":
+            width = Fraction(1080)
+            height = Fraction(floor(Fraction(1080 * source.frame_height, source.frame_width) + Fraction(1, 2)))
+            top = Fraction(floor((1920 - height) / 2 + Fraction(1, 2)))
+            left = Fraction(0)
+        else:
+            push = (
+                Fraction(9, 10)
+                if render_input.safe_region_id == "platform-resilient-portrait-v1"
+                else Fraction(26, 25)
+            )
+            left += width * (1 - push) / 2
+            top += height * (1 - push) / 2
+            width *= push
+            height *= push
+    x = left + width * Fraction(overlay.cta_left_permille, 1000)
+    y = top + height * Fraction(overlay.cta_top_permille, 1000)
+    cta_width = width * Fraction(overlay.cta_width_permille, 1000)
+    cta_height = cta_width * Fraction(3, 8)
+    return floor(x), floor(y), ceil(x + cta_width) - floor(x), ceil(y + cta_height) - floor(y)
+
+
+def validate_overlay_render_geometry(
+    evidence: OverlayExclusionEvidence,
+    render_input: AdvancedHeroRenderInput,
+) -> None:
+    """Reject a safe-looking proof that measures a different CTA rectangle."""
+    from clipforge.preview.timing import frame_at_or_after
+
+    overlay = render_input.campaign_overlay
+    if overlay is None or (evidence.cta_start_us, evidence.cta_end_us) != (
+        overlay.cta_start_us,
+        overlay.cta_end_us,
+    ):
+        raise MediaError("overlay exclusion timing differs from the rendered CTA")
+    bounds = campaign_cta_bounds(render_input)
+    first = frame_at_or_after(overlay.cta_start_us, render_input.duration_in_frames)
+    last = max(first + 1, frame_at_or_after(overlay.cta_end_us, render_input.duration_in_frames)) - 1
+    if first >= render_input.duration_in_frames or last >= render_input.duration_in_frames:
+        raise MediaError("CTA interval is outside the render")
+    for sample in evidence.samples:
+        if (sample.cta_left, sample.cta_top, sample.cta_width, sample.cta_height) != bounds:
+            raise MediaError("overlay exclusion CTA bounds differ from production geometry")
+        if not first <= sample.output_frame_index <= last:
+            raise MediaError("overlay exclusion sample is outside rendered CTA frames")
+    if not any(
+        sample.phase == "entrance" and sample.output_frame_index == first for sample in evidence.samples
+    ):
+        raise MediaError("overlay exclusion must inspect the first CTA frame")
+    if not any(sample.phase == "exit" and sample.output_frame_index == last for sample in evidence.samples):
+        raise MediaError("overlay exclusion must inspect the last CTA frame")
+
+
+def require_tarteel_overlay_matches_plan(
+    planned: CampaignOverlaySpec,
+    staged: CampaignOverlaySpec,
+) -> None:
+    """Do not replace reviewed overlay timing or geometry while staging media."""
+    if planned == staged:
+        return
+    planned_fields = planned.model_dump(mode="json")
+    staged_fields = staged.model_dump(mode="json")
+    changed = sorted(key for key in planned_fields if planned_fields[key] != staged_fields.get(key))
+    raise MediaError("Tarteel overlay staging differs from the reviewed plan: " + ", ".join(changed))
+
+
+def _selected_source_sample_times(source_ranges_us: list[tuple[int, int]]) -> list[int]:
+    if not source_ranges_us or any(end <= start for start, end in source_ranges_us):
+        raise MediaError("Tarteel source measurement requires positive selected source ranges")
+    return [
+        start + (end - start) * fraction // 100
+        for start, end in source_ranges_us
+        for fraction in (10, 15, 18, 20, 25, 50, 80, 90)
+    ]
+
+
 def measure_tarteel_overlay_sizing(
     *,
     source_proxy_path: Path,
-    source_start_us: int,
-    source_end_us: int,
+    source_ranges_us: list[tuple[int, int]],
     source_proxy_sha256: str,
     staging_dir: Path,
     log_path: Path,
 ) -> TarteelOverlaySizing:
-    """Measure native CTA/logo bounds before sizing added campaign layers."""
-    if source_end_us <= source_start_us:
-        raise MediaError("Tarteel source measurement requires a positive source interval")
+    """Measure branding only in the source ranges retained by the edit."""
     staging_dir.mkdir(parents=True, exist_ok=True)
-    sample_times = [
-        source_start_us + (source_end_us - source_start_us) * fraction // 100
-        # The native CTA can be a short animation beat. Sample the early
-        # window densely enough to catch its entrance, then use wider samples
-        # for logo visibility across the rest of the candidate.
-        for fraction in (10, 15, 18, 20, 25, 50, 80, 90)
-    ]
+    # A min/max envelope can include footage removed by a jump cut. Sample
+    # each retained range independently, keeping output order in the digest.
+    sample_times = _selected_source_sample_times(source_ranges_us)
     cta_widths: list[int] = []
     logo_widths: list[int] = []
     frame_width = 0
@@ -120,8 +286,7 @@ def measure_tarteel_overlay_sizing(
     payload = {
         "method": "source-frame-scan-v1",
         "source_proxy_sha256": source_proxy_sha256,
-        "source_start_us": source_start_us,
-        "source_end_us": source_end_us,
+        "source_ranges_us": source_ranges_us,
         "source_width_px": frame_width,
         "source_height_px": frame_height,
         "native_cta_width_px": native_cta_width,
@@ -202,6 +367,7 @@ def stage_tarteel_overlay(
     caption_intervals: list[tuple[int, int]] | None = None,
     source_logo_visible: bool = False,
     face_boxes: list[tuple[float, float, float, float]] | None = None,
+    face_boxes_by_time: list[tuple[int, float, float, float, float]] | None = None,
     sizing: TarteelOverlaySizing | None = None,
 ) -> StagedTarteelOverlay:
     """Stage the reviewed Tarteel CTA and watermark with deterministic alpha."""
@@ -253,10 +419,19 @@ def stage_tarteel_overlay(
     end = min(duration_us, start + effective_duration_us)
     if end <= start:
         raise MediaError("Tarteel CTA interval does not fit the output")
-    cta_left, cta_top = choose_tarteel_foreground_position(face_boxes or [])
     cta_width_permille = max(
         80,
         min(600, round(sizing.native_cta_width_px * 1000 / sizing.source_width_px)),
+    )
+    cta_height_permille = max(1, round(cta_width_permille * 240 / 640))
+    cta_left, cta_top = choose_tarteel_foreground_position(
+        face_boxes or [],
+        face_boxes_by_time=face_boxes_by_time,
+        cta_start_us=start,
+        cta_end_us=end,
+        cta_width_permille=cta_width_permille,
+        cta_height_permille=cta_height_permille,
+        source_logo_visible=source_logo_visible or sizing.source_logo_visible,
     )
     watermark_width_permille = max(
         24,
@@ -327,13 +502,27 @@ def choose_tarteel_overlay_start_us(
         )
 
     scored = [(overlap(start), -abs(start - int(duration_us * 0.62)), start) for start in candidates]
-    # Prefer a caption-free slot; if every slot contains speech, the smallest
-    # overlap wins and the middle/latter beat remains the tie-break.
-    return min(scored)[2]
+    if any(item[0] == 0 for item in scored):
+        # Prefer a caption-free slot; the middle/latter beat remains the
+        # deterministic tie-break.
+        return min(scored)[2]
+    # Dense speech can leave no fully caption-free CTA interval. In that case
+    # do not hide the CTA at the last frame by default: the reviewed payoff
+    # beat is the stable visual choice and is checked later against decoded
+    # faces, tablet, branding, and caption geometry.
+    payoff = int(duration_us * 0.78)
+    return min(candidates, key=lambda start: (abs(start - payoff), overlap(start), start))
 
 
 def choose_tarteel_foreground_position(
     face_boxes: list[tuple[float, float, float, float]],
+    *,
+    face_boxes_by_time: list[tuple[int, float, float, float, float]] | None = None,
+    cta_start_us: int | None = None,
+    cta_end_us: int | None = None,
+    cta_width_permille: int = 600,
+    cta_height_permille: int = 225,
+    source_logo_visible: bool = False,
 ) -> tuple[int, int]:
     """Place the small CTA in the least occupied source-picture region.
 
@@ -341,9 +530,30 @@ def choose_tarteel_foreground_position(
     person. The chosen candidate is still carried as a clearance fact and is
     reviewed in decoded frames before delivery.
     """
-    cta_width = 600
-    cta_height = 225
-    candidates = [(60, 180), (340, 180), (60, 520), (340, 520)]
+    if cta_width_permille <= 0 or cta_height_permille <= 0:
+        raise MediaError("Tarteel CTA geometry must be positive")
+    if face_boxes_by_time is not None:
+        if cta_start_us is None or cta_end_us is None or cta_end_us <= cta_start_us:
+            raise MediaError("Tarteel timed face clearance requires a positive CTA interval")
+        face_boxes = [
+            (x, y, width, height)
+            for timestamp_us, x, y, width, height in face_boxes_by_time
+            if cta_start_us <= timestamp_us < cta_end_us
+        ]
+        if not face_boxes:
+            raise MediaError("Tarteel CTA has no face-clearance sample in its reviewed interval")
+    cta_width = cta_width_permille
+    cta_height = cta_height_permille
+    # Prefer an upper foreground slot when it is clear. The former candidate
+    # set started at 180‰, which can land on children's heads in a wide shot
+    # even when the face detector has sparse samples. The final proof still
+    # owns the visual clearance decision; this slot simply gives the solver a
+    # safe geometry to choose.
+    candidates = [(340, 60), (600, 60), (60, 60), (60, 180), (340, 180), (600, 180), (60, 520), (340, 520)]
+    if source_logo_visible:
+        # The source logo is in the upper-left foreground slot. Do not place
+        # the added CTA over it when source branding remains visible.
+        candidates = [candidate for candidate in candidates if candidate[0] >= 120]
 
     def overlap(candidate: tuple[int, int]) -> float:
         left, top = candidate
@@ -361,7 +571,18 @@ def choose_tarteel_foreground_position(
             total += intersection
         return total
 
-    return min(candidates, key=lambda candidate: (overlap(candidate), candidate[1], candidate[0]))
+    chosen = min(
+        candidates,
+        key=lambda candidate: (
+            overlap(candidate),
+            candidate[1],
+            0 if candidate[0] == 340 else 1,
+            candidate[0],
+        ),
+    )
+    if overlap(chosen) > 0:
+        raise MediaError("Tarteel CTA has no face-clear foreground position for the reviewed frame evidence")
+    return chosen
 
 
 def _choose(

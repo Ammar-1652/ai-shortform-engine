@@ -36,6 +36,7 @@ from clipforge.schemas.governance import AssetLicenseRecord, ComplianceStatus
 from clipforge.schemas.jobs import JobRecord, QACheck, QAKind, QAResult, QAStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument, aggregate_status
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.storage import (
     Database,
     find_artifact,
@@ -408,6 +409,7 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         PolicyDigest(policy_id=item.policy_id, sha256=item.sha256) for item in prepared.resolution.policies
     ]
     return QASetDocument(
+        workflow_roles=WorkflowRolePolicy(),
         qa_set_id=str(uuid.uuid4()),
         project_id=prepared.project_id,
         source_asset_id=prepared.source_asset_id,

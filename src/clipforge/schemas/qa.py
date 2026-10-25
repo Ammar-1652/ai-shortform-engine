@@ -2,15 +2,143 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
 
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.editorial import OutputInterval
 from clipforge.schemas.jobs import QAKind, QAResult, QAStatus
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.roles import WorkflowRolePolicy
 
 _SHA = r"^[0-9a-f]{64}$"
+_EVIDENCE_PATH = (
+    r"^candidates/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}/viewer-evidence/"
+    r"[A-Za-z0-9][A-Za-z0-9._-]{0,100}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,100})*$"
+)
+
+
+class ViewerEvidenceFile(Versioned):
+    """One decoded image/contact sheet bound to the current encoded draft."""
+
+    relative_path: str = Field(pattern=_EVIDENCE_PATH)
+    sha256: str = Field(pattern=_SHA)
+    kind: str = Field(min_length=1, max_length=60)
+    frame_index: int | None = Field(default=None, ge=0)
+
+
+class EditorialPilotReceipt(Versioned):
+    """Hash-bound preflight receipt required before a clean Advanced render."""
+
+    pilot_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    plan_sha256: str = Field(pattern=_SHA)
+    direction_sha256: str = Field(pattern=_SHA)
+    dependency_sha256: str = Field(pattern=_SHA)
+    status: Literal["passed", "blocked"]
+    checked_event_ids: list[EntityId] = Field(default_factory=list, max_length=64)
+    inspected_intervals: list[OutputInterval] = Field(default_factory=list, max_length=64)
+    findings: list[str] = Field(default_factory=list, max_length=32)
+    created_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def is_bound(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("pilot provenance must include the source asset")
+        if self.status == "passed" and self.findings:
+            raise ValueError("a passed pilot cannot contain findings")
+        return self
+
+
+class HumanWatchRecord(Versioned):
+    """A separate human playback observation; automation cannot create approval."""
+
+    reviewer: str = Field(min_length=1, max_length=120)
+    watched_with_audio: bool
+    watched_muted: bool
+    observations: list[str] = Field(min_length=1, max_length=40)
+    decision: Literal["needs_changes", "reviewed_pending_final", "accepted_for_final_review"]
+    reviewed_at: AwareDatetime
+    player: str = Field(default="", max_length=200)
+
+
+class HumanPlaybackTarget(Versioned):
+    """Exact playback identity displayed before a human records a decision."""
+
+    project_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    advanced_artifact_id: EntityId
+    advanced_manifest_sha256: str = Field(pattern=_SHA)
+    advanced_plan_sha256: str = Field(pattern=_SHA)
+    source_sha256: str = Field(pattern=_SHA)
+    video_sha256: str = Field(pattern=_SHA)
+
+
+class HumanPlaybackReview(HumanPlaybackTarget):
+    """Human observation stored with a final decision, never in immutable render bytes."""
+
+    watch: HumanWatchRecord
+    automated: Literal[False]
+    reviewer_role: Literal["human_reviewer"] = "human_reviewer"
+
+    @model_validator(mode="after")
+    def complete_watch(self) -> Self:
+        if not self.watch.watched_with_audio or not self.watch.watched_muted:
+            raise ValueError("human watch must include audio and muted playback")
+        if not self.watch.player.strip() or not self.watch.reviewer.strip():
+            raise ValueError("human watch must name its player and reviewer")
+        if any(not observation.strip() for observation in self.watch.observations):
+            raise ValueError("human watch observations cannot be blank")
+        return self
+
+
+class ViewerEvidenceBundle(Versioned):
+    """Decoded viewer-facing evidence for one exact Advanced Hero artifact."""
+
+    evidence_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    artifact_id: EntityId
+    manifest_sha256: str = Field(pattern=_SHA)
+    encoded_media_sha256: str = Field(pattern=_SHA)
+    render_input_sha256: str = Field(pattern=_SHA)
+    pilot_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    style_fingerprint: str = Field(pattern=_SHA)
+    font_dependency_sha256: str = Field(pattern=_SHA)
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+    frame_rate: str = Field(pattern=r"^[0-9]+/[0-9]+$")
+    duration_us: Microseconds
+    integrated_lufs: float
+    true_peak_dbfs: float
+    decoded_frames: list[ViewerEvidenceFile] = Field(min_length=1)
+    contact_sheets: list[ViewerEvidenceFile] = Field(min_length=1)
+    platform_crop_previews: list[ViewerEvidenceFile] = Field(min_length=1)
+    camera_motion_event_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    transition_event_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    human_watch: HumanWatchRecord | None = None
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def is_bound(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("viewer evidence provenance must include its source")
+        if self.artifact_id not in self.provenance.parent_artifact_ids:
+            raise ValueError("viewer evidence provenance must include its artifact")
+        if self.width != 1080 or self.height != 1920 or self.frame_rate != "30/1":
+            raise ValueError("viewer evidence must describe the portrait production output")
+        if self.human_watch is not None and (
+            not self.human_watch.watched_with_audio or not self.human_watch.watched_muted
+        ):
+            raise ValueError("human watch must include audio and muted playback")
+        return self
 
 
 class PolicyDigest(Versioned):
@@ -36,6 +164,7 @@ class QASetDocument(Versioned):
     campaign: QAResult
     status: QAStatus
     provenance: ArtifactProvenance
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def set_is_bound(self) -> Self:

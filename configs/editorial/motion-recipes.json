@@ -1,0 +1,1115 @@
+{
+  "schema_version": "1.0.0",
+  "references": [
+    {
+      "reference_id": "motion-ref-native",
+      "source_id": "source-clipforge-native-motion",
+      "title": "Clipforge native Remotion motion components",
+      "reference_kind": "local_component",
+      "permission": "reuse_allowed",
+      "license_id": "Clipforge-project",
+      "attribution": "Clipforge native renderer components",
+      "content_sha256": "26be3937c98f3397889d975ee58aa8ffcc6f11dbd53a5e6ae59b17eb13be333c",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "notes": "Typed components already shipped in the Remotion renderer."
+    },
+    {
+      "reference_id": "motion-ref-iart-guidance",
+      "source_id": "source-iart-motion-skills-lock",
+      "title": "Pinned iart-ai motion guidance",
+      "reference_kind": "skill_guidance",
+      "permission": "reference_only",
+      "license_id": "MIT-per-selected-pack",
+      "attribution": "See docs/third_party/motion-skills.lock.json",
+      "content_sha256": "59d4184840e660a5a75ad19a5ffc1fc50f50b639850fa8d62d53a3d2e675a43d",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "notes": "Guidance source; does not execute upstream code."
+    }
+  ],
+  "recipes": [
+    {
+      "recipe_id": "motion-caption-emphasis-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "hook",
+        "key phrase",
+        "caption emphasis"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "caption-emphasis-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 180000,
+      "duration_max_us": 800000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "quran-readable-v2",
+        "kinetic-caption-v1"
+      ],
+      "required_inputs": [
+        "caption_word_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#F6C875"
+        },
+        {
+          "name": "max_scale_permille",
+          "value_type": "integer",
+          "default_value": "1040",
+          "minimum": 1000,
+          "maximum": 1100
+        }
+      ],
+      "overuse_warning": "Use on source-grounded emphasis; do not color every word or hide the full phrase.",
+      "local_modifications": [
+        "Uses canonical frame intervals and shared RTL-safe caption layout."
+      ],
+      "recipe_sha256": "5fb3a0503a1b791885e08a3353b2303d05a8da8cd4c43121e8e539755b461809"
+    },
+    {
+      "recipe_id": "motion-concat-dissolve-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "directed cut",
+        "scene transition",
+        "payoff reveal"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "concat_blur_dissolve_v1",
+      "fallback_component_id": "concat_push_v1",
+      "duration_min_us": 120000,
+      "duration_max_us": 600000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "documentary-broll-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "cut_interval",
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "progress",
+          "value_type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "A dissolve must bridge a reviewed directed cut; never use it to conceal a bad word boundary.",
+      "local_modifications": [
+        "Remotion-native adaptation; no Concat runtime or external network dependency."
+      ],
+      "recipe_sha256": "6ded5a632711ef41967cd3dd0ad4268763b229ebbbbb33d6e44c4c67feaa621d"
+    },
+    {
+      "recipe_id": "motion-native-graphic-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "source-grounded illustration",
+        "proof",
+        "concept"
+      ],
+      "purposes": [
+        "concept",
+        "data"
+      ],
+      "component_id": "motion-graphic-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 3000000,
+      "attention_cost": "medium",
+      "readability_risk": "medium",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "data-explainer-v1",
+        "paper-explainer-v1",
+        "documentary-broll-v1"
+      ],
+      "required_inputs": [
+        "template",
+        "display_text",
+        "source_evidence_ids",
+        "safe_geometry"
+      ],
+      "parameters": [
+        {
+          "name": "template",
+          "value_type": "string"
+        },
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Omit the illustration when captions and source footage already explain the fact.",
+      "local_modifications": [
+        "The renderer only accepts allowlisted semantic templates and evidence text."
+      ],
+      "recipe_sha256": "d3353649f1081ec774e7165fae1d33a6afedf6a3ec654f990fb2abec69196377"
+    },
+    {
+      "recipe_id": "motion-context-reveal-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "question reveal",
+        "context",
+        "hook"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "context-line-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 2500000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "quran-readable-v2",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "reviewed_context_line",
+        "output_interval"
+      ],
+      "parameters": [
+        {
+          "name": "emoji",
+          "value_type": "string",
+          "default_value": "💡"
+        }
+      ],
+      "overuse_warning": "Use one concise evidence-backed context line; it must not duplicate timed speech captions.",
+      "local_modifications": [
+        "Upper-lane geometry and emoji are allowlisted by the direction contract."
+      ],
+      "recipe_sha256": "8e136cfb8800cd137dc75ac269eed4cf530405d9a7a96e41a3ed0031ca84624f"
+    },
+    {
+      "recipe_id": "motion-hook-card-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "hook",
+        "question reveal"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "hook-card-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 2500000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "quran-readable-v2",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#F6C875"
+        }
+      ],
+      "overuse_warning": "Use one source-grounded opening card; never replace a complete spoken caption.",
+      "local_modifications": [
+        "Uses the shared caption lane and source-native-text collision rules."
+      ],
+      "recipe_sha256": "95ae0493c0fd47abad986dbad2c415b282f09f7d051f8afd704a1b3700849d3a"
+    },
+    {
+      "recipe_id": "motion-punch-card-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "payoff",
+        "reaction",
+        "result hold"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "punch-card-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 350000,
+      "duration_max_us": 2200000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "quran-readable-v2",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Reserve for the demonstrated result or reaction; omit when the source has no payoff.",
+      "local_modifications": [
+        "Keeps the final hold readable and leaves the caption lane available."
+      ],
+      "recipe_sha256": "8535598f60e96140568eefa60aae4e7bbddd2cd9ff53cb4d1cd1ba29c9b66ebb"
+    },
+    {
+      "recipe_id": "motion-concat-push-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "directed cut",
+        "location change",
+        "emphasis transition"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "concat_push_v1",
+      "fallback_component_id": "concat_blur_dissolve_v1",
+      "duration_min_us": 120000,
+      "duration_max_us": 500000,
+      "attention_cost": "medium",
+      "readability_risk": "medium",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "documentary-broll-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "cut_interval",
+        "source_evidence_ids"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Use only at a reviewed narrative cut; never hide a split word or unrelated shot.",
+      "local_modifications": [
+        "Bound to the canonical output frame and explicit transition interval."
+      ],
+      "recipe_sha256": "932d3b55661e41a65df4b3a10575161b579b4547dc262506d435f8e847e2de84"
+    },
+    {
+      "recipe_id": "motion-caption-emphasis-short-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "context emphasis"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "caption-emphasis-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 180000,
+      "duration_max_us": 550000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "c7698ad22697a1a0d8c392388e1fad26e43250357594df140907e53b9db9dcc7"
+    },
+    {
+      "recipe_id": "motion-caption-emphasis-payoff-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "payoff emphasis"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "caption-emphasis-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 220000,
+      "duration_max_us": 800000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "0b92d157b6e591bb51a2db86b3b857c003d72f54fd5f992bc8cd677912623c58"
+    },
+    {
+      "recipe_id": "motion-caption-emphasis-process-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "process emphasis"
+      ],
+      "purposes": [
+        "process_step"
+      ],
+      "component_id": "caption-emphasis-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 220000,
+      "duration_max_us": 800000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "41c403c2bc2b0598f0fd78a588248781a2c3ecf474e883b570b8acda1012f07f"
+    },
+    {
+      "recipe_id": "motion-context-reveal-question-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "question reveal"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "context-line-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 1800000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "bf01c7d58c5448bddc13847b81a1206a8271a37461a199d0ff8ed5d3acb528ba"
+    },
+    {
+      "recipe_id": "motion-context-reveal-takeaway-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "takeaway context"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "context-line-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 2000000,
+      "attention_cost": "low",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "4b4856084f8e667fdcc54d1d4720f833499f61234896daebffb902d4d8ead66e"
+    },
+    {
+      "recipe_id": "motion-hook-card-question-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "question hook"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "hook-card-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 1800000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "f7e2bb1771a21213fc3ae2424026144806edcfaf989ae424571096c389e2a38e"
+    },
+    {
+      "recipe_id": "motion-hook-card-proof-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "proof hook"
+      ],
+      "purposes": [
+        "data"
+      ],
+      "component_id": "hook-card-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 1800000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "4b1972395a09ab92acb9841695dbd527157fb66a8ff25b6e040309d2ff555b16"
+    },
+    {
+      "recipe_id": "motion-punch-card-result-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "result punch"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "punch-card-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 350000,
+      "duration_max_us": 1800000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "86a53169f71c18ef7888665f7efb564d0a8ea4ec527117bf349c213aff813cc9"
+    },
+    {
+      "recipe_id": "motion-punch-card-reaction-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "reaction punch"
+      ],
+      "purposes": [
+        "key_phrase"
+      ],
+      "component_id": "punch-card-v1",
+      "fallback_component_id": "caption-emphasis-v1",
+      "duration_min_us": 350000,
+      "duration_max_us": 1800000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "5db779c2e9016b15c5e01e4b5cffd43b8e6e0cd0f3654048c5f0ed0d7228b12c"
+    },
+    {
+      "recipe_id": "motion-graphic-concept-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "concept illustration"
+      ],
+      "purposes": [
+        "concept"
+      ],
+      "component_id": "motion-graphic-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 2600000,
+      "attention_cost": "medium",
+      "readability_risk": "medium",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "65511b9e04592dfe09ed68a0e90e0ae2b68302d480f4da0bba55502cbad7eae3"
+    },
+    {
+      "recipe_id": "motion-graphic-data-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "data illustration"
+      ],
+      "purposes": [
+        "data"
+      ],
+      "component_id": "motion-graphic-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 400000,
+      "duration_max_us": 3000000,
+      "attention_cost": "medium",
+      "readability_risk": "medium",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "ba30a54cb833c89c8aa65b6f50752a282b31cbd9618bd48943b4f0c17ff90bdb"
+    },
+    {
+      "recipe_id": "motion-concat-push-location-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "location transition"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "concat_push_v1",
+      "fallback_component_id": "concat_blur_dissolve_v1",
+      "duration_min_us": 120000,
+      "duration_max_us": 500000,
+      "attention_cost": "medium",
+      "readability_risk": "medium",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "2abac72462c119b371f1081402867646372375d3e6ee4e8793a236e00c80f95c"
+    },
+    {
+      "recipe_id": "motion-concat-dissolve-payoff-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "payoff transition"
+      ],
+      "purposes": [
+        "visual_reveal"
+      ],
+      "component_id": "concat_blur_dissolve_v1",
+      "fallback_component_id": "concat_push_v1",
+      "duration_min_us": 120000,
+      "duration_max_us": 600000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "required_inputs": [
+        "source_evidence_ids",
+        "output_interval"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Select only when the scene purpose and source evidence support this treatment.",
+      "local_modifications": [
+        "Audited Clipforge recipe variant; deterministic local Remotion component with fallback."
+      ],
+      "recipe_sha256": "5ea0fa2da58c17c4999e7e8eaba833ffa964d8c6c5f75ca0150299c21c7f3f9b"
+    },
+    {
+      "recipe_id": "motion-quran-challenge-v1",
+      "reference_id": "motion-ref-native",
+      "recipe_version": "1.0.0",
+      "state": "approved",
+      "scene_intents": [
+        "quran challenge",
+        "recitation",
+        "memory test"
+      ],
+      "purposes": [
+        "concept",
+        "visual_reveal"
+      ],
+      "component_id": "motion-graphic-v1",
+      "fallback_component_id": "context-line-v1",
+      "duration_min_us": 500000,
+      "duration_max_us": 3500000,
+      "attention_cost": "medium",
+      "readability_risk": "low",
+      "supports_rtl": true,
+      "supports_captions": true,
+      "compatible_languages": [
+        "ar",
+        "en-US",
+        "fr-FR",
+        "ja"
+      ],
+      "compatible_profiles": [
+        "quran-editorial-v1",
+        "quran-readable-v2",
+        "editorial-clean-v1"
+      ],
+      "required_inputs": [
+        "template",
+        "display_text",
+        "source_evidence_ids",
+        "safe_geometry"
+      ],
+      "optional_inputs": [
+        "accent"
+      ],
+      "parameters": [
+        {
+          "name": "template",
+          "value_type": "string",
+          "default_value": "quran_challenge"
+        },
+        {
+          "name": "accent",
+          "value_type": "color",
+          "default_value": "#DCA95A"
+        }
+      ],
+      "overuse_warning": "Use only for a source-grounded Quran challenge, completion, or recitation moment.",
+      "local_modifications": [
+        "Semantic Quran challenge adaptation with RTL-safe local Remotion rendering."
+      ],
+      "recipe_sha256": "3d1e8d9251c3d08c9bc43dd8bb8d1ec5ed6b82437ef242da35739c217d81c4bf"
+    }
+  ]
+}

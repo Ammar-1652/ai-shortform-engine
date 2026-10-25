@@ -192,6 +192,12 @@ class SourceWorkspace:
         """Validated editorial direction for one promoted candidate."""
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "direction.json")
 
+    def advanced_pilot_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "pilot.json")
+
+    def advanced_review_pilot_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "pilot.json")
+
     def advanced_review_direction_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "direction.json")
 

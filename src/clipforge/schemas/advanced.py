@@ -18,6 +18,7 @@ from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.direction import MotionStyleSpec, SourceNativeText
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
 
 _SHA = r"^[0-9a-f]{64}$"
@@ -178,6 +179,7 @@ class MotionGraphicEvent(Versioned):
         "travel_postcard",
         "business_identity",
         "business_spotlight",
+        "quran_challenge",
     ]
     interval: OutputInterval
     purpose: MotionPurpose
@@ -194,6 +196,46 @@ class MotionGraphicEvent(Versioned):
             raise ValueError("motion graphic extends past the safe area width")
         if self.y + self.height > 1480:
             raise ValueError("motion graphic extends into the reserved caption lane")
+        return self
+
+
+class CameraMotionEvent(Versioned):
+    """A deterministic output-space camera move selected by direction."""
+
+    event_id: EntityId
+    interval: OutputInterval
+    intent: Literal["orient", "follow", "reveal", "emphasize", "transition", "settle"]
+    path: Literal["hold", "push_in", "pull_out", "pan_x", "pan_y", "drift", "parallax", "match_cut"]
+    target_x_permille: int = Field(default=500, ge=0, le=1000)
+    target_y_permille: int = Field(default=500, ge=0, le=1000)
+    scale_start_permille: int = Field(default=1000, ge=1000, le=1140)
+    scale_end_permille: int = Field(default=1000, ge=1000, le=1140)
+    travel_px: int = Field(default=0, ge=0, le=194)
+    intensity: Literal["quiet", "gentle", "active", "peak"] = "gentle"
+    easing: Literal["linear", "ease_out_cubic", "ease_in_out_cubic"] = "ease_in_out_cubic"
+    source_evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="after")
+    def camera_event_is_bounded(self) -> Self:
+        if self.path == "hold" and (
+            self.scale_start_permille != 1000 or self.scale_end_permille != 1000 or self.travel_px != 0
+        ):
+            raise ValueError("hold camera event cannot change scale or travel")
+        envelopes = {"quiet": (64, 1060), "gentle": (96, 1080), "active": (144, 1110), "peak": (194, 1140)}
+        max_travel, max_scale = envelopes[self.intensity]
+        if self.travel_px > max_travel or max(self.scale_start_permille, self.scale_end_permille) > max_scale:
+            raise ValueError(f"{self.intensity} camera event exceeds its envelope")
+        if self.path == "push_in" and self.scale_end_permille < self.scale_start_permille:
+            raise ValueError("push_in camera event must not zoom out")
+        if self.path == "pull_out" and self.scale_end_permille > self.scale_start_permille:
+            raise ValueError("pull_out camera event must not zoom in")
+        if (
+            self.path in {"pan_x", "pan_y", "drift", "match_cut"}
+            and self.scale_start_permille != self.scale_end_permille
+        ):
+            raise ValueError(f"{self.path} camera event cannot change scale")
+        if self.path != "hold" and self.travel_px == 0 and self.scale_start_permille == self.scale_end_permille:
+            raise ValueError("a non-hold camera event must have a bounded movement")
         return self
 
 
@@ -250,6 +292,9 @@ class TransitionEvent(Versioned):
     interval: OutputInterval
     purpose: Literal[MotionPurpose.VISUAL_REVEAL] = MotionPurpose.VISUAL_REVEAL
     style: Literal["clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"] = "clean_cut_v1"
+    source_evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    direction_purpose: Literal["cut", "time_shift", "location_change", "reveal", "emphasis", "settle"] = "cut"
+    sfx_placement_id: EntityId | None = None
 
 
 class AdvancedHeroProfile(Versioned):
@@ -355,6 +400,20 @@ class AdvancedHeroProfile(Versioned):
         return advanced_fingerprint(payload)
 
 
+class FramePaletteSpec(Versioned):
+    """Source-bound, allowlisted palette for an editorial frame treatment."""
+
+    analyzer_version: Literal["source-frame-palette-v1"] = "source-frame-palette-v1"
+    source_sha256: str = Field(pattern=_SHA)
+    family: Literal["olive", "sage", "charcoal"]
+    dominant_hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    primary_hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    accent_hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    backdrop_hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    backdrop_alt_hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    sample_times_us: list[Microseconds] = Field(min_length=1, max_length=8)
+
+
 class AdvancedHeroRenderInput(Versioned):
     """Facts for one advanced composition. Paths are local staging names, not URLs."""
 
@@ -379,12 +438,29 @@ class AdvancedHeroRenderInput(Versioned):
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_style: MotionStyleSpec | None = None
+    frame_style_id: str = Field(default="none-v1", min_length=1, max_length=64)
+    frame_backdrop_id: Literal["blurred-source-v1", "palette-solid-v1"] = "blurred-source-v1"
+    frame_layout_id: Literal["standard-card-v1", "platform-bleed-v1"] = "standard-card-v1"
+    frame_palette: FramePaletteSpec | None = None
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    preset_id: str = Field(default="", max_length=64)
+    pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    motion_catalog_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    knowledge_context_id: str = Field(default="", max_length=128)
+    knowledge_release_id: str = Field(default="", max_length=128)
+    knowledge_context_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    knowledge_decision_trace_id: str = Field(default="", max_length=128)
+    knowledge_decision_trace_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     quran_review_id: str = Field(default="", max_length=128)
     quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    speech_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    arabic_corrections_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    caption_alignment_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     alignment_sha256: str = Field(pattern=_SHA)
     hero_plan_sha256: str = Field(pattern=_SHA)
@@ -393,11 +469,13 @@ class AdvancedHeroRenderInput(Versioned):
     base_video_name: Literal["analysis.mp4"] = "analysis.mp4"
     speech_name: Literal["asr.flac"] = "asr.flac"
     campaign_overlay: CampaignOverlaySpec | None = None
+    overlay_exclusion_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     language: str = "en-US"
     captions: list[TypographyEvent] = Field(default_factory=list)
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    camera_motion: list[CameraMotionEvent] = Field(default_factory=list)
     source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
     transitions: list[TransitionEvent] = Field(default_factory=list)
@@ -416,18 +494,37 @@ class AdvancedHeroRenderInput(Versioned):
     audio_lra_lu: float = 11
     audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     debug_overlays: Literal[False] = False
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def local_names_only(self) -> Self:
+        if bool(self.knowledge_context_id) != bool(self.knowledge_context_sha256):
+            raise ValueError("knowledge context id and hash must be recorded together")
+        if bool(self.knowledge_context_id) != bool(self.knowledge_release_id):
+            raise ValueError("knowledge context requires a release id")
+        if bool(self.knowledge_decision_trace_id) != bool(self.knowledge_decision_trace_sha256):
+            raise ValueError("knowledge decision trace id and hash must be recorded together")
+        if self.knowledge_decision_trace_id and not self.knowledge_context_id:
+            raise ValueError("knowledge decision trace requires a knowledge context")
         if self.motion_style is not None and self.motion_style.style_id != self.style_id:
             raise ValueError("render input motion style does not match style_id")
         if self.style_id != "legacy-v1" and not self.style_fingerprint:
             raise ValueError("production motion style requires a fingerprint")
+        if self.frame_style_id == "auto-source-palette-v1" and self.frame_palette is None:
+            raise ValueError("auto-source-palette-v1 requires a source-bound frame palette")
+        if self.frame_style_id == "auto-source-palette-v1" and self.frame_layout_id != "platform-bleed-v1":
+            raise ValueError("auto-source-palette-v1 requires the platform-bleed frame layout")
+        if self.frame_palette is not None and self.frame_palette.source_sha256 != self.source_sha256:
+            raise ValueError("frame palette must bind the render source hash")
+        if self.frame_style_id != "none-v1" and self.frame_backdrop_id != "palette-solid-v1":
+            raise ValueError("framed renders must use the palette backdrop instead of source blur")
         for name in self.asset_names.values():
             lowered = name.lower()
             if lowered.startswith(("http://", "https://")) or ".." in name or name.startswith("/"):
                 raise ValueError("advanced asset name must be a staging file name")
         if self.campaign_overlay is not None:
+            if self.style_id != "legacy-v1" and not self.overlay_exclusion_sha256:
+                raise ValueError("clean campaign overlays require overlay exclusion evidence")
             names = [self.campaign_overlay.watermark_asset_name]
             if self.campaign_overlay.cta_render_mode == "alpha_video_v1":
                 names.append(self.campaign_overlay.cta_asset_name)
@@ -454,10 +551,23 @@ class AdvancedHeroDraftOutput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    preset_id: str = Field(default="", max_length=64)
+    pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    motion_catalog_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    knowledge_context_id: str = Field(default="", max_length=128)
+    knowledge_release_id: str = Field(default="", max_length=128)
+    knowledge_context_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    knowledge_decision_trace_id: str = Field(default="", max_length=128)
+    knowledge_decision_trace_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     quran_review_id: str = Field(default="", max_length=128)
     quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    speech_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    arabic_corrections_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    caption_alignment_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     render_input_sha256: str = Field(pattern=_SHA)
     preview_relative_path: str = Field(min_length=1, max_length=512)
@@ -474,6 +584,27 @@ class AdvancedHeroDraftOutput(Versioned):
     detected_audio_sample_rate: int = Field(ge=1)
     detected_duration_us: Microseconds
     duration_error_us: int
+    # New directed renders bind decoded cue-edge evidence. Empty values keep
+    # historical immutable manifests readable; clean production QA rejects
+    # them when the evidence report is absent.
+    caption_coverage_relative_path: str = Field(default="", max_length=512)
+    caption_coverage_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    viewer_evidence_relative_path: str = Field(default="", max_length=512)
+    viewer_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    overlay_exclusion_relative_path: str = Field(default="", max_length=512)
+    overlay_exclusion_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+
+    @model_validator(mode="after")
+    def knowledge_binding_is_complete(self) -> Self:
+        if bool(self.knowledge_context_id) != bool(self.knowledge_context_sha256):
+            raise ValueError("knowledge context id and hash must be recorded together")
+        if bool(self.knowledge_context_id) != bool(self.knowledge_release_id):
+            raise ValueError("knowledge context requires a release id")
+        if bool(self.knowledge_decision_trace_id) != bool(self.knowledge_decision_trace_sha256):
+            raise ValueError("knowledge decision trace id and hash must be recorded together")
+        if self.knowledge_decision_trace_id and not self.knowledge_context_id:
+            raise ValueError("knowledge decision trace requires a knowledge context")
+        return self
 
     @model_validator(mode="after")
     def path_is_contained(self) -> Self:
@@ -482,6 +613,24 @@ class AdvancedHeroDraftOutput(Versioned):
             raise ValueError("advanced preview path must be candidates/<id>/advanced.mp4")
         if parts[1] != self.candidate_id or parts[1] in {"", ".", ".."}:
             raise ValueError("advanced preview path candidate id does not match")
+        if bool(self.caption_coverage_relative_path) != bool(self.caption_coverage_sha256):
+            raise ValueError("caption evidence path and hash must be recorded together")
+        if self.caption_coverage_relative_path and self.caption_coverage_relative_path != (
+            f"candidates/{self.candidate_id}/caption-coverage.json"
+        ):
+            raise ValueError("caption evidence must belong to this candidate")
+        if bool(self.viewer_evidence_relative_path) != bool(self.viewer_evidence_sha256):
+            raise ValueError("viewer evidence path and hash must be recorded together")
+        if self.viewer_evidence_relative_path and self.viewer_evidence_relative_path != (
+            f"candidates/{self.candidate_id}/viewer-evidence/bundle.json"
+        ):
+            raise ValueError("viewer evidence must belong to this candidate")
+        if bool(self.overlay_exclusion_relative_path) != bool(self.overlay_exclusion_sha256):
+            raise ValueError("overlay exclusion evidence path and hash must be recorded together")
+        if self.overlay_exclusion_relative_path and self.overlay_exclusion_relative_path != (
+            f"candidates/{self.candidate_id}/overlay-exclusion.json"
+        ):
+            raise ValueError("overlay exclusion evidence must belong to this candidate")
         return self
 
 
@@ -515,15 +664,32 @@ class AdvancedHeroPlanDocument(Versioned):
     time_map_sha256: str = Field(pattern=_SHA)
     editorial_arc_id: str = Field(default="", max_length=128)
     editorial_arc_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    editorial_arc_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     quran_review_id: str = Field(default="", max_length=128)
     quran_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    speech_review_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    arabic_corrections_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    caption_alignment_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     profile_fingerprint: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    preset_id: str = Field(default="", max_length=64)
+    pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    motion_catalog_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    knowledge_context_id: str = Field(default="", max_length=128)
+    knowledge_release_id: str = Field(default="", max_length=128)
+    knowledge_context_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    knowledge_decision_trace_id: str = Field(default="", max_length=128)
+    knowledge_decision_trace_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     style_id: str = Field(default="legacy-v1", min_length=1, max_length=64)
     style_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     safe_region_id: str = Field(default="portrait-safe-v1", min_length=1, max_length=64)
     motion_style: MotionStyleSpec | None = None
+    frame_style_id: str = Field(default="none-v1", min_length=1, max_length=64)
+    frame_backdrop_id: Literal["blurred-source-v1", "palette-solid-v1"] = "blurred-source-v1"
+    frame_layout_id: Literal["standard-card-v1", "platform-bleed-v1"] = "standard-card-v1"
+    frame_palette: FramePaletteSpec | None = None
     reframing_strategy: str = Field(min_length=1, max_length=40)
     reframing_config_sha256: str = Field(pattern=_SHA)
     windows: list[ReframingWindow] = Field(default_factory=list)
@@ -531,6 +697,7 @@ class AdvancedHeroPlanDocument(Versioned):
     typography: list[TypographyEvent] = Field(default_factory=list)
     diagrams: list[DiagramEvent] = Field(default_factory=list)
     motion_graphics: list[MotionGraphicEvent] = Field(default_factory=list)
+    camera_motion: list[CameraMotionEvent] = Field(default_factory=list)
     source_native_text: list[SourceNativeText] = Field(default_factory=list)
     emphasis: list[EmphasisEvent] = Field(default_factory=list)
     transitions: list[TransitionEvent] = Field(default_factory=list)
@@ -539,18 +706,28 @@ class AdvancedHeroPlanDocument(Versioned):
     assets: list[AssetBinding] = Field(default_factory=list)
     campaign_overlay: CampaignOverlaySpec | None = None
     qa_requirements: list[str] = Field(min_length=1)
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
     provenance: ArtifactProvenance
 
     @model_validator(mode="after")
     def events_do_not_overlap_illegally(self) -> Self:
         if self.source_asset_id not in self.provenance.source_asset_ids:
             raise ValueError("advanced plan provenance must include source_asset_id")
+        if bool(self.knowledge_context_id) != bool(self.knowledge_context_sha256):
+            raise ValueError("knowledge context id and hash must be recorded together")
+        if bool(self.knowledge_context_id) != bool(self.knowledge_release_id):
+            raise ValueError("knowledge context requires a release id")
+        if bool(self.knowledge_decision_trace_id) != bool(self.knowledge_decision_trace_sha256):
+            raise ValueError("knowledge decision trace id and hash must be recorded together")
+        if self.knowledge_decision_trace_id and not self.knowledge_context_id:
+            raise ValueError("knowledge decision trace requires a knowledge context")
         if self.time_map is not None and digest_time_map(self.time_map) != self.time_map_sha256:
             raise ValueError("advanced plan time_map_sha256 does not match time_map")
         _reject_overlaps(self.broll, "b-roll")
         _reject_overlaps_typed(self.captions, "captions")
         _reject_overlaps_typed(self.typography, "typography")
         _reject_overlaps_typed(self.motion_graphics, "motion graphics")
+        _reject_overlaps_typed(self.camera_motion, "camera motion")
         for event in self.sfx:
             if event.role != "sfx":
                 raise ValueError("advanced Hero audio rejects music")
@@ -559,6 +736,14 @@ class AdvancedHeroPlanDocument(Versioned):
                 raise ValueError("advanced plan motion style does not match style_id")
             if self.style_fingerprint == "":
                 raise ValueError("advanced plan motion style requires a fingerprint")
+        if self.frame_style_id == "auto-source-palette-v1" and self.frame_palette is None:
+            raise ValueError("auto-source-palette-v1 requires a source-bound frame palette")
+        if self.frame_style_id == "auto-source-palette-v1" and self.frame_layout_id != "platform-bleed-v1":
+            raise ValueError("auto-source-palette-v1 requires the platform-bleed frame layout")
+        if self.frame_palette is not None and self.frame_palette.source_sha256 != self.source_sha256:
+            raise ValueError("frame palette must bind the plan source hash")
+        if self.frame_style_id != "none-v1" and self.frame_backdrop_id != "palette-solid-v1":
+            raise ValueError("framed plans must use the palette backdrop instead of source blur")
         return self
 
 
@@ -589,7 +774,10 @@ class AdvancedHeroDraftSetDocument(Versioned):
     # an old cache entry.
     renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     direction_sha256s: list[str] = Field(default_factory=list)
+    knowledge_context_sha256s: list[str] = Field(default_factory=list)
+    knowledge_decision_trace_sha256s: list[str] = Field(default_factory=list)
     style_ids: list[str] = Field(default_factory=list)
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
     drafts: list[AdvancedHeroDraftOutput] = Field(min_length=1)
     provenance: ArtifactProvenance
 
@@ -606,6 +794,20 @@ class AdvancedHeroDraftSetDocument(Versioned):
             raise ValueError("provenance input digest must be the advanced input digest")
         if any(item.hero_review_status != self.hero_review_status for item in self.drafts):
             raise ValueError("advanced draft review status must match the set status")
+        output_contexts = sorted(
+            {item.knowledge_context_sha256 for item in self.drafts if item.knowledge_context_sha256}
+        )
+        output_traces = sorted(
+            {
+                item.knowledge_decision_trace_sha256
+                for item in self.drafts
+                if item.knowledge_decision_trace_sha256
+            }
+        )
+        if self.knowledge_context_sha256s != output_contexts:
+            raise ValueError("advanced knowledge context fingerprints do not match drafts")
+        if self.knowledge_decision_trace_sha256s != output_traces:
+            raise ValueError("advanced knowledge decision fingerprints do not match drafts")
         return self
 
 
@@ -633,6 +835,9 @@ class AdvancedHeroCacheRecord(Versioned):
     advanced_input_sha256: str = Field(pattern=_SHA)
     renderer_dependency_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     direction_sha256s: list[str] = Field(default_factory=list)
+    knowledge_context_sha256s: list[str] = Field(default_factory=list)
+    knowledge_decision_trace_sha256s: list[str] = Field(default_factory=list)
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
     manifest_sha256: str = Field(pattern=_SHA)
     manifest_size_bytes: int = Field(ge=1)
     rendered_count: int = Field(ge=1)
@@ -644,6 +849,9 @@ class AdvancedRenderProgress(Versioned):
     """Checkpoint for a resumable Advanced Remotion run."""
 
     advanced_set_id: EntityId
+    # Preallocated before the first worker starts so a resumed run keeps the
+    # same artifact binding for viewer evidence and the eventual DB row.
+    artifact_id: EntityId | None = None
     source_asset_id: EntityId
     source_sha256: str = Field(pattern=_SHA)
     hero_review_status: Literal["approved", "pending"]
@@ -685,6 +893,11 @@ class _TimedPlanEvent(Protocol):
 
 
 def _reject_overlaps_typed(events: Sequence[_TimedPlanEvent], label: str) -> None:
+    # The upper context sentence intentionally spans the complete output and
+    # occupies its own lane. It may coexist in time with hook/body/punch cards;
+    # all non-context typography must remain mutually exclusive.
+    if label == "typography":
+        events = tuple(event for event in events if getattr(event, "component_id", "") != "context-line-v1")
     ordered = sorted(events, key=lambda item: (item.interval.output_start_us, item.event_id))
     previous_end = -1
     for event in ordered:

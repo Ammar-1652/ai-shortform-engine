@@ -7,6 +7,24 @@
       "title": "Accent",
       "type": "string"
     },
+    "caption_max_chars": {
+      "maximum": 64,
+      "minimum": 16,
+      "title": "Caption Max Chars",
+      "type": "integer"
+    },
+    "caption_max_lines": {
+      "const": 1,
+      "default": 1,
+      "title": "Caption Max Lines",
+      "type": "integer"
+    },
+    "caption_max_words": {
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Caption Max Words",
+      "type": "integer"
+    },
     "caption_mode": {
       "enum": [
         "phrase_active_word",
@@ -14,6 +32,12 @@
       ],
       "title": "Caption Mode",
       "type": "string"
+    },
+    "caption_y": {
+      "maximum": 1700,
+      "minimum": 300,
+      "title": "Caption Y",
+      "type": "integer"
     },
     "contrast": {
       "enum": [
@@ -130,7 +154,10 @@
     "safe_right",
     "safe_top",
     "safe_bottom",
-    "max_simultaneous_emphasis"
+    "max_simultaneous_emphasis",
+    "caption_max_words",
+    "caption_max_chars",
+    "caption_y"
   ],
   "title": "MotionStyleSpec",
   "type": "object"

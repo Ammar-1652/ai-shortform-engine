@@ -80,6 +80,7 @@ export function stageCaptionFonts(stagingDir, expected, sourceDirectory = proces
     const quranSourceDirectory = process.env.CLIPFORGE_QURAN_FONT_DIR;
     const candidates = font.name === "AmiriQuran.ttf"
       ? [
+        path.join(stagingDir, font.name),
         ...(quranSourceDirectory ? [path.join(quranSourceDirectory, font.name)] : []),
         path.join(bundledFontDirectory, font.bundledName ?? font.name),
         ...font.candidates,

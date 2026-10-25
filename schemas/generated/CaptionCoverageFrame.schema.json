@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "CaptionFrameObservation": {
+      "additionalProperties": false,
+      "description": "A frame may simultaneously own several cue/word boundary roles.",
+      "properties": {
+        "cue_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cue Id"
+        },
+        "phase": {
+          "enum": [
+            "before",
+            "start",
+            "middle",
+            "end",
+            "after",
+            "first",
+            "last",
+            "word_start",
+            "word_end"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "word_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Word Id"
+        }
+      },
+      "required": [
+        "phase"
+      ],
+      "title": "CaptionFrameObservation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One decoded frame at a caption edge or word-highlight boundary.",
+  "properties": {
+    "frame_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Frame Id",
+      "type": "string"
+    },
+    "frame_index": {
+      "minimum": 0,
+      "title": "Frame Index",
+      "type": "integer"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/CaptionFrameObservation"
+      },
+      "minItems": 1,
+      "title": "Observations",
+      "type": "array"
+    },
+    "output_time_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Time Us",
+      "type": "integer"
+    },
+    "relative_path": {
+      "pattern": "^candidates/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}/caption-frames/[A-Za-z0-9][A-Za-z0-9._-]{0,100}\\.png$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "frame_id",
+    "frame_index",
+    "output_time_us",
+    "observations",
+    "relative_path",
+    "sha256"
+  ],
+  "title": "CaptionCoverageFrame",
+  "type": "object"
+}

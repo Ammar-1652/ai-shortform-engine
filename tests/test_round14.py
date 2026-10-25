@@ -151,7 +151,7 @@ def test_version_5_database_upgrades_in_place(tmp_path: Path) -> None:
     connection.commit()
     connection.close()
     database = Database(path)
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     with database.connect() as checked:
         assert checked.execute("SELECT name FROM projects").fetchone()["name"] == "Keep"
         row = checked.execute("SELECT * FROM analytics_imports").fetchone()

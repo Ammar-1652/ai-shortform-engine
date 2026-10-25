@@ -11,6 +11,7 @@ import pytest
 from clipforge.errors import MediaError
 from clipforge.hero.backend import RemotionHeroRenderBackend
 from clipforge.preview.browser import resolve_browser
+from clipforge.schemas.advanced import advanced_fingerprint
 
 pytestmark = pytest.mark.browser
 
@@ -106,7 +107,11 @@ def _advanced_input() -> dict[str, object]:
         ("en-US", "Café costs $12.50 today.", 3_000_000),
     ]
     return {
+        "schema_version": "1.0.0",
         "composition_id": "AdvancedHeroDraft",
+        "candidate_id": "cand-caption",
+        "advanced_set_id": "advanced-caption-set",
+        "source_sha256": _SHA,
         "duration_in_frames": 120,
         "reframing_strategy": "contain",
         "base_video_name": "analysis.mp4",
@@ -123,6 +128,49 @@ def _advanced_input() -> dict[str, object]:
             for language, text, start in events
         ],
     }
+
+
+def _authorize_advanced(batch: Path) -> None:
+    """Give the browser fixture the same service-issued binding as production."""
+    import json
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from clipforge.hero.render_checkpoint import renderer_dependency_files, renderer_dependency_sha256
+    from clipforge.media.hashing import sha256_file
+
+    payload = json.loads(batch.read_text(encoding="utf-8"))
+    item = payload["items"][0]
+    input_payload = item["input"]
+    item["input_sha256"] = advanced_fingerprint(input_payload)
+    batch.write_text(json.dumps(payload), encoding="utf-8")
+    canonical = batch.parent / "batch-input.json"
+    canonical.write_text(json.dumps(payload), encoding="utf-8")
+    authorization = {
+        "schema_version": "1.0.0",
+        "recipe": "advanced-render-authorization-v1",
+        "authorization_id": str(uuid4()),
+        "advanced_set_id": input_payload["advanced_set_id"],
+        "source_asset_id": "source-caption",
+        "source_sha256": input_payload["source_sha256"],
+        "batch_sha256": sha256_file(canonical),
+        "renderer_dependency_sha256": renderer_dependency_sha256(),
+        "renderer_dependency_files": renderer_dependency_files(),
+        "items": [
+            {
+                "schema_version": "1.0.0",
+                "candidate_id": input_payload["candidate_id"],
+                "input_sha256": item["input_sha256"],
+                "output_relative_path": Path(item["outputPath"]).relative_to(batch.parent).as_posix(),
+                "staged_sha256": {
+                    name: sha256_file(batch.parent / "staging" / name) for name in ("analysis.mp4", "asr.flac")
+                },
+            }
+        ],
+        "created_at": datetime.now(UTC).isoformat(),
+        "provenance": {"source_asset_ids": ["source-caption"]},
+    }
+    (batch.parent / "authorization.json").write_text(json.dumps(authorization), encoding="utf-8")
 
 
 def _assert_decoded_captions(run: Path, output: Path, baseline: Path) -> None:
@@ -294,6 +342,7 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
         ),
         encoding="utf-8",
     )
+    _authorize_advanced(advanced_batch)
     from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 
     advanced_backend = RemotionAdvancedRenderBackend()
@@ -315,5 +364,6 @@ def test_production_hero_render_keeps_caption_glyphs_inside_the_safe_area(tmp_pa
         ),
         encoding="utf-8",
     )
+    _authorize_advanced(advanced_batch)
     advanced_backend.render_batch(advanced_batch, log_path=advanced_run / "baseline-render.log")
     _assert_decoded_captions(advanced_run, advanced_output, advanced_baseline)

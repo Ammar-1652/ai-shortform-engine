@@ -1,0 +1,105 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "allowed_style_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Allowed Style Ids",
+      "type": "array"
+    },
+    "audio_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Audio Rules",
+      "type": "array"
+    },
+    "camera_language": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Camera Language",
+      "type": "array"
+    },
+    "caption_mode": {
+      "enum": [
+        "phrase_active_word",
+        "phrase_whole_run"
+      ],
+      "title": "Caption Mode",
+      "type": "string"
+    },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
+    "narrative_structure": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 3,
+      "title": "Narrative Structure",
+      "type": "array"
+    },
+    "preset_id": {
+      "enum": [
+        "clean_explainer",
+        "proof_comparison",
+        "story_reveal",
+        "transformation",
+        "quote_emotion",
+        "product_cta"
+      ],
+      "title": "Preset Id",
+      "type": "string"
+    },
+    "preset_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Preset Sha256",
+      "type": "string"
+    },
+    "reject_when": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Reject When",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "preset_id",
+    "narrative_structure",
+    "camera_language",
+    "motion_recipe_ids",
+    "allowed_style_ids",
+    "caption_mode",
+    "audio_rules",
+    "reject_when",
+    "preset_sha256"
+  ],
+  "title": "PresetDefinition",
+  "type": "object"
+}

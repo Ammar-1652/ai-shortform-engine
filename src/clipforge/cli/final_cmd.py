@@ -25,12 +25,17 @@ def _fail(exc: BaseException) -> NoReturn:
 @review_app.command("doctor")
 def final_doctor_command() -> None:
     """Report the final-review gate. This does not write."""
-    typer.echo("final_review: human")
+    typer.echo("editorial_operator: codex_operator")
+    typer.echo("deterministic_enforcer: system_enforcer")
+    typer.echo("final_review: human_reviewer")
+    typer.echo("final_playback_required: true")
     typer.echo("hero_approval_authorizes_delivery: no")
     typer.echo("qa_authorizes_delivery: no")
     typer.echo("whop: deferred")
     typer.echo("external_publishing: deferred")
-    typer.echo("sqlite_schema: 6")
+    from clipforge.storage.migrations import CURRENT_SCHEMA_VERSION
+
+    typer.echo(f"sqlite_schema: {CURRENT_SCHEMA_VERSION}")
 
 
 @review_app.command("open")
@@ -112,7 +117,7 @@ def final_verify_command(
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
     """Re-check the effective final decision. This does not write."""
-    _show(source_asset_id, candidate_id, db, work_dir, listed=False)
+    _show(source_asset_id, candidate_id, db, work_dir, listed=False, require_approved=True)
 
 
 @review_app.command("decide")
@@ -122,13 +127,20 @@ def final_decide_command(
     decision: Annotated[str, typer.Option("--decision")],
     reviewer_id: Annotated[str, typer.Option("--reviewer")],
     notes: Annotated[str, typer.Option("--notes")] = "",
+    watch_record: Annotated[Path | None, typer.Option("--watch-record")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
     """Append one human final decision for the current Advanced Hero evidence."""
     from clipforge.review.final_gate import capture_final_decision
+    from clipforge.schemas.qa import HumanPlaybackReview
 
     try:
+        playback = None
+        if watch_record is not None:
+            if watch_record.is_symlink() or not watch_record.is_file():
+                raise ClipforgeError("human playback file is missing or a symlink")
+            playback = HumanPlaybackReview.model_validate_json(watch_record.read_text(encoding="utf-8"))
         review = capture_final_decision(
             Database(resolve_db_path(db)),
             resolve_work_dir(work_dir),
@@ -137,12 +149,41 @@ def final_decide_command(
             decision=decision,
             reviewer_id=reviewer_id,
             notes=notes,
+            playback=playback,
         )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
     typer.echo(review.review_id)
     typer.echo(f"decision: {review.decision}")
     typer.echo("automated: false")
+
+
+@review_app.command("watch-target")
+def final_watch_target_command(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Print exact playback bindings as JSON, without recording any watch or approval."""
+    from clipforge.publish.preflight import preflight_delivery
+    from clipforge.review.final_gate import evidence_for_facts
+    from clipforge.review.playback import playback_target
+    from clipforge.transcription.io import dump_json
+
+    try:
+        facts = preflight_delivery(
+            Database(resolve_db_path(db)),
+            resolve_work_dir(work_dir),
+            source_asset_id,
+            candidate_id,
+            probe=False,
+            require_final=False,
+        )
+        evidence = {**evidence_for_facts(facts), "video_sha256": facts.video_sha256}
+        typer.echo(dump_json(playback_target(evidence)), nl=False)
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
 
 
 def _show(
@@ -152,6 +193,7 @@ def _show(
     work_dir: Path | None,
     *,
     listed: bool,
+    require_approved: bool = False,
 ) -> None:
     from clipforge.review.final_gate import final_board
 
@@ -176,3 +218,5 @@ def _show(
     typer.echo("blockers: " + ",".join(str(item) for item in names))
     typer.echo("whop: deferred")
     typer.echo("external_publishing: deferred")
+    if require_approved and card.get("effective_decision") != "approved":
+        raise typer.Exit(1)

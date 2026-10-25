@@ -20,11 +20,19 @@ lower caption cards, a larger centered upper context line, and zero additional
 caption scale motion. Active coloring is bound to the forced `word_id`; visible
 text matching remains only the ordered fallback for legacy inputs.
 
-The Tarteel public-readable editorial arc starts at the reviewed
-`احنا اليوم بإذن الله` boundary, keeps the readiness exchange, and then carries
-the complete reviewed recitation. The preset is immutable and part of style,
-renderer, cache, QA, and stale-approval identity. It is still a review draft;
-human final approval is required before local delivery.
+The current pilot candidate's public-readable editorial arc starts at the
+reviewed `احنا اليوم بإذن الله` boundary, keeps the readiness exchange, and
+then carries the complete reviewed recitation. This source boundary belongs to
+that candidate's arc evidence; future Tarteel candidates must bind their own
+reviewed opening and are not required to reuse it. The preset is immutable and
+part of style, renderer, cache, QA, and stale-approval identity. It is still a
+review draft; human final approval is required before local delivery.
+
+When the platform-resilient portrait region is selected, the upper context line
+uses the smaller campaign title size, starts at the persisted `y=280` title
+anchor, and is capped at two centered lines so it stays below TikTok's top
+search/header area while fitting the inner horizontal safe band without
+clipping.
 
 ## Consequences
 

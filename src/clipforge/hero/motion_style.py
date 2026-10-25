@@ -31,6 +31,13 @@ class MotionStyleProfile:
     safe_top: int
     safe_bottom: int
     max_simultaneous_emphasis: int
+    # Production captions are deliberately one line.  The planner splits
+    # forced words before rendering so the renderer never wraps or drops text
+    # to make a platform overlay fit.
+    caption_max_lines: int = 1
+    caption_max_words: int = 6
+    caption_max_chars: int = 28
+    caption_y: int = 1360
 
     def fingerprint(self) -> str:
         raw = json.dumps(asdict(self), sort_keys=True, separators=(",", ":")).encode()
@@ -59,10 +66,10 @@ EDITORIAL_CLEAN_V1 = MotionStyleProfile(
         "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
     ),
     accent="#ffcf4a",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -81,10 +88,10 @@ QURAN_EDITORIAL_V1 = MotionStyleProfile(
         "8fa95faaf7bd18b71789f6f57312003e30c5029218a035e5baf613a0222ab82d",
     ),
     accent="#ffcf4a",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -95,7 +102,10 @@ QURAN_READABLE_V2 = replace(
     exit_frames=0,
     max_travel_px=0,
     max_scale_permille=1000,
-    safe_bottom=120,
+    safe_bottom=360,
+    caption_max_words=4,
+    caption_max_chars=24,
+    caption_y=1360,
 )
 
 CONCAT_EDITORIAL_V1 = MotionStyleProfile(
@@ -115,10 +125,10 @@ CONCAT_EDITORIAL_V1 = MotionStyleProfile(
         "9187fa244db5f50201cfb0ede30ae7269651d090290f164c0703403fd0fab1b2",
     ),
     accent="#e8b84a",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -134,10 +144,10 @@ KINETIC_CAPTION_V1 = MotionStyleProfile(
     font_identity="dejavu-noto-local-v1",
     font_sha256=EDITORIAL_CLEAN_V1.font_sha256,
     accent="#64d8ff",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -153,10 +163,10 @@ DOCUMENTARY_BROLL_V1 = MotionStyleProfile(
     font_identity="dejavu-noto-local-v1",
     font_sha256=EDITORIAL_CLEAN_V1.font_sha256,
     accent="#f0c36a",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -172,10 +182,10 @@ DATA_EXPLAINER_V1 = MotionStyleProfile(
     font_identity="dejavu-noto-local-v1",
     font_sha256=EDITORIAL_CLEAN_V1.font_sha256,
     accent="#63e6be",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -191,10 +201,10 @@ PAPER_EXPLAINER_V1 = MotionStyleProfile(
     font_identity="dejavu-noto-local-v1",
     font_sha256=EDITORIAL_CLEAN_V1.font_sha256,
     accent="#ffb86c",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 
@@ -210,10 +220,10 @@ PREMIUM_MINIMAL_V1 = MotionStyleProfile(
     font_identity="dejavu-noto-local-v1",
     font_sha256=EDITORIAL_CLEAN_V1.font_sha256,
     accent="#ffffff",
-    safe_left=64,
-    safe_right=64,
-    safe_top=120,
-    safe_bottom=300,
+    safe_left=96,
+    safe_right=160,
+    safe_top=270,
+    safe_bottom=360,
     max_simultaneous_emphasis=1,
 )
 

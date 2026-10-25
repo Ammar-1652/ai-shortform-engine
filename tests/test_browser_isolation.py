@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from clipforge.errors import MediaError
+from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 from clipforge.hero.backend import RemotionHeroRenderBackend
 from clipforge.media.process import ProcessResult, ProcessRunner
 from clipforge.preview.isolation import browser_render_lock, chrome_socket_fits
@@ -58,6 +59,27 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
     script = Path("apps/renderer/scripts/render-hero.mjs").read_text(encoding="utf-8")
     assert "process.env.TMPDIR" in script
     assert 'import("@remotion/renderer")' in script
+
+
+def test_advanced_renderer_is_marked_as_service_launched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded: dict[str, object] = {}
+
+    def fake_run(self: ProcessRunner, argv: list[str], **kwargs: object) -> ProcessResult:
+        del self
+        recorded["env"] = kwargs.get("env")
+        return ProcessResult(tuple(argv), 0, "", "", 0.0, tmp_path / "render.log")
+
+    monkeypatch.setattr(ProcessRunner, "run", fake_run)
+    monkeypatch.setattr("clipforge.preview.isolation.resolve_browser", lambda: Path("/usr/bin/chrome"))
+    monkeypatch.setattr("clipforge.preview.isolation.resolve_executable", lambda *_args: "node")
+    batch = tmp_path / "batch.json"
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
+    RemotionAdvancedRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
+    env = recorded["env"]
+    assert isinstance(env, dict)
+    assert env["CLIPFORGE_RENDER_AUTHORITY"] == "advanced_service"
 
 
 def test_long_temp_base_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

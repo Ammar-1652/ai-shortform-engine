@@ -18,11 +18,13 @@ from clipforge.cli.batch_cmd import batch_app
 from clipforge.cli.benchmark_cmd import benchmark_app
 from clipforge.cli.campaign_cmd import campaign_app
 from clipforge.cli.candidate_cmd import candidate_app
+from clipforge.cli.editorial_cmd import editorial_app
 from clipforge.cli.final_cmd import final_app
 from clipforge.cli.hero_cmd import hero_app
 from clipforge.cli.job_cmd import job_app
 from clipforge.cli.language_cmd import language_app
 from clipforge.cli.media_cmd import media_app
+from clipforge.cli.operator_cmd import operator_app
 from clipforge.cli.platform_cmd import platform_app
 from clipforge.cli.preview_cmd import preview_app
 from clipforge.cli.profile_cmd import profile_app
@@ -58,6 +60,7 @@ app.add_typer(storage_app, name="storage")
 app.add_typer(transcript_app, name="transcript")
 app.add_typer(vision_app, name="vision")
 app.add_typer(candidate_app, name="candidate")
+app.add_typer(editorial_app, name="editorial")
 app.add_typer(preview_app, name="preview")
 app.add_typer(review_app, name="review")
 app.add_typer(hero_app, name="hero")
@@ -74,6 +77,7 @@ app.add_typer(campaign_app, name="campaign")
 app.add_typer(final_app, name="final")
 app.add_typer(assets_app, name="assets")
 app.add_typer(language_app, name="language")
+app.add_typer(operator_app, name="operator")
 
 
 def _version_callback(value: bool) -> None:

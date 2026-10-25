@@ -177,6 +177,26 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "opening_boundary_note": {
+      "default": "",
+      "maxLength": 240,
+      "title": "Opening Boundary Note",
+      "type": "string"
+    },
+    "opening_word_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Opening Word Id"
+    },
     "project_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",

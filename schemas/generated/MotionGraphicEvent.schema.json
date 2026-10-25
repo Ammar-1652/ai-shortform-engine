@@ -96,7 +96,8 @@
         "credit_card",
         "travel_postcard",
         "business_identity",
-        "business_spotlight"
+        "business_spotlight",
+        "quran_challenge"
       ],
       "title": "Template",
       "type": "string"

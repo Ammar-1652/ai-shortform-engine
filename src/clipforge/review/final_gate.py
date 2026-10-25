@@ -15,12 +15,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from clipforge.errors import ClipforgeError, MediaError, StorageError
+from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.media.hashing import sha256_file
 from clipforge.publish.errors import PublishError
 from clipforge.publish.preflight import DeliveryFacts
+from clipforge.review.playback import playback_sha256, playback_target, validate_playback
 from clipforge.review.service import NOTES_MAX, effective_review
 from clipforge.schemas.governance import ReviewDecision
+from clipforge.schemas.qa import HumanPlaybackReview
 from clipforge.storage import Database, insert_review, list_reviews
 
 FINAL_STALE = "The final review changed while this page was open; reload before saving."
@@ -70,7 +75,17 @@ def evidence_for_facts(facts: DeliveryFacts) -> dict[str, str]:
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
         "safe_region_id": facts.safe_region_id,
+        "preset_id": facts.preset_id,
+        "pilot_sha256": facts.pilot_sha256,
+        "motion_recipe_ids": ",".join(facts.motion_recipe_ids),
+        "motion_catalog_sha256": facts.motion_catalog_sha256,
+        "knowledge_context_id": facts.knowledge_context_id,
+        "knowledge_release_id": facts.knowledge_release_id,
+        "knowledge_context_sha256": facts.knowledge_context_sha256,
+        "knowledge_decision_trace_id": facts.knowledge_decision_trace_id,
+        "knowledge_decision_trace_sha256": facts.knowledge_decision_trace_sha256,
         "trajectory_sha256": facts.trajectory_sha256,
+        **({"video_sha256": facts.video_sha256} if facts_require_playback(facts) else {}),
         **language_evidence(facts),
     }
 
@@ -86,6 +101,7 @@ def capture_final_decision(
     notes: str,
     include_narration: bool = False,
     narration_artifact_id: str | None = None,
+    playback: HumanPlaybackReview | None = None,
 ) -> ReviewDecision:
     """Record a final decision from the current delivery evidence. This does not export."""
     from clipforge.publish.preflight import preflight_delivery
@@ -108,6 +124,7 @@ def capture_final_decision(
         decision=decision,
         reviewer_id=reviewer_id,
         notes=notes,
+        playback=playback,
     )
 
 
@@ -138,6 +155,8 @@ def approval_code(
     review = _newest(reviews, facts.candidate_id, facts.advanced_artifact_id)
     if review is None:
         return "final_approval_required"
+    if review.reviewer_role != "human_reviewer":
+        return "final_approval_required"
     if review.decision == "rejected":
         return "final_approval_rejected"
     if review.decision == "changes_requested":
@@ -145,7 +164,18 @@ def approval_code(
     stored = _stored_evidence(work_root, review)
     if stored is None:
         return "stale_final_review"
-    return _difference(stored, evidence)
+    code = _difference(stored, evidence)
+    if code == "approved" and facts_require_playback(facts):
+        playback = _stored_playback(work_root, review)
+        if playback is None:
+            return "human_playback_required"
+        try:
+            validate_playback(
+                playback, evidence, reviewer=review.reviewer_id, approving=True, recorded_at=review.created_at
+            )
+        except (MediaError, ValueError):
+            return "stale_human_playback"
+    return code
 
 
 def record_final_decision(
@@ -157,6 +187,7 @@ def record_final_decision(
     decision: str,
     reviewer_id: str,
     notes: str,
+    playback: HumanPlaybackReview | None = None,
 ) -> ReviewDecision:
     """Append one final decision for the evidence captured by the caller."""
     if decision not in {"approved", "rejected", "changes_requested"}:
@@ -169,6 +200,17 @@ def record_final_decision(
         raise FinalReviewError("reviewer_id must not be blank", code="invalid_document")
     if len(notes) > NOTES_MAX:
         raise FinalReviewError(f"notes are longer than {NOTES_MAX} characters", code="invalid_document")
+    if facts_require_playback(facts) and (decision == "approved" or playback is not None):
+        if playback is None:
+            raise FinalReviewError(
+                "an exact human playback record is required for a clean Advanced Hero approval",
+                code="human_playback_required",
+            )
+        try:
+            validate_playback(playback, evidence, reviewer=reviewer, approving=decision == "approved")
+        except (MediaError, ValueError) as exc:
+            raise FinalReviewError(str(exc), code="stale_human_playback") from exc
+        evidence = {**evidence, "human_playback_sha256": playback_sha256(playback)}
     digest = evidence_sha256(evidence)
     review = ReviewDecision(
         review_id=str(uuid.uuid4()),
@@ -183,9 +225,19 @@ def record_final_decision(
         automated=False,
     )
     root = work_root.resolve()
-    with database.transaction() as connection:
-        insert_review(connection, review)
-    _write_sidecar(root, review.review_id, evidence, digest)
+    sidecar: Path | None = None
+    try:
+        with database.transaction() as connection:
+            insert_review(connection, review)
+            _write_sidecar(root, review.review_id, evidence, digest, playback=playback)
+            sidecar = _sidecar_path(root, review.review_id)
+    except Exception:
+        # The row transaction rolls back on failure. Remove only this newly
+        # allocated sidecar if its publication succeeded before commit failed;
+        # older decisions and packages remain untouched.
+        if sidecar is not None and sidecar.is_file() and not sidecar.is_symlink():
+            sidecar.unlink()
+        raise
     return review
 
 
@@ -232,6 +284,7 @@ def package_blocker(
     qa_set_sha256: str,
     source_sha256: str,
     delivery_manifest_sha256: str,
+    current_evidence: dict[str, str] | None = None,
 ) -> str | None:
     """Block one campaign source when its final approval does not match the package."""
     try:
@@ -253,8 +306,36 @@ def package_blocker(
         return "final_approval_rejected"
     if review.decision == "changes_requested":
         return "final_approval_changes_requested"
-    if _stored_evidence(work_root, review) is None:
+    stored = _stored_evidence(work_root, review)
+    if stored is None:
         return "stale_final_review"
+    if stored.get("source_sha256") != source_sha256:
+        return "stale_source"
+    if stored.get("qa_set_sha256") != qa_set_sha256:
+        return "stale_qa"
+    if (
+        stored.get("project_id") != project_id
+        or stored.get("candidate_id") != candidate_id
+        or stored.get("advanced_artifact_id") != advanced_artifact_id
+    ):
+        return "stale_final_review"
+    recorded_delivery = stored.get("delivery_manifest_sha256", "")
+    if recorded_delivery and recorded_delivery != delivery_manifest_sha256:
+        return "stale_delivery"
+    if current_evidence is not None:
+        current_code = _difference(stored, current_evidence)
+        if current_code != "approved":
+            return current_code
+    if stored.get("style_id", "legacy-v1") != "legacy-v1":
+        playback = _stored_playback(work_root, review)
+        if playback is None:
+            return "human_playback_required"
+        try:
+            validate_playback(
+                playback, stored, reviewer=review.reviewer_id, approving=True, recorded_at=review.created_at
+            )
+        except (MediaError, ValueError):
+            return "stale_human_playback"
     return None
 
 
@@ -337,6 +418,12 @@ def final_board(
         "publishing": "deferred",
         "whop": "deferred",
         "automated": False,
+        "playback_required": facts_require_playback(facts),
+        "playback_target": (
+            playback_target(evidence_for_facts(facts)).model_dump(mode="json")
+            if facts_require_playback(facts)
+            else None
+        ),
     }
 
 
@@ -439,6 +526,7 @@ def accept_final_post(
         "reviewer_id",
         "notes",
         "automated",
+        "playback",
     }
     unknown = sorted(set(payload) - allowed)
     if unknown:
@@ -453,6 +541,7 @@ def accept_final_post(
     decision = payload.get("decision")
     reviewer = payload.get("reviewer_id")
     notes = payload.get("notes", "")
+    playback_payload = payload.get("playback")
     if not isinstance(candidate_id, str) or not isinstance(artifact_id, str):
         raise FinalReviewError("final review ids must be text", code="invalid_document")
     if not isinstance(manifest_sha, str):
@@ -471,6 +560,14 @@ def accept_final_post(
     )
     if facts.advanced_artifact_id != artifact_id or facts.advanced_artifact_sha256 != manifest_sha:
         raise FinalReviewError(FINAL_STALE, code="stale_final_review")
+    playback: HumanPlaybackReview | None = None
+    if playback_payload is not None:
+        if not isinstance(playback_payload, dict):
+            raise FinalReviewError("playback must be an object", code="invalid_document")
+        try:
+            playback = HumanPlaybackReview.model_validate(playback_payload)
+        except ValidationError as exc:
+            raise FinalReviewError(f"invalid human playback: {exc}", code="invalid_document") from exc
     return record_final_decision(
         database=database,
         work_root=work_root,
@@ -479,7 +576,13 @@ def accept_final_post(
         decision=decision,
         reviewer_id=reviewer,
         notes=notes,
+        playback=playback,
     )
+
+
+def facts_require_playback(facts: DeliveryFacts) -> bool:
+    """New clean renders need explicit playback; legacy fixtures remain readable."""
+    return facts.style_id != "legacy-v1"
 
 
 def final_media(database: Database, work_root: Path, source_asset_id: str, candidate_id: str) -> Path:
@@ -510,6 +613,7 @@ def history_rows(reviews: list[ReviewDecision], candidate_id: str, artifact_id: 
             "artifact_id": item.artifact_id,
             "decision": item.decision,
             "reviewer_id": item.reviewer_id,
+            "reviewer_role": item.reviewer_role,
             "created_at": item.created_at.isoformat(),
             "notes": human_notes(item.notes),
             "current_artifact": item.artifact_id == artifact_id,
@@ -538,8 +642,9 @@ def _difference(stored: dict[str, str], current: dict[str, str]) -> str:
     current_delivery = current.get("delivery_manifest_sha256") or ""
     if recorded_delivery and recorded_delivery != current_delivery:
         return "stale_delivery"
-    compared = {key: value for key, value in current.items() if key != "delivery_manifest_sha256"}
-    stored_compared = {key: value for key, value in stored.items() if key != "delivery_manifest_sha256"}
+    excluded = {"delivery_manifest_sha256", "human_playback_sha256"}
+    compared = {key: value for key, value in current.items() if key not in excluded}
+    stored_compared = {key: value for key, value in stored.items() if key not in excluded}
     if stored_compared != compared:
         return "stale_final_review"
     return "approved"
@@ -549,7 +654,12 @@ def _stored_evidence(work_root: Path, review: ReviewDecision) -> dict[str, str] 
     _human, digest = _split_notes(review.notes)
     if digest is None or review.artifact_id is None or review.candidate_id is None:
         return None
-    path = _sidecar_path(work_root.resolve(), review.review_id)
+    try:
+        path = confine_work_path(
+            work_root.resolve(), f"final-reviews/{review.review_id}.json", label="final review"
+        )
+    except MediaError:
+        return None
     if path.is_symlink() or not path.is_file():
         return None
     try:
@@ -566,30 +676,66 @@ def _stored_evidence(work_root: Path, review: ReviewDecision) -> dict[str, str] 
     typed = {str(key): str(value) for key, value in evidence.items()}
     if evidence_sha256(typed) != digest:
         return None
+    if "human_playback_sha256" in typed:
+        try:
+            playback = HumanPlaybackReview.model_validate(payload.get("playback"))
+        except ValidationError:
+            return None
+        if playback_sha256(playback) != typed["human_playback_sha256"]:
+            return None
     return typed
 
 
-def _write_sidecar(root: Path, review_id: str, evidence: dict[str, str], digest: str) -> None:
-    directory = root / "final-reviews"
+def _write_sidecar(
+    root: Path,
+    review_id: str,
+    evidence: dict[str, str],
+    digest: str,
+    *,
+    playback: HumanPlaybackReview | None = None,
+) -> None:
+    try:
+        target = confine_work_path(root, f"final-reviews/{review_id}.json", label="final review")
+    except MediaError as exc:
+        raise FinalReviewError(str(exc), code="unsafe_path") from exc
+    directory = target.parent
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / f"{review_id}.json"
     if target.is_symlink() or directory.is_symlink():
         raise FinalReviewError("final review destination is a symlink", code="unsafe_path")
-    payload = {"evidence": evidence, "evidence_sha256": digest}
+    payload: dict[str, object] = {"evidence": evidence, "evidence_sha256": digest}
+    if playback is not None:
+        payload["playback"] = playback.model_dump(mode="json")
     encoded = (json.dumps(payload, sort_keys=True) + "\n").encode("utf-8")
-    partial = target.with_suffix(".json.partial")
-    if partial.is_symlink():
-        raise FinalReviewError("final review destination is a symlink", code="unsafe_path")
-    descriptor = os.open(partial, os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    partial = target.with_suffix(f".json.partial.{uuid.uuid4().hex}")
+    descriptor = os.open(partial, os.O_CREAT | os.O_WRONLY | os.O_EXCL | os.O_NOFOLLOW, 0o644)
     try:
-        os.write(descriptor, encoded)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # A review id is append-only: linking publishes atomically without
+        # replacing an existing decision, including a malicious symlink.
+        os.link(partial, target)
     finally:
-        os.close(descriptor)
-    os.replace(partial, target)
+        partial.unlink()
 
 
 def _sidecar_path(root: Path, review_id: str) -> Path:
     return root / "final-reviews" / f"{review_id}.json"
+
+
+def _stored_playback(root: Path, review: ReviewDecision) -> HumanPlaybackReview | None:
+    try:
+        path = confine_work_path(
+            root.resolve(), f"final-reviews/{review.review_id}.json", label="final playback"
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw = payload.get("playback")
+        if not isinstance(raw, dict):
+            return None
+        return HumanPlaybackReview.model_validate(raw)
+    except (MediaError, OSError, UnicodeError, json.JSONDecodeError, ValidationError, AttributeError):
+        return None
 
 
 def _join_notes(notes: str, digest: str) -> str:
@@ -615,6 +761,8 @@ def _message(code: str) -> str:
         "stale_qa": "QA set changed after final approval",
         "stale_artifact": "advanced Hero artifact changed after final approval",
         "stale_delivery": "delivery package changed after final approval",
+        "human_playback_required": "human playback review is required before clean approval",
+        "stale_human_playback": "human playback review is stale or invalid",
     }.get(code, "final approval is missing")
 
 

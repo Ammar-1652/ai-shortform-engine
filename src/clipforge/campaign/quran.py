@@ -13,10 +13,22 @@ from pydantic import ValidationError
 
 from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
-from clipforge.schemas.campaign import QuranCaptionReview
+from clipforge.schemas.campaign import QuranCaptionReview, QuranVerificationPolicy, TarteelSpeechReview
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 
 _ARABIC_LETTERS = re.compile(r"[\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u06AF\u06CC]")
+
+
+def reviewed_quran_font(root: Path, policy: QuranVerificationPolicy) -> Path:
+    """Resolve the exact local font bound to the review, without a network fallback."""
+    root = root.resolve()
+    relative = Path(policy.font_relative_path)
+    if relative.is_absolute() or ".." in relative.parts or "\\" in policy.font_relative_path:
+        raise MediaError("Quran font must be a relative path inside the work root")
+    font = _confined_regular_path(root, root / relative)
+    if sha256_file(font) != policy.font_sha256:
+        raise MediaError("Quran font hash changed after review")
+    return font
 
 
 def load_tarteel_quran_review(
@@ -79,6 +91,73 @@ def load_tarteel_quran_review(
             f"Tarteel Advanced Hero requires exactly one reviewed Quran sidecar for {candidate_id}"
         )
     return matches[0]
+
+
+def load_tarteel_speech_review(
+    root: Path,
+    *,
+    source_asset_id: str,
+    candidate_id: str,
+    source_sha256: str = "",
+    raw_asr_sha256: str = "",
+    transcript_sha256: str = "",
+) -> tuple[TarteelSpeechReview, str, Path] | None:
+    """Load the optional reviewed audible-speech inventory for one candidate.
+
+    Absence is deliberately distinct from an invalid sidecar: old drafts stay
+    ``insufficient_evidence``, while a sidecar that names this candidate but
+    is stale or malformed blocks the render instead of being ignored.
+    """
+    root = root.resolve()
+    base = root / "campaigns" / "Tarteel"
+    _confined_regular_path(root, base, directory=True)
+    if not base.is_dir() or base.is_symlink():
+        raise MediaError("Tarteel speech review directory is missing")
+    matches: list[tuple[TarteelSpeechReview, str, Path]] = []
+    for path in sorted(base.rglob("speech-review.json")):
+        _confined_regular_path(root, path)
+        if path.is_symlink() or not path.is_file():
+            raise MediaError("Tarteel speech review sidecar must be a regular file")
+        try:
+            review = TarteelSpeechReview.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"invalid Tarteel speech review sidecar {path.name}: {exc}") from exc
+        if (review.source_asset_id, review.candidate_id) != (source_asset_id, candidate_id):
+            continue
+        if source_sha256 and review.source_sha256 != source_sha256:
+            raise MediaError("Tarteel speech review is stale: source hash differs")
+        if raw_asr_sha256 and review.raw_asr_sha256 != raw_asr_sha256:
+            raise MediaError("Tarteel speech review is stale: ASR hash differs")
+        if transcript_sha256 and review.transcript_sha256 != transcript_sha256:
+            raise MediaError("Tarteel speech review is stale: transcript hash differs")
+        matches.append((review, sha256_file(path), path))
+    if len(matches) > 1:
+        raise MediaError(f"multiple Tarteel speech review sidecars found for {candidate_id}")
+    return matches[0] if matches else None
+
+
+def validate_tarteel_speech_review_ranges(
+    review: TarteelSpeechReview,
+    source_ranges_us: list[tuple[int, int]],
+) -> None:
+    """Require the review to account for every retained source interval."""
+    if not source_ranges_us:
+        raise MediaError("Tarteel speech review requires selected source ranges")
+    intervals = sorted(review.intervals, key=lambda item: item.source_start_us)
+    for range_start, range_end in source_ranges_us:
+        cursor = range_start
+        for interval in intervals:
+            if interval.source_end_us <= cursor:
+                continue
+            if interval.source_start_us >= range_end:
+                break
+            if interval.source_start_us > cursor:
+                raise MediaError("Tarteel speech review has an uncovered selected source interval")
+            cursor = max(cursor, interval.source_end_us)
+            if cursor >= range_end:
+                break
+        if cursor < range_end:
+            raise MediaError("Tarteel speech review does not cover the full selected source range")
 
 
 def _confined_regular_path(root: Path, path: Path, *, directory: bool = False) -> Path:

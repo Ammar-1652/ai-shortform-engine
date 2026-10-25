@@ -13,12 +13,14 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from clipforge.editorial.knowledge import KnowledgeError, load_context
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.hero.motion_style import production_style_ids, style_for_id
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.direction import DirectionDocument, DirectionOption
+from clipforge.schemas.editorial_knowledge import EditorialDecisionTrace
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.time import TimeMapDocument
 from clipforge.storage import Database
@@ -52,6 +54,8 @@ def save_direction_brief(
     brief_path: Path,
     style: str = "auto",
     allow_unapproved: bool = False,
+    knowledge_context_path: Path | None = None,
+    knowledge_decision_trace_path: Path | None = None,
 ) -> tuple[DirectionDocument, Path, str]:
     """Validate a skill-produced brief against the current Hero evidence."""
 
@@ -91,18 +95,82 @@ def save_direction_brief(
         context.hero_plan.edit_plan.time_map,
         {scene.scene_id for scene in context.visual.scenes},
     )
+    # Recipe ids are references to the verified local catalog.  A direction
+    # may only name approved, offline-capable components; the renderer never
+    # resolves a free-form component string from the brief.
+    from clipforge.editorial.motion_catalog import MotionCatalog
+
+    catalog = MotionCatalog.load()
+    for option in document.options:
+        for recipe_id in option.motion_recipe_ids:
+            recipe = catalog.find(recipe_id)
+            if recipe.state != "approved":
+                raise MediaError(f"direction recipe is not approved: {recipe_id}")
     selected = _select(document, style)
     profile = style_for_id(selected.style_id)
+    knowledge_context = None
+    knowledge_trace = None
+    knowledge_trace_sha256 = None
+    if knowledge_context_path is not None:
+        try:
+            knowledge_context, _ = load_context(knowledge_context_path.absolute())
+        except KnowledgeError as exc:
+            raise MediaError(str(exc)) from exc
+        if (
+            knowledge_context.project_id != context.project_id
+            or knowledge_context.source_asset_id != source_asset_id
+            or knowledge_context.candidate_id != candidate_id
+            or knowledge_context.source_sha256 != context.source_sha256
+        ):
+            raise MediaError("knowledge context does not match the promoted candidate and source")
+    if knowledge_decision_trace_path is not None:
+        if knowledge_context is None:
+            raise MediaError("knowledge decision trace requires --knowledge-context")
+        if knowledge_decision_trace_path.is_symlink() or not knowledge_decision_trace_path.is_file():
+            raise MediaError("knowledge decision trace must be a regular file")
+        try:
+            knowledge_trace = EditorialDecisionTrace.model_validate_json(
+                knowledge_decision_trace_path.absolute().read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"invalid knowledge decision trace: {exc}") from exc
+        if (
+            knowledge_trace.context_id != knowledge_context.context_id
+            or knowledge_trace.context_sha256 != knowledge_context.context_sha256
+        ):
+            raise MediaError("knowledge decision trace does not match the context bundle")
+        knowledge_trace_sha256 = sha256_file(knowledge_decision_trace_path.absolute())
     # Selection is a controlled transformation, never model_copy of unchecked
     # user fields: the complete resulting document is validated again.
     payload = document.model_dump(mode="json")
     payload.update(
+        operator_role=document.operator_role or "codex_operator",
         selected_option_id=selected.option_id,
         selection_mode="operator_override" if style != "auto" else "automatic",
         style_id=selected.style_id,
         style_fingerprint=profile.fingerprint(),
+        preset_id=selected.preset_id,
+        direction_recipe_version="direction-v2",
+        # Every new directed production uses the shared platform-safe inner
+        # band unless the operator explicitly selected the legacy region in a
+        # reviewed document.
+        safe_region_id=document.safe_region_id,
+        motion_catalog_sha256=catalog.fingerprint(),
     )
+    if knowledge_context is not None:
+        payload.update(
+            knowledge_context_id=knowledge_context.context_id,
+            knowledge_release_id=knowledge_context.knowledge_release_id,
+            knowledge_context_sha256=knowledge_context.context_sha256,
+        )
+    if knowledge_trace is not None:
+        payload.update(
+            knowledge_decision_trace_id=knowledge_trace.trace_id,
+            knowledge_decision_trace_sha256=knowledge_trace_sha256,
+        )
     document = DirectionDocument.model_validate(payload)
+    validate_motion_recipe_bindings(document)
+    validate_preset_binding(document)
     destination = (
         context.workspace.advanced_review_direction_file(candidate_id)
         if allow_unapproved
@@ -136,6 +204,49 @@ def _select(document: DirectionDocument, style: str) -> DirectionOption:
     if not matches:
         raise MediaError(f"direction brief has no option for style {style}")
     return sorted(matches, key=lambda option: (-option.selection_score, option.option_id))[0]
+
+
+def validate_motion_recipe_bindings(document: DirectionDocument) -> None:
+    """Verify the selected direction against the current local recipe catalog."""
+    if document.motion_catalog_sha256 is None and not any(
+        option.motion_recipe_ids for option in document.options
+    ):
+        return
+    from clipforge.editorial.motion_catalog import MotionCatalog, MotionCatalogError
+
+    try:
+        catalog = MotionCatalog.load()
+    except MotionCatalogError as exc:
+        raise MediaError(str(exc)) from exc
+    if document.motion_catalog_sha256 is not None and document.motion_catalog_sha256 != catalog.fingerprint():
+        raise MediaError("direction motion catalog fingerprint is stale")
+    if any(option.motion_recipe_ids for option in document.options) and document.motion_catalog_sha256 is None:
+        raise MediaError("direction motion recipes require a catalog fingerprint")
+    for option in document.options:
+        for recipe_id in option.motion_recipe_ids:
+            try:
+                recipe = catalog.find(recipe_id)
+            except MotionCatalogError as exc:
+                raise MediaError(str(exc)) from exc
+            if recipe.state != "approved":
+                raise MediaError(f"direction recipe is not approved: {recipe_id}")
+
+
+def validate_preset_binding(document: DirectionDocument) -> None:
+    if document.preset_id is None:
+        return
+    from clipforge.editorial.presets import PresetCatalog, PresetCatalogError
+
+    try:
+        preset = PresetCatalog.load().find(document.preset_id)
+    except PresetCatalogError as exc:
+        raise MediaError(str(exc)) from exc
+    selected = next(item for item in document.options if item.option_id == document.selected_option_id)
+    if selected.style_id not in preset.allowed_style_ids:
+        raise MediaError("direction preset does not allow the selected style")
+    missing = sorted(set(preset.motion_recipe_ids) - set(selected.motion_recipe_ids))
+    if missing:
+        raise MediaError(f"direction preset recipes are missing from the selected option: {missing}")
 
 
 def _editorial_score(option: DirectionOption) -> float:
@@ -299,15 +410,80 @@ def validate_source_evidence(
                 # company mention alone supports an identity card, never a
                 # trend visualization.
                 "business_spotlight": ("$", "million", "valued", "growth", "increase", "%"),
+                "quran_challenge": (
+                    "quran",
+                    "قرآن",
+                    "آية",
+                    "آيات",
+                    "يكمل",
+                    "حفظ",
+                    "ترتيل",
+                    "يلفظ",
+                    "رقيب",
+                    "عتيد",
+                ),
             }[graphic.template]
             if graphic.template == "credit_card":
                 supported = all(term in evidence_text for term in required_terms)
             elif graphic.template == "business_spotlight":
                 supported = sum(term in evidence_text for term in required_terms) >= 2
+            elif graphic.template == "quran_challenge":
+                supported = any(term in evidence_text for term in required_terms)
             else:
                 supported = any(term in evidence_text for term in required_terms)
             if not supported:
                 raise MediaError("direction motion graphic template is not supported by its source evidence")
+        for camera in option.camera_motion:
+            if camera.interval.output_end_us > duration:
+                raise MediaError("direction camera motion extends past the approved TimeMap")
+            if any(evidence_id not in evidence_by_id for evidence_id in camera.source_evidence_ids):
+                raise MediaError("direction camera motion references undeclared evidence")
+            camera_words = [
+                by_id[word_id]
+                for evidence_id in camera.source_evidence_ids
+                for word_id in evidence_by_id[evidence_id].source_word_ids
+            ]
+            camera_start = min(word.output_start_us for word in camera_words)
+            camera_end = max(word.output_end_us for word in camera_words)
+            if camera.interval.output_end_us <= camera_start or camera.interval.output_start_us >= camera_end:
+                raise MediaError("direction camera motion does not overlap its source evidence")
+        mapped_segments = time_map.to_time_map().segments
+        interior_cut_starts = {segment.output_start_us for segment in mapped_segments[1:]}
+        for transition in option.transitions:
+            if transition.interval.output_end_us > duration:
+                raise MediaError("direction transition extends past the approved TimeMap")
+            if transition.interval.output_start_us not in interior_cut_starts:
+                raise MediaError("direction transition must start at an interior TimeMap cut")
+            if any(evidence_id not in evidence_by_id for evidence_id in transition.source_evidence_ids):
+                raise MediaError("direction transition references undeclared evidence")
+            transition_words = [
+                by_id[word_id]
+                for evidence_id in transition.source_evidence_ids
+                for word_id in evidence_by_id[evidence_id].source_word_ids
+            ]
+            evidence_start = min(word.output_start_us for word in transition_words)
+            evidence_end = max(word.output_end_us for word in transition_words)
+            if (
+                transition.interval.output_end_us <= evidence_start
+                or transition.interval.output_start_us >= evidence_end
+            ):
+                raise MediaError("direction transition does not overlap its source evidence")
+            if transition.sfx_placement_id is not None:
+                placement_ref = next(
+                    (
+                        item
+                        for item in option.asset_placements
+                        if item.placement_id == transition.sfx_placement_id
+                    ),
+                    None,
+                )
+                if placement_ref is None or placement_ref.kind != "audio":
+                    raise MediaError("direction transition SFX placement is missing or not audio")
+                if (
+                    placement_ref.interval.output_end_us <= transition.interval.output_start_us
+                    or placement_ref.interval.output_start_us >= transition.interval.output_end_us
+                ):
+                    raise MediaError("direction transition SFX must overlap its transition")
         for native in option.source_native_text:
             if native.interval.output_end_us > duration:
                 raise MediaError("source-native text interval extends past the approved TimeMap")

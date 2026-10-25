@@ -55,9 +55,19 @@ class LocalAssetRegistration:
     cache_status: Literal["hit", "miss"]
 
 
-def _fingerprint(project_id: str, kind: str, digest: str, evidence_hash: str, tags: list[str]) -> str:
+def _fingerprint(
+    project_id: str,
+    kind: str,
+    digest: str,
+    evidence_hash: str,
+    tags: list[str],
+    rights_status: str = "campaign_provided",
+) -> str:
+    identity: list[object] = ["campaign-local-v1", project_id, kind, digest, evidence_hash, tags]
+    if rights_status != "campaign_provided":
+        identity.append(rights_status)
     body = json.dumps(
-        ["campaign-local-v1", project_id, kind, digest, evidence_hash, tags],
+        identity,
         ensure_ascii=False,
         separators=(",", ":"),
     )
@@ -75,6 +85,7 @@ def register_local_asset(
     kind: LocalAssetKind,
     confirm_rights: bool = False,
     content_tags: list[str] | None = None,
+    rights_status: Literal["campaign_provided", "licensed"] = "campaign_provided",
 ) -> LocalAssetRegistration:
     """Hash, decode and bind a campaign asset; no download or editorial approval.
 
@@ -86,6 +97,8 @@ def register_local_asset(
         raise MediaError("--confirm-rights is required; campaign-provided rights are an operator assertion")
     if kind not in {"graphic", "audio"}:
         raise MediaError("local asset kind must be graphic or audio")
+    if rights_status not in {"campaign_provided", "licensed"}:
+        raise MediaError("local registration requires campaign_provided or licensed rights")
     root = work_root.resolve()
     with database.connect() as connection:
         get_project(connection, project_id)
@@ -117,7 +130,7 @@ def register_local_asset(
         ),
     )
     tags = sorted(reference.content_tags)
-    identity = _fingerprint(project_id, kind, digest, evidence_hash, tags)
+    identity = _fingerprint(project_id, kind, digest, evidence_hash, tags, rights_status)
     asset_id = f"campaign-{identity}"
     license_id = f"lic-{asset_id}"
     reference.asset_id = asset_id
@@ -127,8 +140,10 @@ def register_local_asset(
     record = AssetLicenseRecord(
         license_record_id=license_id,
         asset_id=asset_id,
-        status=RightsStatus.CAMPAIGN_PROVIDED,
-        license_name="campaign-provided local asset",
+        status=RightsStatus(rights_status),
+        license_name="campaign-provided local asset"
+        if rights_status == "campaign_provided"
+        else "licensed external asset",
         evidence_uri=path_to_file_uri(evidence),
         notes="Explicit operator rights assertion; not independent legal verification.",
         recorded_at=now,
@@ -196,6 +211,7 @@ def validate_local_asset_evidence(
         entry.file_sha256,
         sha256_file(evidence),
         sorted(entry.reference.content_tags),
+        record.status.value,
     )
     if fingerprint != entry.reference.provenance.inputs_sha256:
         raise MediaError("campaign asset evidence or content tags changed after registration")

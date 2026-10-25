@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn, cast
 from uuid import UUID
 
 import typer
+from pydantic import ValidationError
 
 from clipforge.assets.handoff import (
     cancel_envato_asset,
@@ -23,6 +24,15 @@ from clipforge.assets.handoff import (
 )
 from clipforge.assets.local import LocalAssetKind, register_local_asset
 from clipforge.assets.mcp_client import AssetError
+from clipforge.assets.openverse import (
+    OpenverseError,
+    OpenverseProvider,
+    acquire_selection,
+    load_acquisition,
+    load_search_response,
+    select_media,
+    write_selection,
+)
 from clipforge.assets.portal_bridge import EnvatoPortalBridge, extract_media_archive
 from clipforge.assets.provider import (
     DryRunAssetDiscoveryProvider,
@@ -44,11 +54,125 @@ envato_app = typer.Typer(
 )
 assets_app.add_typer(envato_app, name="envato")
 envato_app.add_typer(envato_auth_app, name="auth")
+openverse_app = typer.Typer(
+    no_args_is_help=True,
+    help="Search optional Openverse metadata without automatic downloads.",
+)
+assets_app.add_typer(openverse_app, name="openverse")
 
 
 def _fail(exc: BaseException) -> NoReturn:
     typer.echo(str(exc), err=True)
     raise typer.Exit(1)
+
+
+@openverse_app.command("doctor")
+def openverse_doctor() -> None:
+    """Report Openverse configuration without contacting the provider."""
+    typer.echo(OpenverseProvider().doctor())
+
+
+@openverse_app.command("search")
+def openverse_search(
+    media_type: Annotated[str, typer.Option("--media-type", help="image or audio.")],
+    query: Annotated[str, typer.Option("--query")],
+    page: Annotated[int, typer.Option("--page", min=1)] = 1,
+    page_size: Annotated[int, typer.Option("--page-size", min=1, max=20)] = 10,
+    license_filter: Annotated[list[str] | None, typer.Option("--license")] = None,
+    category: Annotated[str | None, typer.Option("--category")] = None,
+) -> None:
+    """Search Openverse and print normalized metadata; never downloads media."""
+    from pydantic import ValidationError
+
+    from clipforge.schemas.openverse import OpenverseSearchRequest
+
+    try:
+        if media_type not in {"image", "audio"}:
+            raise ClipforgeError("media_type must be image or audio")
+        request = OpenverseSearchRequest(
+            media_type=cast(Literal["image", "audio"], media_type),
+            query=query,
+            page=page,
+            page_size=page_size,
+            license_filter=license_filter or [],
+            category=category,
+        )
+        response = OpenverseProvider().search(request)
+    except (ClipforgeError, OpenverseError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(response.model_dump_json(indent=2))
+
+
+@openverse_app.command("select")
+def openverse_select(
+    response_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    media_id: Annotated[str, typer.Option("--media-id")],
+    policy_fingerprint: Annotated[str, typer.Option("--policy-fingerprint")],
+    license_evidence: Annotated[Path | None, typer.Option("--license-evidence")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Select one normalized result; no media bytes are downloaded."""
+    from clipforge.schemas.openverse import OpenverseLicenseEvidence
+
+    try:
+        response = load_search_response(response_file.resolve())
+        evidence = (
+            OpenverseLicenseEvidence.model_validate_json(license_evidence.resolve().read_text(encoding="utf-8"))
+            if license_evidence is not None
+            else None
+        )
+        selection = select_media(
+            response,
+            media_id=media_id,
+            policy_fingerprint=policy_fingerprint,
+            license_evidence=evidence,
+        )
+        path = write_selection(selection, work_root=work_dir)
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"selection_id: {selection.selection_id}")
+    typer.echo(f"policy_status: {selection.policy_status}")
+    typer.echo(f"path: {path}")
+
+
+@openverse_app.command("acquire")
+def openverse_acquire(
+    selection_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    project_id: Annotated[str, typer.Option("--project")],
+    source_asset_id: Annotated[str, typer.Option("--source")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Acquire the bytes for one independently rights-verified selection."""
+    from clipforge.schemas.openverse import OpenverseSelection
+
+    try:
+        selection = OpenverseSelection.model_validate_json(selection_file.read_text(encoding="utf-8"))
+        manifest = acquire_selection(
+            selection,
+            database=Database(resolve_db_path(db)),
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            work_root=work_dir,
+        )
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"acquisition_id: {manifest.acquisition_id}")
+    typer.echo(f"file_sha256: {manifest.file_sha256}")
+    typer.echo(f"size_bytes: {manifest.size_bytes}")
+
+
+@openverse_app.command("verify")
+def openverse_verify(
+    manifest_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Verify acquired bytes without downloading or changing them."""
+    try:
+        manifest = load_acquisition(manifest_file, work_root=work_dir)
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"PASS openverse_acquisition {manifest.acquisition_id}")
 
 
 def _provider_names(name: str) -> tuple[str, str]:

@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "A human review. ``automated`` cannot be true in this schema version.",
+  "description": "A review decision with an explicit operator role.\n\nCodex may record source-grounded candidate, Hero, caption, and framing\ndecisions while operating the pipeline. Final approval remains human-only.\n``automated`` cannot be true in this schema version.",
   "properties": {
     "artifact_id": {
       "anyOf": [
@@ -71,6 +71,15 @@
       "maxLength": 200,
       "minLength": 1,
       "title": "Reviewer Id",
+      "type": "string"
+    },
+    "reviewer_role": {
+      "default": "human_reviewer",
+      "enum": [
+        "codex_operator",
+        "human_reviewer"
+      ],
+      "title": "Reviewer Role",
       "type": "string"
     },
     "schema_version": {

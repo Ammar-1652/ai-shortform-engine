@@ -11,6 +11,15 @@
   <form id="decision-form">
     <label>Reviewer <input id="reviewer" name="reviewer"></label>
     <label>Notes <textarea id="notes" name="notes"></textarea></label>
+    <fieldset id="playback-fields" hidden>
+      <legend>Exact-video playback observation (required for clean approval)</legend>
+      <label><input type="checkbox" id="watched-audio"> I watched the complete video with audio</label>
+      <label><input type="checkbox" id="watched-muted"> I watched the complete video muted</label>
+      <label>Player <input id="watch-player" value="Clipforge loopback browser player"></label>
+      <label>Playback observations, including timestamps
+        <textarea id="watch-observations"></textarea>
+      </label>
+    </fieldset>
     <button type="submit" data-decision="approved">Approve</button>
     <button type="submit" data-decision="rejected">Reject</button>
     <button type="submit" data-decision="changes_requested">Request changes</button>

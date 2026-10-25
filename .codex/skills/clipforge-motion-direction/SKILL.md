@@ -9,6 +9,21 @@ Use this project skill when an operator asks for a stronger short-form presentat
 motion direction, typography treatment, or an improved Hero/Advanced Hero draft.
 It is editorial guidance, not a renderer or an approval gate.
 
+## Role and tool boundary
+
+Codex is the `codex_operator`: choose the editorial direction and invoke the
+typed Clipforge tools. The system is the `system_enforcer`: it performs media
+work, validates rights and timing, renders Remotion compositions, and writes
+evidence. A human remains the `human_reviewer` for exact audio/muted playback
+and final approval. This skill must return declarative JSON; it must never
+return JSX, JavaScript, shell commands, arbitrary effect code, or an approval.
+
+Use the capability routing in the repository `SKILLS.md`. In particular,
+send speech work to transcript/alignment services, cuts to an
+`EditorialArcDocument`, captions to the shared caption builder, assets through
+the licensed asset catalog, and graphics through allowlisted Remotion motion
+graphic events. Do not make a skill a second renderer or a second cache.
+
 ## Read before planning
 
 Read the campaign policy and rights restrictions, source manifest, transcript,
@@ -33,20 +48,32 @@ Return a concise direction brief with:
    `quran-readable-v2`,
    `kinetic-caption-v1`, `documentary-broll-v1`, `data-explainer-v1`,
    `paper-explainer-v1`, or `premium-minimal-v1`;
-5. the project-defined `portrait-safe-v1` region (not a universal platform
-   guarantee) and collision notes for faces,
+   optionally pair it with one cataloged narrative preset:
+   `clean_explainer`, `proof_comparison`, `story_reveal`, `transformation`,
+   `quote_emotion`, or `product_cta`. A preset is a routing contract; it does
+   not override source evidence, campaign policy, or the selected style;
+5. one project-defined safe region: `portrait-safe-v1` for nonessential edge
+   content, or `platform-resilient-portrait-v1` when reviewed logos, source
+   text, or other important material is close to a horizontal edge. The latter
+   keeps the foreground inside an inner band over the existing blurred source
+   background so one 1080x1920 file tolerates TikTok and Instagram viewer
+   chrome. Its persisted upper-context defaults are 64px, centered, `y=280`,
+   and at most two lines. Neither region is a universal platform guarantee.
+   Record collision notes for faces,
    source-native text, graphics, B-roll, and captions. Record either
    `source_native_text_status: reviewed_absent` or `annotated`. When a title or
    quote is already burned into the source, record a reviewed `SourceNativeText`
    annotation with its exact phrase, interval, visual scene id, and note so
    duplicate optional typography can be suppressed. `unavailable` cannot enter
    clean production;
-6. an optional `context_line` for campaigns that reserve an upper blurred lane.
-   It is one typed sentence with an allowlisted emoji, a full-output interval,
-   and exact transcript evidence or explicit human-review metadata. It must not
-   duplicate a timed caption; omit it when no defensible context exists. The
-   renderer owns the upper safe-lane geometry and never accepts arbitrary HTML
-   or emoji strings;
+6. one required `context_line` for every new production direction (the
+   `direction-v2` contract). It is one typed, scene-specific sentence with an
+   allowlisted emoji, a full-output interval, and exact transcript evidence or
+   explicit human-review metadata. It must not duplicate a timed caption. The
+   renderer owns the upper safe-lane geometry and keeps it below search/header
+   UI; arbitrary HTML or emoji strings are rejected. Historical `direction-v1`
+   artifacts remain readable but cannot be used as a new clean production
+   direction without this line;
 7. optional diagram facts only when both sides, units, labels, values, and source
    word/span provenance are explicit;
 8. optional native `motion_graphics` only when an allowlisted illustration conveys
@@ -63,7 +90,15 @@ Return a concise direction brief with:
    use a graphic as a generic decoration, replacement caption, or way to invent a
    hook. Graphics must not overlap each other; omission is the correct choice when
    no template fits;
-9. optional `asset_placements` only for locally registered, rights-cleared media
+9. optional `camera_motion` events when a bounded move helps orient, follow,
+   reveal, emphasize, or settle a source-grounded beat. Bind each event to
+   evidence, an integer-microsecond interval, a target, an intensity envelope,
+   and a hold fallback. Do not add constant zooms or movement while the viewer
+   must read a caption;
+10. optional `transitions` only at reviewed interior TimeMap cuts. Each one
+    names its narrative purpose, allowlisted style, evidence, and optional SFX
+    placement. A clean cut is the default for ordinary conversation;
+11. optional `asset_placements` only for locally registered, rights-cleared media
    that has a real source-grounded reason. Each placement must name `asset_id`,
    `kind` (`graphic` or `audio`), an integer-microsecond output `interval`,
    `source_in_us`, one or more evidence ids, a `purpose`, and a concise
@@ -75,6 +110,14 @@ Return a concise direction brief with:
 10. a validation checklist covering alignment, rights, geometry, stale
    approvals, and complete-word TimeMap boundaries. Reject a cut that
    intersects a spoken word so the picture cannot lose its leading phoneme.
+
+All new production styles use the shared platform-safe text policy: every
+spoken caption is grouped into exactly one readable line, with a plan-time
+word/character budget and no renderer wrapping fallback. The upper context
+sentence and lower caption lane are kept inside the same inner portrait band;
+the system checks their animated bounds against the top search/header, side
+rails, and bottom description/action UI. A line that cannot fit at the pinned
+local font size fails planning and must be regrouped from complete words.
 
 When the operator requests a multi-moment recut, produce a separate typed
 `EditorialArcDocument` for `--editorial-arc-file`. It must name exact forced
@@ -97,10 +140,13 @@ The brief is declarative JSON, not executable code. Its top-level fields are
 `source_sha256`, `hero_plan_sha256`, `time_map_sha256`, `alignment_sha256`,
 `visual_analysis_sha256`, `options` (exactly three), `selected_option_id`,
 `selection_mode`, `style_id`,
-`style_fingerprint`, `safe_region_id` (`portrait-safe-v1`), and provenance.
+`style_fingerprint`, `safe_region_id` (`portrait-safe-v1` or
+`platform-resilient-portrait-v1`), and provenance.
 Each option contains `style_id`, `beats`, `evidence`, `segment_order`,
-`context_line`, `motion_graphics`, `asset_placements`, `selection_score`, and
-`selection_reason`; every beat contains a `kind`
+`context_line`, `motion_graphics`, `asset_placements`, `motion_recipe_ids`,
+`camera_motion`, `transitions`, `selection_score`, and `selection_reason`;
+the persisted direction also carries the verified `motion_catalog_sha256`.
+Every beat contains a `kind`
 (`hook`, `body`, or `punch`), source segment ids, evidence ids, and exact
 source-grounded display text. A brief that cannot populate these fields must
 be rejected rather than filled with invented copy.
@@ -128,6 +174,24 @@ Invoke this skill before planning when presentation quality needs review. Save
 the JSON brief outside Git (under the work root or another operator-controlled
 input location), then validate and bind it to the current approved Hero
 candidate:
+
+The normal routing is: inspect with `source inspect` / `vision show`, extract
+speech with `transcript run` and `hero align`, mine with `candidate mine`,
+record Codex editorial promotion with `review decide --reviewer-role
+codex_operator` and `hero review decide --reviewer-role codex_operator`, then
+bind this brief with `direction plan`. Use the Advanced Hero service for the
+TimeMap, crop, captions, graphics, B-roll, SFX, Remotion render, checkpoints,
+decoded evidence, and QA. Do not make this skill perform those media actions
+itself.
+
+Before binding, compare the three declarative alternatives without rendering:
+
+```text
+clipforge editorial direction compare direction.json
+```
+
+This command only reports the deterministic score and layer counts. It does not
+rewrite the brief or create an approval.
 
 ```text
 clipforge hero advanced direction plan SOURCE_ID CANDIDATE_ID \

@@ -14,7 +14,7 @@ from clipforge.review.service import LOOPBACK_HOST
 from clipforge.storage import Database
 
 _HELP = (
-    "Record human decisions on the current rough preview set. "
+    "Record role-labelled editorial decisions on the current rough preview set. "
     "Decisions stay on this machine. Scores stay unchanged."
 )
 
@@ -95,16 +95,20 @@ def review_decide(
     source_asset_id: Annotated[str, typer.Argument(help="Ingested source id.")],
     candidate_id: Annotated[str, typer.Argument(help="Candidate id in the current preview set.")],
     decision: Annotated[str, typer.Option("--decision", help="approved, rejected, or changes_requested.")],
-    reviewer_id: Annotated[str, typer.Option("--reviewer-id", help="Human reviewer id.")],
+    reviewer_id: Annotated[str, typer.Option("--reviewer-id", help="Codex or human operator id.")],
     preview_set_id: Annotated[str, typer.Option("--preview-set-id", help="Preview set id shown on the page.")],
     manifest_sha256: Annotated[str, typer.Option("--manifest-sha256", help="Current manifest SHA-256.")],
     artifact_id: Annotated[str, typer.Option("--artifact-id", help="Current rough preview artifact id.")],
     project_id: Annotated[str, typer.Option("--project-id", help="Project id shown on the page.")],
+    reviewer_role: Annotated[
+        str,
+        typer.Option("--reviewer-role", help="codex_operator or human_reviewer."),
+    ] = "codex_operator",
     notes: Annotated[str, typer.Option("--notes", help="Optional note stored as text.")] = "",
     db: Annotated[Path | None, typer.Option("--db", help="SQLite database path.")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir", help="Derived-media work root.")] = None,
 ) -> None:
-    """Append one human decision. Does not change the preview files."""
+    """Append one editorial decision. Final approval uses the human-only final-review command."""
     from clipforge.review.service import DecisionContext, record_decision
 
     context = DecisionContext(
@@ -123,6 +127,7 @@ def review_decide(
             decision=decision,
             reviewer_id=reviewer_id,
             notes=notes,
+            reviewer_role=reviewer_role,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

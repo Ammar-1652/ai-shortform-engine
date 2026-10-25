@@ -4,17 +4,20 @@ import pytest
 from pydantic import ValidationError
 
 from clipforge.errors import MediaError
+from clipforge.hero.direction_lint import lint_direction
 from clipforge.hero.direction_service import validate_source_evidence
 from clipforge.hero.editorial_arc import remap_direction_intervals
 from clipforge.hero.motion_style import style_for_id
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionBeat,
+    DirectionCameraMotion,
     DirectionContextLine,
     DirectionDocument,
     DirectionEvidence,
     DirectionMotionGraphic,
     DirectionOption,
+    DirectionTransitionSpec,
     SourceNativeText,
 )
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
@@ -93,6 +96,8 @@ def _document() -> DirectionDocument:
         selection_mode="automatic",
         style_id="kinetic-caption-v1",
         style_fingerprint=style_for_id("kinetic-caption-v1").fingerprint(),
+        safe_region_id="portrait-safe-v1",
+        direction_recipe_version="direction-v1",
         provenance=ArtifactProvenance(
             created_at=datetime.now(UTC),
             created_by="test",
@@ -198,6 +203,16 @@ def test_direction_requires_three_source_grounded_options() -> None:
     assert {beat.kind for beat in document.options[0].beats} == {"hook", "body", "punch"}
 
 
+def test_direction_accepts_explicit_platform_resilient_portrait_region() -> None:
+    document = _document().model_copy(update={"safe_region_id": "platform-resilient-portrait-v1"})
+    assert document.safe_region_id == "platform-resilient-portrait-v1"
+
+    with pytest.raises(ValidationError):
+        DirectionDocument.model_validate(
+            {**_document().model_dump(mode="json"), "safe_region_id": "unknown-safe-region"}
+        )
+
+
 def test_direction_rejects_missing_beat_kind() -> None:
     option = _option("option-a", "editorial-clean-v1", 0.5)
     option = option.model_copy(
@@ -259,9 +274,103 @@ def test_direction_evidence_binds_words_and_time_map() -> None:
     validate_source_evidence(document, words, time_map, set())
 
 
+def test_camera_motion_is_bounded_and_bound_to_source_evidence() -> None:
+    option = _option("option-a", "editorial-clean-v1", 0.8).model_copy(
+        update={
+            "camera_motion": [
+                DirectionCameraMotion(
+                    motion_id="camera-1",
+                    intent="emphasize",
+                    path="push_in",
+                    interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+                    source_evidence_ids=["e-option-a-0"],
+                    scale_start_permille=1000,
+                    scale_end_permille=1060,
+                    travel_px=32,
+                    intensity="quiet",
+                )
+            ]
+        }
+    )
+    document = _document().model_copy(
+        update={
+            "options": [
+                option,
+                _option("option-b", "kinetic-caption-v1", 0.9),
+                _option("option-c", "premium-minimal-v1", 0.7),
+            ]
+        }
+    )
+    validate_source_evidence(
+        document,
+        _aligned_words(),
+        TimeMapDocument(
+            time_map_id="map-1",
+            segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+        ),
+        set(),
+    )
+    with pytest.raises(ValidationError, match="quiet camera motion"):
+        DirectionCameraMotion(
+            motion_id="camera-bad",
+            intent="emphasize",
+            path="push_in",
+            interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+            source_evidence_ids=["e-1"],
+            scale_end_permille=1100,
+            intensity="quiet",
+        )
+
+    with pytest.raises(ValidationError, match="push_in camera motion"):
+        DirectionCameraMotion(
+            motion_id="camera-reverse",
+            intent="emphasize",
+            path="push_in",
+            interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+            source_evidence_ids=["e-1"],
+            scale_start_permille=1060,
+            scale_end_permille=1000,
+            intensity="gentle",
+        )
+
+
+def test_transition_requires_a_narrative_purpose() -> None:
+    with pytest.raises(ValidationError, match="clean cut transition"):
+        DirectionTransitionSpec(
+            transition_id="transition-1",
+            interval=OutputInterval(output_start_us=1_000_000, output_end_us=1_100_000),
+            purpose="reveal",
+            style="clean_cut_v1",
+            source_evidence_ids=["e-1"],
+        )
+
+
+def test_direction_lint_reports_pass_and_restraint_info() -> None:
+    document = _document()
+    report = lint_direction(
+        document,
+        direction_sha256="f" * 64,
+        words=_aligned_words(),
+        time_map=TimeMapDocument(
+            time_map_id="map-1",
+            segments=[TimelineSegment(segment_id="segment-1", source_start_us=0, source_end_us=3_000_000)],
+        ),
+        scene_ids=set(),
+    )
+    assert report.status == "pass"
+    assert any(item.code == "optional_layers_omitted" for item in report.findings)
+
+
 def test_quran_style_requires_a_context_line() -> None:
     with pytest.raises(ValidationError, match="upper context line"):
         _option("quran", "quran-editorial-v1", 0.8)
+
+
+def test_new_direction_recipe_requires_context_line() -> None:
+    payload = _document().model_dump(mode="json")
+    payload["direction_recipe_version"] = "direction-v2"
+    with pytest.raises(ValidationError, match="reviewed upper context line"):
+        DirectionDocument.model_validate(payload)
 
 
 def test_context_line_is_full_clip_reviewed_and_not_a_duplicate() -> None:
