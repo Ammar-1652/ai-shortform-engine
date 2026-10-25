@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.treatment import BeatTreatmentDecision
 
 _SHA = r"^[0-9a-f]{64}$"
 
@@ -303,6 +304,7 @@ class DirectionOption(Versioned):
     context_line: DirectionContextLine | None = None
     source_native_text: list[SourceNativeText] = Field(default_factory=list, max_length=8)
     source_native_text_status: Literal["reviewed_absent", "annotated", "unavailable"] = "unavailable"
+    treatment_decisions: list[BeatTreatmentDecision] = Field(default_factory=list, max_length=12)
     segment_order: list[EntityId] = Field(min_length=1)
     selection_score: float = Field(ge=0, le=1)
     selection_reason: str = Field(min_length=1, max_length=500)
@@ -395,6 +397,36 @@ class DirectionOption(Versioned):
             raise ValueError("overlapping motion graphics are rejected")
         if len(set(self.segment_order)) != len(self.segment_order):
             raise ValueError("direction segment order cannot repeat a segment")
+        if self.treatment_decisions:
+            beat_ids = {beat.beat_id for beat in self.beats}
+            decision_ids = [item.beat_id for item in self.treatment_decisions]
+            if len(set(decision_ids)) != len(decision_ids) or set(decision_ids) != beat_ids:
+                raise ValueError("treatment decisions must cover each direction beat exactly once")
+            known_placement_ids = {item.placement_id for item in self.asset_placements}
+            placement_asset_ids = {item.asset_id for item in self.asset_placements}
+            known_camera_ids = {item.motion_id for item in self.camera_motion}
+            known_transition_ids = {item.transition_id for item in self.transitions}
+            known_graphic_ids = {item.graphic_id for item in self.motion_graphics}
+            for decision in self.treatment_decisions:
+                for layer in (
+                    decision.broll,
+                    decision.sfx,
+                ):
+                    if any(item not in known_placement_ids for item in layer.event_ids):
+                        raise ValueError(f"{layer.layer} treatment references an unknown placement")
+                    if any(item not in placement_asset_ids for item in layer.asset_ids):
+                        raise ValueError(f"{layer.layer} treatment references an unknown asset")
+                if any(item not in known_camera_ids for item in decision.camera.event_ids):
+                    raise ValueError("camera treatment references an unknown camera event")
+                if any(item not in known_transition_ids for item in decision.transition.event_ids):
+                    raise ValueError("transition treatment references an unknown transition event")
+                if any(item not in known_graphic_ids for item in decision.motion_graphics.event_ids):
+                    raise ValueError("motion-graphics treatment references an unknown graphic event")
+        request_ids = [
+            request.request_id for decision in self.treatment_decisions for request in decision.asset_requests
+        ]
+        if len(request_ids) != len(set(request_ids)):
+            raise ValueError("treatment asset request ids must be unique")
         return self
 
 
@@ -416,7 +448,8 @@ class DirectionDocument(Versioned):
     style_id: DirectionStyleId
     style_fingerprint: str = Field(pattern=_SHA)
     safe_region_id: SafeRegionId = "platform-resilient-portrait-v1"
-    direction_recipe_version: Literal["direction-v1", "direction-v2"] = "direction-v2"
+    direction_recipe_version: Literal["direction-v1", "direction-v2", "direction-v3"] = "direction-v2"
+    treatment_fingerprint: str | None = Field(default=None, pattern=_SHA)
     motion_catalog_sha256: str | None = Field(
         default=None, pattern=_SHA, exclude_if=lambda value: value is None
     )
@@ -448,6 +481,10 @@ class DirectionDocument(Versioned):
             raise ValueError("selected direction preset does not match the selected option")
         if self.direction_recipe_version == "direction-v2" and selected.context_line is None:
             raise ValueError("direction-v2 requires one reviewed upper context line")
+        if self.direction_recipe_version == "direction-v3" and len(selected.treatment_decisions) != len(
+            selected.beats
+        ):
+            raise ValueError("direction-v3 requires treatment decisions for every selected beat")
         if self.safe_region_id == "platform-resilient-portrait-v1":
             for graphic in selected.motion_graphics:
                 if graphic.y < 270 or graphic.y + graphic.height > 1320:

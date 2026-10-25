@@ -164,7 +164,15 @@ from clipforge.schemas.editorial_knowledge import (
     ReferenceMetric,
     ReferenceObservation,
 )
-from clipforge.schemas.editorial_preset import EditorialPresetCatalog, PresetDefinition
+from clipforge.schemas.editorial_preset import (
+    BrollPolicy,
+    CameraPolicy,
+    EditorialPresetCatalog,
+    PresetDefinition,
+    SfxPolicy,
+    TransitionPolicy,
+    TreatmentPolicy,
+)
 from clipforge.schemas.envato_asset import (
     EnvatoAssetCacheRecord,
     EnvatoAssetRegistration,
@@ -308,6 +316,17 @@ from clipforge.schemas.render_checkpoint import (
 from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import SourceTimeRange, TimelineSegment, TimeMapDocument
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
+from clipforge.schemas.treatment import (
+    BeatTreatmentDecision,
+    BrollTreatmentDecision,
+    CameraTreatmentDecision,
+    MotionGraphicsTreatmentDecision,
+    SfxTreatmentDecision,
+    TransitionTreatmentDecision,
+    TreatmentAssetRequest,
+    TreatmentLayerDecision,
+    TreatmentPlanSummary,
+)
 from clipforge.schemas.vision import (
     ContactSheet,
     EvidenceFile,
@@ -481,6 +500,20 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     EditorialPilotReceipt,
     EditorialPresetCatalog,
     PresetDefinition,
+    BrollPolicy,
+    CameraPolicy,
+    SfxPolicy,
+    TransitionPolicy,
+    TreatmentPolicy,
+    BeatTreatmentDecision,
+    BrollTreatmentDecision,
+    CameraTreatmentDecision,
+    MotionGraphicsTreatmentDecision,
+    SfxTreatmentDecision,
+    TreatmentLayerDecision,
+    TreatmentPlanSummary,
+    TreatmentAssetRequest,
+    TransitionTreatmentDecision,
     PolicyDigest,
     QASetDocument,
     QACacheRecord,

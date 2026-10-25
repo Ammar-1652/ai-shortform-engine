@@ -174,13 +174,19 @@ def build_advanced_plan(
     # A directed clean-production recut gets a soft bridge by default. An
     # editorial arc that explicitly says `none` still retains that reviewed
     # hard-cut decision; legacy/no-direction plans remain unchanged.
-    effective_transition_style = _effective_transition_style(cut_transition_style, direction is not None)
+    selected_transition_specs = _selected_transition_specs(direction)
+    # Treatment-aware directions explicitly decide whether a transition is
+    # useful. Legacy directed plans retain their historical soft bridge.
+    directed_transition_default = direction is not None and (
+        direction.direction_recipe_version != "direction-v3" or bool(selected_transition_specs)
+    )
+    effective_transition_style = _effective_transition_style(cut_transition_style, directed_transition_default)
     transitions = _transitions(
         candidate_id,
         hero_plan.edit_plan.time_map,
         duration_us,
         effective_transition_style,
-        _selected_transition_specs(direction),
+        selected_transition_specs,
     )
     typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
@@ -303,6 +309,7 @@ def build_advanced_plan(
         profile_fingerprint=profile.fingerprint(),
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
+        treatment_fingerprint="" if direction is None else direction.treatment_fingerprint or "",
         preset_id="" if direction is None else direction.preset_id or "",
         motion_recipe_ids=motion_recipe_ids,
         motion_catalog_sha256=motion_catalog_sha256,

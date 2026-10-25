@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A bounded provider request produced from a source-grounded beat.",
+  "properties": {
+    "beat_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Beat Id",
+      "type": "string"
+    },
+    "interval": {
+      "$ref": "#/$defs/OutputInterval"
+    },
+    "kind": {
+      "enum": [
+        "graphic",
+        "audio"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "negative_terms": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Negative Terms",
+      "type": "array"
+    },
+    "provider_classes": {
+      "items": {
+        "enum": [
+          "local",
+          "envato",
+          "openverse"
+        ],
+        "type": "string"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Provider Classes",
+      "type": "array"
+    },
+    "query_terms": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Query Terms",
+      "type": "array"
+    },
+    "relevance_threshold": {
+      "default": 0.85,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Relevance Threshold",
+      "type": "number"
+    },
+    "request_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "role": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "request_id",
+    "beat_id",
+    "kind",
+    "role",
+    "query_terms",
+    "provider_classes",
+    "interval",
+    "source_evidence_ids"
+  ],
+  "title": "TreatmentAssetRequest",
+  "type": "object"
+}

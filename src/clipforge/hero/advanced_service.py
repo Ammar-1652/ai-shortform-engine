@@ -1463,6 +1463,7 @@ def _render_run(
             motion_style=selected_style.contract(),
             direction_id=plan.direction_id,
             direction_sha256=plan.direction_sha256,
+            treatment_fingerprint=plan.treatment_fingerprint,
             preset_id=plan.preset_id,
             pilot_sha256=pilot_sha256,
             motion_recipe_ids=plan.motion_recipe_ids,
@@ -1737,6 +1738,7 @@ def _render_run(
                 ),
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
+                treatment_fingerprint=plan.treatment_fingerprint,
                 preset_id=plan.preset_id,
                 motion_recipe_ids=plan.motion_recipe_ids,
                 motion_catalog_sha256=plan.motion_catalog_sha256,
@@ -2742,6 +2744,8 @@ def _require_plan_binding(
             raise MediaError("advanced plan is stale: direction changed after planning")
         if direction.style_id != plan.style_id or direction.style_fingerprint != plan.style_fingerprint:
             raise MediaError("advanced plan is stale: selected motion style changed")
+        if plan.treatment_fingerprint != (direction.treatment_fingerprint or ""):
+            raise MediaError("advanced plan is stale: treatment decisions changed")
         if direction.motion_catalog_sha256 is not None or any(
             option.motion_recipe_ids for option in direction.options
         ):
@@ -2845,7 +2849,10 @@ def _require_plan_binding(
             {scene.scene_id for scene in context.visual.scenes},
             selected_only=True,
         )
-        expected_transition_style = _effective_transition_style("", True)
+        expected_transition_style = _effective_transition_style(
+            "",
+            direction.direction_recipe_version != "direction-v3" or bool(direction_transition_specs),
+        )
     elif not plan.editorial_arc_id:
         expected_transition_style = _effective_transition_style("", False)
     checks = (

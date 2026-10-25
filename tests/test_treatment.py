@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from clipforge.editorial.presets import PresetCatalog
+from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
+from clipforge.schemas.treatment import (
+    BrollTreatmentDecision,
+    SfxTreatmentDecision,
+)
+from tests.test_direction import _aligned_words, _document
+
+
+def test_materialized_generic_treatment_covers_beats_and_adds_bounded_camera() -> None:
+    option = _document().options[0]
+    preset = PresetCatalog.load().find("clean_explainer")
+    treated = materialize_treatment(option, _aligned_words(), preset)
+
+    assert len(treated.treatment_decisions) == len(treated.beats)
+    assert len(treated.camera_motion) == 2
+    fingerprint = treatment_fingerprint(treated)
+    assert all(item.dependency_fingerprint == fingerprint for item in treated.treatment_decisions)
+    summary = summarize_treatment(treated)
+    assert summary.provider_request_count == 4
+    assert "camera" in summary.used_layers
+    assert "motion_graphics" in summary.blocked_layers
+
+
+def test_restricted_treatment_blocks_outside_broll_and_sfx() -> None:
+    option = _document().options[0]
+    preset = PresetCatalog.load().find("clean_explainer")
+    treated = materialize_treatment(option, _aligned_words(), preset, restricted_profile=True)
+
+    assert all(item.broll.state == "blocked_by_policy" for item in treated.treatment_decisions)
+    assert all(item.sfx.state == "blocked_by_policy" for item in treated.treatment_decisions)
+    assert all(not item.asset_requests for item in treated.treatment_decisions)
+
+
+def test_treatment_rejects_use_without_event_or_asset() -> None:
+    with pytest.raises(ValidationError, match="used treatment must reference"):
+        BrollTreatmentDecision(
+            state="use",
+            rationale="missing binding",
+            role="context",
+            relevance_note="missing",
+            source_evidence_ids=["e-1"],
+        )
+
+
+def test_treatment_rejects_missing_omission_reason() -> None:
+    with pytest.raises(ValidationError, match="omission_reason"):
+        SfxTreatmentDecision(
+            state="omit_with_reason",
+            rationale="missing reason",
+            source_evidence_ids=["e-1"],
+        )
+
+
+def test_treatment_fingerprint_changes_when_camera_changes() -> None:
+    option = _document().options[0]
+    preset = PresetCatalog.load().find("clean_explainer")
+    treated = materialize_treatment(option, _aligned_words(), preset)
+    changed = treated.model_copy(
+        update={
+            "camera_motion": [
+                treated.camera_motion[0].model_copy(update={"travel_px": 20}),
+                *treated.camera_motion[1:],
+            ]
+        }
+    )
+    assert treatment_fingerprint(treated) != treatment_fingerprint(changed)

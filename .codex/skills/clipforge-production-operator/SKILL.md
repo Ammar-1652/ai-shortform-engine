@@ -66,6 +66,12 @@ while retiring the prior release. Admission never approves a video artifact.
   start at interior TimeMap cuts, never split a forced word, and may carry a
   separately licensed SFX cue. A plain conversational cut uses no decorative
   transition.
+- Every new treatment-aware direction makes a per-beat decision for B-roll,
+  SFX, camera, transitions, and graphics. Use `clipforge editorial treatment
+  plan`, `show`, and `lint` to inspect the decisions, bounded provider
+  requests, and omission or policy-block reasons before Advanced Hero planning.
+  Generic campaigns may require a cleared asset; restricted campaigns record
+  `blocked_by_policy` and never inherit a generic asset default.
 - Encoding uses `hero advanced render`; an interrupted run resumes only from
   matching receipts. QA uses `qa run` and `qa gate`.
 - Clean Advanced plans create a pilot receipt during planning. Verify it with

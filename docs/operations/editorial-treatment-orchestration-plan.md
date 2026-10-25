@@ -1,7 +1,8 @@
 # Editorial treatment orchestration plan
 
-**Status:** planned; documentation only. No production behavior changes are
-made by this document.
+**Status:** T0–T8 technical implementation complete on the current branch;
+exact encoded generic-campaign playback and human visual acceptance remain
+separate review gates.
 
 **Prepared:** 2026-10-25
 **Parent plans:**
@@ -9,6 +10,32 @@ made by this document.
 - [Editorial Direction Engine deep integration plan](editorial-direction-engine-deep-integration-plan.md)
 - [Editorial Direction Engine integration plan](editorial-direction-engine-integration-plan.md)
 - [Editorial knowledge layer plan](editorial-knowledge-layer-plan.md)
+
+### Implementation checkpoint
+
+The current implementation provides:
+
+- `direction-v3` treatment-aware directions with generated JSON Schema;
+- typed use/omission/policy-block/review decisions for every selected beat;
+- typed preset policies for B-roll, camera, transitions, SFX, and graphics;
+- deterministic hook/payoff camera planning and sparse discontinuity transition
+  planning on the canonical TimeMap;
+- bounded Envato/Openverse/local provider requests persisted in the direction
+  document for Codex selection;
+- existing rights-bound acquisition boundaries reused for selected assets;
+- treatment fingerprints carried through Advanced Hero plans, render inputs,
+  outputs, stale checks, and cache identity;
+- `editorial treatment doctor`, `plan`, `show`, and `lint` commands;
+- jump-cut interval remapping for treatment decisions and provider requests;
+- operator capability and skill routing for the treatment stage;
+- deterministic tests for generic treatment, restricted policy blocks, stale
+  fingerprints, camera bounds, and Advanced Hero browser integration.
+
+Motion graphics remain disabled by the current production policy. A generic
+campaign with preferred B-roll/SFX receives bounded requests and remains in
+`needs_review` until Codex selects rights-cleared assets; a compatibility or
+restricted direction records a clean omission or policy block. This is an
+intentional gate in the current asset workflow, not a renderer fallback.
 
 ## Purpose
 

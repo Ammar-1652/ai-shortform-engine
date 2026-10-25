@@ -297,6 +297,12 @@
           "title": "Style Id",
           "type": "string"
         },
+        "treatment_fingerprint": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        },
         "viewer_evidence_relative_path": {
           "default": "",
           "maxLength": 512,

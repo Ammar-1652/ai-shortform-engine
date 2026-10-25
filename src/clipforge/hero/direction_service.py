@@ -17,6 +17,7 @@ from clipforge.editorial.knowledge import KnowledgeError, load_context
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.hero.motion_style import production_style_ids, style_for_id
+from clipforge.hero.treatment import materialize_treatment, treatment_fingerprint
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.direction import DirectionDocument, DirectionOption
@@ -108,6 +109,31 @@ def save_direction_brief(
                 raise MediaError(f"direction recipe is not approved: {recipe_id}")
     selected = _select(document, style)
     profile = style_for_id(selected.style_id)
+    from clipforge.editorial.presets import PresetCatalog, PresetCatalogError
+
+    preset_id = selected.preset_id or document.preset_id
+    compatibility_direction = preset_id is None
+    try:
+        preset = PresetCatalog.load().find(preset_id or "clean_explainer")
+    except PresetCatalogError as exc:
+        raise MediaError(str(exc)) from exc
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        project = get_project(connection, context.project_id)
+    restricted_profile = project.profile_id == "profile-tarteel-campaign"
+    treatment_options = [
+        materialize_treatment(
+            option,
+            context.alignment.words,
+            preset,
+            restricted_profile=restricted_profile,
+            require_asset_selection=not compatibility_direction,
+            time_map=context.hero_plan.edit_plan.time_map,
+        )
+        for option in document.options
+    ]
+    treated_selected = next(item for item in treatment_options if item.option_id == selected.option_id)
     knowledge_context = None
     knowledge_trace = None
     knowledge_trace_sha256 = None
@@ -143,14 +169,16 @@ def save_direction_brief(
     # Selection is a controlled transformation, never model_copy of unchecked
     # user fields: the complete resulting document is validated again.
     payload = document.model_dump(mode="json")
+    payload["options"] = [item.model_dump(mode="json") for item in treatment_options]
     payload.update(
         operator_role=document.operator_role or "codex_operator",
         selected_option_id=selected.option_id,
         selection_mode="operator_override" if style != "auto" else "automatic",
         style_id=selected.style_id,
         style_fingerprint=profile.fingerprint(),
-        preset_id=selected.preset_id,
-        direction_recipe_version="direction-v2",
+        preset_id=preset_id,
+        direction_recipe_version="direction-v3",
+        treatment_fingerprint=treatment_fingerprint(treated_selected),
         # Every new directed production uses the shared platform-safe inner
         # band unless the operator explicitly selected the legacy region in a
         # reviewed document.

@@ -22,10 +22,13 @@ reference videos become scoped guidance cards, narrative/style patterns,
 evaluations, and versioned context for Codex. These documents are plans;
 their proposed knowledge and provider commands are not current capabilities.
 
-The current knowledge, motion, and direction commands are available through the
-editorial doctor command, editorial knowledge list/context commands, editorial
-motion list --approved-only, and the read-only `editorial direction compare`
-command. Use the resulting context bundle as an input to the direction command.
+The current knowledge, motion, direction, and treatment commands are available
+through the editorial doctor command, editorial knowledge list/context commands,
+editorial motion list --approved-only, and the read-only `editorial direction
+compare` command. For every new treatment-aware direction, inspect
+`editorial treatment plan`, `editorial treatment show`, and
+`editorial treatment lint` before planning Advanced Hero. Use the resulting
+context bundle as an input to the direction command.
 Production motion recipe ids are checked against both the Python catalog and
 the renderer registry; plans naming recipes carry the catalog fingerprint.
 The bundle records source facts, unknowns, selected guidance, rejected
@@ -76,6 +79,7 @@ check; previously rendered artifacts remain immutable.
 | Extract speech and subtitles | transcript service, `hero align`, `clipforge.campaign.speech` | Forced alignment and typed speech inventory |
 | Find candidate moments | `candidate mine` | Candidate set with transcript and visual evidence |
 | Choose an editorial direction | `clipforge-motion-direction` skill, `editorial direction compare`, and `direction plan` | Declarative `DirectionDocument` with camera and transition choices |
+| Decide treatment per beat | `editorial treatment plan/show/lint` after direction selection | Hash-bound use, omission, policy-block, or review decision for B-roll, SFX, camera, transitions, and graphics |
 | Choose hook/body/punch cuts | typed `EditorialArcDocument` and `advanced plan --editorial-arc-file` | Ordered TimeMap and arc evidence |
 | Frame faces and important source content | `advanced plan --reframing` and typed crop windows | Hash-bound portrait transform |
 | Add captions | shared caption builders and Remotion `CaptionPlate` | Word-timed caption events |

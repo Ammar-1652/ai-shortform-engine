@@ -33,7 +33,8 @@ from clipforge.editorial.reference_analysis import (
     load_reference_analysis,
     propose_style_card,
 )
-from clipforge.errors import ClipforgeError
+from clipforge.errors import ClipforgeError, MediaError
+from clipforge.hero.treatment import summarize_treatment, treatment_fingerprint
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.editorial_knowledge import (
     ContextFact,
@@ -58,6 +59,10 @@ direction_app = typer.Typer(
     no_args_is_help=True, help="Compare source-grounded direction options without rendering."
 )
 editorial_app.add_typer(direction_app, name="direction")
+treatment_app = typer.Typer(
+    no_args_is_help=True, help="Inspect and validate per-beat B-roll, SFX, camera, and transition treatment."
+)
+editorial_app.add_typer(treatment_app, name="treatment")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -199,6 +204,8 @@ def direction_compare(
                     "hook_body_punch": [beat.kind for beat in option.beats],
                     "camera_motion": len(option.camera_motion),
                     "transitions": len(option.transitions),
+                    "treatment_decisions": len(option.treatment_decisions),
+                    "treatment_fingerprint": document.treatment_fingerprint,
                     "motion_graphics": len(option.motion_graphics),
                     "asset_placements": len(option.asset_placements),
                     "selection_reason": option.selection_reason,
@@ -207,6 +214,132 @@ def direction_compare(
                 sort_keys=True,
             )
         )
+
+
+def _load_treatment_direction(path: Path) -> DirectionDocument:
+    if path.is_symlink() or not path.is_file():
+        raise MediaError("treatment direction must be a regular file")
+    try:
+        return DirectionDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+        raise MediaError(f"invalid treatment direction: {exc}") from exc
+
+
+@treatment_app.command("doctor")
+def treatment_doctor() -> None:
+    """Verify typed treatment policies and report the current graphics flag."""
+    from clipforge.editorial.presets import PresetCatalog, PresetCatalogError
+
+    try:
+        catalog = PresetCatalog.load()
+    except (ClipforgeError, PresetCatalogError, ValidationError) as exc:
+        _fail(exc)
+    for preset in catalog.document.presets:
+        policy = preset.treatment_policy
+        typer.echo(
+            json.dumps(
+                {
+                    "preset_id": preset.preset_id,
+                    "beat_coverage": policy.beat_coverage,
+                    "broll": policy.broll.mode,
+                    "camera": policy.camera.mode,
+                    "transitions": policy.transitions.mode,
+                    "sfx": policy.sfx.mode,
+                    "motion_graphics": policy.motion_graphics,
+                },
+                sort_keys=True,
+            )
+        )
+
+
+@treatment_app.command("plan")
+def treatment_plan(
+    direction: Annotated[
+        Path, typer.Argument(exists=True, readable=True, help="Treatment-aware direction JSON.")
+    ],
+) -> None:
+    """Show the deterministic treatment plan and pending provider requests."""
+    try:
+        document = _load_treatment_direction(direction.absolute())
+        selected = next(item for item in document.options if item.option_id == document.selected_option_id)
+        summary = summarize_treatment(selected)
+    except (ClipforgeError, ValidationError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(json.dumps(summary.model_dump(mode="json"), ensure_ascii=False, sort_keys=True))
+    for decision in selected.treatment_decisions:
+        for request in decision.asset_requests:
+            typer.echo(
+                json.dumps(
+                    {"type": "asset_request", **request.model_dump(mode="json")},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )
+
+
+@treatment_app.command("show")
+def treatment_show(
+    direction: Annotated[
+        Path, typer.Argument(exists=True, readable=True, help="Treatment-aware direction JSON.")
+    ],
+) -> None:
+    """Print all selected per-beat treatment decisions without writing files."""
+    try:
+        document = _load_treatment_direction(direction.absolute())
+        selected = next(item for item in document.options if item.option_id == document.selected_option_id)
+    except (ClipforgeError, ValidationError, ValueError) as exc:
+        _fail(exc)
+    for decision in selected.treatment_decisions:
+        typer.echo(json.dumps(decision.model_dump(mode="json"), ensure_ascii=False, sort_keys=True))
+
+
+@treatment_app.command("lint")
+def treatment_lint(
+    direction: Annotated[
+        Path, typer.Argument(exists=True, readable=True, help="Treatment-aware direction JSON.")
+    ],
+) -> None:
+    """Validate treatment coverage and dependency fingerprints without rendering."""
+    try:
+        document = _load_treatment_direction(direction.absolute())
+        selected = next(item for item in document.options if item.option_id == document.selected_option_id)
+        findings: list[dict[str, str]] = []
+        if document.direction_recipe_version != "direction-v3":
+            findings.append(
+                {"severity": "error", "code": "legacy_direction", "message": "direction-v3 is required"}
+            )
+        if len(selected.treatment_decisions) != len(selected.beats):
+            findings.append(
+                {"severity": "error", "code": "coverage_missing", "message": "every beat needs a decision"}
+            )
+        expected = treatment_fingerprint(selected)
+        if document.treatment_fingerprint != expected:
+            findings.append(
+                {"severity": "error", "code": "fingerprint_stale", "message": "treatment fingerprint is stale"}
+            )
+        for decision in selected.treatment_decisions:
+            if decision.dependency_fingerprint != document.treatment_fingerprint:
+                findings.append({"severity": "error", "code": "decision_stale", "message": decision.beat_id})
+            for layer in (
+                decision.broll,
+                decision.camera,
+                decision.transition,
+                decision.sfx,
+                decision.motion_graphics,
+            ):
+                if layer.state == "needs_review":
+                    findings.append(
+                        {
+                            "severity": "error",
+                            "code": "needs_review",
+                            "message": f"{decision.beat_id}:{layer.layer}",
+                        }
+                    )
+    except (ClipforgeError, ValidationError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(json.dumps({"status": "fail" if findings else "pass", "findings": findings}, sort_keys=True))
+    if findings:
+        raise typer.Exit(1)
 
 
 @motion_app.command("doctor")

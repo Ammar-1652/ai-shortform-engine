@@ -444,6 +444,7 @@ class AdvancedHeroRenderInput(Versioned):
     frame_palette: FramePaletteSpec | None = None
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
@@ -551,6 +552,7 @@ class AdvancedHeroDraftOutput(Versioned):
     advanced_plan_sha256: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)
@@ -673,6 +675,7 @@ class AdvancedHeroPlanDocument(Versioned):
     profile_fingerprint: str = Field(pattern=_SHA)
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     motion_recipe_ids: list[EntityId] = Field(default_factory=list, max_length=16)

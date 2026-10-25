@@ -10,6 +10,7 @@ from pathlib import Path
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_assets import confine_work_path
 from clipforge.hero.alignment import alignment_binding_sha256
+from clipforge.hero.treatment import treatment_fingerprint
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import mkdir_contained
 from clipforge.preview.timing import frame_at_or_after
@@ -26,6 +27,7 @@ from clipforge.schemas.direction import (
 from clipforge.schemas.editorial import OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
+from clipforge.schemas.treatment import BeatTreatmentDecision
 from clipforge.timeline import FrameRate
 from clipforge.transcription.io import dump_json, publish_json
 
@@ -475,6 +477,26 @@ def remap_direction_intervals(
                     }
                 )
             )
+        treatment_decisions: list[BeatTreatmentDecision] = []
+        for decision in option.treatment_decisions:
+            requests = [
+                request.model_copy(
+                    update={
+                        "interval": remap_output_interval(request.interval, source_time_map, output_time_map)
+                    }
+                )
+                for request in decision.asset_requests
+            ]
+            treatment_decisions.append(
+                decision.model_copy(
+                    update={
+                        "output_interval": remap_output_interval(
+                            decision.output_interval, source_time_map, output_time_map
+                        ),
+                        "asset_requests": requests,
+                    }
+                )
+            )
         context_line = option.context_line
         if context_line is not None:
             # The upper context label intentionally spans the complete new
@@ -489,34 +511,46 @@ def remap_direction_intervals(
                     )
                 }
             )
-        option_updates.append(
-            DirectionOption.model_validate(
-                {
-                    **option.model_dump(mode="json"),
-                    "beats": beats,
-                    "evidence": [
-                        remapped_evidence[item.evidence_id].model_dump(mode="json") for item in option.evidence
-                    ],
-                    "segment_order": [segment.segment_id for segment in output_time_map.segments],
-                    "asset_placements": placements,
-                    "motion_graphics": graphics,
-                    "camera_motion": camera_motion,
-                    "transitions": transitions,
-                    "context_line": None if context_line is None else context_line.model_dump(mode="json"),
-                    "source_native_text": [
-                        item.model_copy(
-                            update={
-                                "interval": remap_output_interval(
-                                    item.interval, source_time_map, output_time_map
-                                )
-                            }
-                        ).model_dump(mode="json")
-                        for item in option.source_native_text
-                    ],
+        remapped_option = DirectionOption.model_validate(
+            {
+                **option.model_dump(mode="json"),
+                "beats": beats,
+                "evidence": [
+                    remapped_evidence[item.evidence_id].model_dump(mode="json") for item in option.evidence
+                ],
+                "segment_order": [segment.segment_id for segment in output_time_map.segments],
+                "asset_placements": placements,
+                "motion_graphics": graphics,
+                "camera_motion": camera_motion,
+                "transitions": transitions,
+                "treatment_decisions": [item.model_dump(mode="json") for item in treatment_decisions],
+                "context_line": None if context_line is None else context_line.model_dump(mode="json"),
+                "source_native_text": [
+                    item.model_copy(
+                        update={
+                            "interval": remap_output_interval(item.interval, source_time_map, output_time_map)
+                        }
+                    ).model_dump(mode="json")
+                    for item in option.source_native_text
+                ],
+            }
+        )
+        if remapped_option.treatment_decisions:
+            fingerprint = treatment_fingerprint(remapped_option)
+            remapped_option = remapped_option.model_copy(
+                update={
+                    "treatment_decisions": [
+                        item.model_copy(update={"dependency_fingerprint": fingerprint})
+                        for item in remapped_option.treatment_decisions
+                    ]
                 }
             )
-        )
-    return DirectionDocument.model_validate({**direction.model_dump(mode="json"), "options": option_updates})
+        option_updates.append(remapped_option)
+    payload = {**direction.model_dump(mode="json"), "options": option_updates}
+    if direction.direction_recipe_version == "direction-v3":
+        selected = next(item for item in option_updates if item.option_id == direction.selected_option_id)
+        payload["treatment_fingerprint"] = treatment_fingerprint(selected)
+    return DirectionDocument.model_validate(payload)
 
 
 def remap_output_interval(

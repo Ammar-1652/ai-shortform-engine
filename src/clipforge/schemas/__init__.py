@@ -54,7 +54,15 @@ from clipforge.schemas.editorial_knowledge import (
     ReferenceMetric,
     ReferenceObservation,
 )
-from clipforge.schemas.editorial_preset import EditorialPresetCatalog, PresetDefinition
+from clipforge.schemas.editorial_preset import (
+    BrollPolicy,
+    CameraPolicy,
+    EditorialPresetCatalog,
+    PresetDefinition,
+    SfxPolicy,
+    TransitionPolicy,
+    TreatmentPolicy,
+)
 from clipforge.schemas.execution import ProductionExecutionCheckpoint, RunStageReceipt
 from clipforge.schemas.export import assert_schemas_current, export_schemas
 from clipforge.schemas.governance import (
@@ -117,6 +125,17 @@ from clipforge.schemas.time import (
     digest_time_map,
 )
 from clipforge.schemas.transcription import TranscriptionCacheRecord, TranscriptionProfile
+from clipforge.schemas.treatment import (
+    BeatTreatmentDecision,
+    BrollTreatmentDecision,
+    CameraTreatmentDecision,
+    MotionGraphicsTreatmentDecision,
+    SfxTreatmentDecision,
+    TransitionTreatmentDecision,
+    TreatmentAssetRequest,
+    TreatmentLayerDecision,
+    TreatmentPlanSummary,
+)
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -129,7 +148,12 @@ __all__ = [
     "AudioEvent",
     "BatchChild",
     "BatchManifest",
+    "BeatTreatmentDecision",
     "BrollEvent",
+    "BrollPolicy",
+    "BrollTreatmentDecision",
+    "CameraPolicy",
+    "CameraTreatmentDecision",
     "CampaignMode",
     "CampaignProfile",
     "CandidateClip",
@@ -172,6 +196,7 @@ __all__ = [
     "Microseconds",
     "MotionCatalogDocument",
     "MotionEvent",
+    "MotionGraphicsTreatmentDecision",
     "MotionParameter",
     "MotionPurpose",
     "MotionRecipe",
@@ -202,6 +227,8 @@ __all__ = [
     "RunStageReceipt",
     "Scene",
     "SegmentDiagnostics",
+    "SfxPolicy",
+    "SfxTreatmentDecision",
     "SourceAsset",
     "SourceNativeText",
     "SourceTimeRange",
@@ -212,6 +239,12 @@ __all__ = [
     "TranscriptWord",
     "TranscriptionCacheRecord",
     "TranscriptionProfile",
+    "TransitionPolicy",
+    "TransitionTreatmentDecision",
+    "TreatmentAssetRequest",
+    "TreatmentLayerDecision",
+    "TreatmentPlanSummary",
+    "TreatmentPolicy",
     "Versioned",
     "assert_schemas_current",
     "digest_time_map",

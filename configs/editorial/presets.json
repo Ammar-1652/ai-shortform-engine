@@ -28,7 +28,42 @@
       "reject_when": [
         "No clear explanation or takeaway."
       ],
-      "preset_sha256": "a2af94f40f5a708f6889e72a444f173f5eb7ab0c19724191a62b2dd41f8001f6"
+      "preset_sha256": "3e5732594016a8bebf90c487c6b8ae3ff65f5c25bd9f2c04f4dc25162fcf0bb7",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "context",
+            "proof",
+            "process"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 1,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     },
     {
       "preset_id": "proof_comparison",
@@ -58,7 +93,42 @@
       "reject_when": [
         "No comparable facts or units."
       ],
-      "preset_sha256": "ef6f65ef4c5e382412fb1afdccbfb9f21de1e0984672f72c1c11492a5148f32b"
+      "preset_sha256": "007ee87e9834c3cd95e7e1aeb924125799c8b6e0569b7a17fb508a6006e5c717",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "proof",
+            "contrast",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 3,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     },
     {
       "preset_id": "story_reveal",
@@ -89,7 +159,42 @@
       "reject_when": [
         "Hook and payoff are unrelated."
       ],
-      "preset_sha256": "63b02cbf7dad877c69a9a676ac46db689b33212bee2d83fd6d7c486167b31ce3"
+      "preset_sha256": "25896cc8277d861ab17edcebd1429d0f02c1d1fe3acaabcaede9c114b3be3479",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "context",
+            "reaction",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     },
     {
       "preset_id": "transformation",
@@ -119,7 +224,42 @@
       "reject_when": [
         "No visible sequence or result."
       ],
-      "preset_sha256": "0ee145817cde465122747b53b54824621d92accbf02ef3ce3fffe9647dc96c23"
+      "preset_sha256": "b7a894bfd388c5d62cf13405d7b080a3b7dfe00c7d3fbac019d6c50c337e4915",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "process",
+            "result",
+            "contrast"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "allowed",
+          "max_per_30s": 3,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 3,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     },
     {
       "preset_id": "quote_emotion",
@@ -149,7 +289,41 @@
       "reject_when": [
         "Quote needs invented context."
       ],
-      "preset_sha256": "bc3bd37d2061bfc2e5094202f609c8a3a9a52c65f796d9cf812830404f3c27c6"
+      "preset_sha256": "2751a52af4b5199ae7f58a392d406eb199441eb75f35b196e335d09039f40afd",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "eligible",
+          "roles": [
+            "reaction",
+            "context"
+          ],
+          "min_meaningful_beats": 0,
+          "max_consecutive_beats": 1,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "allowed",
+          "min_events": 0,
+          "max_events": 3,
+          "max_scale_delta": 0.05,
+          "max_subject_drift_px": 64
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 1,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 1,
+          "max_gain_db": -20,
+          "speech_duck_db": 8,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     },
     {
       "preset_id": "product_cta",
@@ -180,7 +354,42 @@
       "reject_when": [
         "CTA would obscure faces or proof."
       ],
-      "preset_sha256": "9235e883081fd9f01c46403ab26c9e84bc29488e898dc9b2078b0a0aa52819be"
+      "preset_sha256": "5b2a541a4bbae4276274b5e6a1be32903343163355f3dc0f9fa127c985e82719",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "product_detail",
+            "process",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
     }
   ]
 }

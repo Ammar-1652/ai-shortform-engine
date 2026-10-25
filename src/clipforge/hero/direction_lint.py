@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from clipforge.errors import MediaError
 from clipforge.hero.direction_service import validate_source_evidence
+from clipforge.hero.treatment import treatment_fingerprint
 from clipforge.schemas.direction import DirectionDocument, DirectionLintFinding, DirectionLintReport
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.time import TimeMapDocument
@@ -32,6 +33,125 @@ def lint_direction(
             )
         )
     selected = next(option for option in document.options if option.option_id == document.selected_option_id)
+    if document.direction_recipe_version == "direction-v3":
+        if document.treatment_fingerprint is None:
+            findings.append(
+                DirectionLintFinding(
+                    severity="error",
+                    code="treatment_fingerprint_missing",
+                    message="treatment-aware direction must carry a treatment fingerprint",
+                )
+            )
+        else:
+            expected_treatment = treatment_fingerprint(selected)
+            if document.treatment_fingerprint != expected_treatment:
+                findings.append(
+                    DirectionLintFinding(
+                        severity="error",
+                        code="treatment_fingerprint_stale",
+                        message="direction treatment decisions are stale against the selected option",
+                    )
+                )
+        if len(selected.treatment_decisions) != len(selected.beats):
+            findings.append(
+                DirectionLintFinding(
+                    severity="error",
+                    code="treatment_coverage_missing",
+                    message="every selected hook/body/punch beat needs treatment decisions",
+                )
+            )
+        for decision in selected.treatment_decisions:
+            if decision.dependency_fingerprint != document.treatment_fingerprint:
+                findings.append(
+                    DirectionLintFinding(
+                        severity="error",
+                        code="treatment_decision_stale",
+                        message=f"treatment decision is stale: {decision.beat_id}",
+                    )
+                )
+            for layer in (
+                decision.broll,
+                decision.camera,
+                decision.transition,
+                decision.sfx,
+                decision.motion_graphics,
+            ):
+                if layer.state == "needs_review":
+                    findings.append(
+                        DirectionLintFinding(
+                            severity="error",
+                            code="treatment_needs_review",
+                            message=(
+                                f"{layer.layer} treatment needs asset or operator review "
+                                f"on beat {decision.beat_id}"
+                            ),
+                        )
+                    )
+        if document.preset_id:
+            try:
+                from clipforge.editorial.presets import PresetCatalog, PresetCatalogError
+
+                policy = PresetCatalog.load().find(document.preset_id).treatment_policy
+                selected_layers = [
+                    layer
+                    for decision in selected.treatment_decisions
+                    for layer in (
+                        decision.broll,
+                        decision.camera,
+                        decision.transition,
+                        decision.sfx,
+                        decision.motion_graphics,
+                    )
+                ]
+                policy_modes = {
+                    "broll": policy.broll.mode,
+                    "camera": policy.camera.mode,
+                    "transition": policy.transitions.mode,
+                    "sfx": policy.sfx.mode,
+                    "motion_graphics": policy.motion_graphics,
+                }
+                for layer in selected_layers:
+                    if layer.state == "use" and policy_modes[layer.layer] == "blocked":
+                        findings.append(
+                            DirectionLintFinding(
+                                severity="error",
+                                code="treatment_policy_conflict",
+                                message=f"{layer.layer} is used while the selected preset blocks it",
+                            )
+                        )
+                if len(selected.camera_motion) > policy.camera.max_events:
+                    findings.append(
+                        DirectionLintFinding(
+                            severity="error",
+                            code="preset_camera_density_high",
+                            message="camera events exceed the selected preset policy",
+                        )
+                    )
+                if len(selected.transitions) > policy.transitions.max_per_30s:
+                    findings.append(
+                        DirectionLintFinding(
+                            severity="error",
+                            code="preset_transition_density_high",
+                            message="transition events exceed the selected preset policy",
+                        )
+                    )
+                audio_placements = [item for item in selected.asset_placements if item.kind == "audio"]
+                if len(audio_placements) > policy.sfx.max_cues_per_30s:
+                    findings.append(
+                        DirectionLintFinding(
+                            severity="error",
+                            code="preset_sfx_density_high",
+                            message="SFX placements exceed the selected preset policy",
+                        )
+                    )
+            except PresetCatalogError as exc:
+                findings.append(
+                    DirectionLintFinding(
+                        severity="error",
+                        code="treatment_policy_invalid",
+                        message=str(exc),
+                    )
+                )
     if document.motion_catalog_sha256 is not None or selected.motion_recipe_ids:
         try:
             from clipforge.editorial.motion_catalog import MotionCatalog, MotionCatalogError
