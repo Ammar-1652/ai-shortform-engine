@@ -92,6 +92,7 @@ from clipforge.media.workspace import (
     candidate_read_lock,
     ensure_within,
     hero_lock,
+    mkdir_contained,
     prepare_read_lock,
     preview_read_lock,
     transcribe_read_lock,
@@ -2598,7 +2599,12 @@ def _write_pilot_receipt(
             existing.plan_sha256 != receipt.plan_sha256
             or existing.dependency_sha256 != receipt.dependency_sha256
         ):
-            raise MediaError("Advanced Hero pilot receipt is stale; create a new plan")
+            archive = destination.parent / "pilot-history" / f"{existing.plan_sha256[:16]}.json"
+            mkdir_contained(root, archive.parent)
+            if not archive.exists():
+                publish_json(archive, existing, root, workspace.partial_for(archive))
+            destination.unlink()
+            publish_json(destination, receipt, root, workspace.partial_for(destination))
     else:
         publish_json(destination, receipt, root, workspace.partial_for(destination))
     return destination

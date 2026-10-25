@@ -20,6 +20,7 @@ from clipforge.schemas.arc import (
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
+from clipforge.transcription.io import dump_json
 
 
 def _provenance() -> ArtifactProvenance:
@@ -206,9 +207,10 @@ def test_codex_arc_review_rebases_when_only_hero_plan_identity_changed(tmp_path)
     frame_sha = hashlib.sha256(b"frame").hexdigest()
     review = review.model_copy(
         update={
+            "arc_sha256": hashlib.sha256(dump_json(arc).encode("utf-8")).hexdigest(),
             "beats": [
                 beat.model_copy(update={"representative_frame_sha256": frame_sha}) for beat in review.beats
-            ]
+            ],
         }
     )
     for beat in review.beats:

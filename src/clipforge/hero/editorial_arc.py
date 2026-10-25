@@ -121,6 +121,7 @@ def rebase_codex_arc_review(
     """
     if arc.hero_plan_sha256 == hero_plan_sha256:
         return arc, hashlib.sha256(dump_json(arc).encode("utf-8")).hexdigest()
+    expected_arc_sha256 = hashlib.sha256(dump_json(arc).encode("utf-8")).hexdigest()
     root = root.resolve()
     base = root / "campaigns" / "Tarteel"
     if not base.is_dir() or base.is_symlink():
@@ -141,9 +142,16 @@ def rebase_codex_arc_review(
             and review.source_sha256 == source_sha256
             and review.transcript_sha256 == transcript_sha256
             and review.visual_analysis_sha256 == visual_analysis_sha256
+            and review.arc_sha256 == expected_arc_sha256
         ):
-            verify_arc_review_frames(root, review)
-            validate_arc_review(review, arc)
+            try:
+                verify_arc_review_frames(root, review)
+                validate_arc_review(review, arc)
+            except MediaError:
+                # An older Codex review may describe a previous arc revision.
+                # Preserve it as history and keep looking for the current
+                # source-bound review.
+                continue
             candidate_reviews.append((review, path))
     if not candidate_reviews:
         raise MediaError("Tarteel editorial arc is stale and has no source-bound Codex review to revalidate")

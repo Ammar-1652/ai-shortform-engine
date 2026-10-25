@@ -9,6 +9,7 @@ import { cameraFor } from "./AdvancedHeroDraft.js";
 import { motionRecipeRoute, validateMotionRecipes } from "./motionRecipeRegistry.js";
 
 const source = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "AdvancedHeroDraft.tsx"), "utf8");
+const motionGraphic = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "MotionGraphic.tsx"), "utf8");
 
 describe("advanced hero composition", () => {
   it("keeps text as React children and stays local", () => {
@@ -51,6 +52,9 @@ describe("advanced hero composition", () => {
     expect(source).toContain("tarteel-card-olive-gold-v1");
     expect(source).toContain("auto-source-palette-v1");
     expect(source).toContain("quran_challenge");
+    expect(motionGraphic).toContain("visualEnd = graphic.template === \"quran_challenge\"");
+    expect(motionGraphic).toContain("spring({");
+    expect(motionGraphic).toContain("graphic.template === \"quran_challenge\" && visible <= 0 ? 0");
     expect(source).toContain("palette-solid-v1");
     expect(source).toContain("platform-bleed-v1");
     expect(source).toContain("dimBlurredFrameBackdrop");

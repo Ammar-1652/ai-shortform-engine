@@ -1,4 +1,4 @@
-import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { frameAtOrAfter } from "./program-frames.js";
 
 export type MotionGraphic = {
@@ -35,10 +35,18 @@ export function MotionGraphicCard({ graphic, accent, fontFamily, showLabel = tru
   const start = frameAtOrAfter(graphic.interval?.output_start_us);
   const end = Math.max(start + 1, frameAtOrAfter(graphic.interval?.output_end_us));
   const local = Math.max(0, frame - start);
-  const duration = end - start;
+  // A source-grounded illustration is a beat, not a persistent panel. The
+  // Quran challenge card gets one compact reveal/confirmation beat and then
+  // leaves the picture clear for the closing recitation. The event interval
+  // remains the reviewed evidence window; this visual budget prevents a
+  // long punch segment from turning into a full-time obstruction.
+  const visualEnd = graphic.template === "quran_challenge"
+    ? Math.min(end, start + 72)
+    : end;
+  const duration = Math.max(1, visualEnd - start);
   const enter = clamp(local / Math.min(12, Math.max(1, Math.floor(duration / 3))));
-  const exit = clamp((end - frame) / Math.min(10, Math.max(1, Math.floor(duration / 3))));
-  const visible = Math.min(enter, exit);
+  const visualExit = clamp((visualEnd - frame) / Math.min(10, Math.max(1, Math.floor(duration / 3))));
+  const visible = Math.min(enter, visualExit);
   const eased = 1 - Math.pow(1 - visible, 3);
   // A bounded settle is intentional: illustration movement communicates its
   // entrance once instead of becoming a generic looping distraction.
@@ -53,7 +61,9 @@ export function MotionGraphicCard({ graphic, accent, fontFamily, showLabel = tru
     top: graphic.y ?? 760,
     width,
     height,
-    opacity: 0.1 + 0.9 * eased,
+    // Unlike legacy cards, a completed Quran beat must leave no ghost panel
+    // behind while the spoken payoff continues.
+    opacity: graphic.template === "quran_challenge" && visible <= 0 ? 0 : 0.1 + 0.9 * eased,
     transform: `translate3d(${(1 - eased) * 38}px, ${bob + (1 - eased) * 20}px, 0) scale(${0.9 + 0.1 * eased})`,
     transformOrigin: "center center",
     filter: "drop-shadow(0 18px 22px rgba(0,0,0,0.34))",
@@ -229,11 +239,8 @@ function BusinessSpotlight({
 
 function QuranChallenge({
   accent,
-  fontFamily,
-  text,
   style,
   local,
-  showLabel,
 }: {
   graphic: MotionGraphic;
   accent: string;
@@ -243,25 +250,68 @@ function QuranChallenge({
   local: number;
   showLabel: boolean;
 }) {
-  const reveal = clamp(local / 22);
-  const page = 1 - Math.pow(1 - reveal, 3);
+  const { fps } = useVideoConfig();
+  const enter = spring({
+    fps,
+    frame: local,
+    config: { damping: 200, stiffness: 170, mass: 0.8 },
+    durationInFrames: 18,
+  });
+  const page = interpolate(local, [5, 24], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const lineReveal = interpolate(local, [18, 42], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const completion = spring({
+    fps,
+    frame: Math.max(0, local - 38),
+    config: { damping: 180, stiffness: 180, mass: 0.7 },
+    durationInFrames: 16,
+  });
+  const pulse = interpolate(local, [38, 48, 62], [0, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const compactStyle = {
+    ...style,
+    width: Math.min(Number(style.width ?? 420), 430),
+    height: Math.min(Number(style.height ?? 280), 280),
+    opacity: Number(style.opacity ?? 1) * (0.92 + completion * 0.08),
+    transform: `translate3d(${(1 - enter) * 34}px, ${(1 - enter) * 16}px, 0) scale(${0.94 + enter * 0.06})`,
+    background: "rgba(8, 24, 19, 0.9)",
+    border: `1.5px solid ${accent}b8`,
+    borderRadius: 22,
+    boxShadow: "0 12px 30px rgba(0,0,0,.32)",
+  };
   return (
-    <div style={{ ...style, borderRadius: 28, overflow: "hidden", background: "linear-gradient(135deg,#102a24,#1b4739)", border: `2px solid ${accent}aa` }}>
-      <svg viewBox="0 0 720 440" width="100%" height="100%" aria-label="Animated Quran challenge illustration">
-        <rect width="720" height="440" fill="#153a2e" />
-        <circle cx="600" cy="94" r="82" fill={accent} opacity=".16" />
-        <g transform={`translate(${(1 - page) * 36} 0)`} opacity={0.25 + page * 0.75}>
-          <path d="M92 112 Q180 72 342 126 V348 Q194 302 92 338Z" fill="#fbf3d1" stroke={accent} strokeWidth="5" />
-          <path d="M628 112 Q540 72 378 126 V348 Q526 302 628 338Z" fill="#fbf3d1" stroke={accent} strokeWidth="5" />
-          <path d="M360 120V352" stroke="#b88a43" strokeWidth="5" />
-          {[160,198,236,274].map((y) => <path key={y} d={`M132 ${y} Q210 ${y - 18} 306 ${y} M414 ${y} Q510 ${y - 18} 588 ${y}`} stroke="#6e8a68" strokeWidth="7" strokeLinecap="round" opacity=".8" />)}
-        </g>
-        <g transform={`translate(${page * 16} ${-page * 12})`}>
-          <circle cx="598" cy="306" r="42" fill={accent} opacity=".94" />
-          <path d="M578 306l14 14 28-34" stroke="#153a2e" strokeWidth="9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <div style={{ ...compactStyle, overflow: "hidden" }}>
+      <svg viewBox="0 0 430 280" width="100%" height="100%" aria-label="Animated Quran completion challenge">
+        <defs>
+          <linearGradient id="quran-challenge-panel" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#173f31" />
+            <stop offset="1" stopColor="#0d261f" />
+          </linearGradient>
+          <clipPath id="quran-challenge-clip"><rect x="0" y="0" width="430" height="280" rx="22" /></clipPath>
+        </defs>
+        <rect width="430" height="280" fill="url(#quran-challenge-panel)" />
+        <g clipPath="url(#quran-challenge-clip)">
+          <circle cx="370" cy="50" r="66" fill={accent} opacity=".12" />
+          <path d="M28 228H402" stroke="#e5f3dd" strokeWidth="2" opacity=".16" />
+          {[0, 1, 2].map((index) => (
+            <circle key={index} cx={46 + index * 18} cy="244" r="4.5" fill={index < (completion > 0.8 ? 3 : 2) ? accent : "#7b9486"} opacity={0.35 + lineReveal * 0.65} />
+          ))}
+          <g transform={`translate(${(1 - page) * 18} ${12 - page * 12})`} opacity={0.35 + page * 0.65}>
+            <path d="M64 66 Q124 46 202 78 V208 Q128 184 64 200Z" fill="#fbf3d1" stroke={accent} strokeWidth="3" />
+            <path d="M366 66 Q306 46 228 78 V208 Q302 184 366 200Z" fill="#fbf3d1" stroke={accent} strokeWidth="3" />
+            <path d="M215 76V210" stroke="#b88a43" strokeWidth="3" />
+            {[104,130,156].map((y) => (
+              <g key={y} opacity={lineReveal}>
+                <path d={`M92 ${y} Q132 ${y - 9} 174 ${y} M256 ${y} Q298 ${y - 9} 338 ${y}`} stroke="#6e8a68" strokeWidth="4" strokeLinecap="round" />
+              </g>
+            ))}
+          </g>
+          <g transform={`translate(${300 + completion * 8} ${170 - completion * 8})`} opacity={completion}>
+            <circle r="28" fill={accent} opacity={0.94 + pulse * 0.06} />
+            <path d="M-12 0l9 10 19-23" stroke="#123329" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <path d="M40 42H152" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeDasharray="10 8" opacity={0.4 + lineReveal * 0.6} />
+          <circle cx="40" cy="42" r="7" fill={accent} opacity={0.5 + completion * 0.5} />
         </g>
       </svg>
-      <Label text={text} accent={accent} fontFamily={fontFamily} show={showLabel} />
     </div>
   );
 }
