@@ -1,7 +1,9 @@
 # Editorial treatment orchestration plan
 
-**Status:** T0–T8 technical implementation complete on the current branch;
-exact encoded generic-campaign playback and human visual acceptance remain
+**Status:** technical treatment slice implemented; follow-up required before
+the full T0–T8 claim is closed. See the
+[follow-up fixing plan](editorial-treatment-orchestration-followup-plan.md).
+Exact encoded generic-campaign playback and human visual acceptance remain
 separate review gates.
 
 **Prepared:** 2026-10-25
@@ -36,6 +38,13 @@ campaign with preferred B-roll/SFX receives bounded requests and remains in
 `needs_review` until Codex selects rights-cleared assets; a compatibility or
 restricted direction records a clean omission or policy block. This is an
 intentional gate in the current asset workflow, not a renderer fallback.
+
+The post-implementation audit found remaining gaps in request-to-acquisition
+binding, visual relevance and collision evidence, complete preset enforcement,
+treatment-authoritative audio mixing, direct QA/review/delivery treatment
+binding, and generic production proof. Those gaps and their exit tests are
+documented in the [follow-up fixing plan](editorial-treatment-orchestration-followup-plan.md)
+and must be resolved before this document is marked fully implemented.
 
 ## Purpose
 
