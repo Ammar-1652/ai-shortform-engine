@@ -217,6 +217,19 @@ def _window_rms(
     return max(values)
 
 
+def _reference_window_rms(
+    *, root: Path, media: Path, interval_start_us: int, interval_end_us: int, log_path: Path
+) -> float:
+    """Measure a staged speech/SFX reference window on the same output clock."""
+    return _window_rms(
+        root=root,
+        output=media,
+        interval_start_us=interval_start_us,
+        interval_end_us=interval_end_us,
+        log_path=log_path,
+    )
+
+
 def _decoded_intelligibility(
     *,
     root: Path,
@@ -225,6 +238,7 @@ def _decoded_intelligibility(
     true_peak_dbfs: float,
     peak_limit_dbfs: float,
     log_path: Path,
+    render_input: AdvancedHeroRenderInput | None = None,
 ) -> TreatmentAudioMixResult:
     """Return technical decoded speech-window evidence for a treatment mix.
 
@@ -244,6 +258,119 @@ def _decoded_intelligibility(
         )
     checked = [window for window in mix.speech_overlap_windows if window is not None]
     failed = []
+    encoded_rms: list[float] = []
+    speech_rms: list[float] = []
+    sfx_rms: list[float] = []
+    margins: list[float] = []
+    if render_input is not None and checked:
+        speech_path = _safe(root, output.parent / "staging" / render_input.speech_name)
+        if speech_path.is_symlink() or not speech_path.is_file():
+            return mix.model_copy(
+                update={
+                    "status": "measured",
+                    "intelligibility_status": "fail",
+                    "intelligibility_method": "decoded_window_signal_v2",
+                    "intelligibility_checked_windows": checked,
+                    "intelligibility_failed_windows": checked,
+                    "intelligibility_encoded_rms_windows": [],
+                    "intelligibility_speech_reference_rms_windows": [],
+                    "intelligibility_sfx_reference_rms_windows": [],
+                    "intelligibility_margin_db": [],
+                    "intelligibility_note": "Staged speech reference is missing for decoded mix comparison.",
+                }
+            )
+        try:
+            sfx_by_id = {event.event_id: event for event in render_input.sfx}
+            for index, window in enumerate(checked):
+                encoded_level = _window_rms(
+                    root=root,
+                    output=output,
+                    interval_start_us=window.output_start_us,
+                    interval_end_us=window.output_end_us,
+                    log_path=log_path.with_name(f"{log_path.stem}.window-{index:02d}.log"),
+                )
+                speech_level = _reference_window_rms(
+                    root=root,
+                    media=speech_path,
+                    interval_start_us=window.output_start_us,
+                    interval_end_us=window.output_end_us,
+                    log_path=log_path.with_name(f"{log_path.stem}.speech-{index:02d}.log"),
+                )
+                overlapping_sfx: list[float] = []
+                overlapping_duck: list[float] = []
+                for event_index, event_id in enumerate(mix.cue_event_ids):
+                    event = sfx_by_id.get(event_id)
+                    event_window = mix.speech_overlap_windows[event_index]
+                    if event is None or event_window is None:
+                        continue
+                    if not (
+                        event_window.output_start_us < window.output_end_us
+                        and window.output_start_us < event_window.output_end_us
+                    ):
+                        continue
+                    name = render_input.asset_names.get(event.asset_id)
+                    if not name:
+                        raise MediaError(f"staged SFX asset name is missing: {event.asset_id}")
+                    sfx_path = _safe(root, output.parent / "staging" / name)
+                    if sfx_path.is_symlink() or not sfx_path.is_file():
+                        raise MediaError(f"staged SFX asset is missing: {event.asset_id}")
+                    sfx_level = _reference_window_rms(
+                        root=root,
+                        media=sfx_path,
+                        interval_start_us=event.sfx_source_in_us or 0,
+                        interval_end_us=(event.sfx_source_in_us or 0)
+                        + (event.interval.output_end_us - event.interval.output_start_us),
+                        log_path=log_path.with_name(f"{log_path.stem}.sfx-{index:02d}-{event_index:02d}.log"),
+                    )
+                    overlapping_sfx.append(sfx_level + event.gain_db)
+                    overlapping_duck.append(mix.duck_db[event_index])
+                max_sfx = max(overlapping_sfx, default=-120.0)
+                speech_after_duck = (
+                    speech_level + (render_input.source_gain_db or 0) - max(overlapping_duck, default=0.0)
+                )
+                margin = speech_after_duck - max_sfx
+                encoded_rms.append(encoded_level)
+                speech_rms.append(speech_level)
+                sfx_rms.append(max_sfx)
+                margins.append(margin)
+                if encoded_level <= _RMS_WINDOW_LIMIT_DB or speech_level <= _RMS_WINDOW_LIMIT_DB or margin < 0:
+                    failed.append(window)
+        except MediaError as exc:
+            return mix.model_copy(
+                update={
+                    "status": "measured",
+                    "intelligibility_status": "fail",
+                    "intelligibility_method": "decoded_window_signal_v2",
+                    "intelligibility_checked_windows": checked,
+                    "intelligibility_failed_windows": checked,
+                    "intelligibility_encoded_rms_windows": encoded_rms,
+                    "intelligibility_speech_reference_rms_windows": speech_rms,
+                    "intelligibility_sfx_reference_rms_windows": sfx_rms,
+                    "intelligibility_margin_db": margins,
+                    "intelligibility_note": str(exc),
+                }
+            )
+        passed = not failed and all(margin >= 0 for margin in margins)
+        return mix.model_copy(
+            update={
+                "status": "measured",
+                "intelligibility_status": "pass" if passed else "fail",
+                "intelligibility_method": "decoded_window_signal_v2",
+                "intelligibility_checked_windows": checked,
+                "intelligibility_failed_windows": failed,
+                "intelligibility_encoded_rms_windows": encoded_rms,
+                "intelligibility_speech_reference_rms_windows": speech_rms,
+                "intelligibility_sfx_reference_rms_windows": sfx_rms,
+                "intelligibility_margin_db": margins,
+                "intelligibility_note": (
+                    "Decoded mix, staged speech reference, and staged SFX references show speech "
+                    "at or above the applied SFX level."
+                    if passed
+                    else "Decoded mix comparison found a silent speech window or SFX level "
+                    "above the speech reference."
+                ),
+            }
+        )
     for index, window in enumerate(checked):
         rms_db = _window_rms(
             root=root,
@@ -271,6 +398,10 @@ def _decoded_intelligibility(
             "intelligibility_method": "decoded_window_signal_v1",
             "intelligibility_checked_windows": checked,
             "intelligibility_failed_windows": failed or ([checked[0]] if not ducking_ok and checked else []),
+            "intelligibility_encoded_rms_windows": [],
+            "intelligibility_speech_reference_rms_windows": [],
+            "intelligibility_sfx_reference_rms_windows": [],
+            "intelligibility_margin_db": [],
             "intelligibility_note": note,
         }
     )
@@ -389,6 +520,7 @@ def write_viewer_evidence_bundle(
             true_peak_dbfs=true_peak_dbfs,
             peak_limit_dbfs=render_input.audio_true_peak_dbfs,
             log_path=log_path.with_name(log_path.stem + ".intelligibility.log"),
+            render_input=render_input,
         )
     measurement_relative_path = ""
     measurement_sha256 = ""

@@ -1710,6 +1710,14 @@
           "title": "Intelligibility Checked Windows",
           "type": "array"
         },
+        "intelligibility_encoded_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Encoded Rms Windows",
+          "type": "array"
+        },
         "intelligibility_failed_windows": {
           "items": {
             "$ref": "#/$defs/OutputInterval"
@@ -1718,11 +1726,20 @@
           "title": "Intelligibility Failed Windows",
           "type": "array"
         },
+        "intelligibility_margin_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Margin Db",
+          "type": "array"
+        },
         "intelligibility_method": {
           "default": "",
           "enum": [
             "",
             "decoded_window_signal_v1",
+            "decoded_window_signal_v2",
             "no_audio_cues_v1"
           ],
           "title": "Intelligibility Method",
@@ -1733,6 +1750,22 @@
           "maxLength": 500,
           "title": "Intelligibility Note",
           "type": "string"
+        },
+        "intelligibility_sfx_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Sfx Reference Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_speech_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Speech Reference Rms Windows",
+          "type": "array"
         },
         "intelligibility_status": {
           "default": "unverified",

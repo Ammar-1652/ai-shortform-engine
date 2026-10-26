@@ -319,9 +319,15 @@ class TreatmentAudioMixResult(Versioned):
     speech_overlap_windows: list[OutputInterval | None] = Field(default_factory=list, max_length=32)
     silence_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
     intelligibility_status: Literal["unverified", "pass", "fail"] = "unverified"
-    intelligibility_method: Literal["", "decoded_window_signal_v1", "no_audio_cues_v1"] = ""
+    intelligibility_method: Literal[
+        "", "decoded_window_signal_v1", "decoded_window_signal_v2", "no_audio_cues_v1"
+    ] = ""
     intelligibility_checked_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
     intelligibility_failed_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    intelligibility_encoded_rms_windows: list[float] = Field(default_factory=list, max_length=32)
+    intelligibility_speech_reference_rms_windows: list[float] = Field(default_factory=list, max_length=32)
+    intelligibility_sfx_reference_rms_windows: list[float] = Field(default_factory=list, max_length=32)
+    intelligibility_margin_db: list[float] = Field(default_factory=list, max_length=32)
     intelligibility_note: str = Field(default="", max_length=500)
     measured_integrated_lufs: float | None = None
     measured_true_peak_dbfs: float | None = None
@@ -346,10 +352,26 @@ class TreatmentAudioMixResult(Versioned):
             self.intelligibility_failed_windows or self.intelligibility_note
         ):
             raise ValueError("failed intelligibility requires failed windows or a failure note")
+        if self.intelligibility_method == "decoded_window_signal_v2":
+            expected = len(self.intelligibility_checked_windows)
+            if any(
+                len(values) != expected
+                for values in (
+                    self.intelligibility_encoded_rms_windows,
+                    self.intelligibility_speech_reference_rms_windows,
+                    self.intelligibility_sfx_reference_rms_windows,
+                    self.intelligibility_margin_db,
+                )
+            ):
+                raise ValueError("decoded intelligibility v2 facts must match checked windows")
         numeric = [
             self.measured_integrated_lufs,
             self.measured_true_peak_dbfs,
             *self.measured_rms_windows,
+            *self.intelligibility_encoded_rms_windows,
+            *self.intelligibility_speech_reference_rms_windows,
+            *self.intelligibility_sfx_reference_rms_windows,
+            *self.intelligibility_margin_db,
         ]
         if any(value is not None and not math.isfinite(value) for value in numeric):
             raise ValueError("audio mix measurements must be finite")

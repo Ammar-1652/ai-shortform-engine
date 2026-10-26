@@ -241,6 +241,23 @@ def test_viewer_evidence_persists_decoded_audio_measurement_sidecar(tmp_path: Pa
     )
     style = style_for_id("editorial-clean-v1")
     mix = _audio_mix()
+    staging = output.parent / "staging"
+    staging.mkdir(parents=True)
+    for name in ("asr.flac", "effect.wav"):
+        ProcessRunner().run(
+            [
+                resolve_ffmpeg(),
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:sample_rate=48000:d=1",
+                "-c:a",
+                "flac" if name.endswith("flac") else "pcm_s16le",
+                str(staging / name),
+            ],
+            log_path=run / f"{name}.log",
+        )
     render_input = AdvancedHeroRenderInput(
         candidate_id="candidate-1",
         advanced_set_id="set-1",
@@ -261,6 +278,7 @@ def test_viewer_evidence_persists_decoded_audio_measurement_sidecar(tmp_path: Pa
         treatment_evidence_sha256="2" * 64,
         treatment_evidence_relative_path="candidates/candidate-1/treatment-evidence.json",
         treatment_audio_mix=mix,
+        asset_names={"sfx-1": "effect.wav"},
         sfx=[
             AudioMixEvent(
                 event_id="sfx-1",
@@ -291,7 +309,8 @@ def test_viewer_evidence_persists_decoded_audio_measurement_sidecar(tmp_path: Pa
     assert measurement_path.is_file()
     measurement = TreatmentAudioMeasurement.model_validate_json(measurement_path.read_text(encoding="utf-8"))
     assert measurement.encoded_media_sha256 == sha256_file(output)
-    assert measurement.mix.intelligibility_method == "decoded_window_signal_v1"
+    assert measurement.mix.intelligibility_method == "decoded_window_signal_v2"
+    assert measurement.mix.intelligibility_margin_db
     assert measurement.mix.status == "measured"
     assert bundle.treatment_audio_measurement_sha256 == sha256_file(measurement_path)
     assert evidence_path.is_file()
