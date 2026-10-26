@@ -1754,6 +1754,8 @@ def _render_run(
         coverage_sha256 = ""
         viewer_relative_path = ""
         viewer_sha256 = ""
+        treatment_audio_measurement_relative_path = ""
+        treatment_audio_measurement_sha256 = ""
         if renderer.requires_browser and plan.style_id != "legacy-v1":
             authorization_path = output.parent / "authorization.json"
             authorization = _read_model(
@@ -1815,6 +1817,8 @@ def _render_run(
             )
             viewer_relative_path = viewer_path.relative_to(run_dir).as_posix()
             viewer_sha256 = sha256_file(viewer_path)
+            treatment_audio_measurement_relative_path = _viewer.treatment_audio_measurement_relative_path
+            treatment_audio_measurement_sha256 = _viewer.treatment_audio_measurement_sha256
         outputs.append(
             AdvancedHeroDraftOutput(
                 candidate_id=candidate_id,
@@ -1871,6 +1875,8 @@ def _render_run(
                 caption_coverage_sha256=coverage_sha256,
                 viewer_evidence_relative_path=viewer_relative_path,
                 viewer_evidence_sha256=viewer_sha256,
+                treatment_audio_measurement_relative_path=treatment_audio_measurement_relative_path,
+                treatment_audio_measurement_sha256=treatment_audio_measurement_sha256,
                 overlay_exclusion_relative_path=overlay_exclusions.get(candidate_id, ("", ""))[0],
                 overlay_exclusion_sha256=overlay_exclusions.get(candidate_id, ("", ""))[1],
             )

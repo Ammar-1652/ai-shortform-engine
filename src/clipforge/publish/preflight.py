@@ -128,6 +128,8 @@ class DeliveryFacts:
     treatment_evidence_sha256: str = ""
     treatment_evidence_relative_path: str = ""
     treatment_audio_mix_sha256: str = ""
+    treatment_audio_measurement_relative_path: str = ""
+    treatment_audio_measurement_sha256: str = ""
     style_id: str = "legacy-v1"
     style_fingerprint: str = ""
     safe_region_id: str = "portrait-safe-v1"
@@ -264,6 +266,9 @@ def preflight_delivery(
         source_asset_id,
         artifact,
         draft.advanced_plan_sha256,
+        expected_audio_measurement_relative_path=draft.treatment_audio_measurement_relative_path,
+        expected_audio_measurement_sha256=draft.treatment_audio_measurement_sha256,
+        expected_audio_measurement_run_dir=workspace.advanced_run_dir(document.advanced_set_id),
     )
     narration_path, narration_doc = narration
     rights_fingerprint = hashlib.sha256(license_record.status.value.encode("utf-8")).hexdigest()
@@ -297,6 +302,8 @@ def preflight_delivery(
             if plan.treatment_audio_mix is not None
             else ""
         ),
+        treatment_audio_measurement_relative_path=draft.treatment_audio_measurement_relative_path,
+        treatment_audio_measurement_sha256=draft.treatment_audio_measurement_sha256,
         style_id=plan.style_id,
         style_fingerprint=plan.style_fingerprint,
         safe_region_id=plan.safe_region_id,
@@ -1126,6 +1133,10 @@ def _qa(
     source_asset_id: str,
     artifact: ArtifactRow,
     plan_sha256: str,
+    *,
+    expected_audio_measurement_relative_path: str = "",
+    expected_audio_measurement_sha256: str = "",
+    expected_audio_measurement_run_dir: Path | None = None,
 ) -> tuple[str, str]:
     with database.connect() as connection:
         row = find_artifact(connection, project_id, source_asset_id, KIND_QA)
@@ -1151,6 +1162,26 @@ def _qa(
         raise PublishError(f"QA status is {qa.status.value}", category="qa_failed")
     if qa.source_asset_id != source_asset_id or qa.target_artifact_id != artifact.artifact_id:
         raise PublishError("QA is not bound to the current advanced Hero artifact", category="qa_stale")
+    if (
+        qa.treatment_audio_measurement_relative_path != expected_audio_measurement_relative_path
+        or qa.treatment_audio_measurement_sha256 != expected_audio_measurement_sha256
+        or record.treatment_audio_measurement_sha256 != expected_audio_measurement_sha256
+    ):
+        raise PublishError("QA audio measurement evidence changed", category="qa_stale")
+    if expected_audio_measurement_relative_path and expected_audio_measurement_run_dir is not None:
+        measurement_path = confine_work_path(
+            root,
+            (expected_audio_measurement_run_dir / expected_audio_measurement_relative_path)
+            .relative_to(root)
+            .as_posix(),
+            label="treatment audio measurement",
+        )
+        if (
+            measurement_path.is_symlink()
+            or not measurement_path.is_file()
+            or sha256_file(measurement_path) != expected_audio_measurement_sha256
+        ):
+            raise PublishError("QA audio measurement file is missing or stale", category="qa_stale")
     if qa.target_artifact_kind != KIND_ADVANCED or qa.target_manifest_sha256 != record.target_manifest_sha256:
         raise PublishError("QA target manifest does not match", category="qa_stale")
     if record.target_artifact_id != artifact.artifact_id:

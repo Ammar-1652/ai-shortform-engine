@@ -76,6 +76,8 @@ def evidence_for_facts(facts: DeliveryFacts) -> dict[str, str]:
         "treatment_evidence_sha256": facts.treatment_evidence_sha256,
         "treatment_evidence_relative_path": facts.treatment_evidence_relative_path,
         "treatment_audio_mix_sha256": facts.treatment_audio_mix_sha256,
+        "treatment_audio_measurement_relative_path": facts.treatment_audio_measurement_relative_path,
+        "treatment_audio_measurement_sha256": facts.treatment_audio_measurement_sha256,
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
         "safe_region_id": facts.safe_region_id,

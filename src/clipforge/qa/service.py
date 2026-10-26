@@ -423,12 +423,20 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         for plan in prepared.plans
         if plan.treatment_audio_mix is not None
     }
+    treatment_audio_measurements = {
+        (draft.treatment_audio_measurement_relative_path, draft.treatment_audio_measurement_sha256)
+        for draft in document.drafts
+        if draft.treatment_audio_measurement_relative_path
+    }
     if len(treatment_fingerprints) > 1:
         raise QAError("QA plans have inconsistent treatment fingerprints")
     if len(treatment_evidence_fingerprints) > 1:
         raise QAError("QA plans have inconsistent treatment evidence fingerprints")
     if len(treatment_mix_fingerprints) > 1:
         raise QAError("QA plans have inconsistent treatment audio mix fingerprints")
+    if len(treatment_audio_measurements) > 1:
+        raise QAError("QA drafts have inconsistent treatment audio measurement evidence")
+    measurement_path, measurement_sha256 = next(iter(treatment_audio_measurements), ("", ""))
     return QASetDocument(
         workflow_roles=WorkflowRolePolicy(),
         qa_set_id=str(uuid.uuid4()),
@@ -458,6 +466,8 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         # legacy field name for compatibility, but never substitute the audio
         # sub-hash for the canonical treatment summary.
         treatment_summary_sha256=next(iter(treatment_evidence_fingerprints), ""),
+        treatment_audio_measurement_relative_path=measurement_path,
+        treatment_audio_measurement_sha256=measurement_sha256,
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,
@@ -556,6 +566,7 @@ def _cache_record(document: QASetDocument, artifact_id: str, digest: str, size: 
         manifest_sha256=digest,
         manifest_size_bytes=size,
         status=document.status,
+        treatment_audio_measurement_sha256=document.treatment_audio_measurement_sha256,
         created_at=document.provenance.created_at,
     )
 

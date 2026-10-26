@@ -610,6 +610,8 @@ class AdvancedHeroDraftOutput(Versioned):
     caption_coverage_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     viewer_evidence_relative_path: str = Field(default="", max_length=512)
     viewer_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_audio_measurement_relative_path: str = Field(default="", max_length=512)
+    treatment_audio_measurement_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     overlay_exclusion_relative_path: str = Field(default="", max_length=512)
     overlay_exclusion_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
 
@@ -646,6 +648,15 @@ class AdvancedHeroDraftOutput(Versioned):
             f"candidates/{self.candidate_id}/viewer-evidence/bundle.json"
         ):
             raise ValueError("viewer evidence must belong to this candidate")
+        if bool(self.treatment_audio_measurement_relative_path) != bool(
+            self.treatment_audio_measurement_sha256
+        ):
+            raise ValueError("treatment audio measurement path and hash must be recorded together")
+        if self.treatment_audio_measurement_relative_path and (
+            self.treatment_audio_measurement_relative_path
+            != f"candidates/{self.candidate_id}/viewer-evidence/treatment-audio-measurement.json"
+        ):
+            raise ValueError("treatment audio measurement must belong to this candidate")
         if bool(self.overlay_exclusion_relative_path) != bool(self.overlay_exclusion_sha256):
             raise ValueError("overlay exclusion evidence path and hash must be recorded together")
         if self.overlay_exclusion_relative_path and self.overlay_exclusion_relative_path != (

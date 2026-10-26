@@ -297,6 +297,18 @@
           "title": "Style Id",
           "type": "string"
         },
+        "treatment_audio_measurement_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Treatment Audio Measurement Relative Path",
+          "type": "string"
+        },
+        "treatment_audio_measurement_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Treatment Audio Measurement Sha256",
+          "type": "string"
+        },
         "treatment_audio_mix": {
           "anyOf": [
             {

@@ -186,6 +186,8 @@ class QASetDocument(Versioned):
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_summary_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_audio_measurement_relative_path: str = Field(default="", max_length=512)
+    treatment_audio_measurement_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     provenance: ArtifactProvenance
     workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 
@@ -193,6 +195,10 @@ class QASetDocument(Versioned):
     def set_is_bound(self) -> Self:
         if self.treatment_fingerprint and not self.treatment_evidence_sha256:
             raise ValueError("QA treatment evidence is missing")
+        if bool(self.treatment_audio_measurement_relative_path) != bool(
+            self.treatment_audio_measurement_sha256
+        ):
+            raise ValueError("QA treatment audio measurement path and hash must be recorded together")
         if self.technical.kind is not QAKind.TECHNICAL:
             raise ValueError("technical result must use kind technical")
         if self.campaign.kind is not QAKind.CAMPAIGN_COMPLIANCE:
@@ -237,6 +243,7 @@ class QACacheRecord(Versioned):
     manifest_sha256: str = Field(pattern=_SHA)
     manifest_size_bytes: int = Field(ge=1)
     status: QAStatus
+    treatment_audio_measurement_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     created_at: AwareDatetime
 
 
