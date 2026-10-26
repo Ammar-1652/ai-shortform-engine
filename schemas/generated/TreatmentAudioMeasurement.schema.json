@@ -1,0 +1,376 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    },
+    "TreatmentAudioMixResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound requested/applied SFX mix policy and measured output facts.",
+      "properties": {
+        "applied_gain_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Applied Gain Db",
+          "type": "array"
+        },
+        "cue_event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Cue Event Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Duck Db",
+          "type": "array"
+        },
+        "fade_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade In Us",
+          "type": "array"
+        },
+        "fade_out_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade Out Us",
+          "type": "array"
+        },
+        "intelligibility_checked_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Checked Windows",
+          "type": "array"
+        },
+        "intelligibility_failed_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Failed Windows",
+          "type": "array"
+        },
+        "intelligibility_method": {
+          "default": "",
+          "enum": [
+            "",
+            "decoded_window_signal_v1",
+            "no_audio_cues_v1"
+          ],
+          "title": "Intelligibility Method",
+          "type": "string"
+        },
+        "intelligibility_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Intelligibility Note",
+          "type": "string"
+        },
+        "intelligibility_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "pass",
+            "fail"
+          ],
+          "title": "Intelligibility Status",
+          "type": "string"
+        },
+        "measured_integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Integrated Lufs"
+        },
+        "measured_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 128,
+          "title": "Measured Rms Windows",
+          "type": "array"
+        },
+        "measured_true_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured True Peak Dbfs"
+        },
+        "mix_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Mix Id",
+          "type": "string"
+        },
+        "policy_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Fingerprint",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "silence_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows",
+          "type": "array"
+        },
+        "source_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Source In Us",
+          "type": "array"
+        },
+        "speech_overlap_windows": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputInterval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows",
+          "type": "array"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "measured"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix_id",
+        "treatment_fingerprint",
+        "policy_fingerprint"
+      ],
+      "title": "TreatmentAudioMixResult",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Decoded post-encode mix evidence bound to the planned treatment bundle.",
+  "properties": {
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "encoded_media_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Encoded Media Sha256",
+      "type": "string"
+    },
+    "measurement_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Measurement Id",
+      "type": "string"
+    },
+    "mix": {
+      "$ref": "#/$defs/TreatmentAudioMixResult"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "treatment_evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Treatment Evidence Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "measurement_id",
+    "source_asset_id",
+    "candidate_id",
+    "treatment_evidence_sha256",
+    "encoded_media_sha256",
+    "mix",
+    "created_at",
+    "provenance"
+  ],
+  "title": "TreatmentAudioMeasurement",
+  "type": "object"
+}

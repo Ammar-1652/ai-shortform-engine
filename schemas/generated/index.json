@@ -152,6 +152,7 @@
     "SfxTreatmentDecision",
     "TreatmentLayerDecision",
     "TreatmentPlanSummary",
+    "TreatmentAudioMeasurement",
     "TreatmentAudioMixResult",
     "TreatmentAssetVerification",
     "TreatmentAssetObservation",

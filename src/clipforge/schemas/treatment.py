@@ -319,6 +319,10 @@ class TreatmentAudioMixResult(Versioned):
     speech_overlap_windows: list[OutputInterval | None] = Field(default_factory=list, max_length=32)
     silence_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
     intelligibility_status: Literal["unverified", "pass", "fail"] = "unverified"
+    intelligibility_method: Literal["", "decoded_window_signal_v1", "no_audio_cues_v1"] = ""
+    intelligibility_checked_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    intelligibility_failed_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    intelligibility_note: str = Field(default="", max_length=500)
     measured_integrated_lufs: float | None = None
     measured_true_peak_dbfs: float | None = None
     measured_rms_windows: list[float] = Field(default_factory=list, max_length=128)
@@ -332,6 +336,16 @@ class TreatmentAudioMixResult(Versioned):
             or not self.measured_rms_windows
         ):
             raise ValueError("measured audio mix results require loudness, true-peak, and RMS facts")
+        if self.intelligibility_status == "unverified" and self.status == "measured":
+            raise ValueError("measured audio mix results require decoded intelligibility evidence")
+        if self.intelligibility_status != "unverified" and not self.intelligibility_method:
+            raise ValueError("audio intelligibility status requires a measurement method")
+        if self.intelligibility_status == "pass" and self.intelligibility_failed_windows:
+            raise ValueError("passed intelligibility cannot contain failed windows")
+        if self.intelligibility_status == "fail" and not (
+            self.intelligibility_failed_windows or self.intelligibility_note
+        ):
+            raise ValueError("failed intelligibility requires failed windows or a failure note")
         numeric = [
             self.measured_integrated_lufs,
             self.measured_true_peak_dbfs,
@@ -352,6 +366,29 @@ class TreatmentAudioMixResult(Versioned):
                 raise ValueError(f"audio mix {label} facts must match cue event ids")
         if len(self.speech_overlap_windows) != len(self.cue_event_ids):
             raise ValueError("audio mix speech-overlap facts must match cue event ids")
+        return self
+
+
+class TreatmentAudioMeasurement(Versioned):
+    """Decoded post-encode mix evidence bound to the planned treatment bundle."""
+
+    measurement_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    treatment_evidence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    encoded_media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mix: TreatmentAudioMixResult
+    created_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def is_bound(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("audio measurement provenance must include the source asset")
+        if self.mix.status != "measured":
+            raise ValueError("audio measurement must contain measured mix facts")
+        if self.mix.treatment_fingerprint == "0" * 64:
+            raise ValueError("audio measurement cannot use an empty treatment fingerprint")
         return self
 
 

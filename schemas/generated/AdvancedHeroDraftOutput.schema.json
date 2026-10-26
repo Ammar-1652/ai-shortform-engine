@@ -78,6 +78,38 @@
           "title": "Fade Out Us",
           "type": "array"
         },
+        "intelligibility_checked_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Checked Windows",
+          "type": "array"
+        },
+        "intelligibility_failed_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Failed Windows",
+          "type": "array"
+        },
+        "intelligibility_method": {
+          "default": "",
+          "enum": [
+            "",
+            "decoded_window_signal_v1",
+            "no_audio_cues_v1"
+          ],
+          "title": "Intelligibility Method",
+          "type": "string"
+        },
+        "intelligibility_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Intelligibility Note",
+          "type": "string"
+        },
         "intelligibility_status": {
           "default": "unverified",
           "enum": [

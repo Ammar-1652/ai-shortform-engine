@@ -44,7 +44,7 @@ from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import QACheck, QAStatus
 from clipforge.schemas.qa import ViewerEvidenceBundle
 from clipforge.schemas.render_checkpoint import AdvancedRenderAuthorization
-from clipforge.schemas.treatment import TreatmentEvidenceBundle
+from clipforge.schemas.treatment import TreatmentAudioMeasurement, TreatmentEvidenceBundle
 from clipforge.storage import Database
 
 
@@ -728,6 +728,41 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                         raise MediaError("viewer evidence render input is stale")
                     if plan.treatment_audio_mix is not None and bundle.treatment_audio_mix_status != "measured":
                         raise MediaError("viewer evidence is missing measured treatment audio mix facts")
+                    if (
+                        plan.treatment_audio_mix is not None
+                        and plan.treatment_audio_mix.cue_event_ids
+                        and bundle.treatment_audio_intelligibility_status != "pass"
+                    ):
+                        raise MediaError(
+                            "viewer evidence is missing a passing decoded audio intelligibility result"
+                        )
+                    if plan.treatment_audio_mix is not None:
+                        measurement_path = confine_work_path(
+                            inputs.root,
+                            (evidence_path.parent / bundle.treatment_audio_measurement_relative_path)
+                            .relative_to(inputs.root)
+                            .as_posix(),
+                            label="treatment audio measurement",
+                        )
+                        if (
+                            measurement_path.is_symlink()
+                            or not measurement_path.is_file()
+                            or sha256_file(measurement_path) != bundle.treatment_audio_measurement_sha256
+                        ):
+                            raise MediaError("treatment audio measurement is missing or stale")
+                        measurement = TreatmentAudioMeasurement.model_validate_json(
+                            measurement_path.read_text(encoding="utf-8")
+                        )
+                        if (
+                            measurement.source_asset_id != inputs.document.source_asset_id
+                            or measurement.candidate_id != plan.candidate_id
+                            or measurement.treatment_evidence_sha256 != plan.treatment_evidence_sha256
+                            or measurement.encoded_media_sha256 != draft.preview_sha256
+                            or measurement.mix.treatment_fingerprint != plan.treatment_fingerprint
+                            or measurement.mix.mix_id != plan.treatment_audio_mix.mix_id
+                            or measurement.mix.intelligibility_status != "pass"
+                        ):
+                            raise MediaError("treatment audio measurement is bound to another render")
                     if (
                         bundle.camera_motion_event_ids
                         != sorted(item.event_id for item in render_input.camera_motion)

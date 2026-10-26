@@ -27,6 +27,7 @@ from clipforge.preview.timing import frame_at_or_after
 from clipforge.schemas.advanced import AdvancedHeroRenderInput, advanced_fingerprint
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.qa import ViewerEvidenceBundle, ViewerEvidenceFile
+from clipforge.schemas.treatment import TreatmentAudioMeasurement, TreatmentAudioMixResult
 from clipforge.transcription.io import publish_json
 from clipforge.vision.images import write_contact_sheet
 
@@ -34,6 +35,7 @@ VIEWER_EVIDENCE_RECIPE = "decoded-viewer-evidence-v3"
 _LOUDNESS_RE = re.compile(r"Integrated loudness:\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS", re.S)
 _TRUE_PEAK_RE = re.compile(r"True peak:\s*Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS", re.S)
 _RMS_RE = re.compile(r"RMS level dB:\s*(-?\d+(?:\.\d+)?)", re.S)
+_RMS_WINDOW_LIMIT_DB = -55.0
 
 
 def _safe(root: Path, path: Path) -> Path:
@@ -172,6 +174,108 @@ def _measured_audio(root: Path, output: Path, log_path: Path) -> tuple[float, fl
     return float(loudness.group(1)), float(peak.group(1)), rms[:128]
 
 
+def _window_rms(
+    root: Path, output: Path, interval_start_us: int, interval_end_us: int, log_path: Path
+) -> float:
+    """Measure one encoded output window without introducing a second clock.
+
+    The interval remains canonical integer microseconds in the evidence. The
+    decimal strings below are only ffmpeg argv values; they are never persisted
+    as timing data.
+    """
+    if interval_end_us <= interval_start_us:
+        raise MediaError("audio intelligibility window is empty")
+    start_s = f"{interval_start_us / 1_000_000:.6f}"
+    duration_s = f"{(interval_end_us - interval_start_us) / 1_000_000:.6f}"
+    result = ProcessRunner().run(
+        [
+            resolve_ffmpeg(),
+            "-v",
+            "info",
+            "-ss",
+            start_s,
+            "-t",
+            duration_s,
+            "-i",
+            str(_safe(root, output)),
+            "-map",
+            "0:a:0",
+            "-af",
+            "astats=metadata=1:reset=0",
+            "-f",
+            "null",
+            "-",
+        ],
+        log_path=_safe(root, log_path),
+        check=True,
+        timeout_s=180,
+        reap_group=True,
+    )
+    values = [float(value) for value in _RMS_RE.findall(result.stderr_tail)]
+    if not values:
+        raise MediaError("audio intelligibility window did not report RMS")
+    return max(values)
+
+
+def _decoded_intelligibility(
+    *,
+    root: Path,
+    output: Path,
+    mix: TreatmentAudioMixResult,
+    true_peak_dbfs: float,
+    peak_limit_dbfs: float,
+    log_path: Path,
+) -> TreatmentAudioMixResult:
+    """Return technical decoded speech-window evidence for a treatment mix.
+
+    This deliberately proves signal presence and duck-policy coverage, not
+    semantic word recognition. Human playback remains a separate review gate.
+    """
+    if not mix.cue_event_ids:
+        return mix.model_copy(
+            update={
+                "status": "measured",
+                "intelligibility_status": "pass",
+                "intelligibility_method": "no_audio_cues_v1",
+                "intelligibility_checked_windows": [],
+                "intelligibility_failed_windows": [],
+                "intelligibility_note": "No treatment audio cues required a speech-overlap check.",
+            }
+        )
+    checked = [window for window in mix.speech_overlap_windows if window is not None]
+    failed = []
+    for index, window in enumerate(checked):
+        rms_db = _window_rms(
+            root=root,
+            output=output,
+            interval_start_us=window.output_start_us,
+            interval_end_us=window.output_end_us,
+            log_path=log_path.with_name(f"{log_path.stem}.window-{index:02d}.log"),
+        )
+        if rms_db <= _RMS_WINDOW_LIMIT_DB:
+            failed.append(window)
+    overlap_indices = [index for index, window in enumerate(mix.speech_overlap_windows) if window is not None]
+    ducking_ok = all(mix.duck_db[index] > 0 for index in overlap_indices)
+    peak_ok = true_peak_dbfs <= peak_limit_dbfs + 0.1
+    passed = not failed and ducking_ok and peak_ok
+    note = (
+        "Decoded speech-overlap windows contain measurable signal; configured SFX ducking "
+        "and true-peak policy are satisfied. Semantic intelligibility still requires human listening."
+        if passed
+        else "Decoded speech-overlap evidence failed signal, ducking, or true-peak checks."
+    )
+    return mix.model_copy(
+        update={
+            "status": "measured",
+            "intelligibility_status": "pass" if passed else "fail",
+            "intelligibility_method": "decoded_window_signal_v1",
+            "intelligibility_checked_windows": checked,
+            "intelligibility_failed_windows": failed or ([checked[0]] if not ducking_ok and checked else []),
+            "intelligibility_note": note,
+        }
+    )
+
+
 def _files(
     paths: list[Path],
     run_dir: Path,
@@ -271,14 +375,52 @@ def write_viewer_evidence_bundle(
     evidence_path = _safe(root, output.parent / "viewer-evidence" / "bundle.json")
     measured_mix = None
     if render_input.treatment_audio_mix is not None:
-        measured_mix = render_input.treatment_audio_mix.model_copy(
-            update={
-                "status": "measured",
-                "measured_integrated_lufs": integrated_lufs,
-                "measured_true_peak_dbfs": true_peak_dbfs,
-                "measured_rms_windows": rms_windows,
-            }
+        measured_mix = _decoded_intelligibility(
+            root=root,
+            output=output,
+            mix=render_input.treatment_audio_mix.model_copy(
+                update={
+                    "status": "measured",
+                    "measured_integrated_lufs": integrated_lufs,
+                    "measured_true_peak_dbfs": true_peak_dbfs,
+                    "measured_rms_windows": rms_windows,
+                }
+            ),
+            true_peak_dbfs=true_peak_dbfs,
+            peak_limit_dbfs=render_input.audio_true_peak_dbfs,
+            log_path=log_path.with_name(log_path.stem + ".intelligibility.log"),
         )
+    measurement_relative_path = ""
+    measurement_sha256 = ""
+    if measured_mix is not None:
+        measurement_path = _safe(root, evidence_path.with_name("treatment-audio-measurement.json"))
+        measurement = TreatmentAudioMeasurement(
+            measurement_id=str(uuid.uuid4()),
+            source_asset_id=source_asset_id,
+            candidate_id=render_input.candidate_id,
+            treatment_evidence_sha256=render_input.treatment_evidence_sha256,
+            encoded_media_sha256=actual_media_sha256,
+            mix=measured_mix,
+            created_at=datetime.now(UTC),
+            provenance=ArtifactProvenance(
+                created_at=datetime.now(UTC),
+                created_by=actor,
+                tool=VIEWER_EVIDENCE_RECIPE,
+                tool_version=__version__,
+                source_asset_ids=[source_asset_id],
+                parent_artifact_ids=sorted(set([*parent_artifact_ids, artifact_id])),
+                job_id=job_id,
+                inputs_sha256=render_input_sha256,
+            ),
+        )
+        publish_json(
+            measurement_path,
+            measurement,
+            root,
+            _safe(root, measurement_path.with_name(f"{measurement_path.stem}.partial.json")),
+        )
+        measurement_relative_path = measurement_path.relative_to(run_dir).as_posix()
+        measurement_sha256 = sha256_file(measurement_path)
     bundle = ViewerEvidenceBundle(
         evidence_id=str(uuid.uuid4()),
         project_id=project_id,
@@ -296,6 +438,17 @@ def write_viewer_evidence_bundle(
             advanced_fingerprint(measured_mix.model_dump(mode="json")) if measured_mix is not None else ""
         ),
         treatment_audio_mix_status="measured" if measured_mix is not None else "",
+        treatment_audio_intelligibility_status=(
+            measured_mix.intelligibility_status if measured_mix is not None else ""
+        ),
+        treatment_audio_intelligibility_method=(
+            measured_mix.intelligibility_method if measured_mix is not None else ""
+        ),
+        treatment_audio_intelligibility_note=(
+            measured_mix.intelligibility_note if measured_mix is not None else ""
+        ),
+        treatment_audio_measurement_relative_path=measurement_relative_path,
+        treatment_audio_measurement_sha256=measurement_sha256,
         treatment_audio_integrated_lufs=integrated_lufs if measured_mix is not None else None,
         treatment_audio_true_peak_dbfs=true_peak_dbfs if measured_mix is not None else None,
         treatment_audio_rms_windows=rms_windows if measured_mix is not None else [],

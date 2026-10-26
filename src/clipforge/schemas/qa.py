@@ -114,6 +114,11 @@ class ViewerEvidenceBundle(Versioned):
     treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_audio_mix_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_audio_mix_status: Literal["", "planned", "measured"] = ""
+    treatment_audio_intelligibility_status: Literal["", "unverified", "pass", "fail"] = ""
+    treatment_audio_intelligibility_method: str = Field(default="", max_length=80)
+    treatment_audio_intelligibility_note: str = Field(default="", max_length=500)
+    treatment_audio_measurement_relative_path: str = Field(default="", max_length=512)
+    treatment_audio_measurement_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_audio_integrated_lufs: float | None = None
     treatment_audio_true_peak_dbfs: float | None = None
     treatment_audio_rms_windows: list[float] = Field(default_factory=list, max_length=128)
@@ -144,6 +149,10 @@ class ViewerEvidenceBundle(Versioned):
             raise ValueError("viewer evidence must describe the portrait production output")
         if self.treatment_fingerprint and not self.treatment_evidence_sha256:
             raise ValueError("viewer evidence treatment evidence is missing")
+        if self.treatment_audio_mix_status == "measured" and (
+            not self.treatment_audio_measurement_relative_path or not self.treatment_audio_measurement_sha256
+        ):
+            raise ValueError("measured treatment audio requires a persisted measurement sidecar")
         if self.human_watch is not None and (
             not self.human_watch.watched_with_audio or not self.human_watch.watched_muted
         ):
