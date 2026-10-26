@@ -38,8 +38,13 @@ evidence`), `ba57bcf` (`fix: preserve legacy audio evidence compatibility`),
 The final validation run must record its exact resulting HEAD below before any
 status can advance.
 
-**Final validation result:** `PENDING — rerun after embedding observations
-in the canonical treatment bundle`.
+**Final validation result:** `TECHNICALLY_VERIFIED` on implementation/document
+head `ebb3de5` (`./scripts/validate.sh`): 946 Python tests passed, 2
+documented skips (VoiceStudio unavailable; Whop not configured), 18
+browser/Remotion tests passed, and 64 renderer tests passed. Ruff, format,
+mypy, schema check, renderer lint/typecheck, and doctor (10 pass, 0 warn,
+0 fail) also passed. The subsequent ledger-only documentation commit does not
+change executable behavior.
 **Final CI result:** `PENDING — a queued or different-head job is not a pass`.
 **Independent review:** `AWAITING_REVIEW`.
 
