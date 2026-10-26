@@ -1,11 +1,16 @@
 # Editorial treatment orchestration follow-up round 3
 
 **Review date:** 2026-10-26
-**Reviewed head:** `6bd76212b85b56bcb4225a312b52ad8690e62d82`
+**Reviewed head:** `331f13eb3f26fe9bfca3422c68cc9cfe3043ae92`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Purpose:** close the evidence and integration gaps found when reviewing the
 round-2 implementation against its own acceptance criteria.
+
+**Current status:** `REVIEW OPEN — NOT COMPLETE`.
+
+This status is intentional. Passing local tests, completing a code slice, or
+having a draft PR does not authorize changing this plan to `COMPLETE`.
 
 ## Review findings
 
@@ -170,9 +175,88 @@ Acceptance: the generic clip proves the provider-backed path and CI is green
 on the exact reviewed commit. Until then these are environment gates, not
 claims of production proof.
 
+## Mandatory completion protocol
+
+The operator must use these statuses for every R3 item:
+
+1. `NOT_STARTED`: no implementation evidence exists.
+2. `IN_PROGRESS`: implementation or tests are being changed.
+3. `CODE_COMPLETE`: the code path exists, but the complete acceptance
+   evidence has not been produced.
+4. `TECHNICALLY_VERIFIED`: targeted and full automated checks pass for the
+   exact commit, including meaningful failure tests.
+5. `EVIDENCE_COMPLETE`: the required real artifacts, decoded frames/audio,
+   provider records, rights records, and review receipts exist, are hashed,
+   and are bound to the exact plan.
+6. `COMPLETE`: only after every item is `EVIDENCE_COMPLETE`, all required
+   external gates are green, and independent code and visual review are still
+   available. `COMPLETE` must never be inferred from CI alone.
+
+The plan may not report `COMPLETE` when any of these conditions applies:
+
+- a required provider, acquisition, license, source, or generic test asset is
+  missing or unauthorized;
+- a fixture substitutes for the required real provider-backed production path;
+- a digest exists without a readable, hash-matching evidence bundle;
+- audio overlap or intelligibility is `unverified` for a treatment with audio
+  cues;
+- a policy evaluator is not executed at every required gate;
+- any rendered event can be duplicated, omitted, or owned by more than one
+  treatment decision;
+- a browser, Remotion, ffmpeg, or media step is still running or failed;
+- CI is queued, cancelled, failed, or reports a different commit SHA;
+- the exact output MP4, decoded frame/audio evidence, and manifests have not
+  been inspected;
+- independent code and visual review has not happened.
+
+## Required evidence ledger
+
+Before changing any item to `EVIDENCE_COMPLETE`, append a row to the round
+report containing all of the following. A prose assertion is not evidence.
+
+| Field | Required value |
+|---|---|
+| item | `R3-1` through `R3-6` |
+| status | one of the statuses above |
+| commit_sha | exact Git SHA under test |
+| implementation_paths | source files and schema files changed |
+| test_commands | exact commands and counts, including failure cases |
+| artifact_paths | relative paths under the ignored work root |
+| artifact_sha256 | hashes of every bundle, MP4, frame sheet, audio report, and rights record |
+| provider_rights | provider response, selection, acquisition, license, and registered-byte facts where applicable |
+| decoded_evidence | frame timestamps, audio measurements, and inspection result |
+| downstream_checks | QA, final review, cache, and delivery verification results |
+| external_status | CI job URL/status and any authorized-media limitation |
+| reviewer | independent reviewer identity or explicit `AWAITING_REVIEW` |
+
+If a field is unavailable, the item remains `CODE_COMPLETE` or
+`TECHNICALLY_VERIFIED`; it cannot become `EVIDENCE_COMPLETE` or `COMPLETE`.
+
+## Required closeout sequence
+
+Execute these steps in order and record each checkpoint:
+
+1. Re-read this plan and the current repository guidance at the actual head.
+2. Implement one R3 item without weakening an existing gate.
+3. Run targeted success and failure tests for that item.
+4. Regenerate schemas and run schema checks when contracts change.
+5. Run the full validation suite on the exact commit.
+6. Produce the required real/provider-backed artifacts, or record the item as
+   blocked by missing authorization; never substitute a fixture silently.
+7. Decode and inspect the actual MP4 frames and audio, then hash all evidence.
+8. Verify QA, final review, cache invalidation, stale-artifact blocking, and
+   local delivery against the same evidence bundle.
+9. Check CI status and commit SHA. A queued job is not a pass.
+10. Update the ledger and status only after all evidence exists.
+11. Stop at draft PR and request independent code and visual review. Do not
+    merge or self-approve.
+
 ## Exit criteria
 
 R3-1 through R3-5 require code, failure tests, generated schemas where
 applicable, and a full validation run. R3-6 requires authorized media and a
-runner result. The round must remain draft and unmerged until independent code
-and visual review are complete.
+runner result. The round remains `REVIEW OPEN — NOT COMPLETE` until every
+required evidence-ledger row is `EVIDENCE_COMPLETE`, CI is green on the exact
+head, authorized production proof is decoded and inspected, and independent
+code and visual review are complete. A local technical pass alone can never
+close this plan.
