@@ -36,7 +36,11 @@ evidence`) and `ba57bcf` (`fix: preserve legacy audio evidence compatibility`).
 The final validation run must record its exact resulting HEAD below before any
 status can advance.
 
-**Final validation result:** `PENDING — run on the final documentation head`.
+**Final validation result:** `TECHNICALLY_VERIFIED` on implementation head
+`39f39f6` (`./scripts/validate.sh`): 946 Python tests passed, 2 documented
+skips (VoiceStudio unavailable; Whop not configured), 18 browser/Remotion
+tests passed, and 64 renderer tests passed. Ruff, format, mypy, schema check,
+renderer lint/typecheck, and doctor (10 pass, 0 warn, 0 fail) also passed.
 **Final CI result:** `PENDING — a queued or different-head job is not a pass`.
 **Independent review:** `AWAITING_REVIEW`.
 
