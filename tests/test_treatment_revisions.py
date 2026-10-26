@@ -84,12 +84,47 @@ def binding_for_direction(direction: DirectionDocument) -> TreatmentAssetBinding
         ),
         acquired,
     )
+    observation = None
+    if pending.kind == "graphic":
+        now = datetime.now(UTC)
+        observation = TreatmentAssetObservation(
+            observation_id="observation-1",
+            asset_id="asset-1",
+            source_asset_id="source-1",
+            media_sha256="c" * 64,
+            output_interval=placement.interval,
+            source_evidence_ids=placement.source_evidence_ids,
+            frames=[
+                TreatmentObservationFrame(
+                    relative_path="editorial/treatment-observations/observation-1/frames/frame-000.jpg",
+                    sha256="a" * 64,
+                    timestamp_us=0,
+                )
+            ],
+            observed_labels=["context"],
+            relevance_score=0.9,
+            relevance_threshold=0.85,
+            reviewed_by="test",
+            review_note="Decoded frame matches the requested context.",
+            provenance=ArtifactProvenance(
+                created_at=now,
+                created_by="test",
+                tool="test",
+                tool_version="1",
+                source_asset_ids=["source-1"],
+                parent_artifact_ids=["asset-1"],
+            ),
+        )
+        placement = placement.model_copy(
+            update={"observation_id": observation.observation_id, "observation_sha256": "d" * 64}
+        )
     now = datetime.now(UTC)
     return TreatmentAssetBindingDocument(
         binding_id="binding-1",
         request=acquired,
         placement=placement,
         verification=checked,
+        observation=observation,
         created_at=now,
         provenance=ArtifactProvenance(
             created_at=now,
@@ -153,12 +188,17 @@ def test_binding_schema_rejects_mismatched_license_and_interval() -> None:
 
 def test_binding_persistence_is_idempotent_and_confined(tmp_path: Path) -> None:
     binding = binding_for_direction(pending_direction())
+    observation_path = tmp_path / "editorial" / "treatment-observations" / "observation-1" / "observation.json"
+    observation_path.parent.mkdir(parents=True)
+    assert binding.observation is not None
+    observation_path.write_text(binding.observation.model_dump_json(), encoding="utf-8")
     kwargs = dict(
         work_root=tmp_path,
         request=binding.request,
         placement=binding.placement,
         verification=binding.verification,
         source_asset_id="source-1",
+        observation_path=observation_path,
     )
     path = persist_treatment_binding(**kwargs)
     before = path.read_bytes()

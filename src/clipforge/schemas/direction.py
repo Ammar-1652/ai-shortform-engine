@@ -223,6 +223,8 @@ class TreatmentAssetBindingDocument(Versioned):
             raise ValueError("treatment observation does not match the visual placement")
         if self.observation is not None and placement.observation_sha256 is None:
             raise ValueError("treatment visual placement is missing its observation hash")
+        if placement.kind == "graphic" and self.observation is None:
+            raise ValueError("graphic treatment bindings require decoded visual observation evidence")
         if placement.kind != request.kind or checked.provider not in request.provider_classes:
             raise ValueError("treatment binding kind or provider was not requested")
         if (

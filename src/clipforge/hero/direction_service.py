@@ -478,6 +478,34 @@ def revise_direction_with_treatment_bindings(
             parent_direction_sha256=parent_sha,
             binding_paths=binding_refs,
         )
+        # Re-run every direction gate on the immutable revision before it can
+        # become the document consumed by Advanced Hero. The parent checks
+        # above protect identity; these checks protect semantics and policy.
+        validate_source_evidence(
+            revised,
+            context.alignment.words,
+            context.hero_plan.edit_plan.time_map,
+            {scene.scene_id for scene in context.visual.scenes},
+        )
+        from clipforge.hero.direction_lint import lint_direction
+
+        lint_report = lint_direction(
+            revised,
+            direction_sha256=parent_sha,
+            words=context.alignment.words,
+            time_map=context.hero_plan.edit_plan.time_map,
+            scene_ids={scene.scene_id for scene in context.visual.scenes},
+        )
+        if lint_report.status == "fail":
+            errors = "; ".join(
+                item.message for item in lint_report.findings if item.severity == "error"
+            )
+            raise MediaError(f"treatment direction revision failed lint: {errors}")
+        validate_motion_recipe_bindings(revised)
+        validate_preset_binding(revised)
+        from clipforge.hero.treatment_policy import require_treatment_policy
+
+        require_treatment_policy(revised)
         destination = (
             context.workspace.advanced_review_direction_file(candidate_id)
             if allow_unapproved
