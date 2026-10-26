@@ -10,12 +10,12 @@ from __future__ import annotations
 from itertools import pairwise
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
-from clipforge.schemas.treatment import BeatTreatmentDecision
+from clipforge.schemas.treatment import BeatTreatmentDecision, TreatmentAssetRequest, TreatmentAssetVerification
 
 _SHA = r"^[0-9a-f]{64}$"
 
@@ -173,7 +173,19 @@ class DirectionAssetPlacement(Versioned):
     selection_id: EntityId | None = None
     acquisition_id: EntityId | None = None
     license_evidence_sha256: str | None = Field(default=None, pattern=_SHA)
+    registered_asset_sha256: str | None = Field(default=None, pattern=_SHA)
     asset_status: Literal["pending", "selected", "acquired", "blocked", "unavailable"] = "acquired"
+
+
+class TreatmentAssetBindingDocument(Versioned):
+    """Immutable persisted request-to-placement handoff for a treatment asset."""
+
+    binding_id: EntityId
+    request: TreatmentAssetRequest
+    placement: DirectionAssetPlacement
+    verification: TreatmentAssetVerification
+    created_at: AwareDatetime
+    provenance: ArtifactProvenance
 
 
 class DirectionMotionGraphic(Versioned):
@@ -268,6 +280,10 @@ class DirectionTransitionSpec(Versioned):
     style: Literal["clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"]
     source_evidence_ids: list[EntityId] = Field(min_length=1)
     sfx_placement_id: EntityId | None = None
+    # Canonical output-time boundary.  It is separate from the visual bridge
+    # interval so lint can reject a transition that was retimed into a spoken
+    # word instead of an actual reviewed cut.
+    cut_boundary_us: Microseconds | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def transition_has_positive_interval(self) -> Self:
@@ -433,6 +449,10 @@ class DirectionOption(Versioned):
                     or placement.acquisition_id != request.acquisition_id
                 ):
                     raise ValueError("asset placement acquisition identity is stale")
+                if placement.license_evidence_sha256 != request.license_evidence_sha256:
+                    raise ValueError("asset placement license evidence is stale")
+                if placement.registered_asset_sha256 != request.registered_asset_sha256:
+                    raise ValueError("asset placement byte hash is stale")
             for decision in self.treatment_decisions:
                 for layer in (
                     decision.broll,

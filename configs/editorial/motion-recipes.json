@@ -9,7 +9,7 @@
       "permission": "reuse_allowed",
       "license_id": "Clipforge-project",
       "attribution": "Clipforge native renderer components",
-      "content_sha256": "4bc1c7fc4b592b62c4d3fce9020ff0594e987d52a886110f86d8ab6d9387bcab",
+      "content_sha256": "833a654e1bbe0e1623ee7eeb77792b5c3d807e3804c77eee16e9c572377de5b3",
       "captured_at": "2026-10-24T00:00:00Z",
       "notes": "Typed components already shipped in the Remotion renderer."
     },

@@ -470,10 +470,20 @@ def remap_direction_intervals(
             )
         transitions: list[DirectionTransitionSpec] = []
         for transition in option.transitions:
+            remapped_interval = remap_output_interval(transition.interval, source_time_map, output_time_map)
             transitions.append(
                 transition.model_copy(
                     update={
-                        "interval": remap_output_interval(transition.interval, source_time_map, output_time_map)
+                        "interval": remapped_interval,
+                        # Treatment lint defines the boundary as the bridge's
+                        # output start. Keep that receipt aligned after a
+                        # jump-cut remap instead of leaving a stale source
+                        # clock value behind.
+                        "cut_boundary_us": (
+                            remapped_interval.output_start_us
+                            if transition.cut_boundary_us is not None
+                            else None
+                        ),
                     }
                 )
             )

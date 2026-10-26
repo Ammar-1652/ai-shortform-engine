@@ -178,8 +178,8 @@ def save_direction_brief(
         style_id=selected.style_id,
         style_fingerprint=profile.fingerprint(),
         preset_id=preset_id,
-        direction_recipe_version="direction-v3",
-        treatment_fingerprint=treatment_fingerprint(treated_selected),
+        direction_recipe_version="direction-v3" if preset_id is not None else "direction-v2",
+        treatment_fingerprint=treatment_fingerprint(treated_selected) if preset_id is not None else None,
         # Every new directed production uses the shared platform-safe inner
         # band unless the operator explicitly selected the legacy region in a
         # reviewed document.

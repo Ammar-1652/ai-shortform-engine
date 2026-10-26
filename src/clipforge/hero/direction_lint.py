@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from clipforge.errors import MediaError
 from clipforge.hero.direction_service import validate_source_evidence
 from clipforge.hero.treatment import treatment_fingerprint
+from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.schemas.direction import DirectionDocument, DirectionLintFinding, DirectionLintReport
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.time import TimeMapDocument
@@ -87,11 +88,13 @@ def lint_direction(
                             ),
                         )
                     )
-        if document.preset_id:
+        if document.direction_recipe_version == "direction-v3":
             try:
                 from clipforge.editorial.presets import PresetCatalog, PresetCatalogError
 
-                policy = PresetCatalog.load().find(document.preset_id).treatment_policy
+                preset_id = document.preset_id or "clean_explainer"
+                policy = PresetCatalog.load().find(preset_id).treatment_policy
+                findings.extend(evaluate_treatment_policy(selected, policy))
                 selected_layers = [
                     layer
                     for decision in selected.treatment_decisions
@@ -367,9 +370,16 @@ def lint_direction(
                 message="source-native text was not reviewed; optional typography may need human inspection",
             )
         )
+    unique_findings: list[DirectionLintFinding] = []
+    seen_findings: set[tuple[str, str]] = set()
+    for finding in findings:
+        key = (finding.code, finding.message)
+        if key not in seen_findings:
+            seen_findings.add(key)
+            unique_findings.append(finding)
     return DirectionLintReport(
         direction_id=document.direction_id,
         direction_sha256=direction_sha256,
-        status="fail" if any(item.severity == "error" for item in findings) else "pass",
-        findings=findings,
+        status="fail" if any(item.severity == "error" for item in unique_findings) else "pass",
+        findings=unique_findings,
     )

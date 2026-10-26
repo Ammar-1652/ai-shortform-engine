@@ -66,6 +66,7 @@
                 "dialogue_clarity",
                 "no_relevant_asset",
                 "face_collision",
+                "protected_region_collision",
                 "quiet_payoff",
                 "short_interval",
                 "no_semantic_cut",
@@ -265,6 +266,7 @@
                 "dialogue_clarity",
                 "no_relevant_asset",
                 "face_collision",
+                "protected_region_collision",
                 "quiet_payoff",
                 "short_interval",
                 "no_semantic_cut",
@@ -398,6 +400,7 @@
                 "dialogue_clarity",
                 "no_relevant_asset",
                 "face_collision",
+                "protected_region_collision",
                 "quiet_payoff",
                 "short_interval",
                 "no_semantic_cut",
@@ -604,6 +607,7 @@
                 "dialogue_clarity",
                 "no_relevant_asset",
                 "face_collision",
+                "protected_region_collision",
                 "quiet_payoff",
                 "short_interval",
                 "no_semantic_cut",
@@ -761,6 +765,7 @@
                 "dialogue_clarity",
                 "no_relevant_asset",
                 "face_collision",
+                "protected_region_collision",
                 "quiet_payoff",
                 "short_interval",
                 "no_semantic_cut",
@@ -1040,6 +1045,86 @@
       "title": "TreatmentAssetRequest",
       "type": "object"
     },
+    "TreatmentRegion": {
+      "additionalProperties": false,
+      "description": "One output-space protected region used by treatment collision checks.",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "face",
+            "active_subject",
+            "source_text",
+            "caption",
+            "logo",
+            "cta",
+            "platform_safe",
+            "broll"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "visual_analysis",
+            "platform_profile",
+            "render_input"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1080,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 1080,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1920,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "region_id",
+        "role",
+        "interval",
+        "x",
+        "y",
+        "width",
+        "height",
+        "source"
+      ],
+      "title": "TreatmentRegion",
+      "type": "object"
+    },
     "TreatmentVisualEvidence": {
       "additionalProperties": false,
       "description": "Measured visual and collision facts for one treatment decision.",
@@ -1080,6 +1165,28 @@
           "title": "Protected Region Ids",
           "type": "array"
         },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/TreatmentRegion"
+          },
+          "maxItems": 32,
+          "title": "Regions",
+          "type": "array"
+        },
+        "relevance_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance Score"
+        },
         "relevance_status": {
           "default": "unknown",
           "enum": [
@@ -1089,6 +1196,20 @@
           ],
           "title": "Relevance Status",
           "type": "string"
+        },
+        "relevance_threshold": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance Threshold"
         },
         "schema_version": {
           "const": "1.0.0",

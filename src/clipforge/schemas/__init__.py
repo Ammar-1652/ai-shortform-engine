@@ -21,6 +21,7 @@ from clipforge.schemas.direction import (
     DirectionLintReport,
     DirectionTransitionSpec,
     SourceNativeText,
+    TreatmentAssetBindingDocument,
 )
 from clipforge.schemas.editorial import (
     AudioEvent,
@@ -133,9 +134,11 @@ from clipforge.schemas.treatment import (
     SfxTreatmentDecision,
     TransitionTreatmentDecision,
     TreatmentAssetRequest,
+    TreatmentAssetVerification,
     TreatmentAudioMixResult,
     TreatmentLayerDecision,
     TreatmentPlanSummary,
+    TreatmentRegion,
     TreatmentVisualEvidence,
 )
 
@@ -243,11 +246,14 @@ __all__ = [
     "TranscriptionProfile",
     "TransitionPolicy",
     "TransitionTreatmentDecision",
+    "TreatmentAssetBindingDocument",
     "TreatmentAssetRequest",
+    "TreatmentAssetVerification",
     "TreatmentAudioMixResult",
     "TreatmentLayerDecision",
     "TreatmentPlanSummary",
     "TreatmentPolicy",
+    "TreatmentRegion",
     "TreatmentVisualEvidence",
     "Versioned",
     "assert_schemas_current",

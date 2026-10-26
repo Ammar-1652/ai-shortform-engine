@@ -16,6 +16,7 @@ TreatmentOmissionReason = Literal[
     "dialogue_clarity",
     "no_relevant_asset",
     "face_collision",
+    "protected_region_collision",
     "quiet_payoff",
     "short_interval",
     "no_semantic_cut",
@@ -25,6 +26,16 @@ TreatmentOmissionReason = Literal[
 ]
 TreatmentAssetStatus = Literal["pending", "selected", "acquired", "blocked", "unavailable"]
 CollisionStatus = Literal["clear", "blocked", "unknown"]
+TreatmentRegionRole = Literal[
+    "face",
+    "active_subject",
+    "source_text",
+    "caption",
+    "logo",
+    "cta",
+    "platform_safe",
+    "broll",
+]
 
 
 class TreatmentLayerDecision(Versioned):
@@ -167,6 +178,39 @@ class TreatmentAssetRequest(Versioned):
         return self
 
 
+class TreatmentAssetVerification(Versioned):
+    """Evidence returned only after an existing provider/rights boundary verifies an asset."""
+
+    provider: Literal["envato", "openverse", "local"]
+    provider_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    selection_id: EntityId
+    acquisition_id: EntityId
+    license_evidence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    registered_asset_id: EntityId
+    registered_asset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    media_kind: Literal["graphic", "audio"]
+    status: Literal["verified"] = "verified"
+
+
+class TreatmentRegion(Versioned):
+    """One output-space protected region used by treatment collision checks."""
+
+    region_id: EntityId
+    role: TreatmentRegionRole
+    interval: OutputInterval
+    x: int = Field(ge=0, le=1080)
+    y: int = Field(ge=0, le=1920)
+    width: int = Field(gt=0, le=1080)
+    height: int = Field(gt=0, le=1920)
+    source: Literal["visual_analysis", "platform_profile", "render_input"]
+
+    @model_validator(mode="after")
+    def stays_in_output(self) -> Self:
+        if self.x + self.width > 1080 or self.y + self.height > 1920:
+            raise ValueError("treatment region must stay inside the portrait output")
+        return self
+
+
 class TreatmentVisualEvidence(Versioned):
     """Measured visual and collision facts for one treatment decision."""
 
@@ -174,7 +218,10 @@ class TreatmentVisualEvidence(Versioned):
     protected_region_ids: list[EntityId] = Field(default_factory=list, max_length=16)
     collision_status: CollisionStatus = "unknown"
     relevance_status: Literal["related", "unrelated", "unknown"] = "unknown"
+    relevance_score: float | None = Field(default=None, ge=0, le=1)
+    relevance_threshold: float | None = Field(default=None, ge=0, le=1)
     evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    regions: list[TreatmentRegion] = Field(default_factory=list, max_length=32)
     note: str = Field(min_length=1, max_length=500)
 
     @model_validator(mode="after")
@@ -183,6 +230,8 @@ class TreatmentVisualEvidence(Versioned):
             raise ValueError("clear collision evidence requires protected region ids")
         if self.relevance_status != "unknown" and not self.evidence_ids:
             raise ValueError("relevance status requires evidence ids")
+        if self.relevance_status != "unknown" and self.relevance_score is None:
+            raise ValueError("relevance status requires a numeric relevance score")
         return self
 
 
@@ -230,6 +279,12 @@ class TreatmentAudioMixResult(Versioned):
     cue_event_ids: list[EntityId] = Field(default_factory=list, max_length=32)
     applied_gain_db: list[float] = Field(default_factory=list, max_length=32)
     duck_db: list[float] = Field(default_factory=list, max_length=32)
+    source_in_us: list[int] = Field(default_factory=list, max_length=32)
+    fade_in_us: list[int] = Field(default_factory=list, max_length=32)
+    fade_out_us: list[int] = Field(default_factory=list, max_length=32)
+    speech_overlap_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    silence_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    intelligibility_status: Literal["unverified", "pass", "fail"] = "unverified"
     measured_integrated_lufs: float | None = None
     measured_true_peak_dbfs: float | None = None
     measured_rms_windows: list[float] = Field(default_factory=list, max_length=128)
@@ -254,6 +309,15 @@ class TreatmentAudioMixResult(Versioned):
             raise ValueError("audio mix gain facts must match cue event ids")
         if len(self.duck_db) != len(self.cue_event_ids):
             raise ValueError("audio mix duck facts must match cue event ids")
+        for label, values in (
+            ("source in", self.source_in_us),
+            ("fade in", self.fade_in_us),
+            ("fade out", self.fade_out_us),
+        ):
+            if len(values) != len(self.cue_event_ids):
+                raise ValueError(f"audio mix {label} facts must match cue event ids")
+        if len(self.speech_overlap_windows) != len(self.cue_event_ids):
+            raise ValueError("audio mix speech-overlap facts must match cue event ids")
         return self
 
 

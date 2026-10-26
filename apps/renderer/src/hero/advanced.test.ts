@@ -29,6 +29,8 @@ describe("advanced hero composition", () => {
     expect(source).toContain("diagram.payload?.left_label");
     expect(source).toContain("staticFile(name)");
     expect(source).toContain("names.narration");
+    expect(source).toContain("speech_overlap_windows");
+    expect(source).toContain("duckedGain");
     expect(source).toContain("hook-card-v1");
     expect(source).toContain("punch-card-v1");
     expect(source).toContain("activeEmphasis");

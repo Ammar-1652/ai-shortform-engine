@@ -36,6 +36,21 @@
   "additionalProperties": false,
   "description": "A narrative transition selected for one reviewed cut.",
   "properties": {
+    "cut_boundary_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cut Boundary Us"
+    },
     "interval": {
       "$ref": "#/$defs/OutputInterval"
     },

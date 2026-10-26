@@ -1464,6 +1464,7 @@ def _render_run(
             direction_id=plan.direction_id,
             direction_sha256=plan.direction_sha256,
             treatment_fingerprint=plan.treatment_fingerprint,
+            treatment_evidence_sha256=plan.treatment_evidence_sha256,
             treatment_audio_mix=plan.treatment_audio_mix,
             preset_id=plan.preset_id,
             pilot_sha256=pilot_sha256,
@@ -1740,6 +1741,7 @@ def _render_run(
                 direction_id=plan.direction_id,
                 direction_sha256=plan.direction_sha256,
                 treatment_fingerprint=plan.treatment_fingerprint,
+                treatment_evidence_sha256=plan.treatment_evidence_sha256,
                 treatment_audio_mix=plan.treatment_audio_mix,
                 preset_id=plan.preset_id,
                 motion_recipe_ids=plan.motion_recipe_ids,
@@ -2536,6 +2538,7 @@ def _pilot_dependency_sha(plan: AdvancedHeroPlanDocument) -> str:
     payload = {
         "style_fingerprint": plan.style_fingerprint,
         "treatment_fingerprint": plan.treatment_fingerprint,
+        "treatment_evidence_sha256": plan.treatment_evidence_sha256,
         "treatment_audio_mix": (
             None if plan.treatment_audio_mix is None else plan.treatment_audio_mix.model_dump(mode="json")
         ),

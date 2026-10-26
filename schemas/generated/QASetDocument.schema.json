@@ -338,6 +338,12 @@
     "technical": {
       "$ref": "#/$defs/QAResult"
     },
+    "treatment_evidence_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Evidence Sha256",
+      "type": "string"
+    },
     "treatment_fingerprint": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",

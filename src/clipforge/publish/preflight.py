@@ -122,6 +122,7 @@ class DeliveryFacts:
     direction_id: str = ""
     direction_sha256: str = ""
     treatment_fingerprint: str = ""
+    treatment_evidence_sha256: str = ""
     treatment_audio_mix_sha256: str = ""
     style_id: str = "legacy-v1"
     style_fingerprint: str = ""
@@ -285,6 +286,7 @@ def preflight_delivery(
         direction_id=plan.direction_id,
         direction_sha256=plan.direction_sha256,
         treatment_fingerprint=plan.treatment_fingerprint,
+        treatment_evidence_sha256=plan.treatment_evidence_sha256,
         treatment_audio_mix_sha256=(
             advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
             if plan.treatment_audio_mix is not None
@@ -383,6 +385,7 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "direction_id": facts.direction_id,
         "direction_sha256": facts.direction_sha256,
         "treatment_fingerprint": facts.treatment_fingerprint,
+        "treatment_evidence_sha256": facts.treatment_evidence_sha256,
         "treatment_audio_mix_sha256": facts.treatment_audio_mix_sha256,
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
@@ -504,6 +507,7 @@ def _reject_render_strategy(
             rendered.direction_id != plan.direction_id
             or rendered.direction_sha256 != plan.direction_sha256
             or rendered.treatment_fingerprint != plan.treatment_fingerprint
+            or rendered.treatment_evidence_sha256 != plan.treatment_evidence_sha256
             or rendered.style_id != plan.style_id
             or rendered.style_fingerprint != plan.style_fingerprint
             or rendered.safe_region_id != plan.safe_region_id
@@ -1108,6 +1112,8 @@ def _qa(
             ) from exc
         if qa.treatment_fingerprint != plan.treatment_fingerprint:
             raise PublishError("QA treatment fingerprint changed", category="qa_stale")
+        if qa.treatment_evidence_sha256 != plan.treatment_evidence_sha256:
+            raise PublishError("QA treatment evidence changed", category="qa_stale")
     return qa.qa_set_id, digest
 
 

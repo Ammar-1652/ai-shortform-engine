@@ -415,6 +415,9 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
     treatment_fingerprints = {
         plan.treatment_fingerprint for plan in prepared.plans if plan.treatment_fingerprint
     }
+    treatment_evidence_fingerprints = {
+        plan.treatment_evidence_sha256 for plan in prepared.plans if plan.treatment_evidence_sha256
+    }
     treatment_mix_fingerprints = {
         advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
         for plan in prepared.plans
@@ -422,6 +425,8 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
     }
     if len(treatment_fingerprints) > 1:
         raise QAError("QA plans have inconsistent treatment fingerprints")
+    if len(treatment_evidence_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment evidence fingerprints")
     if len(treatment_mix_fingerprints) > 1:
         raise QAError("QA plans have inconsistent treatment audio mix fingerprints")
     return QASetDocument(
@@ -439,7 +444,12 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         campaign=campaign_result,
         status=status,
         treatment_fingerprint=next(iter(treatment_fingerprints), ""),
-        treatment_summary_sha256=next(iter(treatment_mix_fingerprints), ""),
+        treatment_evidence_sha256=next(iter(treatment_evidence_fingerprints), ""),
+        # The evidence digest covers the complete direction option, request
+        # bindings, collision/omission receipts, and the audio mix.  Keep the
+        # legacy field name for compatibility, but never substitute the audio
+        # sub-hash for the canonical treatment summary.
+        treatment_summary_sha256=next(iter(treatment_evidence_fingerprints), ""),
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,

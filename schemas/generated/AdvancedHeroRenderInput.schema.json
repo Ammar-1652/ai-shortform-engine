@@ -1453,6 +1453,32 @@
           "title": "Duck Db",
           "type": "array"
         },
+        "fade_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade In Us",
+          "type": "array"
+        },
+        "fade_out_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade Out Us",
+          "type": "array"
+        },
+        "intelligibility_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "pass",
+            "fail"
+          ],
+          "title": "Intelligibility Status",
+          "type": "string"
+        },
         "measured_integrated_lufs": {
           "anyOf": [
             {
@@ -1501,6 +1527,30 @@
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "silence_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows",
+          "type": "array"
+        },
+        "source_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Source In Us",
+          "type": "array"
+        },
+        "speech_overlap_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows",
+          "type": "array"
         },
         "status": {
           "default": "planned",
@@ -2138,6 +2188,12 @@
         }
       ],
       "default": null
+    },
+    "treatment_evidence_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Evidence Sha256",
+      "type": "string"
     },
     "treatment_fingerprint": {
       "default": "",

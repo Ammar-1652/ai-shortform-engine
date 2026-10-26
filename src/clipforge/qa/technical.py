@@ -657,6 +657,7 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                         or bundle.duration_us != draft.output_duration_us
                         or bundle.style_fingerprint != plan.style_fingerprint
                         or bundle.treatment_fingerprint != plan.treatment_fingerprint
+                        or bundle.treatment_evidence_sha256 != plan.treatment_evidence_sha256
                     ):
                         raise MediaError("viewer evidence is bound to a different artifact")
                     auth_path = evidence_path.parent.parent / "authorization.json"
@@ -674,6 +675,7 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                         or render_input.style_fingerprint != bundle.style_fingerprint
                         or bundle.pilot_sha256 != render_input.pilot_sha256
                         or render_input.treatment_fingerprint != bundle.treatment_fingerprint
+                        or render_input.treatment_evidence_sha256 != bundle.treatment_evidence_sha256
                     ):
                         raise MediaError("viewer evidence render input is stale")
                     if plan.treatment_audio_mix is not None and bundle.treatment_audio_mix_status != "measured":

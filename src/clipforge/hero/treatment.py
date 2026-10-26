@@ -27,6 +27,7 @@ from clipforge.schemas.treatment import (
     TreatmentAssetRequest,
     TreatmentLayer,
     TreatmentPlanSummary,
+    TreatmentRegion,
     TreatmentVisualEvidence,
 )
 from clipforge.schemas.vision import VisualAnalysisDocument
@@ -206,20 +207,31 @@ def materialize_treatment(
             )
 
         camera = _camera_decision(option, beat, interval, source_ids, cameras, preset, restricted_profile)
-        visual_evidence = _visual_evidence(option, beat, visual)
+        visual_evidence = _visual_evidence(option, beat, visual, interval)
         if broll.state == "use" and visual_evidence.relevance_status == "unknown":
+            threshold = preset.treatment_policy.broll.relevance_threshold
+            relevance_status, relevance_score = _placement_relevance_status(
+                option, beat, broll_placements, threshold
+            )
             visual_evidence = visual_evidence.model_copy(
                 update={
-                    "relevance_status": _placement_relevance_status(option, beat, broll_placements),
+                    "relevance_status": relevance_status,
+                    "relevance_score": relevance_score,
+                    "relevance_threshold": threshold,
                     "evidence_ids": source_ids,
                 }
             )
-        if camera.state == "use" and visual_evidence.collision_status == "blocked":
+        if camera.state == "use" and (
+            visual_evidence.collision_status == "blocked"
+            or _camera_collides_regions(cameras, camera.event_ids, visual_evidence.regions)
+        ):
+            rejected_event_ids = set(camera.event_ids)
+            cameras[:] = [item for item in cameras if item.motion_id not in rejected_event_ids]
             camera = CameraTreatmentDecision(
                 state="omit_with_reason",
                 rationale="camera move would leave a protected visual subject unsafe",
                 source_evidence_ids=source_ids,
-                omission_reason="face_collision",
+                omission_reason="protected_region_collision",
                 protected_regions=visual_evidence.protected_region_ids,
                 fallback="hold",
             )
@@ -258,26 +270,67 @@ def _visual_evidence(
     option: DirectionOption,
     beat: Any,
     visual: VisualAnalysisDocument | None,
+    interval: OutputInterval,
 ) -> TreatmentVisualEvidence:
     evidence = {item.evidence_id: item for item in option.evidence}
     scene_ids = sorted(
         {scene_id for evidence_id in beat.evidence_ids for scene_id in evidence[evidence_id].visual_scene_ids}
     )
+    base_regions = [
+        TreatmentRegion(
+            region_id="platform-safe-region",
+            role="platform_safe",
+            interval=interval,
+            x=96,
+            y=270,
+            width=824,
+            height=1290,
+            source="platform_profile",
+        ),
+        TreatmentRegion(
+            region_id="caption-lane",
+            role="caption",
+            interval=interval,
+            x=96,
+            y=1540,
+            width=824,
+            height=284,
+            source="render_input",
+        ),
+    ]
+    native_regions = [
+        TreatmentRegion(
+            region_id=item.region_id,
+            role="source_text",
+            interval=item.interval,
+            x=96,
+            y=300,
+            width=824,
+            height=180,
+            source="visual_analysis",
+        )
+        for item in option.source_native_text
+        if any(scene_id in scene_ids for scene_id in item.visual_scene_ids)
+    ]
     if visual is None or not scene_ids:
         return TreatmentVisualEvidence(
             visual_scene_ids=scene_ids,
+            protected_region_ids=[item.region_id for item in base_regions + native_regions],
             collision_status="unknown",
             relevance_status="unknown",
+            regions=[*base_regions, *native_regions],
             note="visual geometry was not available for deterministic treatment planning",
         )
     faces = [item for item in visual.face_detection_samples if item.scene_id in scene_ids]
-    protected = [f"face:{scene_id}" for scene_id in sorted({item.scene_id for item in faces})]
+    protected = ["platform-safe-region", "caption-lane", *[item.region_id for item in native_regions]]
+    protected.extend(f"face:{scene_id}" for scene_id in sorted({item.scene_id for item in faces}))
     if not faces:
         return TreatmentVisualEvidence(
             visual_scene_ids=scene_ids,
-            protected_region_ids=["platform-safe-region"],
+            protected_region_ids=protected,
             collision_status="clear",
             relevance_status="unknown",
+            regions=[*base_regions, *native_regions],
             note="reviewed scenes contain no detected face geometry",
         )
     edge_face = any(
@@ -292,6 +345,23 @@ def _visual_evidence(
         protected_region_ids=protected,
         collision_status="blocked" if edge_face else "clear",
         relevance_status="unknown",
+        regions=[
+            *base_regions,
+            *native_regions,
+            *[
+                TreatmentRegion(
+                    region_id=f"face:{sample.scene_id}",
+                    role="face",
+                    interval=interval,
+                    x=round(sample.bounding_box.x * 1080),
+                    y=round(sample.bounding_box.y * 1920),
+                    width=max(1, round(sample.bounding_box.width * 1080)),
+                    height=max(1, round(sample.bounding_box.height * 1920)),
+                    source="visual_analysis",
+                )
+                for sample in faces
+            ],
+        ],
         note=(
             "face geometry is too close to a frame edge for a bounded camera move"
             if edge_face
@@ -300,19 +370,49 @@ def _visual_evidence(
     )
 
 
+def _camera_collides_regions(
+    cameras: Sequence[Any], event_ids: Sequence[str], regions: Sequence[TreatmentRegion]
+) -> bool:
+    """Conservatively reject a camera envelope that can crop protected pixels."""
+    selected = [item for item in cameras if item.motion_id in set(event_ids)]
+    protected = [
+        item for item in regions if item.role in {"face", "active_subject", "source_text", "logo", "cta"}
+    ]
+    for event in selected:
+        scale_delta = max(event.scale_start_permille, event.scale_end_permille) / 1000 - 1
+        expansion = event.travel_px + round(max(1080, 1920) * scale_delta / 2)
+        for region in protected:
+            if not _intervals_overlap(event.interval, region.interval):
+                continue
+            if (
+                region.x - expansion < 0
+                or region.y - expansion < 0
+                or region.x + region.width + expansion > 1080
+                or region.y + region.height + expansion > 1920
+            ):
+                return True
+    return False
+
+
+def _intervals_overlap(left: OutputInterval, right: OutputInterval) -> bool:
+    return left.output_start_us < right.output_end_us and right.output_start_us < left.output_end_us
+
+
 def _placement_relevance_status(
     option: DirectionOption,
     beat: Any,
     placements: Sequence[Any],
-) -> Literal["related", "unrelated", "unknown"]:
+    threshold: float,
+) -> tuple[Literal["related", "unrelated", "unknown"], float | None]:
     if not placements:
-        return "unknown"
+        return "unknown", None
     evidence = {item.evidence_id: item for item in option.evidence}
     source_terms = set(_terms(" ".join(evidence[item].source_text for item in beat.evidence_ids)))
     asset_terms = {term.casefold() for placement in placements for term in placement.asset_tags if term.strip()}
     if not source_terms or not asset_terms:
-        return "unknown"
-    return "related" if source_terms.intersection(asset_terms) else "unrelated"
+        return "unknown", None
+    score = len(source_terms.intersection(asset_terms)) / len(source_terms)
+    return ("related" if score >= threshold else "unrelated"), score
 
 
 def summarize_treatment(option: DirectionOption) -> TreatmentPlanSummary:
@@ -478,6 +578,11 @@ def _auto_transitions(
             beat_start = min(word.output_start_us for word in beat_words)
             beat_end = max(word.output_end_us for word in beat_words)
             if beat_start <= cut < beat_end:
+                # A transition may bridge a reviewed segment cut, but it must
+                # never bisect a spoken word. The canonical aligned-word
+                # intervals are the only timing authority here.
+                if any(word.output_start_us < cut < word.output_end_us for word in beat_words):
+                    continue
                 transitions.append(
                     DirectionTransitionSpec(
                         transition_id=_event_id(option.option_id, beat.beat_id, f"transition-{index}"),
@@ -488,6 +593,7 @@ def _auto_transitions(
                         purpose="reveal" if beat.kind == "punch" else "cut",
                         style="concat_blur_dissolve_v1",
                         source_evidence_ids=beat.evidence_ids,
+                        cut_boundary_us=cut,
                     )
                 )
                 break

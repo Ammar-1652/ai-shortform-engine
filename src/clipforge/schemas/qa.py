@@ -110,6 +110,7 @@ class ViewerEvidenceBundle(Versioned):
     render_input_sha256: str = Field(pattern=_SHA)
     pilot_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_audio_mix_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_audio_mix_status: Literal["", "planned", "measured"] = ""
     treatment_audio_integrated_lufs: float | None = None
@@ -140,6 +141,8 @@ class ViewerEvidenceBundle(Versioned):
             raise ValueError("viewer evidence provenance must include its artifact")
         if self.width != 1080 or self.height != 1920 or self.frame_rate != "30/1":
             raise ValueError("viewer evidence must describe the portrait production output")
+        if self.treatment_fingerprint and not self.treatment_evidence_sha256:
+            raise ValueError("viewer evidence treatment evidence is missing")
         if self.human_watch is not None and (
             not self.human_watch.watched_with_audio or not self.human_watch.watched_muted
         ):
@@ -170,12 +173,15 @@ class QASetDocument(Versioned):
     campaign: QAResult
     status: QAStatus
     treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_summary_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     provenance: ArtifactProvenance
     workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def set_is_bound(self) -> Self:
+        if self.treatment_fingerprint and not self.treatment_evidence_sha256:
+            raise ValueError("QA treatment evidence is missing")
         if self.technical.kind is not QAKind.TECHNICAL:
             raise ValueError("technical result must use kind technical")
         if self.campaign.kind is not QAKind.CAMPAIGN_COMPLIANCE:

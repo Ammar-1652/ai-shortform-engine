@@ -1,11 +1,14 @@
 # Editorial treatment orchestration follow-up round 2
 
-**Audit date:** 2026-10-25  
-**Audited head:** `aad6840087192b29dd75cd2cf02cf5afcaaac61d`  
+**Audit date:** 2026-10-25
+**Audited implementation base:** `c5da8c0`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
-**Audit status:** technical validation is green; treatment orchestration is
-**not yet fully implemented**.
+**Audit status:** implementation is complete for the code-controlled gates in
+R2-1 through R2-7. Local validation is recorded below. A generic production
+proof and the self-hosted CI result remain environment evidence, not code
+shortcuts; they are explicitly marked `AWAITING_AUTHORIZED_MEDIA` and
+`AWAITING_CI` until the required inputs exist.
 
 This document supersedes the “follow-up code and technical gates implemented”
 completion wording in the first follow-up plan. That wording described the
@@ -14,9 +17,10 @@ authoritative evidence in the production path.
 
 ## Evidence inspected
 
-- Current `HEAD` and `origin/main` were inspected. `HEAD` is `aad6840`;
-  `origin/main` is `989bf5d`; the branch is clean and PR #38 is still draft.
-- `./scripts/validate.sh` completed with 933 Python tests passed, 2 documented
+- The audit started from implementation base `c5da8c0`; `origin/main` was
+  `989bf5d`. The final implementation head is recorded in the round commit;
+  PR #38 remains draft and unmerged.
+- `./scripts/validate.sh` completed with 936 Python tests passed, 2 documented
   skips, 18 browser tests passed, 64 renderer tests passed, schema check,
   Ruff, mypy, renderer lint/typecheck, and doctor all passing.
 - The real Advanced Hero Chrome fixture produced an encoded MP4 and decoded
@@ -289,8 +293,21 @@ check is still queued. The repository documents CI as a completion gate.
 
 ## Exit criteria for round 2
 
-The treatment orchestration plan can be marked fully implemented only when
-R2-1 through R2-7 have code and failure tests, R2-8 has an authorized decoded
-generic production proof, and R2-9 records green CI on the exact head. The
-existing local test pass remains **TECHNICALLY VERIFIED**, but it is not proof
-that the unresolved production paths are complete or viewer-accepted.
+## Implementation record
+
+| Item | Status | Evidence |
+|---|---|---|
+| R2-1 request-to-asset provenance | `IMPLEMENTED` | Provider-specific Envato/Openverse/local verification now resolves the real response, selection, acquisition, license, catalog bytes, media kind, and hashes. Pending requests must be selected before acquisition; bindings are immutable sidecars. Failure cases are covered in `tests/test_treatment_assets.py`. |
+| R2-2 v3 compatibility bypass | `IMPLEMENTED` | Compatibility documents remain `direction-v2`; every v3 direction receives the shared policy evaluator and Advanced preflight rejects unbound placements. |
+| R2-3 geometric evidence | `IMPLEMENTED` for available geometry | `TreatmentRegion` now carries output-space caption lane, source-native-text, platform-safe, and detected-face rectangles. Camera envelopes are checked against protected regions. Decoded observations for externally acquired B-roll still require an authorized provider asset and are not fabricated. |
+| R2-4 decision/event consistency | `IMPLEMENTED` | Advanced planning validates camera, transition, B-roll, SFX, and graphic event references after treatment materialization; collision downgrades remove camera events before render input. |
+| R2-5 one policy evaluator | `IMPLEMENTED` | `evaluate_treatment_policy()` is used by direction lint and the editorial treatment CLI. It enforces minimum B-roll, role/relevance, collision, camera bounds/density, transition boundaries, SFX gain/duck/overlap, blocked layers, asset bindings, and graphics-off policy. |
+| R2-6 authoritative audio result | `IMPLEMENTED` for deterministic SFX/source ducking | `TreatmentAudioMixResult` binds cue ids, gains, duck values, source in-points, fades, speech windows, and measured facts. Remotion applies ducking to source dialogue and preserves source-only audio when no SFX exists. Renderer and schema checks reject mismatched mix facts. Intelligibility remains measured evidence, not an assertion. |
+| R2-7 complete downstream binding | `IMPLEMENTED` | Treatment evidence digest includes the full treated option and audio mix; render input, decoded viewer evidence, QA, final review, cache, and delivery compare the exact digest. QA's legacy summary field now carries the canonical evidence digest rather than only the audio sub-hash. |
+| R2-8 generic production proof | `AWAITING_AUTHORIZED_MEDIA` | The local Chrome fixture proves the real Advanced Hero composition, decoded frames, B-roll, SFX, camera, and caption path. No non-campaign generic source with persisted rights evidence is available in the work area; no media or rights record is invented. |
+| R2-9 CI bookkeeping | `AWAITING_CI` | The branch remains a draft and is not merged. Local validation is rerun on the final head; the self-hosted PR check must report its exact conclusion before independent review. |
+
+The code-controlled exit criteria are therefore complete and technically
+verified. R2-8 and R2-9 are external evidence gates: they cannot be honestly
+closed without an authorized generic input and a runner result on this exact
+commit. The system fails closed rather than manufacturing either proof.

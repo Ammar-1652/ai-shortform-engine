@@ -290,6 +290,7 @@ def write_viewer_evidence_bundle(
         render_input_sha256=render_input_sha256,
         pilot_sha256=render_input.pilot_sha256,
         treatment_fingerprint=render_input.treatment_fingerprint,
+        treatment_evidence_sha256=render_input.treatment_evidence_sha256,
         treatment_audio_mix_sha256=(
             advanced_fingerprint(measured_mix.model_dump(mode="json")) if measured_mix is not None else ""
         ),

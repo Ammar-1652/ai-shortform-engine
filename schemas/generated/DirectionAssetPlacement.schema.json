@@ -151,6 +151,19 @@
     "purpose": {
       "$ref": "#/$defs/MotionPurpose"
     },
+    "registered_asset_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Registered Asset Sha256"
+    },
     "relevance_note": {
       "maxLength": 500,
       "minLength": 1,

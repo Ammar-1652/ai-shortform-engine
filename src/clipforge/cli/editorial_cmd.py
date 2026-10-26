@@ -35,7 +35,14 @@ from clipforge.editorial.reference_analysis import (
 )
 from clipforge.errors import ClipforgeError, MediaError
 from clipforge.hero.treatment import summarize_treatment, treatment_fingerprint
-from clipforge.hero.treatment_assets import bind_acquired_request, bind_placement_to_request
+from clipforge.hero.treatment_assets import (
+    bind_acquired_request,
+    bind_placement_to_request,
+    persist_treatment_binding,
+    select_treatment_request,
+    verify_registered_treatment_asset,
+)
+from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.editorial_knowledge import (
     ContextFact,
@@ -336,6 +343,14 @@ def treatment_lint(
                             "message": f"{decision.beat_id}:{layer.layer}",
                         }
                     )
+        from clipforge.editorial.presets import PresetCatalog
+
+        if document.direction_recipe_version == "direction-v3":
+            preset_id = document.preset_id or "clean_explainer"
+            policy = PresetCatalog.load().find(preset_id).treatment_policy
+            findings.extend(
+                item.model_dump(mode="json") for item in evaluate_treatment_policy(selected, policy)
+            )
     except (ClipforgeError, ValidationError, ValueError) as exc:
         _fail(exc)
     typer.echo(json.dumps({"status": "fail" if findings else "pass", "findings": findings}, sort_keys=True))
@@ -353,29 +368,68 @@ def treatment_bind_asset(
     license_evidence_sha256: Annotated[str, typer.Option("--license-evidence-sha256")],
     registered_asset_id: Annotated[str, typer.Option("--registered-asset-id")],
     registered_asset_sha256: Annotated[str, typer.Option("--registered-asset-sha256")],
+    provider: Annotated[Literal["envato", "openverse", "local"], typer.Option("--provider")],
+    project_id: Annotated[str, typer.Option("--project-id")],
+    source_asset_id: Annotated[str, typer.Option("--source-asset-id")],
+    media_kind: Annotated[Literal["graphic", "audio"], typer.Option("--media-kind")],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
 ) -> None:
     """Bind verified provider/acquisition evidence to one treatment placement."""
+    from clipforge.paths import resolve_db_path, resolve_work_dir
     from clipforge.schemas.direction import DirectionAssetPlacement
     from clipforge.schemas.treatment import TreatmentAssetRequest
+    from clipforge.storage import Database
 
     try:
         request_doc = TreatmentAssetRequest.model_validate_json(request.read_text(encoding="utf-8"))
         placement_doc = DirectionAssetPlacement.model_validate_json(placement.read_text(encoding="utf-8"))
-        acquired = bind_acquired_request(
-            request_doc,
+        selected = (
+            select_treatment_request(
+                request_doc,
+                provider_response_sha256=provider_response_sha256,
+                selection_id=selection_id,
+            )
+            if request_doc.status == "pending"
+            else request_doc
+        )
+        if (
+            selected.provider_response_sha256 != provider_response_sha256
+            or selected.selection_id != selection_id
+        ):
+            raise MediaError("treatment selection evidence does not match the request")
+        verification = verify_registered_treatment_asset(
+            work_root=resolve_work_dir(work_dir),
+            database=Database(resolve_db_path(db)),
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            provider=provider,
             provider_response_sha256=provider_response_sha256,
             selection_id=selection_id,
             acquisition_id=acquisition_id,
             license_evidence_sha256=license_evidence_sha256,
             registered_asset_id=registered_asset_id,
             registered_asset_sha256=registered_asset_sha256,
+            media_kind=media_kind,
         )
+        acquired = bind_acquired_request(selected, verification=verification)
         bound = bind_placement_to_request(placement_doc, acquired)
+        binding_path = persist_treatment_binding(
+            work_root=resolve_work_dir(work_dir),
+            request=acquired,
+            placement=bound,
+            verification=verification,
+            source_asset_id=source_asset_id,
+        )
     except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
         _fail(exc)
     typer.echo(
         json.dumps(
-            {"request": acquired.model_dump(mode="json"), "placement": bound.model_dump(mode="json")},
+            {
+                "request": acquired.model_dump(mode="json"),
+                "placement": bound.model_dump(mode="json"),
+                "binding_relative_path": binding_path.relative_to(resolve_work_dir(work_dir)).as_posix(),
+            },
             ensure_ascii=False,
             sort_keys=True,
         )

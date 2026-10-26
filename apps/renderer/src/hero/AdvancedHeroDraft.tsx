@@ -181,6 +181,8 @@ export type AdvancedHeroInput = {
   direction_id?: string;
   direction_sha256?: string;
   preset_id?: string;
+  treatment_fingerprint?: string;
+  treatment_evidence_sha256?: string;
   pilot_sha256?: string;
   knowledge_context_id?: string;
   knowledge_release_id?: string;
@@ -258,6 +260,12 @@ export type AdvancedHeroInput = {
     cue_event_ids?: string[];
     applied_gain_db?: number[];
     duck_db?: number[];
+    source_in_us?: number[];
+    fade_in_us?: number[];
+    fade_out_us?: number[];
+    speech_overlap_windows?: Interval[];
+    silence_windows?: Interval[];
+    intelligibility_status?: "unverified" | "pass" | "fail";
     status?: "planned" | "measured";
   };
   debug_overlays?: boolean;
@@ -563,6 +571,18 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       if (!Array.isArray(mix.applied_gain_db) || JSON.stringify(mix.applied_gain_db) !== JSON.stringify(sfx.map((event) => event.gain_db))) {
         throw new Error("treatment audio mix gains do not match SFX events");
       }
+      for (const [label, values, expected] of [
+        ["source in", mix.source_in_us, sfx.map((event) => event.sfx_source_in_us ?? 0)],
+        ["fade in", mix.fade_in_us, sfx.map((event) => event.fade_in_us ?? 0)],
+        ["fade out", mix.fade_out_us, sfx.map((event) => event.fade_out_us ?? 0)],
+      ] as const) {
+        if (!Array.isArray(values) || JSON.stringify(values) !== JSON.stringify(expected)) {
+          throw new Error(`treatment audio mix ${label} facts do not match SFX events`);
+        }
+      }
+    }
+    if (input.treatment_fingerprint && !/^[0-9a-f]{64}$/.test(input.treatment_evidence_sha256 ?? "")) {
+      throw new Error("production treatment requires a treatment evidence fingerprint");
     }
     const contextLines = (input.typography ?? []).filter((event) => event.component_id === "context-line-v1");
     if (contextLines.length !== 1) {
@@ -830,7 +850,18 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
       <Audio
         src={staticFile(speech)}
         durationInFrames={input.duration_in_frames}
-        volume={linearVolume(input.source_gain_db ?? 0)}
+        volume={(frame) => {
+          const mix = input.treatment_audio_mix;
+          if (!mix || !mix.speech_overlap_windows?.length) {
+            return linearVolume(input.source_gain_db ?? 0);
+          }
+          const duck = mix.speech_overlap_windows.reduce((maximum, interval, index) => {
+            if (!active(frame, interval)) return maximum;
+            return Math.max(maximum, mix.duck_db?.[index] ?? 0);
+          }, 0);
+          const duckedGain = Math.max(-24, (input.source_gain_db ?? 0) - duck);
+          return linearVolume(duckedGain);
+        }}
       />
       {input.campaign_overlay &&
       reviewWatermarkSlot ? (

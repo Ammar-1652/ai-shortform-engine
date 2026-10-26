@@ -5,12 +5,14 @@ from pydantic import ValidationError
 
 from clipforge.editorial.presets import PresetCatalog
 from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
+from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.schemas.direction import DirectionAssetPlacement
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
     BrollTreatmentDecision,
     SfxTreatmentDecision,
 )
+from tests.candidate_support import visual_document
 from tests.test_direction import _aligned_words, _document
 
 
@@ -84,7 +86,7 @@ def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
         source_evidence_ids=[option.evidence[0].evidence_id],
         purpose=MotionPurpose.CONCEPT,
         relevance_note="source context",
-        asset_tags=["source"],
+        asset_tags=["source", "the"],
     )
     preset = PresetCatalog.load().find("clean_explainer")
     related = materialize_treatment(
@@ -105,3 +107,58 @@ def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
     )
     assert unrelated.treatment_decisions[0].visual_evidence is not None
     assert unrelated.treatment_decisions[0].visual_evidence.relevance_status == "unrelated"
+
+
+def test_face_collision_removes_camera_event_from_render_treatment() -> None:
+    option = (
+        _document()
+        .options[0]
+        .model_copy(
+            update={
+                "evidence": [
+                    item.model_copy(update={"visual_scene_ids": ["scene-0"]})
+                    for item in _document().options[0].evidence
+                ]
+            }
+        )
+    )
+    visual = visual_document(
+        3_000_000,
+        [(0, 3_000_000)],
+        source_sha256="a" * 64,
+        proxy_sha256="b" * 64,
+        faces=True,
+    )
+    treated = materialize_treatment(
+        option,
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+        visual=visual,
+    )
+    assert not treated.camera_motion
+    assert all(item.camera.state != "use" for item in treated.treatment_decisions)
+
+
+def test_shared_policy_evaluator_rejects_unbound_asset_placement() -> None:
+    option = _document().options[0]
+    placement = DirectionAssetPlacement(
+        placement_id="placement-unbound",
+        asset_id="asset-1",
+        kind="graphic",
+        interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_evidence_ids=[option.evidence[0].evidence_id],
+        purpose=MotionPurpose.CONCEPT,
+        relevance_note="context",
+        asset_tags=["source"],
+    )
+    treated = materialize_treatment(
+        option.model_copy(update={"asset_placements": [placement]}),
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+        require_asset_selection=False,
+    )
+    findings = evaluate_treatment_policy(
+        treated,
+        PresetCatalog.load().find("clean_explainer").treatment_policy,
+    )
+    assert any(item.code == "asset_request_not_acquired" for item in findings)

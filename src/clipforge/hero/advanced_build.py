@@ -217,6 +217,7 @@ def build_advanced_plan(
         profile,
         sfx_placements,
     )
+    _validate_treatment_event_consistency(direction, camera_motion, transitions, broll, sfx, motion_graphics)
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
     manual_windows = [item.model_dump(mode="json") for item in profile.manual_windows]
     motion_style = (
@@ -278,6 +279,7 @@ def build_advanced_plan(
             f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
         ).hexdigest()
     treatment_audio_mix = _build_treatment_audio_mix(direction, sfx, profile)
+    treatment_evidence_sha256 = _treatment_evidence_sha256(direction, treatment_audio_mix)
     document = AdvancedHeroPlanDocument(
         workflow_roles=WorkflowRolePolicy(),
         plan_id=plan_id,
@@ -312,6 +314,7 @@ def build_advanced_plan(
         direction_id="" if direction is None else direction.direction_id,
         direction_sha256=direction_sha256,
         treatment_fingerprint="" if direction is None else direction.treatment_fingerprint or "",
+        treatment_evidence_sha256=treatment_evidence_sha256,
         treatment_audio_mix=treatment_audio_mix,
         preset_id="" if direction is None else direction.preset_id or "",
         motion_recipe_ids=motion_recipe_ids,
@@ -1173,8 +1176,95 @@ def _build_treatment_audio_mix(
         cue_event_ids=[event.event_id for event in events],
         applied_gain_db=[event.gain_db for event in events],
         duck_db=[abs(profile.narration_duck_db) for _event in events],
+        source_in_us=[event.sfx_source_in_us for event in events],
+        fade_in_us=[event.fade_in_us for event in events],
+        fade_out_us=[event.fade_out_us for event in events],
+        speech_overlap_windows=[event.interval for event in events],
+        silence_windows=[],
+        intelligibility_status="unverified",
         status="planned",
     )
+
+
+def _treatment_evidence_sha256(
+    direction: DirectionDocument | None,
+    audio_mix: TreatmentAudioMixResult | None,
+) -> str:
+    if direction is None:
+        return ""
+    return advanced_fingerprint(
+        {
+            "treatment_fingerprint": direction.treatment_fingerprint or "",
+            "audio_mix": None if audio_mix is None else audio_mix.model_dump(mode="json"),
+        }
+    )
+
+
+def _validate_treatment_event_consistency(
+    direction: DirectionDocument | None,
+    camera_motion: list[CameraMotionEvent],
+    transitions: list[TransitionEvent],
+    broll: list[BrollEvent],
+    sfx: list[AudioMixEvent],
+    motion_graphics: list[MotionGraphicEvent],
+) -> None:
+    """Reject render events that a treatment decision omitted or blocked."""
+    if direction is None or direction.direction_recipe_version != "direction-v3":
+        return
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    decisions = option.treatment_decisions
+    allowed_camera = {
+        event_id
+        for decision in decisions
+        if decision.camera.state == "use"
+        for event_id in decision.camera.event_ids
+    }
+    actual_camera = {
+        event_id for event in camera_motion for event_id in option_camera_id(direction, event.event_id)
+    }
+    if actual_camera != allowed_camera:
+        raise MediaError("camera render events do not match treatment decisions")
+    allowed_transitions = {
+        event_id
+        for decision in decisions
+        if decision.transition.state == "use"
+        for event_id in decision.transition.event_ids
+    }
+    actual_transitions = {
+        item.transition_id
+        for item in option.transitions
+        if stable_id("transition", direction.candidate_id, item.transition_id)
+        in {event.event_id for event in transitions}
+    }
+    if actual_transitions != allowed_transitions:
+        raise MediaError("transition render events do not match treatment decisions")
+    placement_by_id = {item.placement_id: item for item in option.asset_placements}
+    for layer, events in (("broll", broll), ("sfx", sfx)):
+        allowed = {
+            event_id
+            for decision in decisions
+            if getattr(decision, layer).state == "use"
+            for event_id in getattr(decision, layer).event_ids
+        }
+        actual = {
+            placement_id
+            for placement_id, placement in placement_by_id.items()
+            if placement.kind == ("graphic" if layer == "broll" else "audio")
+            and stable_id(layer, direction.candidate_id, placement.asset_id, placement_id)
+            in {event.event_id for event in events}
+        }
+        if actual != allowed:
+            raise MediaError(f"{layer} render events do not match treatment decisions")
+
+
+def option_camera_id(direction: DirectionDocument, event_id: str) -> set[str]:
+    """Map a render camera id back to its direction motion id."""
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return {
+        item.motion_id
+        for item in option.camera_motion
+        if stable_id("direction-camera", direction.direction_id, item.motion_id) == event_id
+    }
 
 
 def _tags_support_note(tags: tuple[str, ...], note: str) -> bool:

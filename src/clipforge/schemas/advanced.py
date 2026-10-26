@@ -446,6 +446,7 @@ class AdvancedHeroRenderInput(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -515,6 +516,8 @@ class AdvancedHeroRenderInput(Versioned):
             self.treatment_fingerprint or "0" * 64
         ):
             raise ValueError("render input audio mix is stale against treatment decisions")
+        if self.treatment_fingerprint and not self.treatment_evidence_sha256:
+            raise ValueError("render input treatment evidence is missing")
         if self.treatment_audio_mix is not None and self.treatment_audio_mix.cue_event_ids != [
             event.event_id for event in self.sfx
         ]:
@@ -563,6 +566,7 @@ class AdvancedHeroDraftOutput(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -609,6 +613,8 @@ class AdvancedHeroDraftOutput(Versioned):
 
     @model_validator(mode="after")
     def knowledge_binding_is_complete(self) -> Self:
+        if self.treatment_fingerprint and not self.treatment_evidence_sha256:
+            raise ValueError("advanced output treatment evidence is missing")
         if bool(self.knowledge_context_id) != bool(self.knowledge_context_sha256):
             raise ValueError("knowledge context id and hash must be recorded together")
         if bool(self.knowledge_context_id) != bool(self.knowledge_release_id):
@@ -687,6 +693,7 @@ class AdvancedHeroPlanDocument(Versioned):
     direction_id: str = Field(default="", max_length=128)
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -755,6 +762,8 @@ class AdvancedHeroPlanDocument(Versioned):
             self.treatment_fingerprint or "0" * 64
         ):
             raise ValueError("advanced plan audio mix is stale against treatment decisions")
+        if self.treatment_fingerprint and not self.treatment_evidence_sha256:
+            raise ValueError("advanced plan treatment evidence is missing")
         if self.treatment_audio_mix is not None:
             if self.treatment_audio_mix.cue_event_ids != [event.event_id for event in self.sfx]:
                 raise ValueError("advanced plan audio mix cues do not match SFX events")

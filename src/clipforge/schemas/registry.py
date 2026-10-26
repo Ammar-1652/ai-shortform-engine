@@ -134,6 +134,7 @@ from clipforge.schemas.direction import (
     DirectionTransitionSpec,
     MotionStyleSpec,
     SourceNativeText,
+    TreatmentAssetBindingDocument,
 )
 from clipforge.schemas.editorial import (
     AudioEvent,
@@ -324,9 +325,11 @@ from clipforge.schemas.treatment import (
     SfxTreatmentDecision,
     TransitionTreatmentDecision,
     TreatmentAssetRequest,
+    TreatmentAssetVerification,
     TreatmentAudioMixResult,
     TreatmentLayerDecision,
     TreatmentPlanSummary,
+    TreatmentRegion,
     TreatmentVisualEvidence,
 )
 from clipforge.schemas.vision import (
@@ -507,6 +510,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     SfxPolicy,
     TransitionPolicy,
     TreatmentPolicy,
+    TreatmentAssetBindingDocument,
     BeatTreatmentDecision,
     BrollTreatmentDecision,
     CameraTreatmentDecision,
@@ -515,6 +519,8 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TreatmentLayerDecision,
     TreatmentPlanSummary,
     TreatmentAudioMixResult,
+    TreatmentAssetVerification,
+    TreatmentRegion,
     TreatmentVisualEvidence,
     TreatmentAssetRequest,
     TransitionTreatmentDecision,

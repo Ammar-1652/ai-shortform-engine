@@ -75,8 +75,11 @@ while retiring the prior release. Admission never approves a video artifact.
 - For a preferred generic asset request, use the existing Envato/Openverse or
   local provider boundary, register and verify the asset, then bind its
   response/selection/acquisition/license evidence with
-  `clipforge editorial treatment bind-asset`. A request or provider search
-  alone never makes media eligible for a render.
+  `clipforge editorial treatment bind-asset --provider PROVIDER
+  --project-id PROJECT --source-asset-id SOURCE`. The command revalidates the
+  existing provider/acquisition/license/catalog records and byte hash before
+  binding. A request or provider search alone never makes media eligible for a
+  render.
 - Encoding uses `hero advanced render`; an interrupted run resumes only from
   matching receipts. QA uses `qa run` and `qa gate`.
 - Clean Advanced plans create a pilot receipt during planning. Verify it with
