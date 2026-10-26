@@ -24,8 +24,8 @@ fixture cannot close the provider or visual-review requirements.
 
 | item | status | commit_sha | implementation and test evidence | artifact/provider state | downstream/external state |
 |---|---|---|---|---|---|
-| R3-1 | TECHNICALLY_VERIFIED | `2af93a8` | Immutable `direction-v4` revision and `revise-direction` CLI in `direction_service.py`/`editorial_cmd.py`; `uv run pytest -q tests/test_treatment_revisions.py tests/test_treatment_assets.py` (targeted success, stale, binding-mismatch, idempotence, and confinement cases) | No authorized generic provider acquisition is available in the work root for an evidence-complete receipt | Advanced planning revalidates the selected revision; generic provider-backed proof remains open; reviewer `AWAITING_REVIEW` |
-| R3-2 | TECHNICALLY_VERIFIED | `2af93a8` | `TreatmentAssetObservation` and `observe-asset` decode/hash sidecars with stale-frame rejection; observation and source-asset binding are checked during revision | No authorized generic visual asset observation is available for a real production packet | Collision/relevance facts are consumed by the shared treatment policy; real decoded generic proof remains open; reviewer `AWAITING_REVIEW` |
+| R3-1 | TECHNICALLY_VERIFIED | `537acba` | Immutable `direction-v4` revision and `revise-direction` CLI now re-run source-evidence validation, direction lint, motion/preset binding, shared treatment policy, and provider/rights checks before publication; targeted revision/asset tests cover stale, binding-mismatch, idempotence, and confinement cases | No authorized generic provider acquisition is available in the work root for an evidence-complete receipt | Advanced planning revalidates the selected revision; generic provider-backed proof remains open; reviewer `AWAITING_REVIEW` |
+| R3-2 | TECHNICALLY_VERIFIED | `537acba` | `TreatmentAssetObservation` and `observe-asset` decode/hash sidecars with stale-frame rejection; graphic bindings now fail closed without decoded observation evidence; observation and source-asset binding are checked during revision | No authorized generic visual asset observation is available for a real production packet | Collision/relevance facts are consumed by the shared treatment policy; real decoded generic proof remains open; reviewer `AWAITING_REVIEW` |
 | R3-3 | TECHNICALLY_VERIFIED | `2af93a8` | Canonical aligned-word overlap is stored per SFX cue; encoded-window RMS, duck-policy, peak, and silence evidence produce `TreatmentAudioMeasurement` beside viewer evidence. The measurement path/hash now propagates through the Advanced manifest, QA set/cache, preflight, final-review evidence, and delivery facts. `uv run pytest -q tests/test_viewer_evidence.py tests/test_treatment.py` covers pass/fail and sidecar binding | Measurement sidecar is produced only when a real Advanced render reaches decoded viewer evidence; no generic production packet has been authorized in this workspace | QA and delivery reject missing/stale measurement or non-passing intelligibility; the signal test is technical evidence, not semantic human listening; reviewer `AWAITING_REVIEW` |
 | R3-4 | TECHNICALLY_VERIFIED | `58bba9a` | `TreatmentEvidenceBundle` is persisted atomically and now embeds validated observation records and frame hashes, then remains hash-bound into render input/viewer evidence/QA/final review/cache/delivery; schema export/check passes | No real generic bundle with provider receipts is available to hash into the required production packet | Stale bundle and changed receipt tests are present; provider-backed artifact ledger remains open; reviewer `AWAITING_REVIEW` |
 | R3-5 | TECHNICALLY_VERIFIED | `2af93a8` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events | No production artifact is being promoted by this checkpoint | Exact-gate checks are implemented; external CI and independent code/visual review remain open; reviewer `AWAITING_REVIEW` |
@@ -34,12 +34,14 @@ fixture cannot close the provider or visual-review requirements.
 The code commits are `e0e007c` (`feat: require decoded treatment audio
 evidence`), `ba57bcf` (`fix: preserve legacy audio evidence compatibility`),
 `2af93a8` (`feat: bind audio measurements through QA and delivery`), and
-`58bba9a` (`feat: embed treatment observations in evidence bundles`).
+`58bba9a` (`feat: embed treatment observations in evidence bundles`),
+`500fcdc` (`fix: re-lint treatment direction revisions`), and `537acba`
+(`style: format direction revision gate`).
 The final validation run must record its exact resulting HEAD below before any
 status can advance.
 
 **Final validation result:** `TECHNICALLY_VERIFIED` on implementation/document
-head `ebb3de5` (`./scripts/validate.sh`): 946 Python tests passed, 2
+head `537acba` (`./scripts/validate.sh`): 946 Python tests passed, 2
 documented skips (VoiceStudio unavailable; Whop not configured), 18
 browser/Remotion tests passed, and 64 renderer tests passed. Ruff, format,
 mypy, schema check, renderer lint/typecheck, and doctor (10 pass, 0 warn,
