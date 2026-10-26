@@ -29,7 +29,23 @@ fixture cannot close the provider or visual-review requirements.
 | R3-3 | TECHNICALLY_VERIFIED | `2af93a8` | Canonical aligned-word overlap is stored per SFX cue; encoded-window RMS, duck-policy, peak, and silence evidence produce `TreatmentAudioMeasurement` beside viewer evidence. The measurement path/hash now propagates through the Advanced manifest, QA set/cache, preflight, final-review evidence, and delivery facts. `uv run pytest -q tests/test_viewer_evidence.py tests/test_treatment.py` covers pass/fail and sidecar binding | Measurement sidecar is produced only when a real Advanced render reaches decoded viewer evidence; no generic production packet has been authorized in this workspace | QA and delivery reject missing/stale measurement or non-passing intelligibility; the signal test is technical evidence, not semantic human listening; reviewer `AWAITING_REVIEW` |
 | R3-4 | TECHNICALLY_VERIFIED | `58bba9a` | `TreatmentEvidenceBundle` is persisted atomically and now embeds validated observation records and frame hashes, then remains hash-bound into render input/viewer evidence/QA/final review/cache/delivery; schema export/check passes | No real generic bundle with provider receipts is available to hash into the required production packet | Stale bundle and changed receipt tests are present; provider-backed artifact ledger remains open; reviewer `AWAITING_REVIEW` |
 | R3-5 | TECHNICALLY_VERIFIED | `2af93a8` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events | No production artifact is being promoted by this checkpoint | Exact-gate checks are implemented; external CI and independent code/visual review remain open; reviewer `AWAITING_REVIEW` |
-| R3-6 | CODE_COMPLETE | `2af93a8` | Provider-backed acquisition, rights, observation, revision, render, QA, and delivery paths are implemented and covered by offline/fake-provider regressions; no fixture may be substituted for the required authorized generic provider path | The work area has campaign and Envato files, but no persisted authorized **generic non-campaign** source plus complete provider selection/acquisition/license chain for this proof | PR #38 self-hosted `verify-python` is queued for the current head because `clipforge-local` is offline; exact-head CI and authorized production proof are still open |
+| R3-6 | CODE_COMPLETE | `537acba` | Provider-backed acquisition, rights, observation, revision, render, QA, and delivery paths are implemented and covered by offline/fake-provider regressions; no fixture may be substituted for the required authorized generic provider path | The work area has campaign and Envato files, but no persisted authorized **generic non-campaign** source plus complete provider selection/acquisition/license chain for this proof | PR #38 self-hosted `verify-python` is queued for the current head because `clipforge-local` is offline; exact-head CI and authorized production proof are still open |
+
+**R3-6 exact external input required to close the round:**
+
+1. A generic, non-campaign video source placed under the ignored work root,
+   with a persisted source ingest record and a `campaign_provided` or provider
+   license record whose evidence URI and bytes are verifiable.
+2. One relevant visual asset and one SFX selected through an existing provider
+   boundary, each with provider response, selection, acquisition, license, and
+   registered-byte hashes. A fixture or unlicensed file cannot substitute.
+3. Permission to run the generic proof through direction revision, observation,
+   Advanced Remotion render, decoded viewer evidence, QA, final review, and
+   local delivery. The resulting MP4, frames, audio report, and manifests stay
+   under the ignored work root.
+4. An online self-hosted runner carrying the `self-hosted`, `linux`, `x64`, and
+   `clipforge` labels. The repository currently reports zero registered runners,
+   so the queued CI check cannot start from this checkout.
 
 The code commits are `e0e007c` (`feat: require decoded treatment audio
 evidence`), `ba57bcf` (`fix: preserve legacy audio evidence compatibility`),
