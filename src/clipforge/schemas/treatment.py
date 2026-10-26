@@ -375,7 +375,7 @@ class TreatmentAudioMeasurement(Versioned):
     measurement_id: EntityId
     source_asset_id: EntityId
     candidate_id: EntityId
-    treatment_evidence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    treatment_evidence_sha256: str = Field(pattern=r"^$|^[0-9a-f]{64}$")
     encoded_media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     mix: TreatmentAudioMixResult
     created_at: AwareDatetime
@@ -387,8 +387,8 @@ class TreatmentAudioMeasurement(Versioned):
             raise ValueError("audio measurement provenance must include the source asset")
         if self.mix.status != "measured":
             raise ValueError("audio measurement must contain measured mix facts")
-        if self.mix.treatment_fingerprint == "0" * 64:
-            raise ValueError("audio measurement cannot use an empty treatment fingerprint")
+        if self.mix.treatment_fingerprint != "0" * 64 and not self.treatment_evidence_sha256:
+            raise ValueError("directed audio measurement requires treatment evidence binding")
         return self
 
 

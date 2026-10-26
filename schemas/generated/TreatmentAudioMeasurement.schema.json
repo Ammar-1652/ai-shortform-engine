@@ -356,7 +356,7 @@
       "type": "string"
     },
     "treatment_evidence_sha256": {
-      "pattern": "^[0-9a-f]{64}$",
+      "pattern": "^$|^[0-9a-f]{64}$",
       "title": "Treatment Evidence Sha256",
       "type": "string"
     }
