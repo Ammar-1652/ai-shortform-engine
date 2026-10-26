@@ -497,9 +497,7 @@ def revise_direction_with_treatment_bindings(
             scene_ids={scene.scene_id for scene in context.visual.scenes},
         )
         if lint_report.status == "fail":
-            errors = "; ".join(
-                item.message for item in lint_report.findings if item.severity == "error"
-            )
+            errors = "; ".join(item.message for item in lint_report.findings if item.severity == "error")
             raise MediaError(f"treatment direction revision failed lint: {errors}")
         validate_motion_recipe_bindings(revised)
         validate_preset_binding(revised)
