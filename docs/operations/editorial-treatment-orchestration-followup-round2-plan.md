@@ -2,6 +2,7 @@
 
 **Audit date:** 2026-10-25
 **Audited implementation base:** `c5da8c0`
+**Validated implementation commit:** `123eb71`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Audit status:** implementation is complete for the code-controlled gates in
@@ -18,8 +19,8 @@ authoritative evidence in the production path.
 ## Evidence inspected
 
 - The audit started from implementation base `c5da8c0`; `origin/main` was
-  `989bf5d`. The final implementation head is recorded in the round commit;
-  PR #38 remains draft and unmerged.
+  `989bf5d`. Full validation was rerun on `123eb71`; PR #38 remains draft and
+  unmerged.
 - `./scripts/validate.sh` completed with 936 Python tests passed, 2 documented
   skips, 18 browser tests passed, 64 renderer tests passed, schema check,
   Ruff, mypy, renderer lint/typecheck, and doctor all passing.
