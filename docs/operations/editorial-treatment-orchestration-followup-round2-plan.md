@@ -312,3 +312,32 @@ The code-controlled exit criteria are therefore complete and technically
 verified. R2-8 and R2-9 are external evidence gates: they cannot be honestly
 closed without an authorized generic input and a runner result on this exact
 commit. The system fails closed rather than manufacturing either proof.
+
+## Post-round review — 2026-10-26
+
+The implementation review found that several rows above describe the code
+slice as complete even though their full acceptance criteria are not yet met:
+
+- **R2-1:** provider verification is implemented, but `bind-asset` writes a
+  binding sidecar rather than publishing a new immutable direction revision
+  that Advanced planning consumes automatically. Provider-specific failure
+  tests are also incomplete.
+- **R2-3:** available face/caption/source-text geometry is present, but logo,
+  CTA, active-subject, B-roll geometry, confidence, and decoded B-roll
+  observation evidence are still absent. Relevance still relies on reviewed
+  tags and transcript-token overlap.
+- **R2-5:** the shared evaluator is called by direction lint and the treatment
+  CLI, not independently by QA and delivery. Render-event ownership uses set
+  equality and does not reject duplicate references.
+- **R2-6:** source ducking is wired, but speech-overlap windows are currently
+  SFX intervals rather than measured speech intersections, and production
+  intelligibility remains `unverified`.
+- **R2-7:** downstream stages carry and compare a digest, but no persisted
+  typed evidence bundle is loaded and revalidated at each gate.
+- **R2-8/R2-9:** the authorized generic proof is unavailable and PR #38's
+  self-hosted CI check remains queued.
+
+The detailed fixing workflow for these findings is
+[editorial-treatment-orchestration-followup-round3-plan.md](editorial-treatment-orchestration-followup-round3-plan.md).
+Round 2 is therefore **TECHNICALLY VERIFIED LOCALLY** but not fully accepted
+against every stated plan criterion.
