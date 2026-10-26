@@ -56,6 +56,7 @@ from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument
 from clipforge.schemas.treatment import (
+    TreatmentAssetObservation,
     TreatmentAssetReceipt,
     TreatmentAudioMixResult,
     TreatmentEvidenceBundle,
@@ -302,6 +303,7 @@ def build_advanced_plan(
             candidate_id=candidate_id,
             audio_mix=treatment_audio_mix,
             actor=actor,
+            work_root=work_root,
         )
         evidence_path = workspace.treatment_evidence_file(candidate_id)
         workspace.prepare_advanced_file(evidence_path)
@@ -1256,6 +1258,7 @@ def _build_treatment_evidence_bundle(
     candidate_id: str,
     audio_mix: TreatmentAudioMixResult | None,
     actor: str,
+    work_root: Path,
 ) -> TreatmentEvidenceBundle:
     from clipforge.editorial.presets import PresetCatalog
     from clipforge.hero.treatment_policy import evaluate_treatment_policy
@@ -1280,6 +1283,36 @@ def _build_treatment_evidence_bundle(
         )
         for placement in selected.asset_placements
     ]
+    observations: list[TreatmentAssetObservation] = []
+    for receipt in receipts:
+        if receipt.observation_id is None:
+            continue
+        observation_path = (
+            work_root / "editorial" / "treatment-observations" / receipt.observation_id / "observation.json"
+        )
+        if (
+            observation_path.is_symlink()
+            or not observation_path.is_file()
+            or receipt.observation_sha256 != sha256_file(observation_path)
+        ):
+            raise MediaError(f"treatment observation is missing or stale: {receipt.observation_id}")
+        try:
+            observation = TreatmentAssetObservation.model_validate_json(
+                observation_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"treatment observation is invalid: {receipt.observation_id}") from exc
+        if (
+            observation.observation_id != receipt.observation_id
+            or observation.asset_id != receipt.asset_id
+            or observation.media_sha256 != receipt.registered_asset_sha256
+        ):
+            raise MediaError(f"treatment observation binding is stale: {receipt.observation_id}")
+        for frame in observation.frames:
+            frame_path = work_root / frame.relative_path
+            if frame_path.is_symlink() or not frame_path.is_file() or sha256_file(frame_path) != frame.sha256:
+                raise MediaError(f"treatment observation frame is missing or stale: {frame.relative_path}")
+        observations.append(observation)
     findings = [
         TreatmentPolicyFinding(**item.model_dump(mode="json"))
         for item in evaluate_treatment_policy(selected, policy)
@@ -1296,6 +1329,7 @@ def _build_treatment_evidence_bundle(
         treatment_fingerprint=direction.treatment_fingerprint or treatment_fingerprint(selected),
         decisions=selected.treatment_decisions,
         asset_receipts=receipts,
+        observations=observations,
         policy_findings=findings,
         audio_mix=audio_mix,
         created_at=direction.provenance.created_at,

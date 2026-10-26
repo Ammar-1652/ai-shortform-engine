@@ -426,10 +426,27 @@ class TreatmentEvidenceBundle(Versioned):
     treatment_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     decisions: list[BeatTreatmentDecision] = Field(min_length=1, max_length=12)
     asset_receipts: list[TreatmentAssetReceipt] = Field(default_factory=list, max_length=32)
+    observations: list[TreatmentAssetObservation] = Field(default_factory=list, max_length=32)
     policy_findings: list[TreatmentPolicyFinding] = Field(default_factory=list, max_length=64)
     audio_mix: TreatmentAudioMixResult | None = None
     created_at: AwareDatetime
     provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def observation_receipts_are_embedded(self) -> Self:
+        observations = {item.observation_id: item for item in self.observations}
+        for receipt in self.asset_receipts:
+            if receipt.observation_id is None:
+                continue
+            observation = observations.get(receipt.observation_id)
+            if observation is None or receipt.observation_sha256 is None:
+                raise ValueError("treatment receipt observation must be embedded in the evidence bundle")
+            if (
+                observation.asset_id != receipt.asset_id
+                or observation.media_sha256 != receipt.registered_asset_sha256
+            ):
+                raise ValueError("embedded treatment observation is bound to another asset")
+        return self
 
 
 class TreatmentPlanSummary(Versioned):
