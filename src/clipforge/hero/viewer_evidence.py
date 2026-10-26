@@ -272,10 +272,10 @@ def _decoded_intelligibility(
                     "intelligibility_method": "decoded_window_signal_v2",
                     "intelligibility_checked_windows": checked,
                     "intelligibility_failed_windows": checked,
-                    "intelligibility_encoded_rms_windows": [],
-                    "intelligibility_speech_reference_rms_windows": [],
-                    "intelligibility_sfx_reference_rms_windows": [],
-                    "intelligibility_margin_db": [],
+                    "intelligibility_encoded_rms_windows": [-120.0] * len(checked),
+                    "intelligibility_speech_reference_rms_windows": [-120.0] * len(checked),
+                    "intelligibility_sfx_reference_rms_windows": [-120.0] * len(checked),
+                    "intelligibility_margin_db": [-120.0] * len(checked),
                     "intelligibility_note": "Staged speech reference is missing for decoded mix comparison.",
                 }
             )
@@ -336,6 +336,7 @@ def _decoded_intelligibility(
                 if encoded_level <= _RMS_WINDOW_LIMIT_DB or speech_level <= _RMS_WINDOW_LIMIT_DB or margin < 0:
                     failed.append(window)
         except MediaError as exc:
+            missing = len(checked) - len(encoded_rms)
             return mix.model_copy(
                 update={
                     "status": "measured",
@@ -343,10 +344,10 @@ def _decoded_intelligibility(
                     "intelligibility_method": "decoded_window_signal_v2",
                     "intelligibility_checked_windows": checked,
                     "intelligibility_failed_windows": checked,
-                    "intelligibility_encoded_rms_windows": encoded_rms,
-                    "intelligibility_speech_reference_rms_windows": speech_rms,
-                    "intelligibility_sfx_reference_rms_windows": sfx_rms,
-                    "intelligibility_margin_db": margins,
+                    "intelligibility_encoded_rms_windows": encoded_rms + [-120.0] * missing,
+                    "intelligibility_speech_reference_rms_windows": speech_rms + [-120.0] * missing,
+                    "intelligibility_sfx_reference_rms_windows": sfx_rms + [-120.0] * missing,
+                    "intelligibility_margin_db": margins + [-120.0] * missing,
                     "intelligibility_note": str(exc),
                 }
             )
