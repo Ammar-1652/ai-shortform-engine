@@ -557,7 +557,7 @@ def remap_direction_intervals(
             )
         option_updates.append(remapped_option)
     payload = {**direction.model_dump(mode="json"), "options": option_updates}
-    if direction.direction_recipe_version == "direction-v3":
+    if direction.direction_recipe_version in {"direction-v3", "direction-v4"}:
         selected = next(item for item in option_updates if item.option_id == direction.selected_option_id)
         payload["treatment_fingerprint"] = treatment_fingerprint(selected)
     return DirectionDocument.model_validate(payload)

@@ -624,6 +624,33 @@
           "default": null,
           "title": "License Evidence Sha256"
         },
+        "observation_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Id"
+        },
+        "observation_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Sha256"
+        },
         "placement_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -1499,6 +1526,44 @@
       "title": "DirectionTransitionSpec",
       "type": "object"
     },
+    "DirectionTreatmentRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/TreatmentBindingReference"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Bindings",
+          "type": "array"
+        },
+        "parent_direction_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Parent Direction Id",
+          "type": "string"
+        },
+        "parent_direction_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Parent Direction Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_direction_id",
+        "parent_direction_sha256",
+        "bindings"
+      ],
+      "title": "DirectionTreatmentRevision",
+      "type": "object"
+    },
     "MotionGraphicsTreatmentDecision": {
       "additionalProperties": false,
       "properties": {
@@ -2254,6 +2319,40 @@
       "title": "TreatmentAssetRequest",
       "type": "object"
     },
+    "TreatmentBindingReference": {
+      "additionalProperties": false,
+      "properties": {
+        "binding_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Binding Id",
+          "type": "string"
+        },
+        "relative_path": {
+          "pattern": "^editorial/treatment-bindings/[A-Za-z0-9._:-]+\\.json$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding_id",
+        "relative_path",
+        "sha256"
+      ],
+      "title": "TreatmentBindingReference",
+      "type": "object"
+    },
     "TreatmentRegion": {
       "additionalProperties": false,
       "description": "One output-space protected region used by treatment collision checks.",
@@ -2469,7 +2568,8 @@
       "enum": [
         "direction-v1",
         "direction-v2",
-        "direction-v3"
+        "direction-v3",
+        "direction-v4"
       ],
       "title": "Direction Recipe Version",
       "type": "string"
@@ -2684,6 +2784,17 @@
       ],
       "default": null,
       "title": "Treatment Fingerprint"
+    },
+    "treatment_revision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DirectionTreatmentRevision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "visual_analysis_sha256": {
       "pattern": "^[0-9a-f]{64}$",

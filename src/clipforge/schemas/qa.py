@@ -111,6 +111,7 @@ class ViewerEvidenceBundle(Versioned):
     pilot_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_audio_mix_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_audio_mix_status: Literal["", "planned", "measured"] = ""
     treatment_audio_integrated_lufs: float | None = None
@@ -174,6 +175,7 @@ class QASetDocument(Versioned):
     status: QAStatus
     treatment_fingerprint: str = Field(default="", pattern=r"^$|" + _SHA)
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
+    treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_summary_sha256: str = Field(default="", pattern=r"^$|" + _SHA)
     provenance: ArtifactProvenance
     workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)

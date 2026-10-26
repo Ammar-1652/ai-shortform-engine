@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
+from clipforge.schemas.provenance import ArtifactProvenance
 
 TreatmentState = Literal["use", "omit_with_reason", "blocked_by_policy", "needs_review"]
 TreatmentLayer = Literal["broll", "camera", "transition", "sfx", "motion_graphics"]
@@ -211,6 +212,39 @@ class TreatmentRegion(Versioned):
         return self
 
 
+class TreatmentObservationFrame(Versioned):
+    relative_path: str = Field(pattern=r"^editorial/treatment-observations/[A-Za-z0-9._:/-]+\.jpg$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    timestamp_us: Microseconds
+
+
+class TreatmentAssetObservation(Versioned):
+    """Decoded, reviewed observation of a selected visual asset."""
+
+    observation_id: EntityId
+    asset_id: EntityId
+    source_asset_id: EntityId
+    media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    output_interval: OutputInterval
+    source_evidence_ids: list[EntityId] = Field(min_length=1, max_length=16)
+    frames: list[TreatmentObservationFrame] = Field(min_length=1, max_length=8)
+    observed_labels: list[str] = Field(min_length=1, max_length=16)
+    relevance_score: float = Field(ge=0, le=1)
+    relevance_threshold: float = Field(ge=0, le=1)
+    analyzer_version: Literal["ffmpeg-frame-probe-v1"] = "ffmpeg-frame-probe-v1"
+    reviewed_by: str = Field(min_length=1, max_length=200)
+    review_note: str = Field(min_length=1, max_length=500)
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def score_is_actionable(self) -> Self:
+        if self.relevance_score < self.relevance_threshold:
+            raise ValueError("visual observation relevance is below its required threshold")
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("visual observation provenance must include the source asset")
+        return self
+
+
 class TreatmentVisualEvidence(Versioned):
     """Measured visual and collision facts for one treatment decision."""
 
@@ -282,7 +316,7 @@ class TreatmentAudioMixResult(Versioned):
     source_in_us: list[int] = Field(default_factory=list, max_length=32)
     fade_in_us: list[int] = Field(default_factory=list, max_length=32)
     fade_out_us: list[int] = Field(default_factory=list, max_length=32)
-    speech_overlap_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    speech_overlap_windows: list[OutputInterval | None] = Field(default_factory=list, max_length=32)
     silence_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
     intelligibility_status: Literal["unverified", "pass", "fail"] = "unverified"
     measured_integrated_lufs: float | None = None
@@ -319,6 +353,46 @@ class TreatmentAudioMixResult(Versioned):
         if len(self.speech_overlap_windows) != len(self.cue_event_ids):
             raise ValueError("audio mix speech-overlap facts must match cue event ids")
         return self
+
+
+class TreatmentPolicyFinding(Versioned):
+    severity: Literal["error", "warning", "info"]
+    code: str = Field(pattern=r"^[a-z][a-z0-9_.:-]{1,80}$")
+    message: str = Field(min_length=1, max_length=500)
+
+
+class TreatmentAssetReceipt(Versioned):
+    placement_id: EntityId
+    request_id: EntityId
+    asset_id: EntityId
+    kind: Literal["graphic", "audio"]
+    interval: OutputInterval
+    source_in_us: Microseconds
+    provider_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    selection_id: EntityId
+    acquisition_id: EntityId
+    license_evidence_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    registered_asset_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    observation_id: EntityId | None = None
+    observation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class TreatmentEvidenceBundle(Versioned):
+    """Canonical, persisted treatment facts consumed by every downstream gate."""
+
+    bundle_id: EntityId
+    project_id: EntityId
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    direction_id: EntityId
+    direction_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    treatment_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decisions: list[BeatTreatmentDecision] = Field(min_length=1, max_length=12)
+    asset_receipts: list[TreatmentAssetReceipt] = Field(default_factory=list, max_length=32)
+    policy_findings: list[TreatmentPolicyFinding] = Field(default_factory=list, max_length=64)
+    audio_mix: TreatmentAudioMixResult | None = None
+    created_at: AwareDatetime
+    provenance: ArtifactProvenance
 
 
 class TreatmentPlanSummary(Versioned):

@@ -1,0 +1,1859 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "BeatTreatmentDecision": {
+      "additionalProperties": false,
+      "description": "Complete treatment coverage for one hook/body/punch beat.",
+      "properties": {
+        "asset_requests": {
+          "items": {
+            "$ref": "#/$defs/TreatmentAssetRequest"
+          },
+          "maxItems": 8,
+          "title": "Asset Requests",
+          "type": "array"
+        },
+        "audio_mix_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Mix Fingerprint"
+        },
+        "beat_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "broll": {
+          "$ref": "#/$defs/BrollTreatmentDecision"
+        },
+        "camera": {
+          "$ref": "#/$defs/CameraTreatmentDecision"
+        },
+        "dependency_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dependency Fingerprint",
+          "type": "string"
+        },
+        "motion_graphics": {
+          "$ref": "#/$defs/MotionGraphicsTreatmentDecision"
+        },
+        "narrative_purpose": {
+          "enum": [
+            "orient",
+            "explain",
+            "prove",
+            "react",
+            "contrast",
+            "reveal",
+            "resolve",
+            "settle"
+          ],
+          "title": "Narrative Purpose",
+          "type": "string"
+        },
+        "output_interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx": {
+          "$ref": "#/$defs/SfxTreatmentDecision"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "transition": {
+          "$ref": "#/$defs/TransitionTreatmentDecision"
+        },
+        "visual_evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TreatmentVisualEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "beat_id",
+        "output_interval",
+        "narrative_purpose",
+        "source_evidence_ids",
+        "broll",
+        "camera",
+        "transition",
+        "sfx",
+        "motion_graphics",
+        "dependency_fingerprint"
+      ],
+      "title": "BeatTreatmentDecision",
+      "type": "object"
+    },
+    "BrollTreatmentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "asset_request_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Request Ids",
+          "type": "array"
+        },
+        "event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "none",
+          "enum": [
+            "source_footage",
+            "clean_cut",
+            "hold",
+            "silence",
+            "none"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "layer": {
+          "const": "broll",
+          "default": "broll",
+          "title": "Layer",
+          "type": "string"
+        },
+        "negative_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Negative Terms",
+          "type": "array"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "dialogue_clarity",
+                "no_relevant_asset",
+                "face_collision",
+                "protected_region_collision",
+                "quiet_payoff",
+                "short_interval",
+                "no_semantic_cut",
+                "policy_preference",
+                "unsupported_capability",
+                "missing_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "query_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Query Terms",
+          "type": "array"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "relevance_note": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance Note"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "context",
+                "proof",
+                "process",
+                "reaction",
+                "result",
+                "contrast",
+                "atmosphere",
+                "product_detail"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "use",
+            "omit_with_reason",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "rationale"
+      ],
+      "title": "BrollTreatmentDecision",
+      "type": "object"
+    },
+    "CameraTreatmentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "asset_request_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Request Ids",
+          "type": "array"
+        },
+        "event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "none",
+          "enum": [
+            "source_footage",
+            "clean_cut",
+            "hold",
+            "silence",
+            "none"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "intensity": {
+          "default": "gentle",
+          "enum": [
+            "quiet",
+            "gentle",
+            "active",
+            "peak"
+          ],
+          "title": "Intensity",
+          "type": "string"
+        },
+        "layer": {
+          "const": "camera",
+          "default": "camera",
+          "title": "Layer",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "static",
+                "push_in",
+                "pull_out",
+                "follow_subject",
+                "reframe",
+                "settle"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "dialogue_clarity",
+                "no_relevant_asset",
+                "face_collision",
+                "protected_region_collision",
+                "quiet_payoff",
+                "short_interval",
+                "no_semantic_cut",
+                "policy_preference",
+                "unsupported_capability",
+                "missing_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "protected_regions": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Protected Regions",
+          "type": "array"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "use",
+            "omit_with_reason",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "rationale"
+      ],
+      "title": "CameraTreatmentDecision",
+      "type": "object"
+    },
+    "MotionGraphicsTreatmentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "asset_request_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Request Ids",
+          "type": "array"
+        },
+        "event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "none",
+          "enum": [
+            "source_footage",
+            "clean_cut",
+            "hold",
+            "silence",
+            "none"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "layer": {
+          "const": "motion_graphics",
+          "default": "motion_graphics",
+          "title": "Layer",
+          "type": "string"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "dialogue_clarity",
+                "no_relevant_asset",
+                "face_collision",
+                "protected_region_collision",
+                "quiet_payoff",
+                "short_interval",
+                "no_semantic_cut",
+                "policy_preference",
+                "unsupported_capability",
+                "missing_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "use",
+            "omit_with_reason",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Template"
+        }
+      },
+      "required": [
+        "state",
+        "rationale"
+      ],
+      "title": "MotionGraphicsTreatmentDecision",
+      "type": "object"
+    },
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    },
+    "SfxTreatmentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "asset_request_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Request Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "default": 6.0,
+          "maximum": 18.0,
+          "minimum": 0.0,
+          "title": "Duck Db",
+          "type": "number"
+        },
+        "event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "none",
+          "enum": [
+            "source_footage",
+            "clean_cut",
+            "hold",
+            "silence",
+            "none"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "gain_db": {
+          "default": -18.0,
+          "maximum": 0.0,
+          "minimum": -24.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "layer": {
+          "const": "sfx",
+          "default": "sfx",
+          "title": "Layer",
+          "type": "string"
+        },
+        "max_overlap_us": {
+          "default": 300000,
+          "maximum": 2000000,
+          "minimum": 0,
+          "title": "Max Overlap Us",
+          "type": "integer"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "dialogue_clarity",
+                "no_relevant_asset",
+                "face_collision",
+                "protected_region_collision",
+                "quiet_payoff",
+                "short_interval",
+                "no_semantic_cut",
+                "policy_preference",
+                "unsupported_capability",
+                "missing_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "accent",
+                "reveal",
+                "transition",
+                "reaction",
+                "settle"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "use",
+            "omit_with_reason",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "rationale"
+      ],
+      "title": "SfxTreatmentDecision",
+      "type": "object"
+    },
+    "TransitionTreatmentDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Ids",
+          "type": "array"
+        },
+        "asset_request_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Asset Request Ids",
+          "type": "array"
+        },
+        "cut_boundary_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cut Boundary Us"
+        },
+        "event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "fallback": {
+          "default": "none",
+          "enum": [
+            "source_footage",
+            "clean_cut",
+            "hold",
+            "silence",
+            "none"
+          ],
+          "title": "Fallback",
+          "type": "string"
+        },
+        "layer": {
+          "const": "transition",
+          "default": "transition",
+          "title": "Layer",
+          "type": "string"
+        },
+        "omission_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "dialogue_clarity",
+                "no_relevant_asset",
+                "face_collision",
+                "protected_region_collision",
+                "quiet_payoff",
+                "short_interval",
+                "no_semantic_cut",
+                "policy_preference",
+                "unsupported_capability",
+                "missing_evidence"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Omission Reason"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "use",
+            "omit_with_reason",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "enum": [
+                "clean_cut_v1",
+                "concat_push_v1",
+                "concat_blur_dissolve_v1"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        }
+      },
+      "required": [
+        "state",
+        "rationale"
+      ],
+      "title": "TransitionTreatmentDecision",
+      "type": "object"
+    },
+    "TreatmentAssetReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "acquisition_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Acquisition Id",
+          "type": "string"
+        },
+        "asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "kind": {
+          "enum": [
+            "graphic",
+            "audio"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "license_evidence_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "License Evidence Sha256",
+          "type": "string"
+        },
+        "observation_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Id"
+        },
+        "observation_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Sha256"
+        },
+        "placement_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Placement Id",
+          "type": "string"
+        },
+        "provider_response_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Provider Response Sha256",
+          "type": "string"
+        },
+        "registered_asset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Registered Asset Sha256",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Selection Id",
+          "type": "string"
+        },
+        "source_in_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source In Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "placement_id",
+        "request_id",
+        "asset_id",
+        "kind",
+        "interval",
+        "source_in_us",
+        "provider_response_sha256",
+        "selection_id",
+        "acquisition_id",
+        "license_evidence_sha256",
+        "registered_asset_sha256"
+      ],
+      "title": "TreatmentAssetReceipt",
+      "type": "object"
+    },
+    "TreatmentAssetRequest": {
+      "additionalProperties": false,
+      "description": "A bounded provider request produced from a source-grounded beat.",
+      "properties": {
+        "acquisition_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acquisition Id"
+        },
+        "beat_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "kind": {
+          "enum": [
+            "graphic",
+            "audio"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "license_evidence_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Evidence Sha256"
+        },
+        "negative_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Negative Terms",
+          "type": "array"
+        },
+        "provider_classes": {
+          "items": {
+            "enum": [
+              "local",
+              "envato",
+              "openverse"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Provider Classes",
+          "type": "array"
+        },
+        "provider_response_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Response Sha256"
+        },
+        "query_terms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Query Terms",
+          "type": "array"
+        },
+        "registered_asset_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registered Asset Id"
+        },
+        "registered_asset_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registered Asset Sha256"
+        },
+        "relevance_threshold": {
+          "default": 0.85,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Relevance Threshold",
+          "type": "number"
+        },
+        "request_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "role": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selection_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selection Id"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "status": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "selected",
+            "acquired",
+            "blocked",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "beat_id",
+        "kind",
+        "role",
+        "query_terms",
+        "provider_classes",
+        "interval",
+        "source_evidence_ids"
+      ],
+      "title": "TreatmentAssetRequest",
+      "type": "object"
+    },
+    "TreatmentAudioMixResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound requested/applied SFX mix policy and measured output facts.",
+      "properties": {
+        "applied_gain_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Applied Gain Db",
+          "type": "array"
+        },
+        "cue_event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Cue Event Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Duck Db",
+          "type": "array"
+        },
+        "fade_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade In Us",
+          "type": "array"
+        },
+        "fade_out_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade Out Us",
+          "type": "array"
+        },
+        "intelligibility_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "pass",
+            "fail"
+          ],
+          "title": "Intelligibility Status",
+          "type": "string"
+        },
+        "measured_integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Integrated Lufs"
+        },
+        "measured_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 128,
+          "title": "Measured Rms Windows",
+          "type": "array"
+        },
+        "measured_true_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured True Peak Dbfs"
+        },
+        "mix_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Mix Id",
+          "type": "string"
+        },
+        "policy_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Fingerprint",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "silence_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows",
+          "type": "array"
+        },
+        "source_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Source In Us",
+          "type": "array"
+        },
+        "speech_overlap_windows": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputInterval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows",
+          "type": "array"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "measured"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix_id",
+        "treatment_fingerprint",
+        "policy_fingerprint"
+      ],
+      "title": "TreatmentAudioMixResult",
+      "type": "object"
+    },
+    "TreatmentPolicyFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[a-z][a-z0-9_.:-]{1,80}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ],
+      "title": "TreatmentPolicyFinding",
+      "type": "object"
+    },
+    "TreatmentRegion": {
+      "additionalProperties": false,
+      "description": "One output-space protected region used by treatment collision checks.",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "face",
+            "active_subject",
+            "source_text",
+            "caption",
+            "logo",
+            "cta",
+            "platform_safe",
+            "broll"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "visual_analysis",
+            "platform_profile",
+            "render_input"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1080,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 1080,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1920,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "region_id",
+        "role",
+        "interval",
+        "x",
+        "y",
+        "width",
+        "height",
+        "source"
+      ],
+      "title": "TreatmentRegion",
+      "type": "object"
+    },
+    "TreatmentVisualEvidence": {
+      "additionalProperties": false,
+      "description": "Measured visual and collision facts for one treatment decision.",
+      "properties": {
+        "collision_status": {
+          "default": "unknown",
+          "enum": [
+            "clear",
+            "blocked",
+            "unknown"
+          ],
+          "title": "Collision Status",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "protected_region_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Protected Region Ids",
+          "type": "array"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/TreatmentRegion"
+          },
+          "maxItems": 32,
+          "title": "Regions",
+          "type": "array"
+        },
+        "relevance_score": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance Score"
+        },
+        "relevance_status": {
+          "default": "unknown",
+          "enum": [
+            "related",
+            "unrelated",
+            "unknown"
+          ],
+          "title": "Relevance Status",
+          "type": "string"
+        },
+        "relevance_threshold": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relevance Threshold"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "title": "TreatmentVisualEvidence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Canonical, persisted treatment facts consumed by every downstream gate.",
+  "properties": {
+    "asset_receipts": {
+      "items": {
+        "$ref": "#/$defs/TreatmentAssetReceipt"
+      },
+      "maxItems": 32,
+      "title": "Asset Receipts",
+      "type": "array"
+    },
+    "audio_mix": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TreatmentAudioMixResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "bundle_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/BeatTreatmentDecision"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "direction_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
+    "policy_findings": {
+      "items": {
+        "$ref": "#/$defs/TreatmentPolicyFinding"
+      },
+      "maxItems": 64,
+      "title": "Policy Findings",
+      "type": "array"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "treatment_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Treatment Fingerprint",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "direction_id",
+    "direction_sha256",
+    "treatment_fingerprint",
+    "decisions",
+    "created_at",
+    "provenance"
+  ],
+  "title": "TreatmentEvidenceBundle",
+  "type": "object"
+}

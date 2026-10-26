@@ -155,7 +155,14 @@
     },
     "speech_overlap_windows": {
       "items": {
-        "$ref": "#/$defs/OutputInterval"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "maxItems": 32,
       "title": "Speech Overlap Windows",

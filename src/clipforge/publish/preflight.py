@@ -12,6 +12,7 @@ from clipforge.errors import ClipforgeError, MediaError, StorageError
 from clipforge.hero.advanced_assets import confine_file_uri, confine_work_path, require_asset
 from clipforge.hero.advanced_service import JOB_ADVANCED, KIND_ADVANCED
 from clipforge.hero.probe import probe_hero
+from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.workspace import SourceWorkspace
@@ -26,11 +27,13 @@ from clipforge.schemas.advanced import (
     AdvancedHeroRenderInput,
     advanced_fingerprint,
 )
+from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision, RightsStatus
 from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobStatus, QAStatus
 from clipforge.schemas.publish import PublishProfile
 from clipforge.schemas.qa import QACacheRecord, QASetDocument
+from clipforge.schemas.treatment import TreatmentEvidenceBundle
 from clipforge.schemas.voice import NarrationAudioArtifact
 from clipforge.storage import (
     Database,
@@ -123,6 +126,7 @@ class DeliveryFacts:
     direction_sha256: str = ""
     treatment_fingerprint: str = ""
     treatment_evidence_sha256: str = ""
+    treatment_evidence_relative_path: str = ""
     treatment_audio_mix_sha256: str = ""
     style_id: str = "legacy-v1"
     style_fingerprint: str = ""
@@ -287,6 +291,7 @@ def preflight_delivery(
         direction_sha256=plan.direction_sha256,
         treatment_fingerprint=plan.treatment_fingerprint,
         treatment_evidence_sha256=plan.treatment_evidence_sha256,
+        treatment_evidence_relative_path=plan.treatment_evidence_relative_path,
         treatment_audio_mix_sha256=(
             advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
             if plan.treatment_audio_mix is not None
@@ -386,6 +391,7 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "direction_sha256": facts.direction_sha256,
         "treatment_fingerprint": facts.treatment_fingerprint,
         "treatment_evidence_sha256": facts.treatment_evidence_sha256,
+        "treatment_evidence_relative_path": facts.treatment_evidence_relative_path,
         "treatment_audio_mix_sha256": facts.treatment_audio_mix_sha256,
         "style_id": facts.style_id,
         "style_fingerprint": facts.style_fingerprint,
@@ -515,6 +521,61 @@ def _reject_render_strategy(
             raise PublishError("motion direction changed", category="stale_final_review")
         if plan.motion_style is not None and rendered.motion_style != plan.motion_style:
             raise PublishError("motion style recipe changed", category="stale_final_review")
+        if plan.treatment_evidence_sha256:
+            if not plan.treatment_evidence_relative_path:
+                raise PublishError("treatment evidence bundle path is missing", category="stale_final_review")
+            bundle_path = confine_work_path(
+                workspace.root, plan.treatment_evidence_relative_path, label="treatment evidence bundle"
+            )
+            if (
+                bundle_path.is_symlink()
+                or not bundle_path.is_file()
+                or sha256_file(bundle_path) != plan.treatment_evidence_sha256
+            ):
+                raise PublishError(
+                    "treatment evidence bundle is missing or stale", category="stale_final_review"
+                )
+            try:
+                bundle = TreatmentEvidenceBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+                raise PublishError(
+                    "treatment evidence bundle is invalid", category="stale_final_review"
+                ) from exc
+            if (
+                bundle.direction_id != plan.direction_id
+                or bundle.direction_sha256 != plan.direction_sha256
+                or bundle.treatment_fingerprint != plan.treatment_fingerprint
+            ):
+                raise PublishError(
+                    "treatment evidence bundle is bound to a different direction", category="stale_final_review"
+                )
+        direction_path = (
+            workspace.advanced_review_direction_file(plan.candidate_id)
+            if plan.hero_review_status == "pending"
+            else workspace.direction_file(plan.candidate_id)
+        )
+        if direction_path.is_symlink() or not direction_path.is_file():
+            raise PublishError("direction is missing", category="stale_final_review")
+        try:
+            direction = DirectionDocument.model_validate_json(direction_path.read_text(encoding="utf-8"))
+            selected = next(
+                item for item in direction.options if item.option_id == direction.selected_option_id
+            )
+            if direction.direction_recipe_version in {"direction-v3", "direction-v4"}:
+                from clipforge.editorial.presets import PresetCatalog
+
+                policy = PresetCatalog.load().find(direction.preset_id or "clean_explainer").treatment_policy
+                errors = [
+                    item for item in evaluate_treatment_policy(selected, policy) if item.severity == "error"
+                ]
+                if errors:
+                    raise PublishError(
+                        f"treatment policy failed: {errors[0].code}", category="stale_final_review"
+                    )
+        except PublishError:
+            raise
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise PublishError("direction could not be validated", category="stale_final_review") from exc
     if reframe.applied != "face_follow":
         return
     if rendered.trajectory_sha256 != reframe.trajectory_sha256 or not rendered.trajectory_sha256:

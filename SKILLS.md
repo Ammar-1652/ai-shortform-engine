@@ -80,7 +80,7 @@ check; previously rendered artifacts remain immutable.
 | Find candidate moments | `candidate mine` | Candidate set with transcript and visual evidence |
 | Choose an editorial direction | `clipforge-motion-direction` skill, `editorial direction compare`, and `direction plan` | Declarative `DirectionDocument` with camera and transition choices |
 | Decide treatment per beat | `editorial treatment plan/show/lint` after direction selection | Hash-bound use, omission, policy-block, or review decision for B-roll, SFX, camera, transitions, and graphics |
-| Bind a cleared treatment asset | Existing provider search/acquire/register tools, then `editorial treatment bind-asset --provider ... --project-id ... --source-asset-id ...` | Revalidated request-bound placement with provider, selection, license, acquisition, and byte hashes |
+| Bind a cleared treatment asset | Existing provider search/acquire/register tools, then `editorial treatment bind-asset`, `observe-asset`, and `revise-direction` | Immutable direction revision with provider, selection, license, acquisition, byte, decoded-observation, and evidence-bundle hashes |
 | Choose hook/body/punch cuts | typed `EditorialArcDocument` and `advanced plan --editorial-arc-file` | Ordered TimeMap and arc evidence |
 | Frame faces and important source content | `advanced plan --reframing` and typed crop windows | Hash-bound portrait transform |
 | Add captions | shared caption builders and Remotion `CaptionPlate` | Word-timed caption events |

@@ -34,10 +34,12 @@ from clipforge.editorial.reference_analysis import (
     propose_style_card,
 )
 from clipforge.errors import ClipforgeError, MediaError
+from clipforge.hero.direction_service import revise_direction_with_treatment_bindings
 from clipforge.hero.treatment import summarize_treatment, treatment_fingerprint
 from clipforge.hero.treatment_assets import (
     bind_acquired_request,
     bind_placement_to_request,
+    observe_registered_visual_asset,
     persist_treatment_binding,
     select_treatment_request,
     verify_registered_treatment_asset,
@@ -312,7 +314,7 @@ def treatment_lint(
         document = _load_treatment_direction(direction.absolute())
         selected = next(item for item in document.options if item.option_id == document.selected_option_id)
         findings: list[dict[str, str]] = []
-        if document.direction_recipe_version != "direction-v3":
+        if document.direction_recipe_version not in {"direction-v3", "direction-v4"}:
             findings.append(
                 {"severity": "error", "code": "legacy_direction", "message": "direction-v3 is required"}
             )
@@ -345,7 +347,7 @@ def treatment_lint(
                     )
         from clipforge.editorial.presets import PresetCatalog
 
-        if document.direction_recipe_version == "direction-v3":
+        if document.direction_recipe_version in {"direction-v3", "direction-v4"}:
             preset_id = document.preset_id or "clean_explainer"
             policy = PresetCatalog.load().find(preset_id).treatment_policy
             findings.extend(
@@ -374,6 +376,7 @@ def treatment_bind_asset(
     media_kind: Annotated[Literal["graphic", "audio"], typer.Option("--media-kind")],
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
+    observation: Annotated[Path | None, typer.Option("--observation", exists=True, readable=True)] = None,
 ) -> None:
     """Bind verified provider/acquisition evidence to one treatment placement."""
     from clipforge.paths import resolve_db_path, resolve_work_dir
@@ -420,6 +423,7 @@ def treatment_bind_asset(
             placement=bound,
             verification=verification,
             source_asset_id=source_asset_id,
+            observation_path=observation,
         )
     except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
         _fail(exc)
@@ -431,6 +435,96 @@ def treatment_bind_asset(
                 "binding_relative_path": binding_path.relative_to(resolve_work_dir(work_dir)).as_posix(),
             },
             ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+
+
+@treatment_app.command("observe-asset")
+def treatment_observe_asset(
+    asset_id: Annotated[str, typer.Option("--asset-id")],
+    project_id: Annotated[str, typer.Option("--project-id")],
+    source_asset_id: Annotated[str, typer.Option("--source-asset-id")],
+    output_start_us: Annotated[int, typer.Option("--output-start-us")],
+    output_end_us: Annotated[int, typer.Option("--output-end-us")],
+    source_evidence_id: Annotated[list[str], typer.Option("--source-evidence-id")],
+    observed_label: Annotated[list[str], typer.Option("--observed-label")],
+    relevance_score: Annotated[float, typer.Option("--relevance-score")],
+    relevance_threshold: Annotated[float, typer.Option("--relevance-threshold")],
+    reviewed_by: Annotated[str, typer.Option("--reviewed-by")],
+    review_note: Annotated[str, typer.Option("--review-note")],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+) -> None:
+    """Decode and persist reviewed visual evidence for one registered asset."""
+    from clipforge.paths import resolve_db_path, resolve_work_dir
+    from clipforge.schemas.editorial import OutputInterval
+    from clipforge.storage import Database
+
+    try:
+        path, observation = observe_registered_visual_asset(
+            database=Database(resolve_db_path(db)),
+            work_root=resolve_work_dir(work_dir),
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            asset_id=asset_id,
+            output_interval=OutputInterval(output_start_us=output_start_us, output_end_us=output_end_us),
+            source_evidence_ids=source_evidence_id,
+            observed_labels=observed_label,
+            relevance_score=relevance_score,
+            relevance_threshold=relevance_threshold,
+            reviewed_by=reviewed_by,
+            review_note=review_note,
+        )
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "observation_id": observation.observation_id,
+                "observation_relative_path": path.relative_to(resolve_work_dir(work_dir)).as_posix(),
+                "media_sha256": observation.media_sha256,
+                "relevance_score": observation.relevance_score,
+            },
+            sort_keys=True,
+        )
+    )
+
+
+@treatment_app.command("revise-direction")
+def treatment_revise_direction(
+    candidate_id: Annotated[str, typer.Option("--candidate-id")],
+    source_asset_id: Annotated[str, typer.Option("--source-asset-id")],
+    binding: Annotated[
+        list[Path], typer.Option("--binding", exists=True, readable=True, help="Verified binding sidecar.")
+    ],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    allow_unapproved: Annotated[bool, typer.Option("--allow-unapproved")] = False,
+) -> None:
+    """Publish a new immutable direction revision from verified bindings."""
+    from clipforge.paths import resolve_db_path, resolve_work_dir
+    from clipforge.storage import Database
+
+    try:
+        document, destination, digest = revise_direction_with_treatment_bindings(
+            database=Database(resolve_db_path(db)),
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            work_root=resolve_work_dir(work_dir),
+            binding_paths=[path.absolute() for path in binding],
+            allow_unapproved=allow_unapproved,
+        )
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "direction_id": document.direction_id,
+                "direction_recipe_version": document.direction_recipe_version,
+                "direction_relative_path": destination.relative_to(resolve_work_dir(work_dir)).as_posix(),
+                "direction_sha256": digest,
+            },
             sort_keys=True,
         )
     )

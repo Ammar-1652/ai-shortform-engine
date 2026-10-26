@@ -4,8 +4,11 @@ import pytest
 from pydantic import ValidationError
 
 from clipforge.editorial.presets import PresetCatalog
+from clipforge.hero.advanced_build import _build_treatment_audio_mix
+from clipforge.hero.advanced_service import default_advanced_profile
 from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
 from clipforge.hero.treatment_policy import evaluate_treatment_policy
+from clipforge.schemas.advanced import AudioMixEvent
 from clipforge.schemas.direction import DirectionAssetPlacement
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
@@ -162,3 +165,25 @@ def test_shared_policy_evaluator_rejects_unbound_asset_placement() -> None:
         PresetCatalog.load().find("clean_explainer").treatment_policy,
     )
     assert any(item.code == "asset_request_not_acquired" for item in findings)
+
+
+def test_audio_mix_records_real_speech_overlap_and_silence() -> None:
+    direction = _document()
+    event = AudioMixEvent(
+        event_id="sfx-1",
+        interval=OutputInterval(output_start_us=3_000_000, output_end_us=4_000_000),
+        asset_id="asset-1",
+        gain_db=-18,
+    )
+    mix = _build_treatment_audio_mix(direction, [event], default_advanced_profile(), _aligned_words())
+    assert mix is not None
+    assert mix.speech_overlap_windows == [None]
+
+    overlap = event.model_copy(
+        update={"interval": OutputInterval(output_start_us=1_500_000, output_end_us=2_500_000)}
+    )
+    overlap_mix = _build_treatment_audio_mix(direction, [overlap], default_advanced_profile(), _aligned_words())
+    assert overlap_mix is not None
+    assert overlap_mix.speech_overlap_windows[0] == OutputInterval(
+        output_start_us=1_500_000, output_end_us=2_500_000
+    )

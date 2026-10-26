@@ -447,6 +447,7 @@ class AdvancedHeroRenderInput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -567,6 +568,7 @@ class AdvancedHeroDraftOutput(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
@@ -694,6 +696,7 @@ class AdvancedHeroPlanDocument(Versioned):
     direction_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_fingerprint: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     treatment_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    treatment_evidence_relative_path: str = Field(default="", max_length=512)
     treatment_audio_mix: TreatmentAudioMixResult | None = None
     preset_id: str = Field(default="", max_length=64)
     pilot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")

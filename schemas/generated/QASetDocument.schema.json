@@ -338,6 +338,12 @@
     "technical": {
       "$ref": "#/$defs/QAResult"
     },
+    "treatment_evidence_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Treatment Evidence Relative Path",
+      "type": "string"
+    },
     "treatment_evidence_sha256": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",

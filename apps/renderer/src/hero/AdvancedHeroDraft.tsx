@@ -263,7 +263,7 @@ export type AdvancedHeroInput = {
     source_in_us?: number[];
     fade_in_us?: number[];
     fade_out_us?: number[];
-    speech_overlap_windows?: Interval[];
+    speech_overlap_windows?: (Interval | null)[];
     silence_windows?: Interval[];
     intelligibility_status?: "unverified" | "pass" | "fail";
     status?: "planned" | "measured";
@@ -856,7 +856,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
             return linearVolume(input.source_gain_db ?? 0);
           }
           const duck = mix.speech_overlap_windows.reduce((maximum, interval, index) => {
-            if (!active(frame, interval)) return maximum;
+            if (!interval || !active(frame, interval)) return maximum;
             return Math.max(maximum, mix.duck_db?.[index] ?? 0);
           }, 0);
           const duckedGain = Math.max(-24, (input.source_gain_db ?? 0) - duck);

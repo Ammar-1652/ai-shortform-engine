@@ -6,9 +6,11 @@ and review remain owned by their existing boundaries.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 
-from clipforge.schemas.direction import DirectionLintFinding, DirectionOption
+from clipforge.errors import MediaError
+from clipforge.schemas.direction import DirectionDocument, DirectionLintFinding, DirectionOption
 from clipforge.schemas.editorial_preset import TreatmentPolicy
 
 
@@ -17,7 +19,7 @@ def evaluate_treatment_policy(
     policy: TreatmentPolicy,
 ) -> list[DirectionLintFinding]:
     """Return stable policy findings shared by CLI, planning, and QA."""
-    findings: list[DirectionLintFinding] = []
+    findings: list[DirectionLintFinding] = treatment_event_ownership(option)
     beats = {item.beat_id: item for item in option.beats}
     used_broll = [item for item in option.treatment_decisions if item.broll.state == "use"]
     if policy.broll.mode == "blocked" and used_broll:
@@ -173,7 +175,11 @@ def evaluate_treatment_policy(
                         f"SFX ducking is below policy on beat {decision.beat_id}",
                     )
                 )
-            overlap_us = decision.output_interval.output_end_us - decision.output_interval.output_start_us
+            overlap_us = sum(
+                item.interval.output_end_us - item.interval.output_start_us
+                for item in audio
+                if item.placement_id in decision.sfx.event_ids
+            )
             if overlap_us > decision.sfx.max_overlap_us:
                 findings.append(
                     _error(
@@ -195,6 +201,60 @@ def evaluate_treatment_policy(
             )
         )
     return _unique(findings)
+
+
+def treatment_event_ownership(option: DirectionOption) -> list[DirectionLintFinding]:
+    """Every planned event has exactly one use decision, including duplicates."""
+    events = {
+        "camera": [item.motion_id for item in option.camera_motion],
+        "transition": [item.transition_id for item in option.transitions],
+        "broll": [item.placement_id for item in option.asset_placements if item.kind == "graphic"],
+        "sfx": [item.placement_id for item in option.asset_placements if item.kind == "audio"],
+        "motion_graphics": [item.graphic_id for item in option.motion_graphics],
+    }
+    findings = []
+    for layer_name, ids in events.items():
+        owners = Counter(
+            event_id
+            for decision in option.treatment_decisions
+            if (layer := getattr(decision, layer_name)).state == "use"
+            for event_id in layer.event_ids
+        )
+        if any(count != 1 for count in Counter(ids).values()) or owners != Counter(ids):
+            findings.append(
+                _error(
+                    f"{layer_name}_event_ownership_invalid",
+                    f"Every {layer_name} event must have exactly one use decision and render once",
+                )
+            )
+    return findings
+
+
+def require_treatment_policy(document: DirectionDocument) -> list[DirectionLintFinding]:
+    """Shared fail-closed policy gate; legacy recipes keep recorded behavior."""
+    if document.direction_recipe_version not in {"direction-v3", "direction-v4"}:
+        return []
+    from clipforge.editorial.presets import PresetCatalog
+    from clipforge.hero.treatment import treatment_fingerprint
+
+    option = next(item for item in document.options if item.option_id == document.selected_option_id)
+    digest = treatment_fingerprint(option)
+    if digest != document.treatment_fingerprint or any(
+        item.dependency_fingerprint != digest for item in option.treatment_decisions
+    ):
+        raise MediaError("treatment decision fingerprint is stale")
+    if any(
+        getattr(decision, layer).state == "needs_review"
+        for decision in option.treatment_decisions
+        for layer in ("camera", "transition", "broll", "sfx", "motion_graphics")
+    ):
+        raise MediaError("treatment asset or operator decision is unresolved")
+    policy = PresetCatalog.load().find(document.preset_id or "clean_explainer").treatment_policy
+    findings = evaluate_treatment_policy(option, policy)
+    errors = [item for item in findings if item.severity == "error"]
+    if errors:
+        raise MediaError("treatment policy failed: " + "; ".join(item.code for item in errors))
+    return findings
 
 
 def _error(code: str, message: str) -> DirectionLintFinding:

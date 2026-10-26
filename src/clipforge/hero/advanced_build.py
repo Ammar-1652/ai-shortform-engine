@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
+from collections import Counter
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from clipforge import __version__
 from clipforge.campaign.overlays import TARTEEL_PROFILE_ID
 from clipforge.campaign.quran import canonicalize_quran_alignment
 from clipforge.errors import MediaError, StorageError
@@ -22,6 +24,8 @@ from clipforge.hero.reframe import (
     build_face_follow,
     frame_period_tolerance_us,
 )
+from clipforge.hero.treatment import treatment_fingerprint
+from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
@@ -51,7 +55,12 @@ from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
 from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument
-from clipforge.schemas.treatment import TreatmentAudioMixResult
+from clipforge.schemas.treatment import (
+    TreatmentAssetReceipt,
+    TreatmentAudioMixResult,
+    TreatmentEvidenceBundle,
+    TreatmentPolicyFinding,
+)
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import Database, get_source_manifest
 from clipforge.transcription.io import publish_json
@@ -179,7 +188,8 @@ def build_advanced_plan(
     # Treatment-aware directions explicitly decide whether a transition is
     # useful. Legacy directed plans retain their historical soft bridge.
     directed_transition_default = direction is not None and (
-        direction.direction_recipe_version != "direction-v3" or bool(selected_transition_specs)
+        direction.direction_recipe_version not in {"direction-v3", "direction-v4"}
+        or bool(selected_transition_specs)
     )
     effective_transition_style = _effective_transition_style(cut_transition_style, directed_transition_default)
     transitions = _transitions(
@@ -278,8 +288,31 @@ def build_advanced_plan(
         bound_review_digest = hashlib.sha256(
             f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
         ).hexdigest()
-    treatment_audio_mix = _build_treatment_audio_mix(direction, sfx, profile)
-    treatment_evidence_sha256 = _treatment_evidence_sha256(direction, treatment_audio_mix)
+    treatment_audio_mix = _build_treatment_audio_mix(direction, sfx, profile, alignment.words)
+    treatment_evidence_sha256 = ""
+    treatment_evidence_relative_path = ""
+    if direction is not None and direction.treatment_fingerprint:
+        if not direction_sha256:
+            raise MediaError("treatment evidence requires a persisted direction hash")
+        bundle = _build_treatment_evidence_bundle(
+            direction=direction,
+            direction_sha256=direction_sha256,
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            audio_mix=treatment_audio_mix,
+            actor=actor,
+        )
+        evidence_path = workspace.treatment_evidence_file(candidate_id)
+        workspace.prepare_advanced_file(evidence_path)
+        evidence_digest = treatment_evidence_digest(bundle)
+        if evidence_path.exists():
+            if evidence_path.is_symlink() or sha256_file(evidence_path) != evidence_digest:
+                raise MediaError("treatment evidence bundle is immutable and stale")
+        else:
+            publish_json(evidence_path, bundle, work_root, workspace.partial_for(evidence_path))
+        treatment_evidence_sha256 = evidence_digest
+        treatment_evidence_relative_path = evidence_path.relative_to(work_root).as_posix()
     document = AdvancedHeroPlanDocument(
         workflow_roles=WorkflowRolePolicy(),
         plan_id=plan_id,
@@ -315,6 +348,7 @@ def build_advanced_plan(
         direction_sha256=direction_sha256,
         treatment_fingerprint="" if direction is None else direction.treatment_fingerprint or "",
         treatment_evidence_sha256=treatment_evidence_sha256,
+        treatment_evidence_relative_path=treatment_evidence_relative_path,
         treatment_audio_mix=treatment_audio_mix,
         preset_id="" if direction is None else direction.preset_id or "",
         motion_recipe_ids=motion_recipe_ids,
@@ -1154,6 +1188,7 @@ def _build_treatment_audio_mix(
     direction: DirectionDocument | None,
     events: list[AudioMixEvent],
     profile: AdvancedHeroProfile,
+    words: list[AlignedWord],
 ) -> TreatmentAudioMixResult | None:
     """Bind requested/applied SFX values to the Advanced plan identity."""
     if direction is None:
@@ -1169,6 +1204,25 @@ def _build_treatment_audio_mix(
             "narration_duck_db": profile.narration_duck_db,
         }
     )
+    speech_windows: list[OutputInterval | None] = []
+    for event in events:
+        overlaps = [
+            OutputInterval(
+                output_start_us=max(event.interval.output_start_us, word.output_start_us),
+                output_end_us=min(event.interval.output_end_us, word.output_end_us),
+            )
+            for word in words
+            if word.output_start_us < event.interval.output_end_us
+            and event.interval.output_start_us < word.output_end_us
+        ]
+        speech_windows.append(
+            None
+            if not overlaps
+            else OutputInterval(
+                output_start_us=min(item.output_start_us for item in overlaps),
+                output_end_us=max(item.output_end_us for item in overlaps),
+            )
+        )
     return TreatmentAudioMixResult(
         mix_id=stable_id("treatment-audio-mix", direction.direction_id, treatment_sha),
         treatment_fingerprint=treatment_sha,
@@ -1179,24 +1233,81 @@ def _build_treatment_audio_mix(
         source_in_us=[event.sfx_source_in_us for event in events],
         fade_in_us=[event.fade_in_us for event in events],
         fade_out_us=[event.fade_out_us for event in events],
-        speech_overlap_windows=[event.interval for event in events],
+        speech_overlap_windows=speech_windows,
         silence_windows=[],
         intelligibility_status="unverified",
         status="planned",
     )
 
 
-def _treatment_evidence_sha256(
-    direction: DirectionDocument | None,
+def treatment_evidence_digest(bundle: TreatmentEvidenceBundle) -> str:
+    """Hash the exact canonical JSON bytes that are persisted for the bundle."""
+    from clipforge.transcription.io import dump_json
+
+    return hashlib.sha256(dump_json(bundle).encode("utf-8")).hexdigest()
+
+
+def _build_treatment_evidence_bundle(
+    *,
+    direction: DirectionDocument,
+    direction_sha256: str,
+    project_id: str,
+    source_asset_id: str,
+    candidate_id: str,
     audio_mix: TreatmentAudioMixResult | None,
-) -> str:
-    if direction is None:
-        return ""
-    return advanced_fingerprint(
-        {
-            "treatment_fingerprint": direction.treatment_fingerprint or "",
-            "audio_mix": None if audio_mix is None else audio_mix.model_dump(mode="json"),
-        }
+    actor: str,
+) -> TreatmentEvidenceBundle:
+    from clipforge.editorial.presets import PresetCatalog
+    from clipforge.hero.treatment_policy import evaluate_treatment_policy
+
+    selected = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    policy = PresetCatalog.load().find(direction.preset_id or "clean_explainer").treatment_policy
+    receipts = [
+        TreatmentAssetReceipt(
+            placement_id=placement.placement_id,
+            request_id=placement.request_id or "unbound",
+            asset_id=placement.asset_id,
+            kind=placement.kind,
+            interval=placement.interval,
+            source_in_us=placement.source_in_us,
+            provider_response_sha256=placement.provider_response_sha256 or "0" * 64,
+            selection_id=placement.selection_id or "unbound",
+            acquisition_id=placement.acquisition_id or "unbound",
+            license_evidence_sha256=placement.license_evidence_sha256 or "0" * 64,
+            registered_asset_sha256=placement.registered_asset_sha256 or "0" * 64,
+            observation_id=placement.observation_id,
+            observation_sha256=placement.observation_sha256,
+        )
+        for placement in selected.asset_placements
+    ]
+    findings = [
+        TreatmentPolicyFinding(**item.model_dump(mode="json"))
+        for item in evaluate_treatment_policy(selected, policy)
+    ]
+    return TreatmentEvidenceBundle(
+        bundle_id=stable_id(
+            "treatment-evidence", direction.direction_id, direction.treatment_fingerprint or ""
+        ),
+        project_id=project_id,
+        source_asset_id=source_asset_id,
+        candidate_id=candidate_id,
+        direction_id=direction.direction_id,
+        direction_sha256=direction_sha256,
+        treatment_fingerprint=direction.treatment_fingerprint or treatment_fingerprint(selected),
+        decisions=selected.treatment_decisions,
+        asset_receipts=receipts,
+        policy_findings=findings,
+        audio_mix=audio_mix,
+        created_at=direction.provenance.created_at,
+        provenance=ArtifactProvenance(
+            created_at=direction.provenance.created_at,
+            created_by=actor,
+            tool="clipforge advanced treatment evidence",
+            tool_version=__version__,
+            source_asset_ids=[source_asset_id],
+            parent_artifact_ids=[direction.direction_id],
+            inputs_sha256=direction_sha256,
+        ),
     )
 
 
@@ -1209,62 +1320,47 @@ def _validate_treatment_event_consistency(
     motion_graphics: list[MotionGraphicEvent],
 ) -> None:
     """Reject render events that a treatment decision omitted or blocked."""
-    if direction is None or direction.direction_recipe_version != "direction-v3":
+    if direction is None or direction.direction_recipe_version not in {"direction-v3", "direction-v4"}:
         return
     option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
-    decisions = option.treatment_decisions
-    allowed_camera = {
-        event_id
-        for decision in decisions
-        if decision.camera.state == "use"
-        for event_id in decision.camera.event_ids
+    from clipforge.hero.treatment_policy import treatment_event_ownership
+
+    errors = treatment_event_ownership(option)
+    if errors:
+        raise MediaError("; ".join(item.message for item in errors))
+    expected = {
+        "camera": [
+            stable_id("direction-camera", direction.direction_id, item.motion_id)
+            for item in option.camera_motion
+        ],
+        "transition": [
+            stable_id("transition", direction.candidate_id, item.transition_id) for item in option.transitions
+        ],
+        "broll": [
+            stable_id("broll", direction.candidate_id, item.asset_id, item.placement_id)
+            for item in option.asset_placements
+            if item.kind == "graphic"
+        ],
+        "sfx": [
+            stable_id("sfx", direction.candidate_id, item.asset_id, item.placement_id)
+            for item in option.asset_placements
+            if item.kind == "audio"
+        ],
+        "motion_graphics": [
+            stable_id("direction-graphic", direction.direction_id, item.graphic_id)
+            for item in option.motion_graphics
+        ],
     }
-    actual_camera = {
-        event_id for event in camera_motion for event_id in option_camera_id(direction, event.event_id)
+    actual = {
+        "camera": [item.event_id for item in camera_motion],
+        "transition": [item.event_id for item in transitions],
+        "broll": [item.event_id for item in broll],
+        "sfx": [item.event_id for item in sfx],
+        "motion_graphics": [item.event_id for item in motion_graphics],
     }
-    if actual_camera != allowed_camera:
-        raise MediaError("camera render events do not match treatment decisions")
-    allowed_transitions = {
-        event_id
-        for decision in decisions
-        if decision.transition.state == "use"
-        for event_id in decision.transition.event_ids
-    }
-    actual_transitions = {
-        item.transition_id
-        for item in option.transitions
-        if stable_id("transition", direction.candidate_id, item.transition_id)
-        in {event.event_id for event in transitions}
-    }
-    if actual_transitions != allowed_transitions:
-        raise MediaError("transition render events do not match treatment decisions")
-    placement_by_id = {item.placement_id: item for item in option.asset_placements}
-    for layer, events in (("broll", broll), ("sfx", sfx)):
-        allowed = {
-            event_id
-            for decision in decisions
-            if getattr(decision, layer).state == "use"
-            for event_id in getattr(decision, layer).event_ids
-        }
-        actual = {
-            placement_id
-            for placement_id, placement in placement_by_id.items()
-            if placement.kind == ("graphic" if layer == "broll" else "audio")
-            and stable_id(layer, direction.candidate_id, placement.asset_id, placement_id)
-            in {event.event_id for event in events}
-        }
-        if actual != allowed:
+    for layer, ids in expected.items():
+        if Counter(ids) != Counter(actual[layer]):
             raise MediaError(f"{layer} render events do not match treatment decisions")
-
-
-def option_camera_id(direction: DirectionDocument, event_id: str) -> set[str]:
-    """Map a render camera id back to its direction motion id."""
-    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
-    return {
-        item.motion_id
-        for item in option.camera_motion
-        if stable_id("direction-camera", direction.direction_id, item.motion_id) == event_id
-    }
 
 
 def _tags_support_note(tags: tuple[str, ...], note: str) -> bool:

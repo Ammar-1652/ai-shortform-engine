@@ -12,6 +12,10 @@ round-2 implementation against its own acceptance criteria.
 This status is intentional. Passing local tests, completing a code slice, or
 having a draft PR does not authorize changing this plan to `COMPLETE`.
 
+**Implementation checkpoint:** R3-1 through R3-5 now have code paths and
+targeted regression coverage in the working tree. Full exact-head validation,
+generic provider-backed media proof, and CI confirmation remain open gates.
+
 ## Review findings
 
 ### R3-1 — Persist and consume the bound treatment revision

@@ -15,7 +15,12 @@ from pydantic import AwareDatetime, Field, model_validator
 from clipforge.schemas.common import EntityId, Microseconds, Versioned
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
-from clipforge.schemas.treatment import BeatTreatmentDecision, TreatmentAssetRequest, TreatmentAssetVerification
+from clipforge.schemas.treatment import (
+    BeatTreatmentDecision,
+    TreatmentAssetObservation,
+    TreatmentAssetRequest,
+    TreatmentAssetVerification,
+)
 
 _SHA = r"^[0-9a-f]{64}$"
 
@@ -174,6 +179,8 @@ class DirectionAssetPlacement(Versioned):
     acquisition_id: EntityId | None = None
     license_evidence_sha256: str | None = Field(default=None, pattern=_SHA)
     registered_asset_sha256: str | None = Field(default=None, pattern=_SHA)
+    observation_id: EntityId | None = None
+    observation_sha256: str | None = Field(default=None, pattern=_SHA)
     asset_status: Literal["pending", "selected", "acquired", "blocked", "unavailable"] = "acquired"
 
 
@@ -184,8 +191,65 @@ class TreatmentAssetBindingDocument(Versioned):
     request: TreatmentAssetRequest
     placement: DirectionAssetPlacement
     verification: TreatmentAssetVerification
+    observation: TreatmentAssetObservation | None = None
     created_at: AwareDatetime
     provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def evidence_matches(self) -> Self:
+        request, placement, checked = self.request, self.placement, self.verification
+        if request.status != "acquired" or placement.asset_status != "acquired":
+            raise ValueError("treatment binding requires an acquired request and placement")
+        if placement.request_id != request.request_id or placement.asset_id != request.registered_asset_id:
+            raise ValueError("treatment binding request and placement disagree")
+        for name in (
+            "provider_response_sha256",
+            "selection_id",
+            "acquisition_id",
+            "license_evidence_sha256",
+            "registered_asset_sha256",
+        ):
+            if getattr(request, name) != getattr(placement, name) or getattr(request, name) != getattr(
+                checked, name
+            ):
+                raise ValueError(f"treatment binding {name} disagrees")
+        if checked.registered_asset_id != placement.asset_id or checked.media_kind != placement.kind:
+            raise ValueError("treatment binding verified asset or kind disagrees")
+        if self.observation is not None and (
+            placement.kind != "graphic"
+            or self.observation.asset_id != placement.asset_id
+            or placement.observation_id != self.observation.observation_id
+        ):
+            raise ValueError("treatment observation does not match the visual placement")
+        if self.observation is not None and placement.observation_sha256 is None:
+            raise ValueError("treatment visual placement is missing its observation hash")
+        if placement.kind != request.kind or checked.provider not in request.provider_classes:
+            raise ValueError("treatment binding kind or provider was not requested")
+        if (
+            placement.interval.output_start_us < request.interval.output_start_us
+            or placement.interval.output_end_us > request.interval.output_end_us
+            or not set(placement.source_evidence_ids).issubset(request.source_evidence_ids)
+        ):
+            raise ValueError("treatment binding placement escapes the requested beat")
+        return self
+
+
+class TreatmentBindingReference(Versioned):
+    binding_id: EntityId
+    relative_path: str = Field(pattern=r"^editorial/treatment-bindings/[A-Za-z0-9._:-]+\.json$")
+    sha256: str = Field(pattern=_SHA)
+
+
+class DirectionTreatmentRevision(Versioned):
+    parent_direction_id: EntityId
+    parent_direction_sha256: str = Field(pattern=_SHA)
+    bindings: list[TreatmentBindingReference] = Field(min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def unique_bindings(self) -> Self:
+        if len({item.binding_id for item in self.bindings}) != len(self.bindings):
+            raise ValueError("direction revision binding ids must be unique")
+        return self
 
 
 class DirectionMotionGraphic(Versioned):
@@ -494,7 +558,12 @@ class DirectionDocument(Versioned):
     style_id: DirectionStyleId
     style_fingerprint: str = Field(pattern=_SHA)
     safe_region_id: SafeRegionId = "platform-resilient-portrait-v1"
-    direction_recipe_version: Literal["direction-v1", "direction-v2", "direction-v3"] = "direction-v2"
+    direction_recipe_version: Literal["direction-v1", "direction-v2", "direction-v3", "direction-v4"] = (
+        "direction-v2"
+    )
+    treatment_revision: DirectionTreatmentRevision | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     treatment_fingerprint: str | None = Field(default=None, pattern=_SHA)
     motion_catalog_sha256: str | None = Field(
         default=None, pattern=_SHA, exclude_if=lambda value: value is None
@@ -527,10 +596,18 @@ class DirectionDocument(Versioned):
             raise ValueError("selected direction preset does not match the selected option")
         if self.direction_recipe_version == "direction-v2" and selected.context_line is None:
             raise ValueError("direction-v2 requires one reviewed upper context line")
-        if self.direction_recipe_version == "direction-v3" and len(selected.treatment_decisions) != len(
-            selected.beats
+        if self.direction_recipe_version in {"direction-v3", "direction-v4"} and len(
+            selected.treatment_decisions
+        ) != len(selected.beats):
+            raise ValueError("treatment direction requires decisions for every selected beat")
+        if (
+            self.direction_recipe_version == "direction-v4"
+            and selected.asset_placements
+            and self.treatment_revision is None
         ):
-            raise ValueError("direction-v3 requires treatment decisions for every selected beat")
+            raise ValueError("direction-v4 asset placements require a verified treatment revision")
+        if self.treatment_revision is not None and self.direction_recipe_version != "direction-v4":
+            raise ValueError("treatment revisions require direction-v4")
         if self.safe_region_id == "platform-resilient-portrait-v1":
             for graphic in selected.motion_graphics:
                 if graphic.y < 270 or graphic.y + graphic.height > 1320:

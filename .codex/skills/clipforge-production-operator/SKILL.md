@@ -78,8 +78,11 @@ while retiring the prior release. Admission never approves a video artifact.
   `clipforge editorial treatment bind-asset --provider PROVIDER
   --project-id PROJECT --source-asset-id SOURCE`. The command revalidates the
   existing provider/acquisition/license/catalog records and byte hash before
-  binding. A request or provider search alone never makes media eligible for a
-  render.
+  binding. For visual assets, inspect decoded frames with
+  `clipforge editorial treatment observe-asset`, pass the resulting observation
+  to `bind-asset --observation`, then publish the immutable direction revision
+  with `clipforge editorial treatment revise-direction --binding BINDING`.
+  A request or provider search alone never makes media eligible for a render.
 - Encoding uses `hero advanced render`; an interrupted run resumes only from
   matching receipts. QA uses `qa run` and `qa gate`.
 - Clean Advanced plans create a pilot receipt during planning. Verify it with

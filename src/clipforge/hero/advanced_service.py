@@ -121,7 +121,11 @@ from clipforge.schemas.campaign import (
     TarteelSpeechReview,
 )
 from clipforge.schemas.caption_evidence import CaptionAudioCoverageReport
-from clipforge.schemas.direction import DirectionDocument, DirectionTransitionSpec
+from clipforge.schemas.direction import (
+    DirectionDocument,
+    DirectionTransitionSpec,
+    TreatmentAssetBindingDocument,
+)
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
@@ -744,7 +748,7 @@ def render_advanced_drafts(
             )
             _require_plan_binding(database, plan, context, allow_unapproved=draft_only)
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
-            _require_production_direction(plan, renderer, inputs.pair.workspace)
+            _require_production_direction(plan, renderer, inputs.pair.workspace, database=database)
         if (
             narration_artifact_id is None
             and not force
@@ -1113,6 +1117,7 @@ def _require_production_direction(
     plan: AdvancedHeroPlanDocument,
     renderer: AdvancedRenderBackend,
     workspace: SourceWorkspace | None = None,
+    database: Database | None = None,
 ) -> None:
     """Fail closed before a real Remotion render can use unsafe defaults.
 
@@ -1137,6 +1142,91 @@ def _require_production_direction(
             raise MediaError(f"clean Advanced Hero production direction is invalid: {exc}") from exc
         if direction.direction_id != plan.direction_id or direction.style_id != plan.style_id:
             raise MediaError("clean Advanced Hero production direction does not match the plan")
+        if direction.direction_recipe_version == "direction-v4" and direction.treatment_revision is not None:
+            selected_for_bindings = next(
+                item for item in direction.options if item.option_id == direction.selected_option_id
+            )
+            selected_request_ids = {
+                request.request_id
+                for decision in selected_for_bindings.treatment_decisions
+                for request in decision.asset_requests
+            }
+            selected_placement_ids = {item.placement_id for item in selected_for_bindings.asset_placements}
+            selected_graphic_ids = {
+                item.placement_id for item in selected_for_bindings.asset_placements if item.kind == "graphic"
+            }
+            binding_placement_ids: set[str] = set()
+            for reference in direction.treatment_revision.bindings:
+                binding_path = confine_work_path(
+                    workspace.root, reference.relative_path, label="treatment binding"
+                )
+                if (
+                    binding_path.is_symlink()
+                    or not binding_path.is_file()
+                    or sha256_file(binding_path) != reference.sha256
+                ):
+                    raise MediaError("clean Advanced Hero treatment binding is missing or stale")
+                try:
+                    binding = TreatmentAssetBindingDocument.model_validate_json(
+                        binding_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+                    raise MediaError("clean Advanced Hero treatment binding is invalid") from exc
+                if (
+                    binding.binding_id != reference.binding_id
+                    or binding.request.request_id not in selected_request_ids
+                    or binding.placement.placement_id not in selected_placement_ids
+                ):
+                    raise MediaError("clean Advanced Hero treatment binding is not in the selected direction")
+                binding_placement_ids.add(binding.placement.placement_id)
+                if binding.placement.kind == "graphic":
+                    if (
+                        binding.observation is None
+                        or not binding.placement.observation_id
+                        or not binding.placement.observation_sha256
+                    ):
+                        raise MediaError(
+                            "clean Advanced Hero visual treatment is missing decoded observation evidence"
+                        )
+                    if binding.observation.observation_id != binding.placement.observation_id:
+                        raise MediaError("clean Advanced Hero visual observation id is stale")
+                    if binding.observation.media_sha256 != binding.verification.registered_asset_sha256:
+                        raise MediaError("clean Advanced Hero visual observation bytes are stale")
+                    if binding.observation.source_asset_id != plan.source_asset_id:
+                        raise MediaError("clean Advanced Hero visual observation source is stale")
+                    for frame in binding.observation.frames:
+                        frame_path = confine_work_path(
+                            workspace.root, frame.relative_path, label="treatment observation frame"
+                        )
+                        if (
+                            frame_path.is_symlink()
+                            or not frame_path.is_file()
+                            or sha256_file(frame_path) != frame.sha256
+                        ):
+                            raise MediaError("clean Advanced Hero visual observation frame is missing or stale")
+                if database is not None:
+                    from clipforge.hero.treatment_assets import verify_registered_treatment_asset
+
+                    checked = verify_registered_treatment_asset(
+                        work_root=workspace.root,
+                        database=database,
+                        project_id=plan.project_id,
+                        source_asset_id=plan.source_asset_id,
+                        provider=binding.verification.provider,
+                        provider_response_sha256=binding.verification.provider_response_sha256,
+                        selection_id=binding.verification.selection_id,
+                        acquisition_id=binding.verification.acquisition_id,
+                        license_evidence_sha256=binding.verification.license_evidence_sha256,
+                        registered_asset_id=binding.verification.registered_asset_id,
+                        registered_asset_sha256=binding.verification.registered_asset_sha256,
+                        media_kind=binding.verification.media_kind,
+                    )
+                    if checked != binding.verification:
+                        raise MediaError("clean Advanced Hero treatment provider evidence is stale")
+            if binding_placement_ids != selected_graphic_ids | {
+                item.placement_id for item in selected_for_bindings.asset_placements if item.kind == "audio"
+            }:
+                raise MediaError("clean Advanced Hero treatment revision does not cover all asset placements")
         effective_direction = direction
         if plan.editorial_arc_id:
             review_only = plan.hero_review_status == "pending"
@@ -1465,6 +1555,7 @@ def _render_run(
             direction_sha256=plan.direction_sha256,
             treatment_fingerprint=plan.treatment_fingerprint,
             treatment_evidence_sha256=plan.treatment_evidence_sha256,
+            treatment_evidence_relative_path=plan.treatment_evidence_relative_path,
             treatment_audio_mix=plan.treatment_audio_mix,
             preset_id=plan.preset_id,
             pilot_sha256=pilot_sha256,
@@ -1742,6 +1833,7 @@ def _render_run(
                 direction_sha256=plan.direction_sha256,
                 treatment_fingerprint=plan.treatment_fingerprint,
                 treatment_evidence_sha256=plan.treatment_evidence_sha256,
+                treatment_evidence_relative_path=plan.treatment_evidence_relative_path,
                 treatment_audio_mix=plan.treatment_audio_mix,
                 preset_id=plan.preset_id,
                 motion_recipe_ids=plan.motion_recipe_ids,
@@ -2860,7 +2952,8 @@ def _require_plan_binding(
         )
         expected_transition_style = _effective_transition_style(
             "",
-            direction.direction_recipe_version != "direction-v3" or bool(direction_transition_specs),
+            direction.direction_recipe_version not in {"direction-v3", "direction-v4"}
+            or bool(direction_transition_specs),
         )
     elif not plan.editorial_arc_id:
         expected_transition_style = _effective_transition_style("", False)

@@ -1779,7 +1779,14 @@
         },
         "speech_overlap_windows": {
           "items": {
-            "$ref": "#/$defs/OutputInterval"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputInterval"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "maxItems": 32,
           "title": "Speech Overlap Windows",
@@ -2393,6 +2400,12 @@
         }
       ],
       "default": null
+    },
+    "treatment_evidence_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Treatment Evidence Relative Path",
+      "type": "string"
     },
     "treatment_evidence_sha256": {
       "default": "",

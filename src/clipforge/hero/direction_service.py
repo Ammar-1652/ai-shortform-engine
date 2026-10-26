@@ -7,7 +7,9 @@ the renderer can consume them.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
 
@@ -20,12 +22,174 @@ from clipforge.hero.motion_style import production_style_ids, style_for_id
 from clipforge.hero.treatment import materialize_treatment, treatment_fingerprint
 from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
-from clipforge.schemas.direction import DirectionDocument, DirectionOption
+from clipforge.schemas.direction import (
+    DirectionDocument,
+    DirectionOption,
+    DirectionTreatmentRevision,
+    TreatmentAssetBindingDocument,
+    TreatmentBindingReference,
+)
 from clipforge.schemas.editorial_knowledge import EditorialDecisionTrace
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.time import TimeMapDocument
 from clipforge.storage import Database
 from clipforge.transcription.io import publish_json
+
+
+def apply_treatment_bindings(
+    document: DirectionDocument,
+    bindings: Sequence[TreatmentAssetBindingDocument],
+    *,
+    parent_direction_sha256: str,
+    binding_paths: Sequence[tuple[str, str, str]],
+) -> DirectionDocument:
+    """Replace pending requests with verified acquisitions in the selected option.
+
+    No caller edits a persisted direction or inserts a placement by hand. A
+    binding may fulfill one pending/selected request, or repeat an identical
+    acquisition. A changed request intent or previously acquired asset fails.
+    The service verifies file/provider evidence before calling this pure step.
+    """
+    from clipforge.schemas.treatment import BrollTreatmentDecision, SfxTreatmentDecision
+
+    if document.direction_recipe_version not in {"direction-v3", "direction-v4"}:
+        raise MediaError("treatment revisions require a direction-v3 or direction-v4 parent")
+    if not bindings or len(bindings) != len(binding_paths):
+        raise MediaError("treatment bindings and paths must be non-empty and aligned")
+    if [item.binding_id for item in bindings] != [item[0] for item in binding_paths]:
+        raise MediaError("treatment binding identities do not match their path references")
+    by_request = {item.request.request_id: item for item in bindings}
+    if len(by_request) != len(bindings) or len({item.binding_id for item in bindings}) != len(bindings):
+        raise MediaError("treatment binding ids and requests must be unique")
+    selected = next(item for item in document.options if item.option_id == document.selected_option_id)
+    requests = {
+        request.request_id: request
+        for decision in selected.treatment_decisions
+        for request in decision.asset_requests
+    }
+    placements = list(selected.asset_placements)
+    excluded = {
+        "status",
+        "provider_response_sha256",
+        "selection_id",
+        "acquisition_id",
+        "license_evidence_sha256",
+        "registered_asset_id",
+        "registered_asset_sha256",
+    }
+    for request_id, binding in by_request.items():
+        original = requests.get(request_id)
+        if original is None:
+            raise MediaError("treatment binding names no request in the selected option")
+        if original.model_dump(exclude=excluded) != binding.request.model_dump(exclude=excluded):
+            raise MediaError("treatment binding changed the requested editorial intent")
+        if document.source_asset_id not in binding.provenance.source_asset_ids:
+            raise MediaError("treatment binding source provenance is stale")
+        if original.status not in {"pending", "selected", "acquired"}:
+            raise MediaError("treatment binding cannot revive a blocked or unavailable request")
+        if original.status == "selected" and (
+            original.provider_response_sha256 != binding.request.provider_response_sha256
+            or original.selection_id != binding.request.selection_id
+        ):
+            raise MediaError("treatment binding changed the prior selection")
+        if original.status == "acquired" and original != binding.request:
+            raise MediaError("an acquired request is immutable; create a new request")
+        conflicts = [
+            item
+            for item in placements
+            if item.placement_id == binding.placement.placement_id or item.request_id == request_id
+        ]
+        if conflicts and conflicts != [binding.placement]:
+            raise MediaError("treatment placement conflicts with an existing acquisition")
+        if not conflicts:
+            placements.append(binding.placement)
+    decisions = []
+    for decision in selected.treatment_decisions:
+        updates: dict[str, object] = {
+            "asset_requests": [
+                by_request[request.request_id].request if request.request_id in by_request else request
+                for request in decision.asset_requests
+            ]
+        }
+        for kind, layer_name in (("graphic", "broll"), ("audio", "sfx")):
+            fulfilled = [
+                binding
+                for binding in bindings
+                if binding.request.beat_id == decision.beat_id and binding.request.kind == kind
+            ]
+            if not fulfilled:
+                continue
+            prior = getattr(decision, layer_name)
+            if prior.state == "blocked_by_policy":
+                raise MediaError("treatment binding cannot override a campaign policy block")
+            layer_payload = prior.model_dump(mode="json")
+            layer_payload.update(
+                state="use",
+                omission_reason=None,
+                purpose=fulfilled[0].placement.purpose,
+                rationale="Provider and rights evidence verified for this requested beat",
+                asset_request_ids=sorted(
+                    set([*prior.asset_request_ids, *[item.request.request_id for item in fulfilled]])
+                ),
+                event_ids=sorted(set([*prior.event_ids, *[item.placement.placement_id for item in fulfilled]])),
+                asset_ids=sorted(set([*prior.asset_ids, *[item.placement.asset_id for item in fulfilled]])),
+                role=fulfilled[0].request.role,
+            )
+            if kind == "graphic":
+                layer_payload["relevance_note"] = fulfilled[0].placement.relevance_note
+                updates[layer_name] = BrollTreatmentDecision.model_validate(layer_payload)
+            else:
+                layer_payload["gain_db"] = (
+                    fulfilled[0].placement.gain_db if fulfilled[0].placement.gain_db is not None else -18
+                )
+                updates[layer_name] = SfxTreatmentDecision.model_validate(layer_payload)
+        decisions.append(decision.model_copy(update=updates))
+    option = selected.model_copy(update={"asset_placements": placements, "treatment_decisions": decisions})
+    digest = treatment_fingerprint(option)
+    option = DirectionOption.model_validate(
+        {
+            **option.model_dump(mode="json"),
+            "treatment_decisions": [
+                item.model_copy(update={"dependency_fingerprint": digest}).model_dump(mode="json")
+                for item in decisions
+            ],
+        }
+    )
+    references = (
+        {}
+        if document.treatment_revision is None
+        else {item.binding_id: item for item in document.treatment_revision.bindings}
+    )
+    for binding_id, relative_path, sha256 in binding_paths:
+        reference = TreatmentBindingReference(binding_id=binding_id, relative_path=relative_path, sha256=sha256)
+        if binding_id in references and references[binding_id] != reference:
+            raise MediaError("treatment binding reference is immutable")
+        references[binding_id] = reference
+    payload = document.model_dump(mode="json")
+    payload.update(
+        direction_id=str(uuid.uuid4()),
+        direction_recipe_version="direction-v4",
+        options=[
+            option.model_dump(mode="json")
+            if item.option_id == selected.option_id
+            else item.model_dump(mode="json")
+            for item in document.options
+        ],
+        treatment_fingerprint=digest,
+        treatment_revision=DirectionTreatmentRevision(
+            parent_direction_id=document.direction_id,
+            parent_direction_sha256=parent_direction_sha256,
+            bindings=list(references.values()),
+        ).model_dump(mode="json"),
+        provenance=document.provenance.model_copy(
+            update={
+                "created_at": datetime.now(UTC),
+                "tool": "clipforge editorial treatment revise",
+                "inputs_sha256": parent_direction_sha256,
+            }
+        ).model_dump(mode="json"),
+    )
+    return DirectionDocument.model_validate(payload)
 
 
 def load_direction(
@@ -222,6 +386,114 @@ def save_direction_brief(
         publish_json(archive, document, root, context.workspace.partial_for(archive))
     publish_json(destination, document, root, context.workspace.partial_for(destination))
     return document, destination, sha256_file(destination)
+
+
+def revise_direction_with_treatment_bindings(
+    *,
+    database: Database,
+    source_asset_id: str,
+    candidate_id: str,
+    work_root: Path,
+    binding_paths: Sequence[Path],
+    allow_unapproved: bool = False,
+) -> tuple[DirectionDocument, Path, str]:
+    """Verify binding sidecars and publish the immutable direction-v4 revision."""
+    root = work_root.resolve()
+    from clipforge.hero.advanced_service import _context
+    from clipforge.hero.treatment_assets import verify_registered_treatment_asset
+    from clipforge.media.workspace import advanced_hero_lock
+
+    context = _context(
+        database,
+        source_asset_id,
+        candidate_id,
+        root,
+        require_hero_approval=not allow_unapproved,
+    )
+    with advanced_hero_lock(context.workspace):
+        loaded = load_direction(context.workspace, candidate_id, review_only=allow_unapproved)
+        if loaded is None:
+            raise MediaError("cannot revise a missing direction")
+        parent, parent_sha = loaded
+        for actual, expected in (
+            (parent.project_id, context.project_id),
+            (parent.source_sha256, context.source_sha256),
+            (parent.hero_plan_sha256, context.hero_plan_sha256),
+            (parent.time_map_sha256, context.hero_plan.edit_plan.time_map_sha256),
+            (parent.alignment_sha256, context.alignment_sha256),
+            (parent.visual_analysis_sha256, context.visual_sha256),
+        ):
+            if actual != expected:
+                raise MediaError("direction is stale against the current promoted evidence")
+        bindings: list[TreatmentAssetBindingDocument] = []
+        binding_refs: list[tuple[str, str, str]] = []
+        for path in binding_paths:
+            try:
+                relative = path.absolute().relative_to(root).as_posix()
+            except ValueError as exc:
+                raise MediaError("treatment binding is outside the work root") from exc
+            safe = confine_work_path(root, relative, label="treatment binding")
+            if safe.is_symlink() or not safe.is_file():
+                raise MediaError("treatment binding is missing or unsafe")
+            try:
+                binding = TreatmentAssetBindingDocument.model_validate_json(safe.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+                raise MediaError(f"invalid treatment binding: {safe}") from exc
+            if binding.provenance.source_asset_ids != [source_asset_id]:
+                raise MediaError("treatment binding source provenance is stale")
+            if binding.observation is not None:
+                if binding.placement.observation_sha256 is None:
+                    raise MediaError("treatment binding observation hash is missing")
+                for frame in binding.observation.frames:
+                    frame_path = confine_work_path(
+                        root, frame.relative_path, label="treatment observation frame"
+                    )
+                    if (
+                        frame_path.is_symlink()
+                        or not frame_path.is_file()
+                        or sha256_file(frame_path) != frame.sha256
+                    ):
+                        raise MediaError("treatment observation frame is missing or stale")
+            checked = verify_registered_treatment_asset(
+                work_root=root,
+                database=database,
+                project_id=parent.project_id,
+                source_asset_id=source_asset_id,
+                provider=binding.verification.provider,
+                provider_response_sha256=binding.verification.provider_response_sha256,
+                selection_id=binding.verification.selection_id,
+                acquisition_id=binding.verification.acquisition_id,
+                license_evidence_sha256=binding.verification.license_evidence_sha256,
+                registered_asset_id=binding.verification.registered_asset_id,
+                registered_asset_sha256=binding.verification.registered_asset_sha256,
+                media_kind=binding.verification.media_kind,
+            )
+            if checked != binding.verification:
+                raise MediaError("treatment binding provider evidence is stale")
+            bindings.append(binding)
+            binding_refs.append((binding.binding_id, relative, sha256_file(safe)))
+        revised = apply_treatment_bindings(
+            parent,
+            bindings,
+            parent_direction_sha256=parent_sha,
+            binding_paths=binding_refs,
+        )
+        destination = (
+            context.workspace.advanced_review_direction_file(candidate_id)
+            if allow_unapproved
+            else context.workspace.direction_file(candidate_id)
+        )
+        if allow_unapproved:
+            context.workspace.prepare_advanced_review_file(destination)
+        else:
+            context.workspace.prepare_advanced_file(destination)
+        archive = destination.parent / "directions" / f"{revised.direction_id}.json"
+        if archive.exists():
+            raise MediaError("direction revision id already exists")
+        confine_work_path(root, archive.relative_to(root).as_posix(), label="direction revision")
+        publish_json(archive, revised, root, context.workspace.partial_for(archive))
+        publish_json(destination, revised, root, context.workspace.partial_for(destination))
+        return revised, destination, sha256_file(destination)
 
 
 def _select(document: DirectionDocument, style: str) -> DirectionOption:

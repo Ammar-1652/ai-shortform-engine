@@ -445,6 +445,14 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         status=status,
         treatment_fingerprint=next(iter(treatment_fingerprints), ""),
         treatment_evidence_sha256=next(iter(treatment_evidence_fingerprints), ""),
+        treatment_evidence_relative_path=next(
+            (
+                plan.treatment_evidence_relative_path
+                for plan in prepared.plans
+                if plan.treatment_evidence_relative_path
+            ),
+            "",
+        ),
         # The evidence digest covers the complete direction option, request
         # bindings, collision/omission receipts, and the audio mix.  Keep the
         # legacy field name for compatibility, but never substitute the audio

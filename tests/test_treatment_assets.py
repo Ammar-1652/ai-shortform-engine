@@ -9,7 +9,9 @@ from clipforge.hero.treatment_assets import (
     bind_placement_to_request,
     select_treatment_request,
 )
-from clipforge.schemas.direction import DirectionAssetPlacement
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+)
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import TreatmentAssetRequest, TreatmentAssetVerification
 

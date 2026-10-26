@@ -44,6 +44,7 @@ from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.jobs import QACheck, QAStatus
 from clipforge.schemas.qa import ViewerEvidenceBundle
 from clipforge.schemas.render_checkpoint import AdvancedRenderAuthorization
+from clipforge.schemas.treatment import TreatmentEvidenceBundle
 from clipforge.storage import Database
 
 
@@ -518,6 +519,52 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
         )
         if selected is None:
             return _check("direction", False, f"candidate={plan.candidate_id} blocker=selection_missing")
+        if direction.direction_recipe_version in {"direction-v3", "direction-v4"}:
+            from clipforge.editorial.presets import PresetCatalog
+            from clipforge.hero.treatment_policy import evaluate_treatment_policy
+
+            policy = PresetCatalog.load().find(direction.preset_id or "clean_explainer").treatment_policy
+            findings = [
+                item for item in evaluate_treatment_policy(selected, policy) if item.severity == "error"
+            ]
+            if findings:
+                return _check(
+                    "direction",
+                    False,
+                    f"candidate={plan.candidate_id} blocker=treatment_policy:{findings[0].code}",
+                )
+        if plan.treatment_fingerprint:
+            if not plan.treatment_evidence_relative_path:
+                return _check(
+                    "direction", False, f"candidate={plan.candidate_id} blocker=treatment_evidence_path_missing"
+                )
+            bundle_path = confine_work_path(
+                inputs.root, plan.treatment_evidence_relative_path, label="treatment evidence bundle"
+            )
+            if (
+                bundle_path.is_symlink()
+                or not bundle_path.is_file()
+                or sha256_file(bundle_path) != plan.treatment_evidence_sha256
+            ):
+                return _check(
+                    "direction", False, f"candidate={plan.candidate_id} blocker=treatment_evidence_stale"
+                )
+            try:
+                bundle = TreatmentEvidenceBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValidationError, ValueError):
+                return _check(
+                    "direction", False, f"candidate={plan.candidate_id} blocker=treatment_evidence_invalid"
+                )
+            if (
+                bundle.direction_id != plan.direction_id
+                or bundle.direction_sha256 != plan.direction_sha256
+                or bundle.treatment_fingerprint != plan.treatment_fingerprint
+            ):
+                return _check(
+                    "direction",
+                    False,
+                    f"candidate={plan.candidate_id} blocker=treatment_evidence_binding_stale",
+                )
         if plan.motion_recipe_ids != selected.motion_recipe_ids:
             return _check(
                 "direction", False, f"candidate={plan.candidate_id} blocker=motion_recipe_selection_stale"
@@ -658,6 +705,7 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                         or bundle.style_fingerprint != plan.style_fingerprint
                         or bundle.treatment_fingerprint != plan.treatment_fingerprint
                         or bundle.treatment_evidence_sha256 != plan.treatment_evidence_sha256
+                        or bundle.treatment_evidence_relative_path != plan.treatment_evidence_relative_path
                     ):
                         raise MediaError("viewer evidence is bound to a different artifact")
                     auth_path = evidence_path.parent.parent / "authorization.json"
