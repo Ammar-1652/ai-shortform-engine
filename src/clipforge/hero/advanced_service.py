@@ -29,6 +29,7 @@ from clipforge.campaign.overlays import (
 )
 from clipforge.campaign.quran import (
     canonicalize_quran_alignment,
+    load_codex_speech_review,
     load_tarteel_quran_review,
     load_tarteel_speech_review,
     quran_review_for_alignment,
@@ -37,6 +38,7 @@ from clipforge.campaign.quran import (
 )
 from clipforge.campaign.speech import (
     apply_arabic_corrections,
+    apply_speech_review_emojis,
     load_arabic_corrections,
     retained_recitation,
     validate_speech_captions,
@@ -446,6 +448,17 @@ def plan_advanced_candidate(
             quran_review_id = f"quran-{quran_review_sha256[:24]}"
             if quran_review.verification_policy.font_identity != "amiri-quran-local-v1":
                 raise MediaError("Tarteel Quran review must bind the local Amiri Quran font")
+    else:
+        loaded_speech = load_codex_speech_review(
+            root,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            source_sha256=context.source_sha256,
+            raw_asr_sha256=context.alignment.asr_audio_sha256,
+            transcript_sha256=context.alignment.transcript_sha256,
+        )
+        if loaded_speech is not None:
+            speech_review, speech_review_sha256, _speech_path = loaded_speech
     render_alignment = context.alignment
     render_hero_plan = context.hero_plan
     render_direction = stored_direction
@@ -586,9 +599,15 @@ def plan_advanced_candidate(
             time_map=render_hero_plan.edit_plan.time_map,
             captions=plan.captions,
         )
+        reviewed_captions = apply_speech_review_emojis(
+            speech_review,
+            plan.captions,
+            time_map=render_hero_plan.edit_plan.time_map,
+        )
         plan = AdvancedHeroPlanDocument.model_validate(
             {
                 **plan.model_dump(mode="json"),
+                "captions": reviewed_captions,
                 "speech_review_sha256": speech_review_sha256,
                 "arabic_corrections_sha256": arabic_corrections_sha256,
                 "caption_alignment_sha256": hashlib.sha256(
@@ -1379,6 +1398,15 @@ def _render_run(
             if speech_review is not None:
                 validate_tarteel_speech_review_ranges(speech_review[0], source_ranges)
             speech_reviews[candidate_id] = speech_review
+        elif plan.speech_review_sha256:
+            speech_reviews[candidate_id] = load_codex_speech_review(
+                root,
+                source_asset_id=source_asset_id,
+                candidate_id=candidate_id,
+                source_sha256=plan.source_sha256,
+                raw_asr_sha256=inputs.asr_sha256,
+                transcript_sha256=inputs.pair.transcript_sha256,
+            )
         if narration is not None:
             _link(narration[1], staging / "narration.wav", root)
             staged["narration"] = "narration.wav"
@@ -2634,20 +2662,37 @@ def _reviewed_caption_alignment(plan: AdvancedHeroPlanDocument, context: _Contex
         alignment = canonicalize_quran_alignment(alignment, render_review)
     if hashlib.sha256(dump_json(alignment).encode("utf-8")).hexdigest() != plan.caption_alignment_sha256:
         raise MediaError("advanced plan is stale: reviewed caption alignment changed")
-    speech = load_tarteel_speech_review(
-        root,
-        source_asset_id=plan.source_asset_id,
-        candidate_id=plan.candidate_id,
-        source_sha256=plan.source_sha256,
-        raw_asr_sha256=alignment.asr_audio_sha256,
-        transcript_sha256=alignment.transcript_sha256,
+    speech = (
+        load_tarteel_speech_review(
+            root,
+            source_asset_id=plan.source_asset_id,
+            candidate_id=plan.candidate_id,
+            source_sha256=plan.source_sha256,
+            raw_asr_sha256=alignment.asr_audio_sha256,
+            transcript_sha256=alignment.transcript_sha256,
+        )
+        if plan.campaign_overlay is not None
+        else load_codex_speech_review(
+            root,
+            source_asset_id=plan.source_asset_id,
+            candidate_id=plan.candidate_id,
+            source_sha256=plan.source_sha256,
+            raw_asr_sha256=alignment.asr_audio_sha256,
+            transcript_sha256=alignment.transcript_sha256,
+        )
     )
     if speech is None or speech[1] != plan.speech_review_sha256 or plan.time_map is None:
         raise MediaError("advanced plan is stale: reviewed speech inventory is missing or changed")
     if retained_recitation(speech[0], plan.time_map) and not plan.quran_review_sha256:
         raise MediaError("retained Quran recitation requires canonical review evidence")
     validate_speech_captions(speech[0], alignment=alignment, time_map=plan.time_map, captions=plan.captions)
-    if _captions(alignment, plan.candidate_id, style_id=plan.style_id) != plan.captions:
+    expected_captions = _captions(alignment, plan.candidate_id, style_id=plan.style_id)
+    expected_captions = apply_speech_review_emojis(
+        speech[0],
+        expected_captions,
+        time_map=plan.time_map,
+    )
+    if expected_captions != plan.captions:
         raise MediaError("advanced plan captions differ from reviewed display evidence")
     return alignment
 

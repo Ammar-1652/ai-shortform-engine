@@ -56,6 +56,14 @@ match. A checkpoint records progress; it cannot approve or deliver an artifact.
 - **Codex operator:** decides what the short should say and show. It selects
   source moments, hook/body/punch structure, caption corrections, framing,
   graphics, B-roll, SFX, and an allowlisted style. It invokes the tools below.
+- **Codex subtitle reviewer:** reviews every forced-word caption for grammatical
+  meaning and contextual meaning before Advanced rendering. It corrects only
+  through a typed review record bound to the source, transcript, ASR, alignment,
+  and TimeMap. For Quran, quotations, named facts, and other no-error subjects,
+  Codex verifies against a reliable source when needed and records the source
+  URL or hashed local snapshot. Clear laughter, surprise, excitement, sadness,
+  applause, or similar reactions receive an allowlisted emoji annotation when
+  the source supports that emotion; emojis never replace spoken words.
 - **Clipforge system:** executes typed plans and enforces rights, provenance,
   TimeMap synchronization, safe geometry, cache identity, stale evidence, QA,
   and delivery gates. It does not invent editorial choices.
@@ -84,6 +92,7 @@ check; previously rendered artifacts remain immutable.
 | Choose hook/body/punch cuts | typed `EditorialArcDocument` and `advanced plan --editorial-arc-file` | Ordered TimeMap and arc evidence |
 | Frame faces and important source content | `advanced plan --reframing` and typed crop windows | Hash-bound portrait transform |
 | Add captions | shared caption builders and Remotion `CaptionPlate` | Word-timed caption events |
+| Review subtitle meaning and context | `editorial captions review` with `campaign=generic` and `reviewer_role=codex_operator` | Hash-bound Codex speech inventory, corrections, sensitive-text checks, and emotion emoji annotations |
 | Add B-roll, images, fonts, or SFX | asset registration, license records, typed direction placements | Rights-cleared asset bindings |
 | Add illustrations and motion graphics | **Disabled by default**; only an explicit operator request may select an allowlisted Remotion event after policy review | Source-grounded graphics |
 | Add camera movement and transitions | typed `camera_motion` and `transitions` in the selected direction option | Bounded output-space camera events and word-safe transition events |
@@ -128,7 +137,9 @@ clip. The source meaning and campaign policy decide which preset is eligible.
 1. Read the campaign rules, rights, checkpoint, source metadata, transcript,
    visual analysis, existing artifacts, and relevant skill.
 2. Inspect source audio and picture. Do not trust raw ASR or old captions
-   blindly; retain observed text and source hashes.
+   blindly; retain observed text and source hashes. Codex must review every
+   caption for meaning and context, verify sensitive text with reliable
+   sources when needed, and annotate supported emotions with allowlisted emojis.
 3. Build the candidate and forced alignment, then choose a coherent
    hook/body/punch arc with speech-safe boundaries.
 4. Choose a preset and typed direction. Register every supporting asset and

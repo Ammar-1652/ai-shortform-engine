@@ -10,6 +10,7 @@ export type CaptionVariant = "body" | "hook" | "punch" | "typography";
 type CaptionPlateProps = {
   text: string;
   language: string;
+  emoji?: "📖" | "💡" | "🎯" | "✨" | "⚡" | "🧠" | "✅" | "🔎" | "🕌" | "😂" | "😮" | "😢" | "🤩" | "👏" | "❤️" | "🔥" | "😄";
   variant?: CaptionVariant;
   emphasisText?: string;
   activeWordId?: string;
@@ -54,7 +55,7 @@ export type CaptionStyle = Readonly<{
   max_scale_permille?: number;
 }>;
 
-export function CaptionPlate({ text, language, variant = "body", emphasisText, activeWordId, centeredLarge = false, maxLines, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
+export function CaptionPlate({ text, language, emoji, variant = "body", emphasisText, activeWordId, centeredLarge = false, maxLines, x, y, fontSize, style, layoutVersion = "caption-layout-v1", wordStatuses, emphasisStatus }: CaptionPlateProps) {
   const modern = layoutVersion === "caption-layout-v2";
   const safeMargins = {
     left: style?.safe_left ?? 64,
@@ -163,6 +164,7 @@ export function CaptionPlate({ text, language, variant = "body", emphasisText, a
             : "0 5px 18px rgba(0,0,0,0.28)",
         }}
       >
+        {emoji ? <span aria-hidden="true">{emoji} </span> : null}
         {lines.map((line, lineIndex) => {
           // Keep RTL and CJK as whole shaped runs. Splitting their characters
           // into independently styled spans can change joining, grapheme

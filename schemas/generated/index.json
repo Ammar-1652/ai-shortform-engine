@@ -217,6 +217,7 @@
     "QuranCaptionReview",
     "TarteelArabicCorrection",
     "TarteelArabicCorrectionDocument",
+    "SpeechVerification",
     "TarteelSpeechInterval",
     "TarteelSpeechReview",
     "TarteelDisplayCorrection",

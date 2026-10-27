@@ -38,6 +38,21 @@ that the source and any local assets are authorized. Outside media, music, and
 unsupported language claims remain prohibited even if a visual idea would be
 attractive.
 
+## Subtitle review is a Codex gate
+
+Before selecting a visual direction, Codex reviews the forced captions against
+the source moment. The review must answer two separate questions: “does this
+sentence mean something on its own?” and “does it mean the right thing in this
+scene?” A low-confidence or context-breaking phrase is corrected from the
+source or fails closed. Quran verses, quotations, names, numbers, and other
+no-error text are checked against a reliable source when necessary, with the
+verification URL or hashed local snapshot recorded. Clear source-supported
+emotion can receive an allowlisted emoji annotation, but the emoji is added
+beside the spoken words and never replaces them. Persist the result through
+`clipforge editorial captions review --review REVIEW.json` with
+`campaign=generic` and `reviewer_role=codex_operator`; the system binds its
+hash to the alignment and downstream render evidence.
+
 ## Produce a constrained brief
 
 Return a concise direction brief with:

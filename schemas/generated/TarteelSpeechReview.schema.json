@@ -88,6 +88,66 @@
       "title": "ArtifactProvenance",
       "type": "object"
     },
+    "SpeechVerification": {
+      "additionalProperties": false,
+      "description": "Codex evidence for text that must not be guessed.",
+      "properties": {
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Snapshot Sha256",
+          "type": "string"
+        },
+        "source_url": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "status": {
+          "const": "verified",
+          "default": "verified",
+          "title": "Status",
+          "type": "string"
+        },
+        "subject_kind": {
+          "enum": [
+            "quran",
+            "quotation",
+            "proper_noun",
+            "number",
+            "factual_claim"
+          ],
+          "title": "Subject Kind",
+          "type": "string"
+        },
+        "verification_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Verification Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verification_id",
+        "subject_kind",
+        "note"
+      ],
+      "title": "SpeechVerification",
+      "type": "object"
+    },
     "TarteelSpeechInterval": {
       "additionalProperties": false,
       "description": "Reviewed inventory of audible source material for caption coverage.",
@@ -163,10 +223,13 @@
     }
   },
   "additionalProperties": false,
-  "description": "Reviewed source speech inventory used to upgrade caption coverage.",
+  "description": "Codex-reviewed source speech inventory used to upgrade caption coverage.\n\nThe historical class name is retained for stored Tarteel documents. The\nsame source-bound contract is also valid for generic campaigns when\n``campaign=\"generic\"`` and ``reviewer_role=\"codex_operator\"``.",
   "properties": {
     "campaign": {
-      "const": "tarteel",
+      "enum": [
+        "tarteel",
+        "generic"
+      ],
       "title": "Campaign",
       "type": "string"
     },
@@ -251,6 +314,14 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Transcript Sha256",
       "type": "string"
+    },
+    "verifications": {
+      "items": {
+        "$ref": "#/$defs/SpeechVerification"
+      },
+      "maxItems": 32,
+      "title": "Verifications",
+      "type": "array"
     }
   },
   "required": [

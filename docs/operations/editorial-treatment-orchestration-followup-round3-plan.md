@@ -15,9 +15,8 @@ having a draft PR does not authorize changing this plan to `COMPLETE`.
 **Implementation checkpoint:** R3-1 through R3-5 have code paths, targeted
 failure coverage, a full validation run, and a real provider-backed Advanced
 Hero packet. R3-6 is technically exercised with a non-Tarteel campaign source,
-but its acceptance gates remain open because this packet has no independently
-reviewed speech inventory, no human final playback decision, no local delivery,
-and no CI runner result.
+and Codex subtitle-review evidence is now supported for generic campaigns.
+Human playback, local delivery, and CI remain separate gates.
 
 ### Execution ledger (implementation checkpoint)
 
@@ -32,7 +31,7 @@ render is still not a human final approval.
 | R3-3 | TECHNICALLY_VERIFIED | `df74bed` | Canonical aligned-word overlap is stored per SFX cue. Decoded-window RMS compares the encoded output against staged speech and SFX references, applies gain/duck policy, requires a non-negative margin, and records `decoded_window_signal_v2`; targeted tests cover v1 compatibility, v2 success, missing references, stale sidecars, resume restaging, and failure cases | Real measurement: `treatment-audio-measurement.json` sha256 `42ebf986d1d637cba550b152f56ba90db78103cb43e5e518c1d8d18819ee8cf9`; integrated `-17.1 LUFS`, true peak `-1.4 dBFS`, margins `12.78 dB` and `4.19 dB` | `qa verify` passes the evidence binding; `qa gate` remains blocked by separate caption speech inventory insufficiency; human listening is still required |
 | R3-4 | TECHNICALLY_VERIFIED | `df74bed` | `TreatmentEvidenceBundle` is persisted atomically and embeds validated provider/license receipts, observations, frame hashes, policy decisions, and measured audio facts; it remains hash-bound into render input/viewer evidence/QA/final-review/cache/delivery; schema export/check passes | Real bundle `var/round3-provider-proof/.../treatment-evidence.json` sha256 `84f60c498bc39e895502646c888f58311ca32569c564658c446ab9e1f7750268` | The bundle is readable and hash-bound; final review/delivery remain blocked by QA status and no human approval |
 | R3-5 | TECHNICALLY_VERIFIED | `df74bed` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events. The resume evidence path and bounded encoded-duration comparison are now covered by tests | Real render consumed exactly the selected treatment event set; no duplicate event receipt was accepted | Full automated validation passes; CI is still pending and independent code/visual review is still required |
-| R3-6 | TECHNICALLY_VERIFIED | `df74bed` | Provider-backed acquisition, rights, observation, revision, Remotion render, decoded evidence, QA verification, and delivery preflight paths are exercised by a real non-Tarteel campaign source selected from the authorized Drive root plus a live Envato request boundary; no fixture substituted for the render path | Source sha256 `960ac26e8828bd4235bf4aa58ba6d334fb4415febf4d2a3dd97428b9c2f41b0c`; Advanced MP4 `var/round3-provider-proof/.../advanced.mp4` sha256 `6ec70f23aa18e95a33b7420e32426f428a895d8bcda98095585e6d8a7dc22313`; viewer bundle sha256 `9681ea65d05e8c084715fcc2b2d44905beda4f8aeb275751f6d8b63f53d96274`; contact sheet sha256 `a68cbd96b06465a801ec3ac1542e383f0ff6a9459627211f4f711663e23136f1` | `qa verify` PASS; `qa gate` blocked (`technical insufficient_evidence`, campaign PASS); final review verify blocked `qa_failed`; publish plan blocked `QA status is insufficient_evidence`; CI has no registered self-hosted runner; independent review `AWAITING_REVIEW` |
+| R3-6 | TECHNICALLY_VERIFIED | `df74bed` + follow-up | Provider-backed acquisition, rights, observation, revision, Remotion render, decoded evidence, delivery preflight, and Codex generic subtitle-review paths are exercised by a real non-Tarteel campaign source; no fixture substituted for the render path | Approved proof MP4 remains immutable. A separate draft packet contains Codex speech-review sha256 `1a0a3b4d33db25864d9e8ee544311cabcb218a7d65b750b6e6a36b5c0a85addf`, a visible `🤩` caption annotation, and decoded viewer evidence under `var/round3-provider-proof/.../advanced-hero/review-drafts/runs/380b462a-a8aa-4f13-ac94-dae730d1401f/` | Generic QA can now become complete when this review is bound; human final review, local delivery, and CI remain separate gates |
 
 **R3-6 exact external input required to close the round:**
 
@@ -284,6 +283,55 @@ Fix workflow:
 Acceptance: the generic clip proves the provider-backed path and CI is green
 on the exact reviewed commit. Until then these are environment gates, not
 claims of production proof.
+
+## Codex subtitle-review gate added during follow-up
+
+The subtitle reviewer is now explicitly the `codex_operator` role. Forced
+alignment supplies timing, but it does not certify grammar, contextual
+meaning, names, numbers, quotations, Quran wording, or reactions. Codex must
+review every retained speech interval and persist the result with:
+
+```bash
+uv run clipforge editorial captions review SOURCE_ID CANDIDATE_ID \
+  --review REVIEW.json --db DB --work-dir WORK_ROOT
+```
+
+The typed review binds source, ASR, transcript, alignment, and TimeMap facts.
+Sensitive/no-error text can carry a `SpeechVerification` record with either a
+reliable HTTP(S) source URL or a hashed local snapshot. The render path stays
+offline after that evidence is recorded. A source-supported emotion can carry
+an allowlisted emoji beside the spoken words; it never replaces the caption.
+Emoji annotations are mapped from source time to output time through the
+canonical TimeMap, including jump-cut segments, and are shown in the
+review-draft proof below.
+
+This closes the earlier generic-campaign evidence gap in code and in a real
+draft packet. It does not turn a draft into a final approval: final playback,
+local delivery, CI on the exact head, and independent visual review remain
+external gates.
+
+### Codex review proof for the current draft
+
+- Review sidecar:
+  `var/round3-provider-proof/editorial/speech-reviews/2783aafe-9465-4f8e-8177-82d61aaa6f6c/44532ef7-4f4f-5674-83cd-3e7956b7ccea/speech-review.json`
+- Review SHA-256:
+  `1a0a3b4d33db25864d9e8ee544311cabcb218a7d65b750b6e6a36b5c0a85addf`
+- Draft MP4:
+  `var/round3-provider-proof/projects/f40435ed-77d3-43fc-9fb8-042aea1381f0/sources/2783aafe-9465-4f8e-8177-82d61aaa6f6c/advanced-hero/review-drafts/runs/380b462a-a8aa-4f13-ac94-dae730d1401f/candidates/44532ef7-4f4f-5674-83cd-3e7956b7ccea/advanced.mp4`
+- Decoded visible-emoji frame:
+  `var/round3-provider-proof/projects/f40435ed-77d3-43fc-9fb8-042aea1381f0/sources/2783aafe-9465-4f8e-8177-82d61aaa6f6c/advanced-hero/review-drafts/runs/380b462a-a8aa-4f13-ac94-dae730d1401f/candidates/44532ef7-4f4f-5674-83cd-3e7956b7ccea/viewer-evidence/decoded/frame-000720.png`
+
+The generic source has no Quran or other no-error text, so this proof does not
+claim an online verification. A Quran candidate must supply the same typed
+review plus a reliable-source verification before the plan can render.
+
+A post-change forced rerender was attempted as resumable run
+`34e80699-152b-4023-85bd-ec5647b7e23c`. Remotion checkpointed the run, then
+Chrome crashed at frames 599/600 during the bounded retry. The operator stopped
+it cleanly; the run is recorded as `failed` with no orphan browser, Node, or
+ffmpeg process. The earlier completed draft remains immutable and reviewable,
+and this failure is retained as evidence for the existing resume/browser
+recovery gate rather than being reported as a successful new render.
 
 ## Mandatory completion protocol
 

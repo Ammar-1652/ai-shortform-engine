@@ -193,11 +193,37 @@ class TarteelSpeechInterval(Versioned):
         return self
 
 
+class SpeechVerification(Versioned):
+    """Codex evidence for text that must not be guessed."""
+
+    verification_id: EntityId
+    subject_kind: Literal["quran", "quotation", "proper_noun", "number", "factual_claim"]
+    source_url: str = Field(default="", max_length=500)
+    snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    note: str = Field(min_length=1, max_length=500)
+    status: Literal["verified"] = "verified"
+
+    @model_validator(mode="after")
+    def has_reliable_source(self) -> Self:
+        if not self.source_url and not self.snapshot_sha256:
+            raise ValueError("sensitive text verification requires a source URL or hashed snapshot")
+        if self.source_url and not (
+            self.source_url.startswith("https://") or self.source_url.startswith("http://")
+        ):
+            raise ValueError("sensitive text verification URL must be http(s)")
+        return self
+
+
 class TarteelSpeechReview(Versioned):
-    """Reviewed source speech inventory used to upgrade caption coverage."""
+    """Codex-reviewed source speech inventory used to upgrade caption coverage.
+
+    The historical class name is retained for stored Tarteel documents. The
+    same source-bound contract is also valid for generic campaigns when
+    ``campaign="generic"`` and ``reviewer_role="codex_operator"``.
+    """
 
     review_id: EntityId
-    campaign: Literal["tarteel"]
+    campaign: Literal["tarteel", "generic"]
     source_asset_id: EntityId
     candidate_id: EntityId
     source_sha256: str = Field(pattern=_SHA)
@@ -205,6 +231,7 @@ class TarteelSpeechReview(Versioned):
     transcript_sha256: str = Field(pattern=_SHA)
     locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
     intervals: list[TarteelSpeechInterval] = Field(min_length=1)
+    verifications: list[SpeechVerification] = Field(default_factory=list, max_length=32)
     reviewer: str = Field(min_length=1, max_length=120)
     reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
         default=None, exclude_if=lambda value: value is None

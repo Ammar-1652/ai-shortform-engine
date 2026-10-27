@@ -42,12 +42,23 @@ while retiring the prior release. Admission never approves a video artifact.
 - Candidate selection and hook/body/punch cuts become typed candidate reviews
   and `EditorialArcDocument` records. Codex uses `--reviewer-role
   codex_operator` for candidate and Hero decisions.
-- Captions come from forced alignment and the shared caption builder. Preserve
-  observed text, Arabic shaping, Quran evidence, and the canonical TimeMap.
-  New production directions also require one reviewed upper context sentence;
-  spoken captions are grouped into one readable line inside the shared
-  platform-resilient inner band. A cue that cannot fit is regrouped from
-  complete words or fails closed.
+- Captions come from forced alignment and the shared caption builder, but
+  forced alignment is only the timing source. Codex must review every phrase
+  for grammatical meaning and contextual meaning, compare it with the source
+  moment, and record the review with `clipforge editorial captions review`
+  using `campaign=generic` and `reviewer_role=codex_operator`. Corrected text
+  must remain source-grounded and hash-bound to the source, transcript, ASR,
+  alignment, and TimeMap. For Quran, quotations, named facts, and other
+  no-error subjects, verify against a reliable online source or a hashed local
+  snapshot and record that verification; never guess. If the source clearly
+  contains laughter, surprise, excitement, sadness, applause, or another
+  supported reaction, add an allowlisted emoji annotation while retaining the
+  spoken words. Emojis are supplemental and cannot replace captions.
+  Preserve observed text, Arabic shaping, Quran evidence, and the canonical
+  TimeMap. New production directions also require one reviewed upper context
+  sentence; spoken captions are grouped into one readable line inside the
+  shared platform-resilient inner band. A cue that cannot fit is regrouped
+  from complete words or fails closed.
 - Crops use Advanced Hero reframing and output-space geometry.
 - B-roll, images, fonts, and SFX use the registered asset catalogue, license
   records, relevance tags, and typed placements. Envato search/fetch is only

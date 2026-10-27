@@ -201,8 +201,24 @@ class SourceWorkspace:
     def advanced_review_direction_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "direction.json")
 
-    def treatment_evidence_file(self, candidate_id: str) -> Path:
-        return _join(self.advanced_root(), "plans", _segment(candidate_id), "treatment-evidence.json")
+    def treatment_evidence_file(self, candidate_id: str, direction_sha256: str = "") -> Path:
+        suffix = f"-{direction_sha256[:16]}" if direction_sha256 else ""
+        return _join(
+            self.advanced_root(),
+            "plans",
+            _segment(candidate_id),
+            f"treatment-evidence{suffix}.json",
+        )
+
+    def advanced_review_treatment_evidence_file(self, candidate_id: str, direction_sha256: str = "") -> Path:
+        """Immutable treatment evidence for an unapproved review draft."""
+        suffix = f"-{direction_sha256[:16]}" if direction_sha256 else ""
+        return _join(
+            self.advanced_review_root(),
+            "plans",
+            _segment(candidate_id),
+            f"treatment-evidence{suffix}.json",
+        )
 
     def reframe_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "reframe.json")

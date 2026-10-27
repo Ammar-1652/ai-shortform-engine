@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from clipforge.schemas.advanced import TypographyEvent
 from clipforge.schemas.campaign import TarteelArabicCorrectionDocument, TarteelSpeechReview
 from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.time import TimeMapDocument, digest_time_map
+
+_EMOTION_EMOJIS = frozenset({"😂", "😮", "😢", "🤩", "👏", "❤️", "🔥", "✨", "😄"})
 
 
 def load_arabic_corrections(
@@ -190,3 +193,56 @@ def validate_speech_captions(
         accounted.update(word.word_id for word in words)
     if accounted != {word.word_id for word in alignment.words}:
         raise MediaError("speech review does not account for every retained forced word")
+
+
+def apply_speech_review_emojis(
+    review: TarteelSpeechReview,
+    captions: list[TypographyEvent],
+    *,
+    time_map: TimeMapDocument,
+) -> list[TypographyEvent]:
+    """Attach source-clock emotion annotations to output-clock caption cues.
+
+    Speech reviews are authored in source time while caption events are placed
+    in output time. Mapping through the canonical TimeMap keeps annotations
+    attached after jump cuts instead of accidentally comparing two clocks.
+    """
+    updated = list(captions)
+    mapped = time_map.to_time_map()
+    for interval in review.intervals:
+        emojis = [
+            item
+            for item in re.findall(r"😂|😮|😢|🤩|👏|❤️|🔥|✨|😄", interval.observed_text)
+            if item in _EMOTION_EMOJIS
+        ]
+        if not emojis:
+            continue
+        output_ranges = [
+            (
+                segment.output_start_us
+                + max(interval.source_start_us, segment.source_start_us)
+                - segment.source_start_us,
+                segment.output_start_us
+                + min(interval.source_end_us, segment.source_end_us)
+                - segment.source_start_us,
+            )
+            for segment in mapped.segments
+            if segment.source_start_us < interval.source_end_us
+            and interval.source_start_us < segment.source_end_us
+        ]
+        overlaps = [
+            index
+            for index, cue in enumerate(updated)
+            if any(
+                cue.interval.output_start_us < output_end and output_start < cue.interval.output_end_us
+                for output_start, output_end in output_ranges
+            )
+        ]
+        if not overlaps:
+            raise MediaError(f"emotion annotation has no caption cue: {interval.span_id}")
+        emoji = emojis[0]
+        for index in overlaps:
+            if updated[index].emoji is not None and updated[index].emoji != emoji:
+                raise MediaError(f"conflicting emotion emojis overlap caption cue: {updated[index].event_id}")
+            updated[index] = updated[index].model_copy(update={"emoji": emoji})
+    return updated

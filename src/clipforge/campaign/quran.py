@@ -136,6 +136,54 @@ def load_tarteel_speech_review(
     return matches[0] if matches else None
 
 
+def load_codex_speech_review(
+    root: Path,
+    *,
+    source_asset_id: str,
+    candidate_id: str,
+    source_sha256: str = "",
+    raw_asr_sha256: str = "",
+    transcript_sha256: str = "",
+) -> tuple[TarteelSpeechReview, str, Path] | None:
+    """Load one Codex-reviewed speech inventory for a generic campaign.
+
+    Generic reviews are kept outside campaign-specific folders so they cannot
+    be mistaken for Tarteel Quran evidence. The contract is otherwise the
+    same: source, ASR, transcript, intervals, and reviewer identity are
+    hash-bound before caption coverage can become complete.
+    """
+    root = root.resolve()
+    base = root / "editorial" / "speech-reviews"
+    if not base.exists():
+        return None
+    _confined_regular_path(root, base, directory=True)
+    matches: list[tuple[TarteelSpeechReview, str, Path]] = []
+    for path in sorted(base.rglob("speech-review.json")):
+        _confined_regular_path(root, path)
+        if path.is_symlink() or not path.is_file():
+            raise MediaError("Codex speech review sidecar must be a regular file")
+        try:
+            review = TarteelSpeechReview.model_validate_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"invalid Codex speech review sidecar {path.name}: {exc}") from exc
+        if review.campaign != "generic":
+            continue
+        if (review.source_asset_id, review.candidate_id) != (source_asset_id, candidate_id):
+            continue
+        if review.reviewer_role != "codex_operator":
+            raise MediaError("generic speech review must be recorded by codex_operator")
+        if source_sha256 and review.source_sha256 != source_sha256:
+            raise MediaError("Codex speech review is stale: source hash differs")
+        if raw_asr_sha256 and review.raw_asr_sha256 != raw_asr_sha256:
+            raise MediaError("Codex speech review is stale: ASR hash differs")
+        if transcript_sha256 and review.transcript_sha256 != transcript_sha256:
+            raise MediaError("Codex speech review is stale: transcript hash differs")
+        matches.append((review, sha256_file(path), path))
+    if len(matches) > 1:
+        raise MediaError(f"multiple Codex speech review sidecars found for {candidate_id}")
+    return matches[0] if matches else None
+
+
 def validate_tarteel_speech_review_ranges(
     review: TarteelSpeechReview,
     source_ranges_us: list[tuple[int, int]],

@@ -305,7 +305,11 @@ def build_advanced_plan(
             actor=actor,
             work_root=work_root,
         )
-        evidence_path = workspace.treatment_evidence_file(candidate_id)
+        evidence_path = (
+            workspace.advanced_review_treatment_evidence_file(candidate_id, direction_sha256)
+            if allow_unapproved
+            else workspace.treatment_evidence_file(candidate_id, direction_sha256)
+        )
         workspace.prepare_advanced_file(evidence_path)
         evidence_digest = treatment_evidence_digest(bundle)
         if evidence_path.exists():

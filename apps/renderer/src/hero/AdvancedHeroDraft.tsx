@@ -24,7 +24,24 @@ type TypeEvent = {
   y?: number;
   font_size?: number;
   color?: string;
-  emoji?: "📖" | "💡" | "🎯" | "✨" | "⚡" | "🧠" | "✅" | "🔎" | "🕌";
+  emoji?:
+    | "📖"
+    | "💡"
+    | "🎯"
+    | "✨"
+    | "⚡"
+    | "🧠"
+    | "✅"
+    | "🔎"
+    | "🕌"
+    | "😂"
+    | "😮"
+    | "😢"
+    | "🤩"
+    | "👏"
+    | "❤️"
+    | "🔥"
+    | "😄";
   words?: readonly {
     word_id?: string;
     text?: string;
@@ -1084,6 +1101,7 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
               <CaptionPlate
                 text={(item.text ?? "").trim()}
                 language={item.language || language}
+                emoji={item.emoji}
                 variant="body"
                 emphasisText={activeWord ?? (style !== "legacy-v1" ? activeEmphasis : undefined)}
                 emphasisStatus={activeWordRecord?.verification_status}

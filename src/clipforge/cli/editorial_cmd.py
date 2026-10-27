@@ -73,6 +73,10 @@ treatment_app = typer.Typer(
     no_args_is_help=True, help="Inspect and validate per-beat B-roll, SFX, camera, and transition treatment."
 )
 editorial_app.add_typer(treatment_app, name="treatment")
+captions_app = typer.Typer(
+    no_args_is_help=True, help="Codex-reviewed subtitle wording, context, and emotion evidence."
+)
+editorial_app.add_typer(captions_app, name="captions")
 
 
 def _fail(exc: BaseException) -> NoReturn:
@@ -82,6 +86,80 @@ def _fail(exc: BaseException) -> NoReturn:
 
 def _load(config: Path | None) -> KnowledgeLibrary:
     return KnowledgeLibrary.load(config.resolve() if config is not None else default_library_path())
+
+
+@captions_app.command("review")
+def captions_review(
+    source_asset_id: Annotated[str, typer.Argument()],
+    candidate_id: Annotated[str, typer.Argument()],
+    review: Annotated[Path, typer.Option("--review", exists=True, readable=True)],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Validate and persist Codex's source/context subtitle review.
+
+    The review JSON is declarative: it contains observed intervals, corrected
+    context text, optional emotion emoji annotations, and verification notes
+    for sensitive text. It cannot approve delivery.
+    """
+    from clipforge.campaign.quran import validate_tarteel_speech_review_ranges
+    from clipforge.media.workspace import ensure_within
+    from clipforge.paths import resolve_db_path, resolve_work_dir
+    from clipforge.preview.inputs import load_preview_inputs
+    from clipforge.preview.service import default_profile
+    from clipforge.schemas.campaign import TarteelSpeechReview
+    from clipforge.schemas.hero import HeroPlanDocument
+    from clipforge.storage import Database
+    from clipforge.transcription.io import publish_json
+
+    try:
+        root = resolve_work_dir(work_dir).resolve()
+        database = Database(resolve_db_path(db))
+        inputs = load_preview_inputs(
+            database,
+            source_asset_id,
+            root,
+            profile_fingerprint=default_profile().fingerprint(),
+            create_workspace=False,
+        )
+        document = TarteelSpeechReview.model_validate_json(review.read_text(encoding="utf-8"))
+        if document.campaign != "generic":
+            raise MediaError("generic subtitle review must use campaign=generic")
+        if document.reviewer_role != "codex_operator":
+            raise MediaError("subtitle review must be recorded by codex_operator")
+        if document.source_asset_id != source_asset_id or document.candidate_id != candidate_id:
+            raise MediaError("subtitle review source or candidate binding differs")
+        source_sha256 = inputs.pair.manifest.content_sha256
+        if document.source_sha256 != source_sha256:
+            raise MediaError("subtitle review source hash is stale")
+        if document.raw_asr_sha256 != inputs.asr_sha256:
+            raise MediaError("subtitle review ASR hash is stale")
+        if document.transcript_sha256 != inputs.pair.transcript_sha256:
+            raise MediaError("subtitle review transcript hash is stale")
+        plan_path = inputs.pair.workspace.hero_plan_file(candidate_id)
+        if not plan_path.is_file() or plan_path.is_symlink():
+            raise MediaError("subtitle review requires the selected Hero plan")
+        hero_plan = HeroPlanDocument.model_validate_json(plan_path.read_text(encoding="utf-8"))
+        ranges = [
+            (segment.source_start_us, segment.source_end_us)
+            for segment in hero_plan.edit_plan.time_map.segments
+        ]
+        validate_tarteel_speech_review_ranges(document, ranges)
+        if not document.intervals:
+            raise MediaError("subtitle review requires at least one reviewed interval")
+        destination = (
+            root / "editorial" / "speech-reviews" / source_asset_id / candidate_id / "speech-review.json"
+        )
+        ensure_within(root, destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        digest, _ = publish_json(destination, document, root, destination.with_suffix(".json.partial"))
+    except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"review_id: {document.review_id}")
+    typer.echo(f"sha256: {digest}")
+    typer.echo(f"path: {destination.relative_to(root).as_posix()}")
+    typer.echo("reviewer_role: codex_operator")
+    typer.echo("status: reviewed")
 
 
 @editorial_app.command("doctor")
