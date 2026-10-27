@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 3
 
-**Review date:** 2026-10-26
-**Reviewed head:** `331f13eb3f26fe9bfca3422c68cc9cfe3043ae92`
+**Review date:** 2026-10-27
+**Reviewed head:** `df74bed5854706fafb9b632b5a58a90a29d58240`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Purpose:** close the evidence and integration gaps found when reviewing the
@@ -12,24 +12,27 @@ round-2 implementation against its own acceptance criteria.
 This status is intentional. Passing local tests, completing a code slice, or
 having a draft PR does not authorize changing this plan to `COMPLETE`.
 
-**Implementation checkpoint:** R3-1 through R3-5 now have code paths and
-targeted regression coverage in the working tree. Full exact-head validation,
-generic provider-backed media proof, and CI confirmation remain open gates.
+**Implementation checkpoint:** R3-1 through R3-5 have code paths, targeted
+failure coverage, a full validation run, and a real provider-backed Advanced
+Hero packet. R3-6 is technically exercised with a non-Tarteel campaign source,
+but its acceptance gates remain open because this packet has no independently
+reviewed speech inventory, no human final playback decision, no local delivery,
+and no CI runner result.
 
 ### Execution ledger (implementation checkpoint)
 
-The following is the evidence state before the final full validation run. The
-ledger deliberately distinguishes code from real production evidence; a local
-fixture cannot close the provider or visual-review requirements.
+The following is the evidence state at the current reviewed head. The ledger
+deliberately distinguishes code from real production evidence; a provider
+render is still not a human final approval.
 
 | item | status | commit_sha | implementation and test evidence | artifact/provider state | downstream/external state |
 |---|---|---|---|---|---|
-| R3-1 | TECHNICALLY_VERIFIED | `537acba` | Immutable `direction-v4` revision and `revise-direction` CLI now re-run source-evidence validation, direction lint, motion/preset binding, shared treatment policy, and provider/rights checks before publication; targeted revision/asset tests cover stale, binding-mismatch, idempotence, and confinement cases | No authorized generic provider acquisition is available in the work root for an evidence-complete receipt | Advanced planning revalidates the selected revision; generic provider-backed proof remains open; reviewer `AWAITING_REVIEW` |
-| R3-2 | TECHNICALLY_VERIFIED | `537acba` | `TreatmentAssetObservation` and `observe-asset` decode/hash sidecars with stale-frame rejection; graphic bindings now fail closed without decoded observation evidence; observation and source-asset binding are checked during revision | No authorized generic visual asset observation is available for a real production packet | Collision/relevance facts are consumed by the shared treatment policy; real decoded generic proof remains open; reviewer `AWAITING_REVIEW` |
-| R3-3 | TECHNICALLY_VERIFIED | `2af93a8` | Canonical aligned-word overlap is stored per SFX cue; encoded-window RMS, duck-policy, peak, and silence evidence produce `TreatmentAudioMeasurement` beside viewer evidence. The measurement path/hash now propagates through the Advanced manifest, QA set/cache, preflight, final-review evidence, and delivery facts. `uv run pytest -q tests/test_viewer_evidence.py tests/test_treatment.py` covers pass/fail and sidecar binding | Measurement sidecar is produced only when a real Advanced render reaches decoded viewer evidence; no generic production packet has been authorized in this workspace | QA and delivery reject missing/stale measurement or non-passing intelligibility; the signal test is technical evidence, not semantic human listening; reviewer `AWAITING_REVIEW` |
-| R3-4 | TECHNICALLY_VERIFIED | `58bba9a` | `TreatmentEvidenceBundle` is persisted atomically and now embeds validated observation records and frame hashes, then remains hash-bound into render input/viewer evidence/QA/final review/cache/delivery; schema export/check passes | No real generic bundle with provider receipts is available to hash into the required production packet | Stale bundle and changed receipt tests are present; provider-backed artifact ledger remains open; reviewer `AWAITING_REVIEW` |
-| R3-5 | TECHNICALLY_VERIFIED | `2af93a8` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events | No production artifact is being promoted by this checkpoint | Exact-gate checks are implemented; external CI and independent code/visual review remain open; reviewer `AWAITING_REVIEW` |
-| R3-6 | CODE_COMPLETE | `537acba` | Provider-backed acquisition, rights, observation, revision, render, QA, and delivery paths are implemented and covered by offline/fake-provider regressions; no fixture may be substituted for the required authorized generic provider path | The work area has campaign and Envato files, but no persisted authorized **generic non-campaign** source plus complete provider selection/acquisition/license chain for this proof | PR #38 self-hosted `verify-python` is queued for the current head because `clipforge-local` is offline; exact-head CI and authorized production proof are still open |
+| R3-1 | TECHNICALLY_VERIFIED | `df74bed` | Immutable `direction-v4` revision and `revise-direction` CLI re-run source-evidence validation, direction lint, motion/preset binding, shared treatment policy, and provider/rights checks before publication; targeted revision/asset tests cover stale, binding-mismatch, idempotence, and confinement cases | Real selected direction is persisted in `var/round3-provider-proof/.../advanced-hero/plans/44532.../direction.json`; the treatment bundle records Drive visual and Envato SFX receipts | Advanced planning consumed the revision and pilot; no human final review; reviewer `AWAITING_REVIEW` |
+| R3-2 | TECHNICALLY_VERIFIED | `df74bed` | `TreatmentAssetObservation` and `observe-asset` decode/hash sidecars with source-span sampling, stale-frame rejection, immutable cache behavior, and failed-promotion cleanup; bindings fail closed without observations | Two real observations exist under `var/round3-provider-proof/editorial/treatment-observations/`; their frame hashes are embedded in the treatment bundle | Relevance/collision facts reached planning and render input; no human visual acceptance; reviewer `AWAITING_REVIEW` |
+| R3-3 | TECHNICALLY_VERIFIED | `df74bed` | Canonical aligned-word overlap is stored per SFX cue. Decoded-window RMS compares the encoded output against staged speech and SFX references, applies gain/duck policy, requires a non-negative margin, and records `decoded_window_signal_v2`; targeted tests cover v1 compatibility, v2 success, missing references, stale sidecars, resume restaging, and failure cases | Real measurement: `treatment-audio-measurement.json` sha256 `42ebf986d1d637cba550b152f56ba90db78103cb43e5e518c1d8d18819ee8cf9`; integrated `-17.1 LUFS`, true peak `-1.4 dBFS`, margins `12.78 dB` and `4.19 dB` | `qa verify` passes the evidence binding; `qa gate` remains blocked by separate caption speech inventory insufficiency; human listening is still required |
+| R3-4 | TECHNICALLY_VERIFIED | `df74bed` | `TreatmentEvidenceBundle` is persisted atomically and embeds validated provider/license receipts, observations, frame hashes, policy decisions, and measured audio facts; it remains hash-bound into render input/viewer evidence/QA/final-review/cache/delivery; schema export/check passes | Real bundle `var/round3-provider-proof/.../treatment-evidence.json` sha256 `84f60c498bc39e895502646c888f58311ca32569c564658c446ab9e1f7750268` | The bundle is readable and hash-bound; final review/delivery remain blocked by QA status and no human approval |
+| R3-5 | TECHNICALLY_VERIFIED | `df74bed` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events. The resume evidence path and bounded encoded-duration comparison are now covered by tests | Real render consumed exactly the selected treatment event set; no duplicate event receipt was accepted | Full automated validation passes; CI is still pending and independent code/visual review is still required |
+| R3-6 | TECHNICALLY_VERIFIED | `df74bed` | Provider-backed acquisition, rights, observation, revision, Remotion render, decoded evidence, QA verification, and delivery preflight paths are exercised by a real non-Tarteel campaign source selected from the authorized Drive root plus a live Envato request boundary; no fixture substituted for the render path | Source sha256 `960ac26e8828bd4235bf4aa58ba6d334fb4415febf4d2a3dd97428b9c2f41b0c`; Advanced MP4 `var/round3-provider-proof/.../advanced.mp4` sha256 `6ec70f23aa18e95a33b7420e32426f428a895d8bcda98095585e6d8a7dc22313`; viewer bundle sha256 `9681ea65d05e8c084715fcc2b2d44905beda4f8aeb275751f6d8b63f53d96274`; contact sheet sha256 `a68cbd96b06465a801ec3ac1542e383f0ff6a9459627211f4f711663e23136f1` | `qa verify` PASS; `qa gate` blocked (`technical insufficient_evidence`, campaign PASS); final review verify blocked `qa_failed`; publish plan blocked `QA status is insufficient_evidence`; CI has no registered self-hosted runner; independent review `AWAITING_REVIEW` |
 
 **R3-6 exact external input required to close the round:**
 
@@ -49,22 +52,70 @@ fixture cannot close the provider or visual-review requirements.
 
 The code commits are `e0e007c` (`feat: require decoded treatment audio
 evidence`), `ba57bcf` (`fix: preserve legacy audio evidence compatibility`),
-`2af93a8` (`feat: bind audio measurements through QA and delivery`), and
+`19a4ede` (`feat: compare decoded speech and effect references`),
+`91bc774` (`fix: fail closed on incomplete speech comparison`),
+`2af93a8` (`feat: bind audio measurements through QA and delivery`),
 `58bba9a` (`feat: embed treatment observations in evidence bundles`),
 `500fcdc` (`fix: re-lint treatment direction revisions`), and `537acba`
-(`style: format direction revision gate`).
+(`style: format direction revision gate`), and `df74bed`
+(`fix: close treatment evidence resume gaps`).
 The final validation run must record its exact resulting HEAD below before any
 status can advance.
 
-**Final validation result:** `TECHNICALLY_VERIFIED` on implementation/document
-head `537acba` (`./scripts/validate.sh`): 946 Python tests passed, 2
-documented skips (VoiceStudio unavailable; Whop not configured), 18
-browser/Remotion tests passed, and 64 renderer tests passed. Ruff, format,
-mypy, schema check, renderer lint/typecheck, and doctor (10 pass, 0 warn,
-0 fail) also passed. The subsequent ledger-only documentation commit does not
-change executable behavior.
+**Exact-head validation result:** `TECHNICALLY_VERIFIED` on
+`df74bed5854706fafb9b632b5a58a90a29d58240`:
+`./scripts/validate.sh` passed. It records `956 passed, 2 skipped, 18
+deselected` in the non-browser partition (VoiceStudio unavailable; Whop not
+configured), `18 passed, 958 deselected` in the browser/Remotion partition,
+and 64 renderer tests. Ruff, format, mypy, schema check, renderer
+lint/typecheck, and doctor (10 pass, 0 warn, 0 fail) also passed. No Chrome,
+Node renderer, or ffmpeg worker remains running.
+
+The full provider-backed render was also rerun after the resume and evidence
+path fixes. `ffprobe` reports H.264/AAC, 1080x1920, 30/1, 1031 frames,
+34.366667 seconds of video and 34.334312 seconds of audio; ebur128 reports
+`-17.1 LUFS` and `-1.4 dBFS` true peak. The contact sheet at
+`var/round3-provider-proof/projects/f40435ed-77d3-43fc-9fb8-042aea1381f0/sources/2783aafe-9465-4f8e-8177-82d61aaa6f6c/advanced-hero/runs/425e40f4-6736-4a85-abf0-d3ceda05188b/candidates/44532ef7-4f4f-5674-83cd-3e7956b7ccea/viewer-evidence/contact-sheets/full-001.jpg`
+was inspected visually. It shows the source, captions, selected contextual
+visual, and restrained SFX treatment at the sampled times.
 **Final CI result:** `PENDING — a queued or different-head job is not a pass`.
 **Independent review:** `AWAITING_REVIEW`.
+
+### Real provider-backed proof packet
+
+The operator selected the Jingle Jared / Rebel Audio campaign from the
+authorized Google Drive root. This is a real non-Tarteel campaign source that
+exercises the generic profile, but it is not the separate non-campaign source
+requested by the original R3-6 acceptance text. Its campaign eligibility is
+recorded as `unknown`, so it remains a draft-only proof.
+
+Provider chain used by the packet:
+
+- Drive source: `var/round3-provider-proof/media/what-is-rebel-audio.mp4`,
+  sha256 `960ac26e8828bd4235bf4aa58ba6d334fb4415febf4d2a3dd97428b9c2f41b0c`.
+- Drive visual asset: registered campaign asset
+  `campaign-45f7424d3b56d8ec5b622de4579613520743284c353c6f4ce7a9f3569454e876`,
+  with observation `observation-0c99405978f6c7a7aba7fba6bc69b4a8c50702664608e7e508371b6c856dd47f`.
+- Envato request: `9ea9ea20-9241-4dbe-8f9b-e392030f611b`; registered SFX
+  asset `env-d30e52d3437c505fec60-tag-c3c2e06d`; license certificate sha256
+  `9ab3b1dc844d1247253d102bc71b45df834ebca1266d249ae50e6c5c90b73c9f`.
+- Canonical treatment bundle:
+  `var/round3-provider-proof/projects/f40435ed-77d3-43fc-9fb8-042aea1381f0/sources/2783aafe-9465-4f8e-8177-82d61aaa6f6c/advanced-hero/plans/44532ef7-4f4f-5674-83cd-3e7956b7ccea/treatment-evidence.json`,
+  sha256 `84f60c498bc39e895502646c888f58311ca32569c564658c446ab9e1f7750268`.
+- Reviewable MP4:
+  `var/round3-provider-proof/projects/f40435ed-77d3-43fc-9fb8-042aea1381f0/sources/2783aafe-9465-4f8e-8177-82d61aaa6f6c/advanced-hero/runs/425e40f4-6736-4a85-abf0-d3ceda05188b/candidates/44532ef7-4f4f-5674-83cd-3e7956b7ccea/advanced.mp4`,
+  sha256 `6ec70f23aa18e95a33b7420e32426f428a895d8bcda98095585e6d8a7dc22313`.
+- Viewer evidence bundle sha256
+  `9681ea65d05e8c084715fcc2b2d44905beda4f8aeb275751f6d8b63f53d96274` and
+  decoded audio measurement sha256
+  `42ebf986d1d637cba550b152f56ba90db78103cb43e5e518c1d8d18819ee8cf9`.
+
+The real packet proves the provider, observation, render, and encoded-audio
+paths. It does not prove that all audible speech was independently reviewed:
+the caption evidence remains `speech_coverage_status=insufficient_evidence`.
+That is why `qa verify` passes its bindings while `qa gate` blocks with
+`technical insufficient_evidence`; final-review verification and publish
+preflight correctly remain blocked rather than being manufactured.
 
 ## Review findings
 
