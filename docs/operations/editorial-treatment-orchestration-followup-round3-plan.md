@@ -117,6 +117,11 @@ That is why `qa verify` passes its bindings while `qa gate` blocks with
 `technical insufficient_evidence`; final-review verification and publish
 preflight correctly remain blocked rather than being manufactured.
 
+The same Advanced render command without `--force` returned `cache_hit: true`
+for set `425e40f4-6736-4a85-abf0-d3ceda05188b`; `editorial treatment lint`
+returned `status=pass`, and the registered Envato SFX returned
+`status=verified`, `rights_status=allowed`, and `renderable=true`.
+
 ## Review findings
 
 ### R3-1 — Persist and consume the bound treatment revision
