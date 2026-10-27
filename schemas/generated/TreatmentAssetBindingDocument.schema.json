@@ -355,8 +355,11 @@
       "description": "Decoded, reviewed observation of a selected visual asset.",
       "properties": {
         "analyzer_version": {
-          "const": "ffmpeg-frame-probe-v1",
           "default": "ffmpeg-frame-probe-v1",
+          "enum": [
+            "ffmpeg-frame-probe-v1",
+            "ffmpeg-frame-probe-v2"
+          ],
           "title": "Analyzer Version",
           "type": "string"
         },
@@ -447,6 +450,29 @@
           "minItems": 1,
           "title": "Source Evidence Ids",
           "type": "array"
+        },
+        "source_in_us": {
+          "default": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source In Us",
+          "type": "integer"
+        },
+        "source_out_us": {
+          "anyOf": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Out Us"
         }
       },
       "required": [

@@ -453,6 +453,7 @@ def treatment_observe_asset(
     relevance_threshold: Annotated[float, typer.Option("--relevance-threshold")],
     reviewed_by: Annotated[str, typer.Option("--reviewed-by")],
     review_note: Annotated[str, typer.Option("--review-note")],
+    source_in_us: Annotated[int, typer.Option("--source-in-us")] = 0,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
 ) -> None:
@@ -469,6 +470,7 @@ def treatment_observe_asset(
             source_asset_id=source_asset_id,
             asset_id=asset_id,
             output_interval=OutputInterval(output_start_us=output_start_us, output_end_us=output_end_us),
+            source_in_us=source_in_us,
             source_evidence_ids=source_evidence_id,
             observed_labels=observed_label,
             relevance_score=relevance_score,
@@ -507,11 +509,12 @@ def treatment_revise_direction(
     from clipforge.storage import Database
 
     try:
+        root = resolve_work_dir(work_dir).resolve()
         document, destination, digest = revise_direction_with_treatment_bindings(
             database=Database(resolve_db_path(db)),
             source_asset_id=source_asset_id,
             candidate_id=candidate_id,
-            work_root=resolve_work_dir(work_dir),
+            work_root=root,
             binding_paths=[path.absolute() for path in binding],
             allow_unapproved=allow_unapproved,
         )
@@ -522,7 +525,7 @@ def treatment_revise_direction(
             {
                 "direction_id": document.direction_id,
                 "direction_recipe_version": document.direction_recipe_version,
-                "direction_relative_path": destination.relative_to(resolve_work_dir(work_dir)).as_posix(),
+                "direction_relative_path": destination.relative_to(root).as_posix(),
                 "direction_sha256": digest,
             },
             sort_keys=True,

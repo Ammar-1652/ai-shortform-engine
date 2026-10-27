@@ -16,6 +16,7 @@ from clipforge.hero.treatment_assets import (
     persist_treatment_binding,
     select_treatment_request,
 )
+from clipforge.media.hashing import sha256_file
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionDocument,
@@ -182,7 +183,7 @@ def test_binding_schema_rejects_mismatched_license_and_interval() -> None:
         TreatmentAssetBindingDocument.model_validate(payload)
     payload = binding.model_dump(mode="json")
     payload["placement"]["interval"]["output_end_us"] += 1
-    with pytest.raises(ValidationError, match="escapes"):
+    with pytest.raises(ValidationError, match=r"escapes|source span"):
         TreatmentAssetBindingDocument.model_validate(payload)
 
 
@@ -191,6 +192,10 @@ def test_binding_persistence_is_idempotent_and_confined(tmp_path: Path) -> None:
     observation_path = tmp_path / "editorial" / "treatment-observations" / "observation-1" / "observation.json"
     observation_path.parent.mkdir(parents=True)
     assert binding.observation is not None
+    frame_path = tmp_path / binding.observation.frames[0].relative_path
+    frame_path.parent.mkdir(parents=True)
+    frame_path.write_bytes(b"immutable decoded frame fixture")
+    binding.observation.frames[0].sha256 = sha256_file(frame_path)
     observation_path.write_text(binding.observation.model_dump_json(), encoding="utf-8")
     kwargs = dict(
         work_root=tmp_path,
@@ -246,4 +251,59 @@ def test_visual_observation_requires_reviewed_numeric_relevance() -> None:
     with pytest.raises(ValidationError, match="below"):
         TreatmentAssetObservation.model_validate(
             {**observation.model_dump(mode="json"), "relevance_score": 0.4}
+        )
+
+
+def test_v2_visual_observation_binds_frames_to_the_selected_source_span() -> None:
+    now = datetime.now(UTC)
+    provenance = ArtifactProvenance(
+        created_at=now,
+        created_by="reviewer",
+        tool="test",
+        tool_version="2",
+        source_asset_ids=["source-1"],
+        parent_artifact_ids=["asset-1"],
+    )
+    payload = dict(
+        observation_id="observation-v2",
+        asset_id="asset-1",
+        source_asset_id="source-1",
+        media_sha256="b" * 64,
+        output_interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_in_us=5_000_000,
+        source_out_us=6_000_000,
+        source_evidence_ids=["evidence-1"],
+        frames=[
+            TreatmentObservationFrame(
+                relative_path="editorial/treatment-observations/observation-v2/frames/frame-000.jpg",
+                sha256="a" * 64,
+                timestamp_us=5_000_000,
+            ),
+            TreatmentObservationFrame(
+                relative_path="editorial/treatment-observations/observation-v2/frames/frame-001.jpg",
+                sha256="c" * 64,
+                timestamp_us=5_500_000,
+            ),
+        ],
+        observed_labels=["context"],
+        relevance_score=0.9,
+        relevance_threshold=0.85,
+        analyzer_version="ffmpeg-frame-probe-v2",
+        reviewed_by="reviewer",
+        review_note="The selected source span matches the requested context.",
+        provenance=provenance,
+    )
+    observation = TreatmentAssetObservation.model_validate(payload)
+    assert observation.source_out_us == 6_000_000
+    with pytest.raises(ValidationError, match="source span"):
+        TreatmentAssetObservation.model_validate({**payload, "source_out_us": 6_000_001})
+    with pytest.raises(ValidationError, match="inside"):
+        TreatmentAssetObservation.model_validate(
+            {
+                **payload,
+                "frames": [
+                    *payload["frames"][:-1],
+                    payload["frames"][-1].model_copy(update={"timestamp_us": 6_000_000}),
+                ],
+            }
         )

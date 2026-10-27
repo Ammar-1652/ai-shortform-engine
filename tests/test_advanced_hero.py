@@ -27,6 +27,7 @@ from clipforge.hero.advanced_build import (
 from clipforge.hero.advanced_service import (
     _require_production_direction,
     _require_reviewed_tarteel_arc,
+    _restage_candidate_evidence_inputs,
     default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
@@ -34,6 +35,7 @@ from clipforge.hero.advanced_service import (
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
 from clipforge.hero.motion_style import CONCAT_EDITORIAL_V1, EDITORIAL_CLEAN_V1, LEGACY_V1
+from clipforge.hero.reframe import frame_count_for_duration
 from clipforge.hero.show import load_current_hero
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri, path_to_file_uri
@@ -910,6 +912,62 @@ def test_failed_run_writes_checkpoint_and_can_resume(tmp_path: Path, monkeypatch
     )
     assert repaired.status == "rendered"
     assert output.is_file()
+
+
+def test_resume_evidence_restages_speech_and_treatment_assets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A completed checkpoint still rebuilds ephemeral viewer-evidence inputs."""
+    fixture, candidate_id = _approved(tmp_path)
+    _register_asset(fixture, "broll-1", "graphic", b"broll-bytes")
+    _register_asset(fixture, "sfx-1", "audio", b"sfx-bytes")
+    plan = plan_advanced_candidate(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        broll_asset_ids=["broll-1"],
+        sfx_asset_ids=["sfx-1"],
+    )
+    assert plan.time_map is not None
+    inputs = load_preview_inputs(
+        fixture.database,
+        SOURCE_ID,
+        fixture.work,
+        profile_fingerprint=default_profile().fingerprint(),
+        create_workspace=False,
+    )
+    run_dir = fixture.workspace.advanced_root() / "runs" / "resume-evidence"
+    staging = run_dir / "staging"
+    run_dir.mkdir(parents=True)
+
+    def _stage_fixture_base(
+        inputs: object,
+        staging_dir: Path,
+        _candidate_id: str,
+        _time_map: TimeMapDocument,
+        _frame_count: int,
+        _root: Path,
+        _log_path: Path,
+    ) -> None:
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        (staging_dir / "asr.flac").write_bytes(inputs.asr_path.read_bytes())  # type: ignore[attr-defined]
+
+    monkeypatch.setattr("clipforge.hero.advanced_service._stage_candidate_base", _stage_fixture_base)
+    _restage_candidate_evidence_inputs(
+        inputs=inputs,
+        workspace=fixture.workspace,
+        plan=plan,
+        time_map=plan.time_map,
+        staging=staging,
+        frame_count=frame_count_for_duration(plan.time_map.to_time_map().total_output_duration()),
+        root=fixture.work,
+        run_dir=run_dir,
+        candidate_id=candidate_id,
+    )
+    assert sha256_file(staging / "asr.flac") == sha256_file(inputs.asr_path)
+    assert (staging / "broll-1.mp4").read_bytes() == b"broll-bytes"
+    assert (staging / "sfx-1.wav").read_bytes() == b"sfx-bytes"
 
 
 def test_draft_only_advanced_render_is_marked_pending_and_not_default_renderable(tmp_path: Path) -> None:

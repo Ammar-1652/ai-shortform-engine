@@ -239,6 +239,7 @@ def _decoded_intelligibility(
     peak_limit_dbfs: float,
     log_path: Path,
     render_input: AdvancedHeroRenderInput | None = None,
+    staging_dir: Path | None = None,
 ) -> TreatmentAudioMixResult:
     """Return technical decoded speech-window evidence for a treatment mix.
 
@@ -263,7 +264,8 @@ def _decoded_intelligibility(
     sfx_rms: list[float] = []
     margins: list[float] = []
     if render_input is not None and checked:
-        speech_path = _safe(root, output.parent / "staging" / render_input.speech_name)
+        references = staging_dir if staging_dir is not None else output.parent / "staging"
+        speech_path = _safe(root, references / render_input.speech_name)
         if speech_path.is_symlink() or not speech_path.is_file():
             return mix.model_copy(
                 update={
@@ -311,7 +313,7 @@ def _decoded_intelligibility(
                     name = render_input.asset_names.get(event.asset_id)
                     if not name:
                         raise MediaError(f"staged SFX asset name is missing: {event.asset_id}")
-                    sfx_path = _safe(root, output.parent / "staging" / name)
+                    sfx_path = _safe(root, references / name)
                     if sfx_path.is_symlink() or not sfx_path.is_file():
                         raise MediaError(f"staged SFX asset is missing: {event.asset_id}")
                     sfx_level = _reference_window_rms(
@@ -442,6 +444,7 @@ def write_viewer_evidence_bundle(
     job_id: str,
     actor: str,
     log_path: Path,
+    staging_dir: Path | None = None,
 ) -> tuple[Path, ViewerEvidenceBundle]:
     """Decode representative frames and publish a hash-bound evidence bundle."""
     output = _safe(root, output)
@@ -522,6 +525,7 @@ def write_viewer_evidence_bundle(
             peak_limit_dbfs=render_input.audio_true_peak_dbfs,
             log_path=log_path.with_name(log_path.stem + ".intelligibility.log"),
             render_input=render_input,
+            staging_dir=staging_dir,
         )
     measurement_relative_path = ""
     measurement_sha256 = ""

@@ -137,7 +137,27 @@ def apply_treatment_bindings(
             )
             if kind == "graphic":
                 layer_payload["relevance_note"] = fulfilled[0].placement.relevance_note
+                observation = fulfilled[0].observation
+                if observation is None:
+                    raise MediaError(
+                        "verified visual treatment binding is missing decoded observation evidence"
+                    )
+                evidence = decision.visual_evidence
+                if evidence is None:
+                    raise MediaError("visual treatment decision is missing its evidence container")
                 updates[layer_name] = BrollTreatmentDecision.model_validate(layer_payload)
+                updates["visual_evidence"] = evidence.model_copy(
+                    update={
+                        "relevance_status": "related",
+                        "relevance_score": observation.relevance_score,
+                        "relevance_threshold": observation.relevance_threshold,
+                        "evidence_ids": sorted(set([*evidence.evidence_ids, *observation.source_evidence_ids])),
+                        "note": (
+                            "Decoded observation matched the selected asset to the source-grounded beat; "
+                            f"reviewed by {observation.reviewed_by}."
+                        ),
+                    }
+                )
             else:
                 layer_payload["gain_db"] = (
                     fulfilled[0].placement.gain_db if fulfilled[0].placement.gain_db is not None else -18

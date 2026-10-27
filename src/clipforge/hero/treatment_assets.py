@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import uuid
 from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -21,7 +24,7 @@ from clipforge.media.hashing import sha256_file
 from clipforge.media.probe import read_ffprobe_json
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
-from clipforge.media.workspace import SourceWorkspace, atomic_replace, mkdir_contained
+from clipforge.media.workspace import SourceWorkspace, mkdir_contained
 from clipforge.schemas.direction import DirectionAssetPlacement, TreatmentAssetBindingDocument
 from clipforge.schemas.editorial import OutputInterval
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -176,8 +179,9 @@ def observe_registered_visual_asset(
     relevance_threshold: float,
     reviewed_by: str,
     review_note: str,
+    source_in_us: int = 0,
 ) -> tuple[Path, TreatmentAssetObservation]:
-    """Decode representative frames for a registered visual treatment asset."""
+    """Atomically observe the selected source span; earlier reviews are immutable."""
     _entry, _license, media = require_asset(
         database,
         SourceWorkspace(work_root, project_id, source_asset_id),
@@ -198,31 +202,147 @@ def observe_registered_visual_asset(
     )
     if video is None:
         raise MediaError("visual treatment asset has no decodable video/image stream")
-    duration_us = seconds_text_to_us(video.get("duration")) or 0
-    timestamps = [0] if duration_us <= 1 else sorted({0, duration_us // 2})
+    duration_us = seconds_text_to_us(video.get("duration")) or seconds_text_to_us(
+        probe.get("format", {}).get("duration")
+    )
+    if isinstance(source_in_us, bool) or not isinstance(source_in_us, int) or source_in_us < 0:
+        raise MediaError("treatment observation source in-point must be integer microseconds")
+    selected_duration_us = output_interval.output_end_us - output_interval.output_start_us
+    source_out_us = source_in_us + selected_duration_us
+    if duration_us is None:
+        if source_in_us != 0:
+            raise MediaError("still-image observation requires a zero source in-point")
+        timestamps = [0]
+    else:
+        if source_out_us > duration_us:
+            raise MediaError("treatment observation selected source span exceeds the asset duration")
+        try:
+            rate = Fraction(str(video.get("avg_frame_rate") or video.get("r_frame_rate")))
+            step = Fraction(1_000_000, 1) / rate
+            last_frame_budget_us = -(-step.numerator // step.denominator)
+        except (ValueError, ZeroDivisionError) as exc:
+            raise MediaError("treatment observation asset frame rate is unavailable") from exc
+        timestamps = sorted(
+            {
+                source_in_us,
+                source_in_us + selected_duration_us // 2,
+                max(source_in_us, source_out_us - last_frame_budget_us),
+            }
+        )
     observation_id = (
         "observation-"
         + hashlib.sha256(
             json.dumps(
                 [
+                    "ffmpeg-frame-probe-v2",
+                    source_asset_id,
                     asset_id,
                     media_sha,
                     output_interval.model_dump(mode="json"),
+                    source_in_us,
+                    source_out_us,
                     source_evidence_ids,
                     observed_labels,
+                    relevance_score,
+                    relevance_threshold,
+                    reviewed_by,
+                    review_note,
                 ],
                 sort_keys=True,
             ).encode()
         ).hexdigest()
     )
     root = work_root.resolve()
-    directory = root / "editorial" / "treatment-observations" / observation_id / "frames"
-    mkdir_contained(root, directory)
+    directory = root / "editorial" / "treatment-observations" / observation_id
+    target = directory / "observation.json"
+    mkdir_contained(root, directory.parent)
+    confine_work_path(root, target.relative_to(root).as_posix(), label="treatment observation")
+    if directory.exists():
+        try:
+            existing = TreatmentAssetObservation.model_validate_json(target.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError("immutable treatment observation is missing or invalid") from exc
+        if (
+            existing.observation_id != observation_id
+            or existing.media_sha256 != media_sha
+            or existing.source_asset_id != source_asset_id
+            or existing.output_interval != output_interval
+            or existing.source_in_us != source_in_us
+            or existing.source_out_us != source_out_us
+            or existing.source_evidence_ids != source_evidence_ids
+            or existing.observed_labels != observed_labels
+            or existing.relevance_score != relevance_score
+            or existing.relevance_threshold != relevance_threshold
+            or existing.reviewed_by != reviewed_by
+            or existing.review_note != review_note
+        ):
+            raise MediaError("immutable treatment observation identity conflicts with its evidence")
+        for frame in existing.frames:
+            path = confine_work_path(root, frame.relative_path, label="treatment observation frame")
+            if not path.is_file() or sha256_file(path) != frame.sha256:
+                raise MediaError("immutable treatment observation frame is missing or stale")
+        return target, existing
+    staging = directory.with_name(f".{observation_id}.{uuid.uuid4().hex}.partial")
+    mkdir_contained(root, staging / "frames")
+    try:
+        observation = _decode_visual_observation(
+            root=root,
+            staging=staging,
+            directory=directory,
+            media=media,
+            observation_id=observation_id,
+            asset_id=asset_id,
+            source_asset_id=source_asset_id,
+            media_sha=media_sha,
+            timestamps=timestamps,
+            output_interval=output_interval,
+            source_in_us=source_in_us,
+            source_out_us=source_out_us,
+            source_evidence_ids=source_evidence_ids,
+            observed_labels=observed_labels,
+            relevance_score=relevance_score,
+            relevance_threshold=relevance_threshold,
+            reviewed_by=reviewed_by,
+            review_note=review_note,
+        )
+        if sha256_file(media) != media_sha:
+            raise MediaError("treatment asset changed while its observation was decoded")
+        # A nonempty final directory cannot be replaced by rename. Two callers
+        # can never silently overwrite the same immutable observation.
+        os.rename(staging, directory)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+    return target, observation
+
+
+def _decode_visual_observation(
+    *,
+    root: Path,
+    staging: Path,
+    directory: Path,
+    media: Path,
+    observation_id: str,
+    asset_id: str,
+    source_asset_id: str,
+    media_sha: str,
+    timestamps: list[int],
+    output_interval: OutputInterval,
+    source_in_us: int,
+    source_out_us: int,
+    source_evidence_ids: list[str],
+    observed_labels: list[str],
+    relevance_score: float,
+    relevance_threshold: float,
+    reviewed_by: str,
+    review_note: str,
+) -> TreatmentAssetObservation:
+    """Write a private observation directory before its single promotion."""
     frames: list[TreatmentObservationFrame] = []
     runner = ProcessRunner()
     for index, timestamp_us in enumerate(timestamps):
-        final = directory / f"frame-{index:03d}.jpg"
-        partial = directory / f".{final.stem}.{uuid.uuid4().hex}.partial.jpg"
+        final = directory / "frames" / f"frame-{index:03d}.jpg"
+        partial = staging / "frames" / final.name
         runner.run(
             [
                 resolve_ffmpeg(),
@@ -244,11 +364,10 @@ def observe_registered_visual_asset(
         )
         if not partial.is_file() or partial.stat().st_size <= 0:
             raise MediaError(f"could not decode treatment observation frame {index}")
-        atomic_replace(partial, final, root)
         frames.append(
             TreatmentObservationFrame(
                 relative_path=final.relative_to(root).as_posix(),
-                sha256=sha256_file(final),
+                sha256=sha256_file(partial),
                 timestamp_us=timestamp_us,
             )
         )
@@ -258,6 +377,8 @@ def observe_registered_visual_asset(
         source_asset_id=source_asset_id,
         media_sha256=media_sha,
         output_interval=output_interval,
+        source_in_us=source_in_us,
+        source_out_us=source_out_us,
         source_evidence_ids=source_evidence_ids,
         frames=frames,
         observed_labels=observed_labels,
@@ -265,20 +386,20 @@ def observe_registered_visual_asset(
         relevance_threshold=relevance_threshold,
         reviewed_by=reviewed_by,
         review_note=review_note,
+        analyzer_version="ffmpeg-frame-probe-v2",
         provenance=ArtifactProvenance(
             created_at=datetime.now(UTC),
             created_by=reviewed_by,
             tool="clipforge treatment observe-asset",
-            tool_version="1.0.0",
+            tool_version="2.0.0",
             source_asset_ids=[source_asset_id],
             parent_artifact_ids=[asset_id],
             inputs_sha256=media_sha,
         ),
     )
-    target = directory.parent / "observation.json"
-    confine_work_path(root, target.relative_to(root).as_posix(), label="treatment observation")
-    publish_json(target, observation, root, directory.parent / f".observation.{uuid.uuid4().hex}.partial.json")
-    return target, observation
+    staged_target = staging / "observation.json"
+    publish_json(staged_target, observation, root, staging / ".observation.partial.json")
+    return observation
 
 
 def bind_acquired_request(
@@ -413,6 +534,10 @@ def persist_treatment_binding(
             raise MediaError("treatment observation does not match the visual placement")
         if observation.media_sha256 != verification.registered_asset_sha256:
             raise MediaError("treatment observation asset bytes are stale")
+        for frame in observation.frames:
+            frame_path = confine_work_path(work_root, frame.relative_path, label="treatment observation frame")
+            if not frame_path.is_file() or sha256_file(frame_path) != frame.sha256:
+                raise MediaError("treatment observation frame is missing or stale")
         observation_sha256 = sha256_file(observation_path)
         placement = placement.model_copy(
             update={"observation_id": observation.observation_id, "observation_sha256": observation_sha256}
@@ -459,6 +584,7 @@ def persist_treatment_binding(
             existing.request != request
             or existing.placement != placement
             or existing.verification != verification
+            or existing.observation != observation
             or existing.provenance.source_asset_ids != [source_asset_id]
         ):
             raise MediaError("treatment binding id is immutable and already has different evidence")

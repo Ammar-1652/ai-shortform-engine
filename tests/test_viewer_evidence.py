@@ -241,7 +241,9 @@ def test_viewer_evidence_persists_decoded_audio_measurement_sidecar(tmp_path: Pa
     )
     style = style_for_id("editorial-clean-v1")
     mix = _audio_mix()
-    staging = output.parent / "staging"
+    # Production Advanced Hero stages all candidates in the run-level
+    # directory, while the encoded output lives below candidates/<id>.
+    staging = run / "staging"
     staging.mkdir(parents=True)
     for name in ("asr.flac", "effect.wav"):
         ProcessRunner().run(
@@ -303,6 +305,7 @@ def test_viewer_evidence_persists_decoded_audio_measurement_sidecar(tmp_path: Pa
         job_id="job-1",
         actor="test",
         log_path=run / "viewer.log",
+        staging_dir=staging,
     )
     assert bundle.treatment_audio_intelligibility_status == "pass"
     measurement_path = run / bundle.treatment_audio_measurement_relative_path

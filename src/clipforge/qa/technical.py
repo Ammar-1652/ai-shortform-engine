@@ -701,7 +701,7 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                         or bundle.artifact_id != inputs.artifact_id
                         or bundle.encoded_media_sha256 != draft.preview_sha256
                         or bundle.render_input_sha256 != draft.render_input_sha256
-                        or bundle.duration_us != draft.output_duration_us
+                        or not _duration_within_tolerance(bundle.duration_us, draft.output_duration_us)
                         or bundle.style_fingerprint != plan.style_fingerprint
                         or bundle.treatment_fingerprint != plan.treatment_fingerprint
                         or bundle.treatment_evidence_sha256 != plan.treatment_evidence_sha256
@@ -739,7 +739,10 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                     if plan.treatment_audio_mix is not None:
                         measurement_path = confine_work_path(
                             inputs.root,
-                            (evidence_path.parent / bundle.treatment_audio_measurement_relative_path)
+                            (
+                                inputs.workspace.advanced_run_dir(inputs.document.advanced_set_id)
+                                / bundle.treatment_audio_measurement_relative_path
+                            )
                             .relative_to(inputs.root)
                             .as_posix(),
                             label="treatment audio measurement",
@@ -951,6 +954,11 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
         "caption word ids are unique; no repeated source ranges or unsupported quantitative graphic; "
         "human visual review remains required",
     )
+
+
+def _duration_within_tolerance(actual_us: int, expected_us: int) -> bool:
+    """Allow the bounded encoder/container duration error already used by probe QA."""
+    return abs(actual_us - expected_us) <= DURATION_TOLERANCE_US
 
 
 def _caption_alignment_problems(

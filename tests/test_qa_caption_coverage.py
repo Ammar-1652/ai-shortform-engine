@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from clipforge.qa.technical import _caption_alignment_problems
+from clipforge.qa.technical import _caption_alignment_problems, _duration_within_tolerance
 from clipforge.schemas.advanced import CaptionWordTiming
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
@@ -80,3 +80,8 @@ def test_qa_rejects_caption_timing_that_drifted_from_alignment() -> None:
     assert _caption_alignment_problems(plan, alignment) == [
         "candidate=candidate-1 caption_alignment_timing:word-0"
     ]
+
+
+def test_viewer_duration_binding_allows_bounded_container_padding() -> None:
+    assert _duration_within_tolerance(34_366_667, 34_334_300)
+    assert not _duration_within_tolerance(34_500_001, 34_334_300)

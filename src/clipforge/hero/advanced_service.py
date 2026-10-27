@@ -1757,6 +1757,33 @@ def _render_run(
         treatment_audio_measurement_relative_path = ""
         treatment_audio_measurement_sha256 = ""
         if renderer.requires_browser and plan.style_id != "legacy-v1":
+            # The browser staging directory is intentionally ephemeral and is
+            # removed after the run. A resumed run may already have every
+            # encoded chunk recorded in its checkpoint, so the render loop
+            # legitimately skips the browser worker and never rebuilds those
+            # inputs. Viewer evidence still needs the exact staged speech and
+            # SFX references to measure the encoded mix. Re-stage the
+            # candidate before evidence generation instead of accepting a
+            # false "insufficient evidence" result on a successful resume.
+            _restage_candidate_evidence_inputs(
+                inputs=inputs,
+                workspace=workspace,
+                plan=plan,
+                time_map=(
+                    plan.time_map
+                    if plan.time_map is not None
+                    else _read_model(
+                        hero.manifest_path.parent / "candidates" / candidate_id / "plan.json",
+                        HeroPlanDocument,
+                        "hero plan",
+                    ).edit_plan.time_map
+                ),
+                staging=staging,
+                frame_count=render_input.duration_in_frames,
+                root=root,
+                run_dir=run_dir,
+                candidate_id=candidate_id,
+            )
             authorization_path = output.parent / "authorization.json"
             authorization = _read_model(
                 authorization_path, AdvancedRenderAuthorization, "candidate render authorization"
@@ -1814,6 +1841,7 @@ def _render_run(
                 job_id=job.job_id,
                 actor=actor,
                 log_path=run_dir / "logs" / f"{candidate_id}.viewer-evidence.log",
+                staging_dir=staging,
             )
             viewer_relative_path = viewer_path.relative_to(run_dir).as_posix()
             viewer_sha256 = sha256_file(viewer_path)
@@ -3253,6 +3281,41 @@ def _stage_candidate_base(
     staged_audio_path = staged_jump_cut.audio_path
     staged_video_path.rename(staging / "analysis.mp4")
     staged_audio_path.rename(staging / "asr.flac")
+
+
+def _restage_candidate_evidence_inputs(
+    *,
+    inputs: object,
+    workspace: SourceWorkspace,
+    plan: AdvancedHeroPlanDocument,
+    time_map: TimeMapDocument,
+    staging: Path,
+    frame_count: int,
+    root: Path,
+    run_dir: Path,
+    candidate_id: str,
+) -> None:
+    """Rebuild the ephemeral inputs required by post-render evidence.
+
+    A checkpointed browser render can finish all of its frame/audio units in
+    an earlier process. On resume the worker correctly skips those units, but
+    the staging directory is deliberately cleaned after each attempt. The
+    evidence pass must therefore restore the same canonical TimeMap-derived
+    speech and every treatment asset before measuring the encoded file.
+    """
+    staging.mkdir(parents=True, exist_ok=True)
+    _stage_candidate_base(
+        inputs,
+        staging,
+        candidate_id,
+        time_map,
+        frame_count,
+        root,
+        run_dir / "logs" / f"{candidate_id}.evidence-restage.log",
+    )
+    for binding in plan.assets:
+        catalog_file = _asset_path(workspace, binding.asset_id, root)
+        _link(catalog_file, staging / _staged_name(binding), root)
 
 
 def _link(source: Path, destination: Path, root: Path) -> None:

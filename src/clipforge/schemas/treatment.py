@@ -226,18 +226,29 @@ class TreatmentAssetObservation(Versioned):
     source_asset_id: EntityId
     media_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     output_interval: OutputInterval
+    source_in_us: Microseconds = 0
+    source_out_us: Microseconds | None = None
     source_evidence_ids: list[EntityId] = Field(min_length=1, max_length=16)
     frames: list[TreatmentObservationFrame] = Field(min_length=1, max_length=8)
     observed_labels: list[str] = Field(min_length=1, max_length=16)
     relevance_score: float = Field(ge=0, le=1)
     relevance_threshold: float = Field(ge=0, le=1)
-    analyzer_version: Literal["ffmpeg-frame-probe-v1"] = "ffmpeg-frame-probe-v1"
+    analyzer_version: Literal["ffmpeg-frame-probe-v1", "ffmpeg-frame-probe-v2"] = "ffmpeg-frame-probe-v1"
     reviewed_by: str = Field(min_length=1, max_length=200)
     review_note: str = Field(min_length=1, max_length=500)
     provenance: ArtifactProvenance
 
     @model_validator(mode="after")
     def score_is_actionable(self) -> Self:
+        if self.analyzer_version == "ffmpeg-frame-probe-v2":
+            duration = self.output_interval.output_end_us - self.output_interval.output_start_us
+            if self.source_out_us != self.source_in_us + duration:
+                raise ValueError("observation source span must match its selected output duration")
+            timestamps = [frame.timestamp_us for frame in self.frames]
+            if timestamps != sorted(set(timestamps)) or any(
+                not self.source_in_us <= timestamp < self.source_out_us for timestamp in timestamps
+            ):
+                raise ValueError("observation frames must be ordered inside the selected source span")
         if self.relevance_score < self.relevance_threshold:
             raise ValueError("visual observation relevance is below its required threshold")
         if self.source_asset_id not in self.provenance.source_asset_ids:
