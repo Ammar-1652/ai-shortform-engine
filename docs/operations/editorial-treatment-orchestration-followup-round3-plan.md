@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 3
 
 **Review date:** 2026-10-27
-**Reviewed head:** `df74bed5854706fafb9b632b5a58a90a29d58240`
+**Reviewed head:** `4e372dbc83ae56b4abcb19946edc6a4d6309791d`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Purpose:** close the evidence and integration gaps found when reviewing the
@@ -31,7 +31,7 @@ render is still not a human final approval.
 | R3-3 | TECHNICALLY_VERIFIED | `df74bed` | Canonical aligned-word overlap is stored per SFX cue. Decoded-window RMS compares the encoded output against staged speech and SFX references, applies gain/duck policy, requires a non-negative margin, and records `decoded_window_signal_v2`; targeted tests cover v1 compatibility, v2 success, missing references, stale sidecars, resume restaging, and failure cases | Real measurement: `treatment-audio-measurement.json` sha256 `42ebf986d1d637cba550b152f56ba90db78103cb43e5e518c1d8d18819ee8cf9`; integrated `-17.1 LUFS`, true peak `-1.4 dBFS`, margins `12.78 dB` and `4.19 dB` | `qa verify` passes the evidence binding; `qa gate` remains blocked by separate caption speech inventory insufficiency; human listening is still required |
 | R3-4 | TECHNICALLY_VERIFIED | `df74bed` | `TreatmentEvidenceBundle` is persisted atomically and embeds validated provider/license receipts, observations, frame hashes, policy decisions, and measured audio facts; it remains hash-bound into render input/viewer evidence/QA/final-review/cache/delivery; schema export/check passes | Real bundle `var/round3-provider-proof/.../treatment-evidence.json` sha256 `84f60c498bc39e895502646c888f58311ca32569c564658c446ab9e1f7750268` | The bundle is readable and hash-bound; final review/delivery remain blocked by QA status and no human approval |
 | R3-5 | TECHNICALLY_VERIFIED | `df74bed` | Shared evaluator is called by direction lint, Advanced planning/preflight, QA, and delivery; multiplicity-aware ownership rejects duplicate/omitted events. The resume evidence path and bounded encoded-duration comparison are now covered by tests | Real render consumed exactly the selected treatment event set; no duplicate event receipt was accepted | Full automated validation passes; CI is still pending and independent code/visual review is still required |
-| R3-6 | TECHNICALLY_VERIFIED | `df74bed` + follow-up | Provider-backed acquisition, rights, observation, revision, Remotion render, decoded evidence, delivery preflight, and Codex generic subtitle-review paths are exercised by a real non-Tarteel campaign source; no fixture substituted for the render path | Approved proof MP4 remains immutable. A separate draft packet contains Codex speech-review sha256 `1a0a3b4d33db25864d9e8ee544311cabcb218a7d65b750b6e6a36b5c0a85addf`, a visible `🤩` caption annotation, and decoded viewer evidence under `var/round3-provider-proof/.../advanced-hero/review-drafts/runs/380b462a-a8aa-4f13-ac94-dae730d1401f/` | Generic QA can now become complete when this review is bound; human final review, local delivery, and CI remain separate gates |
+| R3-6 | TECHNICALLY_VERIFIED | `4e372db` + follow-up | Provider-backed acquisition, rights, observation, revision, Remotion render, decoded evidence, delivery preflight, and Codex generic subtitle-review paths are exercised by a real non-Tarteel campaign source; no fixture substituted for the render path | Approved proof MP4 remains immutable. A separate draft packet contains Codex speech-review sha256 `1a0a3b4d33db25864d9e8ee544311cabcb218a7d65b750b6e6a36b5c0a85addf`, a visible `🤩` caption annotation, and decoded viewer evidence under `var/round3-provider-proof/.../advanced-hero/review-drafts/runs/380b462a-a8aa-4f13-ac94-dae730d1401f/` | Generic QA can now become complete when this review is bound; human final review, local delivery, and CI remain separate gates |
 
 **R3-6 exact external input required to close the round:**
 
@@ -62,11 +62,13 @@ The final validation run must record its exact resulting HEAD below before any
 status can advance.
 
 **Exact-head validation result:** `TECHNICALLY_VERIFIED` on
-`df74bed5854706fafb9b632b5a58a90a29d58240`:
-`./scripts/validate.sh` passed. It records `956 passed, 2 skipped, 18
+`4e372dbc83ae56b4abcb19946edc6a4d6309791d`:
+`./scripts/validate.sh` passed. It records `964 passed, 2 skipped, 18
 deselected` in the non-browser partition (VoiceStudio unavailable; Whop not
-configured), `18 passed, 958 deselected` in the browser/Remotion partition,
-and 64 renderer tests. Ruff, format, mypy, schema check, renderer
+configured), `18 passed, 966 deselected` in the browser/Remotion partition,
+and 64 renderer tests. The focused Codex-review suite includes source/context
+meaning, sensitive-text evidence, emotion emoji rendering, and source-to-output
+TimeMap mapping after a jump cut. Ruff, format, mypy, schema check, renderer
 lint/typecheck, and doctor (10 pass, 0 warn, 0 fail) also passed. No Chrome,
 Node renderer, or ffmpeg worker remains running.
 
