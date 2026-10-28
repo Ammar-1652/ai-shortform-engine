@@ -484,6 +484,7 @@ for (const item of batch.items) {
     browserExecutable,
     chromiumOptions,
     timeoutInMilliseconds: browserSetupTimeoutMs,
+    numberOfRetries: 1,
     concurrency: 1,
     crf: audioOnly ? undefined : item.h264Crf,
     pixelFormat: audioOnly ? undefined : "yuv420p",
