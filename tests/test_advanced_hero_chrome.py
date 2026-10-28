@@ -32,6 +32,7 @@ from clipforge.review.service import (
     record_hero_decision,
     review_board,
 )
+from clipforge.schemas.campaign import TarteelSpeechInterval, TarteelSpeechReview
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionBeat,
@@ -223,6 +224,45 @@ def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: 
     )
 
 
+def _persist_generic_speech_review(fixture, candidate_id: str) -> None:
+    context = _context(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+    words = context.alignment.words
+    review = TarteelSpeechReview(
+        review_id="chrome-codex-review-1",
+        campaign="generic",
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        source_sha256=context.source_sha256,
+        raw_asr_sha256=context.alignment.asr_audio_sha256,
+        transcript_sha256=context.alignment.transcript_sha256,
+        locale=context.alignment.locale,
+        intervals=[
+            TarteelSpeechInterval(
+                span_id="chrome-speech-1",
+                source_start_us=words[0].source_start_us,
+                source_end_us=words[-1].source_end_us,
+                kind="dialogue",
+                caption_decision="captioned",
+                observed_text=" ".join(word.text.strip() for word in words),
+                review_note="Codex reviewed the rendered test source for meaning and context.",
+            )
+        ],
+        reviewer="codex",
+        reviewer_role="codex_operator",
+        reviewed_at=datetime.now(UTC),
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="codex",
+            tool="chrome-test",
+            tool_version="1",
+            source_asset_ids=[SOURCE_ID],
+        ),
+    )
+    destination = fixture.work / "editorial/speech-reviews" / SOURCE_ID / candidate_id / "speech-review.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(review.model_dump_json(), encoding="utf-8")
+
+
 @pytest.mark.parametrize("clean_direction", [False, True], ids=["legacy", "clean-direction"])
 def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
     clean_direction: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -291,6 +331,7 @@ def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
     _register_asset(fixture, "sfx-1", "audio", effect.read_bytes())
     if clean_direction:
         _persist_clean_direction(fixture, candidate_id, "broll-1", "sfx-1")
+        _persist_generic_speech_review(fixture, candidate_id)
         profile = default_advanced_profile()
     else:
         profile = default_advanced_profile().model_copy(
