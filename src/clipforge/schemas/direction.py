@@ -152,6 +152,21 @@ class DirectionContextLine(Versioned):
         return self
 
 
+class DirectionPlacementRegion(Versioned):
+    """Reviewed output-space rectangle for a visual asset placement."""
+
+    x: int = Field(ge=0, le=1080)
+    y: int = Field(ge=0, le=1920)
+    width: int = Field(gt=0, le=1080)
+    height: int = Field(gt=0, le=1920)
+
+    @model_validator(mode="after")
+    def inside_portrait(self) -> Self:
+        if self.x + self.width > 1080 or self.y + self.height > 1920:
+            raise ValueError("direction placement region must stay inside the portrait output")
+        return self
+
+
 class DirectionAssetPlacement(Versioned):
     """A reviewed, source-grounded placement for one local asset.
 
@@ -169,6 +184,7 @@ class DirectionAssetPlacement(Versioned):
     source_evidence_ids: list[EntityId] = Field(min_length=1)
     purpose: MotionPurpose
     relevance_note: str = Field(min_length=1, max_length=500)
+    output_region: DirectionPlacementRegion | None = None
     # Exact labels copied from the reviewed local asset catalog. A prose note
     # is editorial context, not semantic proof that a stock clip is relevant.
     asset_tags: list[str] = Field(default_factory=list, max_length=24)

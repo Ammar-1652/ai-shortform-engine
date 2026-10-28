@@ -99,6 +99,7 @@
     "DirectionTransitionSpec",
     "SourceNativeText",
     "DirectionOption",
+    "DirectionPlacementRegion",
     "DirectionDocument",
     "DirectionLintFinding",
     "DirectionLintReport",

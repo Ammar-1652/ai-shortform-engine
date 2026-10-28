@@ -197,6 +197,17 @@
           "default": null,
           "title": "Observation Sha256"
         },
+        "output_region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DirectionPlacementRegion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "placement_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -301,6 +312,50 @@
         "relevance_note"
       ],
       "title": "DirectionAssetPlacement",
+      "type": "object"
+    },
+    "DirectionPlacementRegion": {
+      "additionalProperties": false,
+      "description": "Reviewed output-space rectangle for a visual asset placement.",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1080,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 1080,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1920,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "DirectionPlacementRegion",
       "type": "object"
     },
     "MotionPurpose": {

@@ -312,17 +312,38 @@ def _visual_evidence(
         for item in option.source_native_text
         if any(scene_id in scene_ids for scene_id in item.visual_scene_ids)
     ]
+    broll_regions = [
+        TreatmentRegion(
+            region_id=f"broll:{item.placement_id}",
+            role="broll",
+            interval=item.interval,
+            x=item.output_region.x,
+            y=item.output_region.y,
+            width=item.output_region.width,
+            height=item.output_region.height,
+            source="render_input",
+        )
+        for item in option.asset_placements
+        if item.kind == "graphic"
+        and item.output_region is not None
+        and _intervals_overlap(item.interval, interval)
+    ]
     if visual is None or not scene_ids:
         return TreatmentVisualEvidence(
             visual_scene_ids=scene_ids,
             protected_region_ids=[item.region_id for item in base_regions + native_regions],
             collision_status="unknown",
             relevance_status="unknown",
-            regions=[*base_regions, *native_regions],
+            regions=[*base_regions, *native_regions, *broll_regions],
             note="visual geometry was not available for deterministic treatment planning",
         )
     faces = [item for item in visual.face_detection_samples if item.scene_id in scene_ids]
-    protected = ["platform-safe-region", "caption-lane", *[item.region_id for item in native_regions]]
+    protected = [
+        "platform-safe-region",
+        "caption-lane",
+        *[item.region_id for item in native_regions],
+        *[item.region_id for item in broll_regions],
+    ]
     protected.extend(f"face:{scene_id}" for scene_id in sorted({item.scene_id for item in faces}))
     if not faces:
         return TreatmentVisualEvidence(
@@ -330,7 +351,7 @@ def _visual_evidence(
             protected_region_ids=protected,
             collision_status="clear",
             relevance_status="unknown",
-            regions=[*base_regions, *native_regions],
+            regions=[*base_regions, *native_regions, *broll_regions],
             note="reviewed scenes contain no detected face geometry",
         )
     edge_face = any(
@@ -348,6 +369,7 @@ def _visual_evidence(
         regions=[
             *base_regions,
             *native_regions,
+            *broll_regions,
             *[
                 TreatmentRegion(
                     region_id=f"face:{sample.scene_id}",
@@ -376,7 +398,9 @@ def _camera_collides_regions(
     """Conservatively reject a camera envelope that can crop protected pixels."""
     selected = [item for item in cameras if item.motion_id in set(event_ids)]
     protected = [
-        item for item in regions if item.role in {"face", "active_subject", "source_text", "logo", "cta"}
+        item
+        for item in regions
+        if item.role in {"face", "active_subject", "source_text", "logo", "cta", "broll"}
     ]
     for event in selected:
         scale_delta = max(event.scale_start_permille, event.scale_end_permille) / 1000 - 1
