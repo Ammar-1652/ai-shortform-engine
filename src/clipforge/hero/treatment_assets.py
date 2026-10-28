@@ -33,6 +33,7 @@ from clipforge.schemas.treatment import (
     TreatmentAssetRequest,
     TreatmentAssetVerification,
     TreatmentObservationFrame,
+    TreatmentRegion,
 )
 from clipforge.storage import Database
 from clipforge.transcription.io import publish_json
@@ -180,6 +181,7 @@ def observe_registered_visual_asset(
     reviewed_by: str,
     review_note: str,
     source_in_us: int = 0,
+    output_region: tuple[int, int, int, int] | None = None,
 ) -> tuple[Path, TreatmentAssetObservation]:
     """Atomically observe the selected source span; earlier reviews are immutable."""
     _entry, _license, media = require_asset(
@@ -245,6 +247,7 @@ def observe_registered_visual_asset(
                     observed_labels,
                     relevance_score,
                     relevance_threshold,
+                    output_region,
                     reviewed_by,
                     review_note,
                 ],
@@ -262,6 +265,11 @@ def observe_registered_visual_asset(
             existing = TreatmentAssetObservation.model_validate_json(target.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, ValidationError, ValueError) as exc:
             raise MediaError("immutable treatment observation is missing or invalid") from exc
+        existing_broll_regions = [region for region in existing.regions if region.role == "broll"]
+        existing_output_region = None
+        if existing_broll_regions:
+            region = existing_broll_regions[0]
+            existing_output_region = (region.x, region.y, region.width, region.height)
         if (
             existing.observation_id != observation_id
             or existing.media_sha256 != media_sha
@@ -273,6 +281,7 @@ def observe_registered_visual_asset(
             or existing.observed_labels != observed_labels
             or existing.relevance_score != relevance_score
             or existing.relevance_threshold != relevance_threshold
+            or existing_output_region != output_region
             or existing.reviewed_by != reviewed_by
             or existing.review_note != review_note
         ):
@@ -304,6 +313,7 @@ def observe_registered_visual_asset(
             relevance_threshold=relevance_threshold,
             reviewed_by=reviewed_by,
             review_note=review_note,
+            output_region=output_region,
         )
         if sha256_file(media) != media_sha:
             raise MediaError("treatment asset changed while its observation was decoded")
@@ -336,6 +346,7 @@ def _decode_visual_observation(
     relevance_threshold: float,
     reviewed_by: str,
     review_note: str,
+    output_region: tuple[int, int, int, int] | None,
 ) -> TreatmentAssetObservation:
     """Write a private observation directory before its single promotion."""
     frames: list[TreatmentObservationFrame] = []
@@ -371,6 +382,21 @@ def _decode_visual_observation(
                 timestamp_us=timestamp_us,
             )
         )
+    regions = []
+    if output_region is not None:
+        x, y, width, height = output_region
+        regions.append(
+            TreatmentRegion(
+                region_id=f"broll:{asset_id}",
+                role="broll",
+                interval=output_interval,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                source="render_input",
+            )
+        )
     observation = TreatmentAssetObservation(
         observation_id=observation_id,
         asset_id=asset_id,
@@ -384,6 +410,7 @@ def _decode_visual_observation(
         observed_labels=observed_labels,
         relevance_score=relevance_score,
         relevance_threshold=relevance_threshold,
+        regions=regions,
         reviewed_by=reviewed_by,
         review_note=review_note,
         analyzer_version="ffmpeg-frame-probe-v2",

@@ -233,6 +233,7 @@ class TreatmentAssetObservation(Versioned):
     observed_labels: list[str] = Field(min_length=1, max_length=16)
     relevance_score: float = Field(ge=0, le=1)
     relevance_threshold: float = Field(ge=0, le=1)
+    regions: list[TreatmentRegion] = Field(default_factory=list, max_length=8)
     analyzer_version: Literal["ffmpeg-frame-probe-v1", "ffmpeg-frame-probe-v2"] = "ffmpeg-frame-probe-v1"
     reviewed_by: str = Field(min_length=1, max_length=200)
     review_note: str = Field(min_length=1, max_length=500)

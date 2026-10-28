@@ -1104,6 +1104,14 @@
         "provenance": {
           "$ref": "#/$defs/ArtifactProvenance"
         },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/TreatmentRegion"
+          },
+          "maxItems": 8,
+          "title": "Regions",
+          "type": "array"
+        },
         "relevance_score": {
           "maximum": 1,
           "minimum": 0,

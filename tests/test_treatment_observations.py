@@ -131,3 +131,24 @@ def test_observation_at_media_endpoint_has_a_decodable_last_sample(tmp_path: Pat
     _, observation = _observe(tmp_path, source_in_us=1_500_000)
     assert all((tmp_path / item.relative_path).is_file() for item in observation.frames)
     assert observation.source_out_us == 2_000_000
+
+
+def test_observation_persists_reviewed_output_region_for_collision_evidence(
+    tmp_path: Path, visual_asset: Path
+) -> None:
+    _, observation = _observe(tmp_path, output_region=(80, 420, 640, 360))
+    assert len(observation.regions) == 1
+    region = observation.regions[0]
+    assert region.role == "broll"
+    assert (region.x, region.y, region.width, region.height) == (80, 420, 640, 360)
+    _, again = _observe(tmp_path, output_region=(80, 420, 640, 360))
+    assert again.observation_id == observation.observation_id
+
+
+@pytest.mark.parametrize("output_region", [(900, 420, 300, 360), (80, 1800, 640, 200)])
+def test_observation_rejects_output_region_outside_portrait_frame(
+    tmp_path: Path, visual_asset: Path, output_region: tuple[int, int, int, int]
+) -> None:
+    with pytest.raises(ValueError, match="inside the portrait output"):
+        _observe(tmp_path, output_region=output_region)
+    assert not list(tmp_path.glob("editorial/treatment-observations/*"))

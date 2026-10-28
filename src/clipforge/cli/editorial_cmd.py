@@ -567,6 +567,18 @@ def treatment_observe_asset(
     reviewed_by: Annotated[str, typer.Option("--reviewed-by")],
     review_note: Annotated[str, typer.Option("--review-note")],
     source_in_us: Annotated[int, typer.Option("--source-in-us")] = 0,
+    region_x: Annotated[
+        int | None, typer.Option("--region-x", help="Output-region x in portrait pixels.")
+    ] = None,
+    region_y: Annotated[
+        int | None, typer.Option("--region-y", help="Output-region y in portrait pixels.")
+    ] = None,
+    region_width: Annotated[
+        int | None, typer.Option("--region-width", help="Output-region width in portrait pixels.")
+    ] = None,
+    region_height: Annotated[
+        int | None, typer.Option("--region-height", help="Output-region height in portrait pixels.")
+    ] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
 ) -> None:
@@ -576,6 +588,19 @@ def treatment_observe_asset(
     from clipforge.storage import Database
 
     try:
+        region_values = (region_x, region_y, region_width, region_height)
+        if any(value is not None for value in region_values) and not all(
+            value is not None for value in region_values
+        ):
+            raise ValueError("treatment output region requires x, y, width, and height together")
+        if all(value is not None for value in region_values):
+            assert region_x is not None
+            assert region_y is not None
+            assert region_width is not None
+            assert region_height is not None
+            output_region = (region_x, region_y, region_width, region_height)
+        else:
+            output_region = None
         path, observation = observe_registered_visual_asset(
             database=Database(resolve_db_path(db)),
             work_root=resolve_work_dir(work_dir),
@@ -590,6 +615,7 @@ def treatment_observe_asset(
             relevance_threshold=relevance_threshold,
             reviewed_by=reviewed_by,
             review_note=review_note,
+            output_region=output_region,
         )
     except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
         _fail(exc)
@@ -600,6 +626,7 @@ def treatment_observe_asset(
                 "observation_relative_path": path.relative_to(resolve_work_dir(work_dir)).as_posix(),
                 "media_sha256": observation.media_sha256,
                 "relevance_score": observation.relevance_score,
+                "regions": [region.model_dump(mode="json") for region in observation.regions],
             },
             sort_keys=True,
         )
