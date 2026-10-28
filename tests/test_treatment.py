@@ -187,3 +187,31 @@ def test_audio_mix_records_real_speech_overlap_and_silence() -> None:
     assert overlap_mix.speech_overlap_windows[0] == OutputInterval(
         output_start_us=1_500_000, output_end_us=2_500_000
     )
+
+
+def test_audio_mix_preserves_disjoint_speech_and_silence_windows() -> None:
+    direction = _document()
+    words = [
+        _aligned_words()[0].model_copy(update={"output_start_us": 0, "output_end_us": 500_000}),
+        _aligned_words()[1].model_copy(update={"output_start_us": 1_500_000, "output_end_us": 2_000_000}),
+    ]
+    event = AudioMixEvent(
+        event_id="sfx-disjoint",
+        interval=OutputInterval(output_start_us=0, output_end_us=2_500_000),
+        asset_id="asset-1",
+        gain_db=-18,
+    )
+    mix = _build_treatment_audio_mix(direction, [event], default_advanced_profile(), words)
+    assert mix is not None
+    assert mix.speech_overlap_windows_v2 == [
+        [
+            OutputInterval(output_start_us=0, output_end_us=500_000),
+            OutputInterval(output_start_us=1_500_000, output_end_us=2_000_000),
+        ]
+    ]
+    assert mix.silence_windows_v2 == [
+        [
+            OutputInterval(output_start_us=500_000, output_end_us=1_500_000),
+            OutputInterval(output_start_us=2_000_000, output_end_us=2_500_000),
+        ]
+    ]
