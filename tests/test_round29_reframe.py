@@ -258,6 +258,35 @@ def test_corrupt_advanced_mp4_is_rejected(tmp_path: Path) -> None:
         probe_hero(video, expected_duration_us=1_000_000)
 
 
+def test_hero_probe_rejects_audio_video_stream_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    video = tmp_path / "drift.mp4"
+    video.write_bytes(b"probe fixture")
+    monkeypatch.setattr(
+        "clipforge.hero.probe.read_ffprobe_json",
+        lambda *_args, **_kwargs: {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "pix_fmt": "yuv420p",
+                    "width": 1080,
+                    "height": 1920,
+                    "r_frame_rate": "30/1",
+                    "duration": "1.0",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "duration": "1.2",
+                    "start_time": "0",
+                },
+            ]
+        },
+    )
+    with pytest.raises(MediaError, match="audio/video streams differ"):
+        probe_hero(video, expected_duration_us=1_100_000)
+
+
 def test_changed_trajectory_invalidates_qa(tmp_path: Path) -> None:
     document = _plan()
     workspace = SourceWorkspace(tmp_path, "project-1", "source-1")
@@ -370,6 +399,46 @@ def test_delivery_fingerprint_tracks_the_trajectory(tmp_path: Path) -> None:
     )
     first = DeliveryFacts(**base)  # type: ignore[arg-type]
     second = DeliveryFacts(**(base | {"trajectory_sha256": _OTHER}))  # type: ignore[arg-type]
+    assert cache_fingerprint(first) != cache_fingerprint(second)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "preset_id",
+        "pilot_sha256",
+        "motion_catalog_sha256",
+        "knowledge_context_sha256",
+        "knowledge_release_id",
+        "knowledge_decision_trace_sha256",
+    ],
+)
+def test_delivery_fingerprint_tracks_editorial_direction_dependencies(tmp_path: Path, field: str) -> None:
+    from clipforge.publish.preflight import DeliveryFacts
+
+    base = {name: "" for name in DeliveryFacts.__dataclass_fields__}
+    base.update(
+        {
+            "source_duration_us": 1,
+            "candidate_rank": 1,
+            "advanced_artifact_size": 1,
+            "output_duration_us": 1,
+            "video_size": 1,
+            "caption_cues": (),
+            "broll": (),
+            "sfx": (),
+            "typography": (),
+            "diagrams": (),
+            "emphasis": (),
+            "motion_recipe_ids": ("motion-hook-card-v1",),
+            "video_path": tmp_path / "video.mp4",
+            "narration_path": None,
+            "workspace": SourceWorkspace(tmp_path, "project-1", "source-1"),
+        }
+    )
+    first = DeliveryFacts(**base)  # type: ignore[arg-type]
+    value = "f" * 64 if field.endswith("sha256") else "changed"
+    second = DeliveryFacts(**(base | {field: value}))  # type: ignore[arg-type]
     assert cache_fingerprint(first) != cache_fingerprint(second)
 
 

@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "DirectionLintFinding": {
+      "additionalProperties": false,
+      "description": "One deterministic direction-lint finding.",
+      "properties": {
+        "code": {
+          "pattern": "^[a-z][a-z0-9_.:-]{1,80}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ],
+      "title": "DirectionLintFinding",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Reviewable direction lint output bound to one immutable direction.",
+  "properties": {
+    "direction_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/DirectionLintFinding"
+      },
+      "maxItems": 64,
+      "title": "Findings",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "direction_id",
+    "direction_sha256",
+    "status"
+  ],
+  "title": "DirectionLintReport",
+  "type": "object"
+}

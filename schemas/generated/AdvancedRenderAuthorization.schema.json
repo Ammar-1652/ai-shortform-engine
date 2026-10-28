@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "RenderAuthorizationItem": {
+      "additionalProperties": false,
+      "description": "One service-issued composition input accepted by the renderer.",
+      "properties": {
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "output_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Output Relative Path",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "staged_sha256": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Staged Sha256",
+          "type": "object"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "input_sha256",
+        "output_relative_path",
+        "staged_sha256"
+      ],
+      "title": "RenderAuthorizationItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Service-issued proof binding a renderer batch to its persisted inputs.\n\nThe renderer is a worker. It may consume this record, but it cannot create\none. Parent hashes are carried by the canonical render input and are bound\nhere through each input digest.",
+  "properties": {
+    "advanced_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Advanced Set Id",
+      "type": "string"
+    },
+    "authorization_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Authorization Id",
+      "type": "string"
+    },
+    "batch_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Batch Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/RenderAuthorizationItem"
+      },
+      "minItems": 1,
+      "title": "Items",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "recipe": {
+      "const": "advanced-render-authorization-v1",
+      "default": "advanced-render-authorization-v1",
+      "title": "Recipe",
+      "type": "string"
+    },
+    "renderer_dependency_files": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "minProperties": 1,
+      "title": "Renderer Dependency Files",
+      "type": "object"
+    },
+    "renderer_dependency_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "authorization_id",
+    "advanced_set_id",
+    "source_asset_id",
+    "source_sha256",
+    "batch_sha256",
+    "renderer_dependency_sha256",
+    "renderer_dependency_files",
+    "items",
+    "created_at",
+    "provenance"
+  ],
+  "title": "AdvancedRenderAuthorization",
+  "type": "object"
+}

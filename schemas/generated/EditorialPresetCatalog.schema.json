@@ -1,0 +1,384 @@
+{
+  "$defs": {
+    "BrollPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_consecutive_beats": {
+          "default": 2,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Max Consecutive Beats",
+          "type": "integer"
+        },
+        "min_meaningful_beats": {
+          "default": 0,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Min Meaningful Beats",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "preferred",
+            "eligible",
+            "blocked"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "relevance_threshold": {
+          "default": 0.85,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Relevance Threshold",
+          "type": "number"
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 0,
+          "title": "Roles",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "BrollPolicy",
+      "type": "object"
+    },
+    "CameraPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "max_events": {
+          "default": 4,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Max Events",
+          "type": "integer"
+        },
+        "max_scale_delta": {
+          "default": 0.08,
+          "maximum": 0.14,
+          "minimum": 0,
+          "title": "Max Scale Delta",
+          "type": "number"
+        },
+        "max_subject_drift_px": {
+          "default": 80,
+          "maximum": 194,
+          "minimum": 0,
+          "title": "Max Subject Drift Px",
+          "type": "integer"
+        },
+        "min_events": {
+          "default": 0,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Min Events",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "preferred",
+            "allowed",
+            "blocked"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "CameraPolicy",
+      "type": "object"
+    },
+    "PresetDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_style_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Allowed Style Ids",
+          "type": "array"
+        },
+        "audio_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Audio Rules",
+          "type": "array"
+        },
+        "camera_language": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Camera Language",
+          "type": "array"
+        },
+        "caption_mode": {
+          "enum": [
+            "phrase_active_word",
+            "phrase_whole_run"
+          ],
+          "title": "Caption Mode",
+          "type": "string"
+        },
+        "motion_recipe_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Motion Recipe Ids",
+          "type": "array"
+        },
+        "narrative_structure": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 3,
+          "title": "Narrative Structure",
+          "type": "array"
+        },
+        "preset_id": {
+          "enum": [
+            "clean_explainer",
+            "proof_comparison",
+            "story_reveal",
+            "transformation",
+            "quote_emotion",
+            "product_cta"
+          ],
+          "title": "Preset Id",
+          "type": "string"
+        },
+        "preset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Preset Sha256",
+          "type": "string"
+        },
+        "reject_when": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Reject When",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "treatment_policy": {
+          "$ref": "#/$defs/TreatmentPolicy"
+        }
+      },
+      "required": [
+        "preset_id",
+        "narrative_structure",
+        "camera_language",
+        "motion_recipe_ids",
+        "allowed_style_ids",
+        "caption_mode",
+        "audio_rules",
+        "reject_when",
+        "treatment_policy",
+        "preset_sha256"
+      ],
+      "title": "PresetDefinition",
+      "type": "object"
+    },
+    "SfxPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "forbid_on_continuous_dialogue": {
+          "default": true,
+          "title": "Forbid On Continuous Dialogue",
+          "type": "boolean"
+        },
+        "max_cues_per_30s": {
+          "default": 3,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Max Cues Per 30S",
+          "type": "integer"
+        },
+        "max_gain_db": {
+          "default": -18.0,
+          "maximum": 0.0,
+          "minimum": -24.0,
+          "title": "Max Gain Db",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "accent_only",
+            "allowed",
+            "blocked"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "speech_duck_db": {
+          "default": 6.0,
+          "maximum": 18.0,
+          "minimum": 0.0,
+          "title": "Speech Duck Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "SfxPolicy",
+      "type": "object"
+    },
+    "TransitionPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "fallback": {
+          "const": "clean_cut",
+          "default": "clean_cut",
+          "title": "Fallback",
+          "type": "string"
+        },
+        "forbid_on_word_boundary": {
+          "default": true,
+          "title": "Forbid On Word Boundary",
+          "type": "boolean"
+        },
+        "max_per_30s": {
+          "default": 3,
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Max Per 30S",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "sparse",
+            "allowed",
+            "blocked"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "TransitionPolicy",
+      "type": "object"
+    },
+    "TreatmentPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "beat_coverage": {
+          "const": "required_decision",
+          "default": "required_decision",
+          "title": "Beat Coverage",
+          "type": "string"
+        },
+        "broll": {
+          "$ref": "#/$defs/BrollPolicy"
+        },
+        "camera": {
+          "$ref": "#/$defs/CameraPolicy"
+        },
+        "motion_graphics": {
+          "default": "disabled",
+          "enum": [
+            "disabled",
+            "eligible"
+          ],
+          "title": "Motion Graphics",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx": {
+          "$ref": "#/$defs/SfxPolicy"
+        },
+        "transitions": {
+          "$ref": "#/$defs/TransitionPolicy"
+        }
+      },
+      "required": [
+        "broll",
+        "camera",
+        "transitions",
+        "sfx"
+      ],
+      "title": "TreatmentPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "presets": {
+      "items": {
+        "$ref": "#/$defs/PresetDefinition"
+      },
+      "maxItems": 32,
+      "minItems": 6,
+      "title": "Presets",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "presets"
+  ],
+  "title": "EditorialPresetCatalog",
+  "type": "object"
+}

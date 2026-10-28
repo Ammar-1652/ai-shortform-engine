@@ -11,7 +11,10 @@ import pytest
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 from clipforge.hero.reframe import build_face_follow
+from clipforge.hero.render_authorization import authorize_render_candidate
+from clipforge.hero.render_checkpoint import renderer_dependency_sha256
 from clipforge.media.tools import resolve_ffmpeg, resolve_ffprobe
+from clipforge.media.workspace import SourceWorkspace
 from clipforge.preview.browser import resolve_browser
 from clipforge.schemas.advanced import (
     AdvancedHeroRenderInput,
@@ -20,6 +23,7 @@ from clipforge.schemas.advanced import (
     ReframingStrategy,
     ReframingWindow,
     TypographyEvent,
+    advanced_fingerprint,
 )
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
@@ -127,6 +131,8 @@ def test_remotion_face_follow_keeps_the_marker_and_contain_keeps_bars(
                 frame_height=180,
             )
         ],
+        source_sha256=_SHA,
+        output_duration_us=1_000_000,
     )
     follow_probe = _probe(followed)
     contain_probe = _probe(contained)
@@ -227,9 +233,31 @@ def _render(
     batch = root / "batch.json"
     batch.write_text(
         json.dumps(
-            {"items": [{"outputPath": str(output), "h264Crf": 18, "input": payload.model_dump(mode="json")}]}
+            {
+                "items": [
+                    {
+                        "outputPath": str(output),
+                        "h264Crf": 18,
+                        "input_sha256": advanced_fingerprint(payload.model_dump(mode="json")),
+                        "input": payload.model_dump(mode="json"),
+                    }
+                ]
+            }
         ),
         encoding="utf-8",
+    )
+    batch_input = root / "batch-input.json"
+    batch_input.write_bytes(batch.read_bytes())
+    authorize_render_candidate(
+        workspace=SourceWorkspace(root, "project-reframe-test", "source-1"),
+        root=root,
+        run_dir=root,
+        render_input=payload,
+        output=output,
+        dependency_sha256=renderer_dependency_sha256(),
+        job_id="job-reframe-test",
+        parent_artifact_id="hero-reframe-test",
+        actor="test",
     )
     RemotionAdvancedRenderBackend().render_batch(batch, log_path=root / "render.log")
     rendered = payload.model_dump(mode="json")

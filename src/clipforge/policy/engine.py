@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from clipforge.campaign.quran import load_tarteel_quran_review, load_tarteel_speech_review
+from clipforge.campaign.speech import retained_recitation
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import require_asset
 from clipforge.media.hashing import sha256_file
@@ -32,6 +34,7 @@ class PolicyContext:
     plans: tuple[AdvancedHeroPlanDocument, ...]
     work_root: Path
     workspace: SourceWorkspace | None
+    profile_id: str = ""
 
 
 Evaluator = Callable[[PolicyContext], ComplianceResult]
@@ -153,6 +156,109 @@ def evaluate_asset_rights(context: PolicyContext) -> ComplianceResult:
     )
 
 
+def evaluate_tarteel_delivery(context: PolicyContext) -> ComplianceResult:
+    """Enforce the non-negotiable Tarteel branding and audio contract."""
+    if not context.plans:
+        return _result(
+            "policy-tarteel-delivery",
+            ComplianceStatus.INSUFFICIENT_EVIDENCE,
+            "Tarteel compliance has no advanced plan to inspect",
+            context.source_asset_id,
+        )
+    problems: list[str] = []
+    for plan in context.plans:
+        overlay = plan.campaign_overlay
+        if overlay is None:
+            problems.append(f"plan {plan.plan_id} is missing the mandatory Tarteel CTA and watermark overlay")
+            continue
+        binding_ids = {item.asset_id for item in plan.assets}
+        if overlay.cta_asset_id not in binding_ids:
+            problems.append("Tarteel CTA is not rights-bound in the advanced plan")
+        if overlay.watermark_asset_id not in binding_ids:
+            problems.append("Tarteel watermark is not rights-bound in the advanced plan")
+        if overlay.cta_render_mode != "alpha_video_v1":
+            problems.append("Tarteel CTA must be the animated alpha video, not a still or PNG sequence")
+        if (
+            overlay.cta_position != "foreground_attention_v1"
+            or overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            problems.append("Tarteel CTA must be placed inside the original foreground picture")
+        if (
+            overlay.watermark_position != "foreground_top_right_v1"
+            or overlay.overlay_coordinate_space != "foreground_v1"
+        ):
+            problems.append("Tarteel watermark must be placed inside the original foreground picture")
+        if overlay.cta_width_permille > 600:
+            problems.append("Tarteel CTA is too large for the face-safe brand rail")
+        if overlay.sizing_method != "source_frame_scan_v1" or not overlay.sizing_measurement_sha256:
+            problems.append("Tarteel CTA and watermark sizes must be measured from the source frame")
+        if overlay.cta_end_us > max((window.output_end_us for window in plan.windows), default=0):
+            problems.append("Tarteel CTA interval extends past the output")
+        caption_texts = {item.text.strip() for item in (*plan.captions, *plan.typography)}
+        if overlay.first_post_caption_line not in caption_texts:
+            problems.append("mandatory first-post Tarteel caption line is missing")
+        if plan.sfx:
+            problems.append("Tarteel forbids added SFX/music, but the plan contains audio events")
+        if "tarteel-overlay-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the tarteel-overlay-v1 QA gate")
+        if "tarteel-face-clearance-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel face/caption clearance gate")
+        if "tarteel-caption-direction-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel caption-direction gate")
+        if getattr(plan, "style_id", "") not in {"quran-editorial-v1", "quran-readable-v2"}:
+            problems.append("Tarteel captions require the quran-editorial-v1 style")
+        if "tarteel-quran-caption-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the canonical Quran caption gate")
+        needs_quran = True
+        if (
+            getattr(plan, "speech_review_sha256", "")
+            and context.workspace is not None
+            and plan.time_map is not None
+        ):
+            try:
+                speech = load_tarteel_speech_review(
+                    context.work_root,
+                    source_asset_id=plan.source_asset_id,
+                    candidate_id=plan.candidate_id,
+                    source_sha256=plan.source_sha256,
+                )
+                if speech is None or speech[1] != plan.speech_review_sha256:
+                    raise MediaError("Tarteel speech review is missing or stale against the plan")
+                needs_quran = retained_recitation(speech[0], plan.time_map)
+            except MediaError as exc:
+                problems.append(str(exc))
+        if needs_quran and (
+            not getattr(plan, "quran_review_id", "") or not getattr(plan, "quran_review_sha256", "")
+        ):
+            problems.append("Tarteel plan is missing the source-bound Quran review evidence")
+        elif getattr(plan, "quran_review_id", "") and context.workspace is not None:
+            try:
+                _review, review_sha256, _path = load_tarteel_quran_review(
+                    context.work_root,
+                    source_asset_id=plan.source_asset_id,
+                    candidate_id=plan.candidate_id,
+                )
+                if review_sha256 != plan.quran_review_sha256:
+                    problems.append("Tarteel Quran review evidence is stale against the plan")
+            except MediaError as exc:
+                problems.append(str(exc))
+        if not getattr(plan, "editorial_arc_id", ""):
+            problems.append("Tarteel production requires a reviewed hook/body/punch editorial arc")
+        if "tarteel-editorial-arc-v1" not in plan.qa_requirements:
+            problems.append("plan does not require the Tarteel editorial-arc gate")
+    if problems:
+        return _result(
+            "policy-tarteel-delivery", ComplianceStatus.FAIL, "; ".join(problems), context.source_asset_id
+        )
+    return _result(
+        "policy-tarteel-delivery",
+        ComplianceStatus.PASS,
+        "Tarteel animated alpha CTA, alpha watermark, safe brand rail, mandatory caption, "
+        "output interval, and no-added-audio rules passed",
+        context.source_asset_id,
+    )
+
+
 def _public(text: str, root: Path, asset_id: str) -> str:
     lowered = text.lower()
     if "symlink" in lowered:
@@ -183,4 +289,5 @@ def _result(rule_id: str, status: ComplianceStatus, evidence: str, source_asset_
 _EVALUATORS: dict[str, Evaluator] = {
     "policy-source-rights": evaluate_source_rights,
     "policy-asset-rights": evaluate_asset_rights,
+    "policy-tarteel-delivery": evaluate_tarteel_delivery,
 }

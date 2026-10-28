@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from clipforge.assets.filters import MAX_PER_PAGE, search_arguments
+from clipforge.assets.filters import MAX_PER_PAGE, search_arguments, search_spec
 from clipforge.assets.provider import FakeEnvatoMcpProvider
 from clipforge.assets.service import search_assets
 from clipforge.campaign.acquisition import (
@@ -142,6 +142,91 @@ def test_envato_sends_only_supported_filters_and_post_filters() -> None:
     )
     assert hits[0].direct_download_url is None
     assert hits[0].item_url is None
+
+
+def test_envato_routes_font_and_sound_effect_searches_to_advertised_tools() -> None:
+    sound_effects = {
+        "name": "search_sound_effects",
+        "inputSchema": {
+            "properties": {
+                "searchTerms": {"type": "string", "minLength": 1, "maxLength": 60},
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "categories": {
+                            "type": "string",
+                            "enum": ["Transitions & Movement", "Interface Sounds"],
+                        },
+                        "min_media_length": {"type": "integer"},
+                        "max_media_length": {"type": "integer"},
+                    },
+                },
+            },
+            "required": ["searchTerms"],
+        },
+    }
+    fonts = {
+        "name": "search_fonts",
+        "inputSchema": {
+            "properties": {
+                "searchTerms": {"type": "string", "minLength": 1, "maxLength": 60},
+                "filters": {
+                    "type": "object",
+                    "properties": {
+                        "categories": {"type": "string", "enum": ["serif", "decorative_display"]},
+                    },
+                },
+            },
+            "required": ["searchTerms"],
+        },
+    }
+    assert search_spec([sound_effects, fonts], {"asset_type": "audio"})["name"] == "search_sound_effects"
+    assert search_spec([sound_effects, fonts], {"asset_type": "font"})["name"] == "search_fonts"
+    sound_args, _report, deferred = search_arguments(
+        sound_effects,
+        "soft UI whoosh",
+        {
+            "asset_type": "audio",
+            "category": "Transitions & Movement",
+            "min_duration": "0",
+            "max_duration": "2",
+        },
+    )
+    assert sound_args["filters"] == {
+        "categories": "Transitions & Movement",
+        "min_media_length": 0,
+        "max_media_length": 2,
+    }
+    assert deferred == {}
+    font_args, _report, deferred = search_arguments(
+        fonts,
+        "Arabic Naskh Quran font",
+        {"asset_type": "font", "category": "serif", "format": "otf"},
+    )
+    assert font_args["filters"] == {"categories": "serif"}
+    assert deferred["format"] == "otf"
+
+
+def test_envato_normalization_keeps_requested_kind_when_provider_omits_type() -> None:
+    hits = search_assets(
+        FakeEnvatoMcpProvider(
+            [
+                {
+                    "name": "search_fonts",
+                    "inputSchema": {
+                        "properties": {"searchTerms": {"type": "string"}},
+                        "required": ["searchTerms"],
+                    },
+                }
+            ],
+            rows=[{"title": "Arabic display font", "url": "https://elements.envato.com/arabic-font-X"}],
+        ),
+        query="Arabic display font",
+        filters={"asset_type": "font"},
+        campaign_id="tarteel",
+    )
+    assert len(hits) == 1
+    assert hits[0].asset_type == "font"
 
 
 def test_whop_live_is_not_configured_and_secrets_are_not_stored(tmp_path: Path) -> None:

@@ -1,0 +1,270 @@
+{
+  "$defs": {
+    "KnowledgeScope": {
+      "additionalProperties": false,
+      "description": "Scope limits keep a useful pattern from becoming a universal claim.",
+      "properties": {
+        "campaign_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Campaign Ids",
+          "type": "array"
+        },
+        "genres": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Genres",
+          "type": "array"
+        },
+        "languages": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Languages",
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Platforms",
+          "type": "array"
+        },
+        "profile_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Profile Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "KnowledgeScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A coordinated story, visual, motion, caption, and audio direction.",
+  "properties": {
+    "audio_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Audio Rules",
+      "type": "array"
+    },
+    "caption_style_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caption Style Id"
+    },
+    "confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Confidence",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "ending_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Ending Rules",
+      "type": "array"
+    },
+    "evaluation_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evaluation Ids",
+      "type": "array"
+    },
+    "guidance_card_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Guidance Card Ids",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Limitations",
+      "type": "array"
+    },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
+    "name": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "narrative_pattern_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Narrative Pattern Ids",
+      "type": "array"
+    },
+    "observation_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Observation Ids",
+      "type": "array"
+    },
+    "pacing_rules": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Pacing Rules",
+      "type": "array"
+    },
+    "reference_analysis_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Reference Analysis Ids",
+      "type": "array"
+    },
+    "reference_analysis_sha256": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Reference Analysis Sha256",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/KnowledgeScope"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "captured",
+        "analyzed",
+        "proposed",
+        "evaluated",
+        "active",
+        "superseded",
+        "withdrawn"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "style_card_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Style Card Id",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "visual_identity": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Visual Identity",
+      "type": "array"
+    }
+  },
+  "required": [
+    "style_card_id",
+    "name",
+    "state",
+    "source_ids",
+    "pacing_rules",
+    "audio_rules",
+    "ending_rules",
+    "limitations",
+    "confidence",
+    "content_sha256",
+    "updated_at"
+  ],
+  "title": "EditorialStyleCard",
+  "type": "object"
+}

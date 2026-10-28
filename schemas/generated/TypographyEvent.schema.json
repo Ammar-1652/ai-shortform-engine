@@ -1,5 +1,82 @@
 {
   "$defs": {
+    "CaptionWordTiming": {
+      "additionalProperties": false,
+      "description": "One forced word inside a grouped Advanced Hero caption.",
+      "properties": {
+        "output_end_frame_exclusive": {
+          "minimum": 1,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Word Ids",
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "correct",
+            "incorrect"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "word_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Word Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word_id",
+        "text",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive"
+      ],
+      "title": "CaptionWordTiming",
+      "type": "object"
+    },
     "MotionPurpose": {
       "enum": [
         "number",
@@ -63,6 +140,37 @@
       "title": "Component Id",
       "type": "string"
     },
+    "emoji": {
+      "anyOf": [
+        {
+          "enum": [
+            "\ud83d\udcd6",
+            "\ud83d\udca1",
+            "\ud83c\udfaf",
+            "\u2728",
+            "\u26a1",
+            "\ud83e\udde0",
+            "\u2705",
+            "\ud83d\udd0e",
+            "\ud83d\udd4c",
+            "\ud83d\ude02",
+            "\ud83d\ude2e",
+            "\ud83d\ude22",
+            "\ud83e\udd29",
+            "\ud83d\udc4f",
+            "\u2764\ufe0f",
+            "\ud83d\udd25",
+            "\ud83d\ude04"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Emoji"
+    },
     "event_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -70,7 +178,7 @@
       "type": "string"
     },
     "font_size": {
-      "maximum": 96,
+      "maximum": 160,
       "minimum": 24,
       "title": "Font Size",
       "type": "integer"
@@ -92,6 +200,13 @@
       "minLength": 1,
       "title": "Text",
       "type": "string"
+    },
+    "words": {
+      "items": {
+        "$ref": "#/$defs/CaptionWordTiming"
+      },
+      "title": "Words",
+      "type": "array"
     },
     "x": {
       "maximum": 1032,

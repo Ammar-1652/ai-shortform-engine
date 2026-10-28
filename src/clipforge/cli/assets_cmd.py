@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated, Literal, NoReturn, cast
+from uuid import UUID
 
 import typer
+from pydantic import ValidationError
 
 from clipforge.assets.handoff import (
     cancel_envato_asset,
@@ -19,26 +22,157 @@ from clipforge.assets.handoff import (
     show_envato_asset,
     verify_envato_asset,
 )
+from clipforge.assets.local import LocalAssetKind, register_local_asset
 from clipforge.assets.mcp_client import AssetError
+from clipforge.assets.openverse import (
+    OpenverseError,
+    OpenverseProvider,
+    acquire_selection,
+    load_acquisition,
+    load_search_response,
+    select_media,
+    write_selection,
+)
+from clipforge.assets.portal_bridge import EnvatoPortalBridge, extract_media_archive
 from clipforge.assets.provider import (
     DryRunAssetDiscoveryProvider,
     EnvatoMcpDiscoveryProvider,
     FakeAssetDiscoveryProvider,
 )
 from clipforge.assets.service import acquire_local, doctor_text, search_assets, verify_asset, write_requests
+from clipforge.campaign.policy_fingerprint import campaign_blocks_outside_media
+from clipforge.cli.envato_auth_cmd import envato_auth_app
 from clipforge.errors import ClipforgeError
+from clipforge.media.workspace import mkdir_contained
 from clipforge.paths import resolve_db_path, resolve_work_dir
 from clipforge.schemas.assets import AssetSearchHit
 from clipforge.storage import Database
 
-assets_app = typer.Typer(no_args_is_help=True, help="Discover external assets. Files stay manual.")
-envato_app = typer.Typer(no_args_is_help=True, help="Query the Envato MCP catalogue.")
+assets_app = typer.Typer(no_args_is_help=True, help="Discover and register external assets.")
+envato_app = typer.Typer(
+    no_args_is_help=True, help="Query Envato and fetch explicitly selected licensed items."
+)
 assets_app.add_typer(envato_app, name="envato")
+envato_app.add_typer(envato_auth_app, name="auth")
+openverse_app = typer.Typer(
+    no_args_is_help=True,
+    help="Search optional Openverse metadata without automatic downloads.",
+)
+assets_app.add_typer(openverse_app, name="openverse")
 
 
 def _fail(exc: BaseException) -> NoReturn:
     typer.echo(str(exc), err=True)
     raise typer.Exit(1)
+
+
+@openverse_app.command("doctor")
+def openverse_doctor() -> None:
+    """Report Openverse configuration without contacting the provider."""
+    typer.echo(OpenverseProvider().doctor())
+
+
+@openverse_app.command("search")
+def openverse_search(
+    media_type: Annotated[str, typer.Option("--media-type", help="image or audio.")],
+    query: Annotated[str, typer.Option("--query")],
+    page: Annotated[int, typer.Option("--page", min=1)] = 1,
+    page_size: Annotated[int, typer.Option("--page-size", min=1, max=20)] = 10,
+    license_filter: Annotated[list[str] | None, typer.Option("--license")] = None,
+    category: Annotated[str | None, typer.Option("--category")] = None,
+) -> None:
+    """Search Openverse and print normalized metadata; never downloads media."""
+    from pydantic import ValidationError
+
+    from clipforge.schemas.openverse import OpenverseSearchRequest
+
+    try:
+        if media_type not in {"image", "audio"}:
+            raise ClipforgeError("media_type must be image or audio")
+        request = OpenverseSearchRequest(
+            media_type=cast(Literal["image", "audio"], media_type),
+            query=query,
+            page=page,
+            page_size=page_size,
+            license_filter=license_filter or [],
+            category=category,
+        )
+        response = OpenverseProvider().search(request)
+    except (ClipforgeError, OpenverseError, ValidationError) as exc:
+        _fail(exc)
+    typer.echo(response.model_dump_json(indent=2))
+
+
+@openverse_app.command("select")
+def openverse_select(
+    response_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    media_id: Annotated[str, typer.Option("--media-id")],
+    policy_fingerprint: Annotated[str, typer.Option("--policy-fingerprint")],
+    license_evidence: Annotated[Path | None, typer.Option("--license-evidence")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Select one normalized result; no media bytes are downloaded."""
+    from clipforge.schemas.openverse import OpenverseLicenseEvidence
+
+    try:
+        response = load_search_response(response_file.resolve())
+        evidence = (
+            OpenverseLicenseEvidence.model_validate_json(license_evidence.resolve().read_text(encoding="utf-8"))
+            if license_evidence is not None
+            else None
+        )
+        selection = select_media(
+            response,
+            media_id=media_id,
+            policy_fingerprint=policy_fingerprint,
+            license_evidence=evidence,
+        )
+        path = write_selection(selection, work_root=work_dir)
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"selection_id: {selection.selection_id}")
+    typer.echo(f"policy_status: {selection.policy_status}")
+    typer.echo(f"path: {path}")
+
+
+@openverse_app.command("acquire")
+def openverse_acquire(
+    selection_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    project_id: Annotated[str, typer.Option("--project")],
+    source_asset_id: Annotated[str, typer.Option("--source")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Acquire the bytes for one independently rights-verified selection."""
+    from clipforge.schemas.openverse import OpenverseSelection
+
+    try:
+        selection = OpenverseSelection.model_validate_json(selection_file.read_text(encoding="utf-8"))
+        manifest = acquire_selection(
+            selection,
+            database=Database(resolve_db_path(db)),
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            work_root=work_dir,
+        )
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"acquisition_id: {manifest.acquisition_id}")
+    typer.echo(f"file_sha256: {manifest.file_sha256}")
+    typer.echo(f"size_bytes: {manifest.size_bytes}")
+
+
+@openverse_app.command("verify")
+def openverse_verify(
+    manifest_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Verify acquired bytes without downloading or changing them."""
+    try:
+        manifest = load_acquisition(manifest_file, work_root=work_dir)
+    except (ClipforgeError, OpenverseError, ValidationError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"PASS openverse_acquisition {manifest.acquisition_id}")
 
 
 def _provider_names(name: str) -> tuple[str, str]:
@@ -49,6 +183,43 @@ def _provider_names(name: str) -> tuple[str, str]:
     if name == "envato":
         return "envato_mcp", "envato_mcp"
     _fail(ClipforgeError("asset provider must be fake, dry-run, or envato"))
+
+
+_PORTAL_ITEM_TYPES = {
+    "audio": "music",
+    "video": "video",
+    "image": "photo",
+    "graphic": "graphics",
+    "font": "fonts",
+}
+
+_PORTAL_ITEM_TYPE_ALIASES = {
+    "audio": {"music", "sound-effects"},
+    "font": {"fonts", "font"},
+    "video": {"video"},
+    "image": {"photo"},
+    "graphic": {"graphics"},
+}
+
+
+def _portal_item_type(media_kind: str) -> str:
+    try:
+        return _PORTAL_ITEM_TYPES[media_kind]
+    except KeyError as exc:
+        raise AssetError(
+            f"portal download is not supported for media kind {media_kind!r}",
+            code="unsupported_media",
+        ) from exc
+
+
+def _canonical_portal_uuid(value: str) -> str:
+    try:
+        parsed = UUID(value)
+    except ValueError as exc:
+        raise AssetError(
+            "portal item UUID is required and must be a UUID", code="portal_protocol_error"
+        ) from exc
+    return str(parsed)
 
 
 def _provider(
@@ -194,6 +365,10 @@ def envato_request(
             deferred_filters=deferred,
         )
         label, version = _provider_names(provider)
+        if provider == "envato":
+            advertised_version = getattr(getattr(chosen, "client", None), "server_version", None)
+            if isinstance(advertised_version, str) and advertised_version.strip():
+                version = advertised_version.strip()
         stored = create_envato_requests(
             root,
             query=query,
@@ -228,6 +403,114 @@ def envato_import(
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
     typer.echo(str(len(hits)))
+
+
+@envato_app.command("fetch")
+def envato_fetch(
+    request_id: Annotated[str, typer.Option("--request")],
+    project_id: Annotated[str, typer.Option("--project")],
+    portal_item_uuid: Annotated[
+        str | None,
+        typer.Option(
+            "--portal-item-uuid", help="Optional UUID assertion; the MCP item page is resolved automatically."
+        ),
+    ] = None,
+    license_name: Annotated[
+        str | None, typer.Option("--license-name", help="Project name recorded on the Envato certificate.")
+    ] = None,
+    source_asset_id: Annotated[str | None, typer.Option("--source")] = None,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Authenticate through the saved portal login, fetch, license, and register one MCP result.
+
+    The MCP supplies catalogue metadata; portal page resolution binds that
+    metadata to the item downloaded from the operator's subscription bridge.
+    Signed URLs and cookies never appear in command output or artifacts.
+    """
+    root = resolve_work_dir(work_dir).resolve()
+    try:
+        requests = [item for item in list_envato_requests(root) if item.request_id == request_id]
+        if len(requests) != 1:
+            raise AssetError("envato request was not found", code="stale_request")
+        request = requests[0]
+        if request.provider != "envato_mcp":
+            raise AssetError("portal fetch requires an Envato MCP request", code="invalid_document")
+        if campaign_blocks_outside_media(request.campaign_id):
+            raise AssetError("outside media is prohibited by campaign policy", code="policy_blocked")
+        requested_uuid = _canonical_portal_uuid(portal_item_uuid) if portal_item_uuid else None
+        if request.media_kind not in _PORTAL_ITEM_TYPES:
+            raise AssetError(
+                "request media kind has no portal item-type mapping",
+                code="unsupported_media",
+            )
+        project_name = license_name or f"clipforge-{request.request_id[:24]}"
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ._-]{1,100}", project_name):
+            raise AssetError("license name contains unsupported characters", code="invalid_document")
+        session_root = root.joinpath("campaigns", "envato-requests", request.request_id, "portal")
+        incoming_root = root.joinpath("incoming", "envato-portal", request.request_id)
+        mkdir_contained(root, session_root)
+        mkdir_contained(root, incoming_root)
+        archive = session_root / "download.zip"
+        media_staging = incoming_root / "media"
+        license_staging = incoming_root / "license.pdf"
+        bridge = EnvatoPortalBridge()
+        bridge.authenticate()
+        if request.item_page_url is None:
+            raise AssetError("MCP request has no item page URL to bind", code="missing_item_identity")
+        identity = bridge.resolve_item(request.item_page_url)
+        expected_type = _portal_item_type(request.media_kind)
+        if requested_uuid is not None and identity.item_uuid != requested_uuid:
+            raise AssetError("portal UUID does not match the MCP item page", code="portal_item_mismatch")
+        allowed_types = _PORTAL_ITEM_TYPE_ALIASES.get(request.media_kind, {expected_type})
+        if identity.item_type not in allowed_types:
+            raise AssetError("portal item type does not match the MCP request", code="portal_item_mismatch")
+        if request.item_id is not None and request.item_id not in {identity.item_id, identity.item_uuid}:
+            raise AssetError("portal item identity does not match MCP metadata", code="portal_item_mismatch")
+        item_uuid = identity.item_uuid
+        downloaded = bridge.fetch_item(
+            item_uuid=item_uuid,
+            item_type=identity.item_type,
+            project_name=project_name,
+            media_path=archive,
+            license_path=license_staging,
+        )
+        media_path, media_bytes, media_hash = extract_media_archive(
+            downloaded.media_path,
+            media_staging,
+            media_kind=request.media_kind,
+            max_bytes=request.max_bytes,
+        )
+        relative_media = media_path.resolve().relative_to(root).as_posix()
+        relative_license = license_staging.resolve().relative_to(root).as_posix()
+        registration = register_envato_asset(
+            root,
+            Database(resolve_db_path(db)),
+            request.request_id,
+            relative_file=relative_media,
+            project_id=project_id,
+            license_relative=relative_license,
+            rights="allowed",
+            source_asset_id=source_asset_id,
+            expect_size=media_bytes,
+            content_tags=content_tags,
+            download_status="portal_download_verified",
+            portal_item_uuid=item_uuid,
+            portal_license_id=downloaded.license.license_id,
+        )
+    except (AssetError, ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"request_id: {request.request_id}")
+    typer.echo(f"portal_item_uuid: {item_uuid}")
+    typer.echo(f"media: {relative_media}")
+    typer.echo(f"media_bytes: {media_bytes}")
+    typer.echo(f"media_sha256: {media_hash}")
+    typer.echo(f"license: {relative_license}")
+    typer.echo(f"license_sha256: {downloaded.license_sha256}")
+    typer.echo(f"asset_id: {registration.asset_id}")
+    typer.echo(f"acquisition_status: {registration.acquisition_status}")
+    typer.echo(f"download_status: {registration.download_status}")
 
 
 @assets_app.command("acquire")
@@ -290,6 +573,7 @@ def envato_register(
     force: Annotated[bool, typer.Option("--force")] = False,
     asset_id: Annotated[str | None, typer.Option("--asset-id")] = None,
     cancel: Annotated[bool, typer.Option("--cancel")] = False,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
     db: Annotated[Path | None, typer.Option("--db")] = None,
     work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
 ) -> None:
@@ -308,6 +592,7 @@ def envato_register(
             force=force,
             asset_id=asset_id,
             cancel=cancel,
+            content_tags=content_tags,
         )
     except (ClipforgeError, OSError, ValueError) as exc:
         _fail(exc)
@@ -343,6 +628,105 @@ def envato_verify(
     typer.echo(result.model_dump_json())
     if not result.renderable:
         raise typer.Exit(1)
+
+
+@assets_app.command("register-local")
+def assets_register_local(
+    project_id: Annotated[str, typer.Option("--project")],
+    source_asset_ids: Annotated[
+        list[str], typer.Option("--source-asset-id", help="Source catalog to receive the asset; repeatable.")
+    ],
+    relative_file: Annotated[str, typer.Option("--file", help="Path relative to the work root.")],
+    license_relative: Annotated[
+        str, typer.Option("--license-file", help="Rights evidence path relative to the work root.")
+    ],
+    kind: Annotated[LocalAssetKind, typer.Option("--kind", help="graphic or audio.")],
+    confirm_rights: Annotated[bool, typer.Option("--confirm-rights")] = False,
+    content_tags: Annotated[list[str] | None, typer.Option("--tag")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Register campaign-provided local material in Advanced Hero catalogs.
+
+    This command never searches or downloads. It records a hash, campaign
+    rights evidence, and a source-bound catalog entry for each selected source.
+    """
+    if not source_asset_ids:
+        _fail(ClipforgeError("at least one --source-asset-id is required"))
+    try:
+        registrations = [
+            register_local_asset(
+                database=Database(resolve_db_path(db)),
+                work_root=resolve_work_dir(work_dir),
+                project_id=project_id,
+                source_asset_id=source_asset_id,
+                relative_file=relative_file,
+                license_relative=license_relative,
+                kind=kind,
+                confirm_rights=confirm_rights,
+                content_tags=content_tags,
+            )
+            for source_asset_id in source_asset_ids
+        ]
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(
+        json.dumps(
+            [
+                {
+                    "asset_id": item.asset_id,
+                    "license_record_id": item.license_record_id,
+                    "source_asset_id": item.source_asset_id,
+                    "relative_path": item.relative_path,
+                    "sha256": item.sha256,
+                    "kind": item.kind,
+                    "cache_status": item.cache_status,
+                }
+                for item in registrations
+            ],
+            sort_keys=True,
+        )
+    )
+
+
+@assets_app.command("verify-local")
+def assets_verify_local(
+    source_asset_id: str,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Rehash local campaign assets and evidence via the production asset gate."""
+    from clipforge.hero.advanced_assets import load_catalog, require_asset
+    from clipforge.media.workspace import SourceWorkspace, advanced_read_lock
+    from clipforge.storage import get_source_asset
+
+    try:
+        database = Database(resolve_db_path(db))
+        root = resolve_work_dir(work_dir).resolve()
+        with database.connect() as connection:
+            source = get_source_asset(connection, source_asset_id)
+        workspace = SourceWorkspace(root, source.project_id, source_asset_id)
+        with advanced_read_lock(workspace):
+            entries = [
+                entry
+                for entry in load_catalog(workspace)
+                if entry.reference.provenance.tool == "clipforge.assets.local"
+            ]
+            if not entries:
+                raise ClipforgeError("no registered local campaign assets for this source")
+            for entry in entries:
+                require_asset(
+                    database,
+                    workspace,
+                    project_id=source.project_id,
+                    asset_id=entry.reference.asset_id,
+                    expected_kind=entry.reference.kind.value,
+                    work_root=root,
+                )
+    except (ClipforgeError, OSError, ValueError) as exc:
+        _fail(exc)
+    typer.echo(f"verified_local_assets: {len(entries)}")
+    typer.echo("scope: bytes, rights and evidence only; not campaign compliance or editorial approval")
 
 
 @envato_app.command("list")

@@ -11,6 +11,7 @@ import hashlib
 import inspect
 import json
 import os
+import unicodedata
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,6 +30,8 @@ from clipforge.schemas.media import Transcript, TranscriptWord
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.time import TimelineSegment
 from clipforge.timeline.framerate import FrameRate
+
+_MIN_FORCED_WORD_US = 5_000
 
 
 class ForcedAlignmentBackend(Protocol):
@@ -152,10 +155,10 @@ def production_alignment_backend(
     Unit tests inject ``FakeForcedAlignment`` themselves. A production campaign
     does not. A non-English request never falls back to the English checkpoint.
     """
-    from clipforge.language.providers import license_is_allowed, provider_for
+    from clipforge.language.providers import license_is_allowed, selected_clip_provider_for
 
     requested = "en-US" if language in {None, ""} else language
-    record = provider_for(requested)
+    record = selected_clip_provider_for(requested)
     if record.live_status in {"unsupported_language", "alignment_not_claimed"}:
         raise MediaError(record.live_status)
     if not license_is_allowed(record.model_license, record.model_id):
@@ -212,6 +215,7 @@ def build_alignment(
     if not candidate.time_map.segments:
         raise MediaError(f"candidate {candidate.candidate_id} has no TimeMap segments")
     ordered = _evidence_words(transcript, bundle)
+    _validate_cut_boundaries(ordered, candidate.time_map.segments)
     _reject_transcript_language(transcript, backend)
     time_map = candidate.time_map.to_time_map()
     frame_count = time_map.output_frame_count(FrameRate(30, 1))
@@ -222,11 +226,16 @@ def build_alignment(
     previous_output_end = -1
     duration = time_map.total_output_duration()
     for word, (start, end, segment_index) in zip(ordered, bounds, strict=True):
-        if end <= start:
-            raise MediaError(f"aligned word {word.word_id} has no positive duration")
         segment = candidate.time_map.segments[segment_index]
         if start < segment.source_start_us or start >= segment.source_end_us or end > segment.source_end_us:
             raise MediaError(f"aligned word {word.word_id} is outside its TimeMap segment")
+        if end <= start:
+            raise MediaError(f"aligned word {word.word_id} has no positive duration")
+        if end - start < _MIN_FORCED_WORD_US:
+            raise MediaError(
+                f"aligned word {word.word_id} is only {end - start} us; "
+                "the alignment would be unreadable and can lose its leading phoneme"
+            )
         output_start = time_map.source_to_output(start)
         output_end = time_map.source_to_output(end)
         if output_end > duration or output_start < 0 or output_start >= duration:
@@ -353,7 +362,10 @@ def _partition_words(
     for word in words:
         found = None
         for index, segment in enumerate(segments):
-            if segment.source_start_us <= word.start_us < segment.source_end_us:
+            if (
+                segment.source_start_us <= word.start_us < segment.source_end_us
+                and word.end_us <= segment.source_end_us
+            ):
                 found = index
                 break
         if found is None:
@@ -372,6 +384,25 @@ def _partition_words(
             cursor += 1
         groups.append((segments[index], group))
     return groups
+
+
+def _validate_cut_boundaries(words: list[TranscriptWord], segments: list[TimelineSegment]) -> None:
+    """Reject editorial cuts through a spoken word.
+
+    A cut inside ``How`` can leave the encoded picture beginning on the /ow/
+    while the audio still contains the word onset.  Such a map is not repaired
+    by a caption change; it must be reselected at a phonetic boundary.
+    """
+    for segment in segments:
+        for boundary, label in (
+            (segment.source_start_us, "start"),
+            (segment.source_end_us, "end"),
+        ):
+            if any(word.start_us < boundary < word.end_us for word in words):
+                raise MediaError(
+                    f"TimeMap {label} {boundary} us falls inside a transcript word; "
+                    "reselect the cut at a complete-word boundary"
+                )
 
 
 def _owner_segment(segments: list[TimelineSegment], start: int, end: int) -> TimelineSegment | None:
@@ -412,9 +443,9 @@ def _reject_transcript_language(transcript: Transcript, backend: ForcedAlignment
 def _stored_alignment_status(backend: ForcedAlignmentBackend) -> str:
     if backend.model_name == FAKE_MODEL_NAME:
         return "available_not_smoked"
-    from clipforge.language.providers import provider_for
+    from clipforge.language.providers import selected_clip_provider_for
 
-    record = provider_for(str(getattr(backend, "locale", "en-US")))
+    record = selected_clip_provider_for(str(getattr(backend, "locale", "en-US")))
     checkpoint = str(getattr(backend, "checkpoint_sha256", ""))
     if (
         record.live_status == "verified_live"
@@ -473,7 +504,7 @@ def expected_binding(
     aligner: ForcedAlignmentBackend | None,
 ) -> str:
     """Recompute the cache key. A missing production identity is incomplete."""
-    from clipforge.language.providers import canonical_locale, normalized_language, provider_for
+    from clipforge.language.providers import canonical_locale, normalized_language
 
     if aligner is not None:
         return _binding_for(
@@ -515,7 +546,9 @@ def expected_binding(
         or not alignment.manifest_sha256
     ):
         raise MediaError("stored alignment identity is incomplete")
-    record = provider_for(locale)
+    from clipforge.language.providers import selected_clip_provider_for
+
+    record = selected_clip_provider_for(locale)
     if record.provider_name != "whisperx":
         raise MediaError("alignment_not_claimed")
     if alignment.model_name != record.model_id or alignment.model_revision != record.model_revision:
@@ -563,10 +596,10 @@ def _measured_pair(backend: ForcedAlignmentBackend) -> tuple[str, str]:
     cached = getattr(backend, "_measured_pair", None)
     if isinstance(cached, tuple) and len(cached) == 2:
         return cached
-    from clipforge.language.providers import provider_for
+    from clipforge.language.providers import selected_clip_provider_for
 
     locale = str(getattr(backend, "locale", "en-US"))
-    record = provider_for(locale)
+    record = selected_clip_provider_for(locale)
     if record.model_id != backend.model_name:
         raise MediaError("stale_alignment")
     checkpoint, manifest = _measure_checkpoint_and_manifest(
@@ -1009,40 +1042,71 @@ def _collapse_alignment_tokens(
     *,
     source_offset: int,
 ) -> list[tuple[int, int]]:
-    """Group aligner pieces back onto transcript words. Stored text is not rewritten."""
-    cursor = 0
-    bounds: list[tuple[int, int]] = []
+    """Group aligner pieces back onto transcript words without rewriting text.
+
+    WhisperX can merge or split orthographic tokens (for example ``Pac-10``
+    versus transcript words ``Pac`` and ``10``) and may normalize punctuation.
+    Compare the ordered letter/number stream, then project each transcript word
+    onto the returned token times.  This keeps the transcript as the canonical
+    display text while making the timing contract tolerant of harmless
+    punctuation and token-boundary differences.
+    """
+
+    def key(text: str) -> str:
+        normalized = unicodedata.normalize("NFKC", text).casefold()
+        return "".join(char for char in normalized if unicodedata.category(char)[0] in {"L", "M", "N"})
+
+    expected_keys: list[str] = []
     for expected in words:
         target = expected.text.strip()
         if not target:
             raise MediaError(f"transcript word {expected.word_id} is empty")
-        collected = ""
-        start: int | None = None
-        end: int | None = None
-        while cursor < len(returned) and collected != target:
-            token, token_start, token_end = returned[cursor]
-            piece = token.strip()
-            cursor += 1
-            if not piece:
-                continue
-            if token_end <= token_start:
-                raise MediaError("WhisperX returned a word with no positive duration.")
-            if not target.startswith(collected + piece):
-                raise MediaError(
-                    f"WhisperX text {token!r} does not match transcript word {expected.text!r}. "
-                    "The transcript text was not rewritten."
-                )
-            if start is None:
-                start = token_start
-            collected += piece
-            end = token_end
-        if collected != target or start is None or end is None or end <= start:
+        expected_keys.append(key(target))
+    expected_stream = "".join(expected_keys)
+
+    # Expand each returned token into timed canonical characters.  Punctuation
+    # has no canonical character and is intentionally ignored for reconciliation.
+    returned_stream: list[tuple[str, int, int]] = []
+    for token, token_start, token_end in returned:
+        if token_end <= token_start:
+            raise MediaError("WhisperX returned a word with no positive duration.")
+        token_key = key(token)
+        if not token_key:
+            continue
+        span = token_end - token_start
+        for index, char in enumerate(token_key):
+            char_start = token_start + (span * index) // len(token_key)
+            char_end = token_start + (span * (index + 1)) // len(token_key)
+            if char_end <= char_start:
+                char_end = char_start + 1
+            returned_stream.append((char, char_start, char_end))
+    returned_stream_key = "".join(char for char, _start, _end in returned_stream)
+    if returned_stream_key != expected_stream:
+        returned_text = " ".join(token for token, _start, _end in returned)
+        expected_text = " ".join(word.text for word in words)
+        raise MediaError(
+            f"WhisperX text {returned_text!r} does not match transcript word {expected_text!r}. "
+            "The transcript text was not rewritten."
+        )
+
+    cursor = 0
+    bounds: list[tuple[int, int]] = []
+    for expected, target_key in zip(words, expected_keys, strict=True):
+        if not target_key:
+            raise MediaError(f"transcript word {expected.word_id} has no alignable letters or numbers")
+        end_cursor = cursor + len(target_key)
+        if end_cursor > len(returned_stream):
             raise MediaError(
                 "WhisperX word count does not match the transcript evidence. "
                 "Hero alignment does not invent or drop words."
             )
+        start = returned_stream[cursor][1]
+        end = returned_stream[end_cursor - 1][2]
+        if end <= start:
+            raise MediaError("WhisperX returned a transcript word with no positive duration.")
         bounds.append((source_offset + start, source_offset + end))
-    if cursor != len(returned):
+        cursor = end_cursor
+    if cursor != len(returned_stream):
         raise MediaError("WhisperX returned extra tokens. Hero alignment does not invent or drop words.")
     return bounds
 

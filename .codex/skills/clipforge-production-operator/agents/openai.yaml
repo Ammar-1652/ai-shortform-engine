@@ -1,0 +1,7 @@
+interface:
+  display_name: "Clipforge production operator"
+  short_description: "Operate Clipforge from source to reviewable draft"
+  default_prompt: "Use $clipforge-production-operator to operate the typed Clipforge pipeline for this source."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,173 @@
+{
+  "$defs": {
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "asset_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Asset Ids",
+      "type": "array"
+    },
+    "asset_request_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Asset Request Ids",
+      "type": "array"
+    },
+    "cut_boundary_us": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cut Boundary Us"
+    },
+    "event_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Event Ids",
+      "type": "array"
+    },
+    "fallback": {
+      "default": "none",
+      "enum": [
+        "source_footage",
+        "clean_cut",
+        "hold",
+        "silence",
+        "none"
+      ],
+      "title": "Fallback",
+      "type": "string"
+    },
+    "layer": {
+      "const": "transition",
+      "default": "transition",
+      "title": "Layer",
+      "type": "string"
+    },
+    "omission_reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "dialogue_clarity",
+            "no_relevant_asset",
+            "face_collision",
+            "protected_region_collision",
+            "quiet_payoff",
+            "short_interval",
+            "no_semantic_cut",
+            "policy_preference",
+            "unsupported_capability",
+            "missing_evidence"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Omission Reason"
+    },
+    "purpose": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rationale": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "use",
+        "omit_with_reason",
+        "blocked_by_policy",
+        "needs_review"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "style": {
+      "anyOf": [
+        {
+          "enum": [
+            "clean_cut_v1",
+            "concat_push_v1",
+            "concat_blur_dissolve_v1"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Style"
+    }
+  },
+  "required": [
+    "state",
+    "rationale"
+  ],
+  "title": "TransitionTreatmentDecision",
+  "type": "object"
+}

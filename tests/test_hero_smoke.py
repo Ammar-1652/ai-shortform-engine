@@ -184,7 +184,9 @@ def _assert_portrait_frame(video: Path, early: Path, caption: Path) -> None:
         return buf[offset], buf[offset + 1], buf[offset + 2]
 
     top = pixel(raw, 540, 8)
-    assert max(top) < 40
+    # Final portrait output uses an intentional blurred full-frame treatment;
+    # it must not regress to a large uniform black letterbox.
+    assert max(top) > 40
     middle = pixel(raw, 540, 960)
     assert middle[0] > 120 and middle[0] > middle[1] and middle[0] > middle[2]
     bright = False

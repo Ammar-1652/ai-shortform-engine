@@ -129,6 +129,10 @@ def hero_render(
         bool,
         typer.Option("--force", help="Ignore a valid Hero cache and build a new draft set."),
     ] = False,
+    resume: Annotated[
+        str | None,
+        typer.Option("--resume", help="Resume a failed Hero run by its hero_set_id."),
+    ] = None,
     allow_model_download: Annotated[
         bool,
         typer.Option("--allow-model-download", help="Permit fetching a missing alignment model."),
@@ -146,6 +150,7 @@ def hero_render(
             work_root=resolve_work_dir(work_dir),
             force=force,
             allow_model_download=allow_model_download,
+            resume_hero_set_id=resume,
         )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)

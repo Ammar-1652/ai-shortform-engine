@@ -1,0 +1,102 @@
+{
+  "additionalProperties": false,
+  "description": "Reviewed inventory of audible source material for caption coverage.",
+  "properties": {
+    "caption_decision": {
+      "enum": [
+        "captioned",
+        "reviewed_excluded"
+      ],
+      "title": "Caption Decision",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "dialogue",
+        "recitation",
+        "reaction",
+        "nasheed",
+        "silence",
+        "uncertain"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "observed_text": {
+      "default": "",
+      "title": "Observed Text",
+      "type": "string"
+    },
+    "review_note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Review Note",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "span_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Span Id",
+      "type": "string"
+    },
+    "subject_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "quran",
+            "quotation",
+            "proper_noun",
+            "number",
+            "factual_claim"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject Kind"
+    },
+    "subject_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Subject Word Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "span_id",
+    "source_start_us",
+    "source_end_us",
+    "kind",
+    "caption_decision",
+    "review_note"
+  ],
+  "title": "TarteelSpeechInterval",
+  "type": "object"
+}

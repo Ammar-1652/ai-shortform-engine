@@ -2,41 +2,73 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 import uuid
+from collections import Counter
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
+from clipforge import __version__
+from clipforge.campaign.overlays import TARTEEL_PROFILE_ID
+from clipforge.campaign.quran import canonicalize_quran_alignment
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import binding_for, require_asset
+from clipforge.hero.captions import hero_caption_pieces, validate_caption_word_coverage
+from clipforge.hero.frame_palette import analyze_frame_palette
+from clipforge.hero.motion_style import style_for_id, style_for_renderer_version
 from clipforge.hero.reframe import (
     ReframeError,
     build_face_follow,
     frame_period_tolerance_us,
 )
+from clipforge.hero.treatment import treatment_fingerprint
+from clipforge.media.hashing import sha256_file
 from clipforge.media.workspace import SourceWorkspace
 from clipforge.schemas.advanced import (
     AdvancedHeroPlanDocument,
     AdvancedHeroProfile,
     AssetBinding,
     AudioMixEvent,
+    CameraMotionEvent,
+    CaptionWordTiming,
     DiagramEvent,
-    DiagramPayload,
     EmphasisEvent,
+    MotionGraphicEvent,
     ReframingWindow,
+    TransitionEvent,
     TypographyEvent,
     advanced_fingerprint,
+)
+from clipforge.schemas.campaign import QuranCaptionReview
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionDocument,
+    DirectionTransitionSpec,
+    SourceNativeText,
 )
 from clipforge.schemas.editorial import BrollEvent, MotionPurpose, OutputInterval
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument, HeroPlanDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.time import TimeMapDocument
+from clipforge.schemas.treatment import (
+    TreatmentAssetObservation,
+    TreatmentAssetReceipt,
+    TreatmentAudioMixResult,
+    TreatmentEvidenceBundle,
+    TreatmentPolicyFinding,
+)
 from clipforge.schemas.vision import FaceDetectionSample, VisualAnalysisDocument
 from clipforge.storage import Database, get_source_manifest
 from clipforge.transcription.io import publish_json
 
 _NAMESPACE = uuid.UUID("6f1d5e2a-9c4b-4f1a-8d3e-1a2b3c4d5e6f")
 _SAFE = 48
+_DIRECTION_ACCENT_TOP = 1_280
 
 
 def stable_id(*parts: str) -> str:
@@ -74,6 +106,17 @@ def build_advanced_plan(
     sfx_asset_ids: list[str],
     actor: str,
     tool_version: str,
+    direction: DirectionDocument | None = None,
+    direction_sha256: str = "",
+    editorial_arc_id: str = "",
+    editorial_arc_sha256: str = "",
+    editorial_arc_review_sha256: str = "",
+    quran_review_id: str = "",
+    quran_review_sha256: str = "",
+    quran_review: QuranCaptionReview | None = None,
+    caption_alignment_override: ForcedAlignmentDocument | None = None,
+    cut_transition_style: str = "",
+    allow_unapproved: bool = False,
 ) -> AdvancedHeroPlanDocument:
     if profile.music_allowed:
         raise MediaError("advanced Hero profile cannot allow music")
@@ -96,10 +139,72 @@ def build_advanced_plan(
         actor,
         tool_version,
     )
+    if profile.reframing.strategy_id == "manual_window":
+        cursor_us = 0
+        for window in windows:
+            if (
+                window.strategy_id.strategy_id != "manual_window"
+                or window.output_start_us != cursor_us
+                or window.frame_width != visual.proxy_width
+                or window.frame_height != visual.proxy_height
+                or window.source_width * 16 != window.source_height * 9
+            ):
+                raise MediaError("manual crop windows must be ordered, contiguous, source-bound, and 9:16")
+            cursor_us = window.output_end_us
+        if cursor_us != duration_us:
+            raise MediaError("manual crop windows must cover the complete output without gaps")
     emphasis = _emphasis(alignment, candidate_id)
-    typography = _typography(alignment, emphasis, candidate_id)
-    diagrams = _diagrams(emphasis, duration_us, candidate_id)
+    caption_alignment = caption_alignment_override or alignment
+    if quran_review is not None:
+        caption_alignment = canonicalize_quran_alignment(caption_alignment, quran_review)
+    captions = _captions(caption_alignment, candidate_id, style_id=direction.style_id if direction else "")
+    if direction is not None:
+        typography = _directed_typography(direction, alignment, candidate_id)
+        typography = _drop_caption_duplicates(typography, captions)
+    elif profile.renderer_recipe_version == "advanced-hero-renderer-v1":
+        # Preserve immutable Round-30 behavior only when an operator
+        # explicitly selects the legacy recipe. Clean production never
+        # invents a hook/punch from word positions or non-ASCII heuristics.
+        typography = _typography(alignment, emphasis, candidate_id)
+    else:
+        typography = []
+    # A diagram is editorial evidence, not a decoration.  Until an operator
+    # supplies a source-grounded diagram instruction, the safe plan is none.
+    diagrams: list[DiagramEvent] = []
+    motion_graphics = _motion_graphics(direction)
+    camera_motion = _camera_motion(direction)
+    source_native_text = _source_native_text(direction)
+    motion_recipe_ids = []
+    motion_catalog_sha256 = ""
+    if direction is not None:
+        selected_direction = next(
+            item for item in direction.options if item.option_id == direction.selected_option_id
+        )
+        motion_recipe_ids = list(selected_direction.motion_recipe_ids)
+        motion_catalog_sha256 = direction.motion_catalog_sha256 or ""
+    # A directed clean-production recut gets a soft bridge by default. An
+    # editorial arc that explicitly says `none` still retains that reviewed
+    # hard-cut decision; legacy/no-direction plans remain unchanged.
+    selected_transition_specs = _selected_transition_specs(direction)
+    # Treatment-aware directions explicitly decide whether a transition is
+    # useful. Legacy directed plans retain their historical soft bridge.
+    directed_transition_default = direction is not None and (
+        direction.direction_recipe_version not in {"direction-v3", "direction-v4"}
+        or bool(selected_transition_specs)
+    )
+    effective_transition_style = _effective_transition_style(cut_transition_style, directed_transition_default)
+    transitions = _transitions(
+        candidate_id,
+        hero_plan.edit_plan.time_map,
+        duration_us,
+        effective_transition_style,
+        selected_transition_specs,
+    )
+    typography = _drop_typography_graphic_collisions(typography, motion_graphics)
     assets: list[AssetBinding] = []
+    selected_placements = _selected_asset_placements(direction)
+    broll_placements = [item for item in selected_placements if item.kind == "graphic"]
+    sfx_placements = [item for item in selected_placements if item.kind == "audio"]
     broll = _broll(
         database,
         workspace,
@@ -109,6 +214,7 @@ def build_advanced_plan(
         duration_us,
         broll_asset_ids,
         assets,
+        broll_placements,
     )
     sfx = _sfx(
         database,
@@ -120,17 +226,101 @@ def build_advanced_plan(
         sfx_asset_ids,
         assets,
         profile,
+        sfx_placements,
     )
+    _validate_treatment_event_consistency(direction, camera_motion, transitions, broll, sfx, motion_graphics)
     manual = None if profile.manual_window is None else profile.manual_window.model_dump(mode="json")
+    manual_windows = [item.model_dump(mode="json") for item in profile.manual_windows]
+    motion_style = (
+        style_for_id(direction.style_id)
+        if direction is not None
+        else style_for_renderer_version(profile.renderer_recipe_version)
+    )
+    with database.connect() as connection:
+        from clipforge.storage import get_project
+
+        campaign_profile_id = get_project(connection, project_id).profile_id
+    frame_style_id = "none-v1"
+    frame_backdrop_id: Literal["blurred-source-v1", "palette-solid-v1"] = "blurred-source-v1"
+    frame_layout_id: Literal["standard-card-v1", "platform-bleed-v1"] = "standard-card-v1"
+    frame_palette = None
+    if (
+        campaign_profile_id == TARTEEL_PROFILE_ID
+        and direction is not None
+        and direction.safe_region_id == "platform-resilient-portrait-v1"
+    ):
+        frame_palette = analyze_frame_palette(
+            workspace.proxy_file("analysis.mp4"),
+            source_sha256=source_sha256,
+            duration_us=duration_us,
+        )
+        frame_style_id = "auto-source-palette-v1"
+        frame_backdrop_id = "palette-solid-v1"
+        frame_layout_id = "platform-bleed-v1"
     config: dict[str, object] = {
         "manual_window": manual,
+        "manual_windows": manual_windows,
         "strategy": profile.reframing.strategy_id,
         "windows": [item.model_dump(mode="json") for item in windows],
+        "motion_style": asdict(motion_style),
+        "frame_style_id": frame_style_id,
+        "frame_backdrop_id": frame_backdrop_id,
+        "frame_layout_id": frame_layout_id,
+        "frame_palette": None if frame_palette is None else frame_palette.model_dump(mode="json"),
     }
     if reframe is not None and reframe.trajectory_sha256:
         config["trajectory_sha256"] = reframe.trajectory_sha256
     now = datetime.now(UTC)
+    campaign_qa = (
+        [
+            "tarteel-overlay-v1",
+            "tarteel-face-clearance-v1",
+            "tarteel-caption-direction-v1",
+            "tarteel-quran-caption-v1",
+            "tarteel-frame-palette-v1",
+        ]
+        if campaign_profile_id == TARTEEL_PROFILE_ID
+        else []
+    )
+    bound_review_id = review_id
+    bound_review_digest = review_digest
+    if allow_unapproved:
+        bound_review_id = f"pending-{hero_artifact_id}"
+        bound_review_digest = hashlib.sha256(
+            f"pending:{hero_artifact_id}:{hero_manifest_sha256}".encode()
+        ).hexdigest()
+    treatment_audio_mix = _build_treatment_audio_mix(direction, sfx, profile, alignment.words)
+    treatment_evidence_sha256 = ""
+    treatment_evidence_relative_path = ""
+    if direction is not None and direction.treatment_fingerprint:
+        if not direction_sha256:
+            raise MediaError("treatment evidence requires a persisted direction hash")
+        bundle = _build_treatment_evidence_bundle(
+            direction=direction,
+            direction_sha256=direction_sha256,
+            project_id=project_id,
+            source_asset_id=source_asset_id,
+            candidate_id=candidate_id,
+            audio_mix=treatment_audio_mix,
+            actor=actor,
+            work_root=work_root,
+        )
+        evidence_path = (
+            workspace.advanced_review_treatment_evidence_file(candidate_id, direction_sha256)
+            if allow_unapproved
+            else workspace.treatment_evidence_file(candidate_id, direction_sha256)
+        )
+        workspace.prepare_advanced_file(evidence_path)
+        evidence_digest = treatment_evidence_digest(bundle)
+        if evidence_path.exists():
+            if evidence_path.is_symlink() or sha256_file(evidence_path) != evidence_digest:
+                raise MediaError("treatment evidence bundle is immutable and stale")
+        else:
+            publish_json(evidence_path, bundle, work_root, workspace.partial_for(evidence_path))
+        treatment_evidence_sha256 = evidence_digest
+        treatment_evidence_relative_path = evidence_path.relative_to(work_root).as_posix()
     document = AdvancedHeroPlanDocument(
+        workflow_roles=WorkflowRolePolicy(),
         plan_id=plan_id,
         project_id=project_id,
         source_asset_id=source_asset_id,
@@ -143,26 +333,73 @@ def build_advanced_plan(
         hero_artifact_id=hero_artifact_id,
         hero_set_id=hero_set_id,
         hero_manifest_sha256=hero_manifest_sha256,
-        hero_review_id=review_id,
-        hero_review_digest=review_digest,
+        hero_review_id=bound_review_id,
+        hero_review_digest=bound_review_digest,
+        hero_review_status="pending" if allow_unapproved else "approved",
         alignment_id=alignment.alignment_id,
         alignment_sha256=alignment_sha256,
         hero_plan_id=hero_plan.plan_id,
         hero_plan_sha256=hero_plan_sha256,
         visual_analysis_id=visual.analysis_id,
         visual_analysis_sha256=visual_sha256,
+        time_map=hero_plan.edit_plan.time_map,
         time_map_sha256=hero_plan.edit_plan.time_map_sha256,
+        editorial_arc_id=editorial_arc_id,
+        editorial_arc_sha256=editorial_arc_sha256,
+        editorial_arc_review_sha256=editorial_arc_review_sha256,
+        quran_review_id=quran_review_id,
+        quran_review_sha256=quran_review_sha256,
         profile_fingerprint=profile.fingerprint(),
+        direction_id="" if direction is None else direction.direction_id,
+        direction_sha256=direction_sha256,
+        treatment_fingerprint="" if direction is None else direction.treatment_fingerprint or "",
+        treatment_evidence_sha256=treatment_evidence_sha256,
+        treatment_evidence_relative_path=treatment_evidence_relative_path,
+        treatment_audio_mix=treatment_audio_mix,
+        preset_id="" if direction is None else direction.preset_id or "",
+        motion_recipe_ids=motion_recipe_ids,
+        motion_catalog_sha256=motion_catalog_sha256,
+        knowledge_context_id="" if direction is None else direction.knowledge_context_id or "",
+        knowledge_release_id="" if direction is None else direction.knowledge_release_id or "",
+        knowledge_context_sha256="" if direction is None else direction.knowledge_context_sha256 or "",
+        knowledge_decision_trace_id="" if direction is None else direction.knowledge_decision_trace_id or "",
+        knowledge_decision_trace_sha256=(
+            "" if direction is None else direction.knowledge_decision_trace_sha256 or ""
+        ),
+        style_id=motion_style.style_id,
+        style_fingerprint=motion_style.fingerprint(),
+        # A direction may opt into the cross-platform portrait treatment when
+        # reviewed edge content (for example a source-native logo) must survive
+        # both TikTok and Instagram viewers. Undirected/legacy plans retain
+        # the immutable full-width region.
+        safe_region_id=(direction.safe_region_id if direction is not None else "portrait-safe-v1"),
+        motion_style=motion_style.contract(),
+        frame_style_id=frame_style_id,
+        frame_backdrop_id=frame_backdrop_id,
+        frame_layout_id=frame_layout_id,
+        frame_palette=frame_palette,
         reframing_strategy=profile.reframing.strategy_id,
         reframing_config_sha256=advanced_fingerprint(config),
         windows=windows,
+        captions=captions,
         typography=typography,
         diagrams=diagrams,
+        motion_graphics=motion_graphics,
+        camera_motion=camera_motion,
+        source_native_text=source_native_text,
         emphasis=emphasis,
+        transitions=transitions,
         broll=broll,
         sfx=sfx,
         assets=assets,
-        qa_requirements=["forced_alignment", "rights_cleared_assets", "no_speaker_inference", "no_music"],
+        qa_requirements=[
+            "forced_alignment",
+            "rights_cleared_assets",
+            "no_speaker_inference",
+            "no_music",
+            *campaign_qa,
+            *(["tarteel-editorial-arc-v1"] if editorial_arc_id else []),
+        ],
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,
@@ -181,6 +418,92 @@ def build_advanced_plan(
 def _require_forced(alignment: ForcedAlignmentDocument) -> None:
     if any(word.alignment_quality != "forced" for word in alignment.words):
         raise MediaError("advanced plan refuses provisional timing")
+
+
+def _selected_asset_placements(direction: DirectionDocument | None) -> list[DirectionAssetPlacement]:
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.asset_placements)
+
+
+def _selected_transition_specs(direction: DirectionDocument | None) -> list[DirectionTransitionSpec]:
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.transitions)
+
+
+def _camera_motion(direction: DirectionDocument | None) -> list[CameraMotionEvent]:
+    """Convert validated direction camera choices into render events."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return [
+        CameraMotionEvent(
+            event_id=stable_id("direction-camera", direction.direction_id, item.motion_id),
+            interval=item.interval,
+            intent=item.intent,
+            path=item.path,
+            target_x_permille=item.target_x_permille,
+            target_y_permille=item.target_y_permille,
+            scale_start_permille=item.scale_start_permille,
+            scale_end_permille=item.scale_end_permille,
+            travel_px=item.travel_px,
+            intensity=item.intensity,
+            easing=item.easing,
+            source_evidence_ids=item.source_evidence_ids,
+        )
+        for item in option.camera_motion
+    ]
+
+
+def _motion_graphics(direction: DirectionDocument | None) -> list[MotionGraphicEvent]:
+    """Convert only validated selected-direction graphics into render events."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return [
+        MotionGraphicEvent(
+            event_id=stable_id("direction-graphic", direction.direction_id, graphic.graphic_id),
+            template=graphic.template,
+            interval=graphic.interval,
+            purpose=graphic.purpose,
+            source_evidence_ids=graphic.source_evidence_ids,
+            display_text=graphic.display_text,
+            x=graphic.x,
+            y=graphic.y,
+            width=graphic.width,
+            height=graphic.height,
+        )
+        for graphic in option.motion_graphics
+    ]
+
+
+def _source_native_text(direction: DirectionDocument | None) -> list[SourceNativeText]:
+    """Carry reviewed source-native title annotations into the plan."""
+    if direction is None:
+        return []
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    return list(option.source_native_text)
+
+
+def _drop_typography_graphic_collisions(
+    typography: list[TypographyEvent], motion_graphics: list[MotionGraphicEvent]
+) -> list[TypographyEvent]:
+    """A graphic owns its source beat; don't stack a decorative rail over it."""
+    if not motion_graphics:
+        return list(typography)
+    return [
+        item
+        for item in typography
+        if item.component_id == "context-line-v1"
+        or not any(
+            item.interval.output_start_us < graphic.interval.output_end_us
+            and graphic.interval.output_start_us < item.interval.output_end_us
+            for graphic in motion_graphics
+        )
+    ]
 
 
 def _emphasis(alignment: ForcedAlignmentDocument, candidate_id: str) -> list[EmphasisEvent]:
@@ -217,14 +540,105 @@ def _rule(word: AlignedWord) -> str | None:
     return None
 
 
+def _directed_typography(
+    direction: DirectionDocument,
+    alignment: ForcedAlignmentDocument,
+    candidate_id: str,
+) -> list[TypographyEvent]:
+    """Optional cards use only selected, exact source-bound words and timing."""
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    evidence = {item.evidence_id: item for item in option.evidence}
+    words = {word.word_id: word for word in alignment.words}
+    events: list[TypographyEvent] = []
+    context_line = getattr(option, "context_line", None)
+    if context_line is not None:
+        platform_resilient = (
+            getattr(direction, "safe_region_id", "portrait-safe-v1") == "platform-resilient-portrait-v1"
+        )
+        events.append(
+            TypographyEvent(
+                event_id=stable_id(
+                    "context-line", candidate_id, direction.direction_id, context_line.context_id
+                ),
+                interval=context_line.interval,
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id="context-line-v1",
+                text=context_line.text,
+                x=96 if platform_resilient else 72,
+                # Keep the context sentence below search/header chrome for
+                # every production style. The context line is a shared
+                # platform-safe lane, not a Quran-only special case.
+                y=280 if platform_resilient else 270,
+                font_size=(64 if platform_resilient else 80)
+                if getattr(direction, "style_id", "") == "quran-readable-v2"
+                else 48,
+                emoji=context_line.emoji,
+            )
+        )
+    for beat in option.beats:
+        if beat.display_text is None:
+            continue
+        bound_words = [
+            words[word_id]
+            for evidence_id in beat.evidence_ids
+            for word_id in evidence[evidence_id].source_word_ids
+        ]
+        start = min(word.output_start_us for word in bound_words)
+        end = max(word.output_end_us for word in bound_words)
+        events.append(
+            TypographyEvent(
+                event_id=stable_id("direction-type", candidate_id, direction.direction_id, beat.beat_id),
+                interval=OutputInterval(output_start_us=start, output_end_us=end),
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id=f"{beat.kind}-card-v1",
+                text=beat.display_text,
+                x=230 if beat.kind == "hook" else 160 if beat.kind == "punch" else 280,
+                # Duplicate text is suppressed in Remotion and represented by
+                # its accent track. Keep that track with the caption stack,
+                # below face space, rather than over a subject's forehead.
+                y=_DIRECTION_ACCENT_TOP + 34 if beat.kind == "punch" else _DIRECTION_ACCENT_TOP - 68,
+                font_size=64,
+            )
+        )
+    return events
+
+
 def _typography(
     alignment: ForcedAlignmentDocument,
     emphasis: list[EmphasisEvent],
     candidate_id: str,
 ) -> list[TypographyEvent]:
-    chosen: list[tuple[str, int, int, MotionPurpose]] = []
+    words = [word for word in alignment.words if word.text.strip()]
+    if not words:
+        return []
+    chosen: list[tuple[str, int, int, MotionPurpose, str]] = []
+    hook_index = next(
+        (
+            index
+            for index, word in enumerate(words)
+            if word.text.strip().lower() in {"never", "secret", "surprise"}
+        ),
+        0,
+    )
+    hook_end = min(len(words), hook_index + 5)
+    hook_text = _phrase(words[hook_index:hook_end])
+    punch_words = words[-3:]
+    punch_text = _phrase(punch_words)
+    hook_end_us = min(1_400_000, max(600_000, words[0].output_end_us))
+    if punch_words and punch_words[0].output_start_us <= hook_end_us:
+        hook_end_us = max(1, punch_words[0].output_start_us - 1)
+    chosen.append(
+        (
+            hook_text,
+            0,
+            hook_end_us,
+            MotionPurpose.KEY_PHRASE,
+            "hook-card-v1",
+        )
+    )
+
     seen: set[str] = set()
-    for word in alignment.words:
+    for word in words:
         stripped = word.text.strip()
         non_ascii = any(ord(char) > 127 for char in stripped)
         numeric = any(char.isdigit() or char == "$" for char in stripped)
@@ -232,59 +646,186 @@ def _typography(
         if not interesting or not stripped or stripped in seen:
             continue
         seen.add(stripped)
-        chosen.append((stripped, word.output_start_us, word.output_end_us, MotionPurpose.KEY_PHRASE))
+        chosen.append(
+            (stripped, word.output_start_us, word.output_end_us, MotionPurpose.KEY_PHRASE, "typography-card-v1")
+        )
     if not chosen and emphasis:
         item = emphasis[0]
-        chosen.append((item.text.strip(), item.output_start_us, item.output_end_us, item.purpose))
+        chosen.append(
+            (item.text.strip(), item.output_start_us, item.output_end_us, item.purpose, "typography-card-v1")
+        )
+    if punch_text and punch_text.lower() != hook_text.lower() and punch_words[0].output_start_us > hook_end_us:
+        chosen.append(
+            (
+                punch_text,
+                punch_words[0].output_start_us,
+                punch_words[-1].output_end_us,
+                MotionPurpose.KEY_PHRASE,
+                "punch-card-v1",
+            )
+        )
+    hooks = [item for item in chosen if item[4] == "hook-card-v1"][:1]
+    punches = [item for item in chosen if item[4] == "punch-card-v1"][:1]
+    middle = [item for item in chosen if item[4] == "typography-card-v1"]
+    middle.sort(key=lambda item: (0 if any(char.isdigit() or char == "$" for char in item[0]) else 1, item[1]))
+    ordered = sorted(hooks + middle[:2] + punches, key=lambda item: (item[1], item[4]))
+    selected: list[tuple[str, int, int, MotionPurpose, str]] = []
+    for candidate in ordered:
+        if selected and candidate[1] < selected[-1][2]:
+            if candidate[4] == "punch-card-v1":
+                while selected and candidate[1] < selected[-1][2]:
+                    selected.pop()
+            else:
+                continue
+        selected.append(candidate)
     events: list[TypographyEvent] = []
-    for index, (text, start, end, purpose) in enumerate(chosen[:3]):
+    for index, (text, start, end, purpose, component_id) in enumerate(selected):
+        # Punch cards are now positioned by the renderer in final portrait
+        # coordinates.  Keep the default in the lower safe region while
+        # leaving room for the baseline caption plate beneath it.
+        y = 220 if component_id == "hook-card-v1" else 1450 if component_id == "punch-card-v1" else 360
         events.append(
             TypographyEvent(
                 event_id=stable_id("type", candidate_id, text, str(index)),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 purpose=purpose,
-                component_id=f"typography-{index}",
+                component_id=component_id,
                 text=text,
                 x=72,
-                y=1480,
+                y=y,
                 font_size=64,
             )
         )
     return events
 
 
-def _diagrams(emphasis: list[EmphasisEvent], duration_us: int, candidate_id: str) -> list[DiagramEvent]:
-    label = emphasis[0].text.strip() if emphasis else "Step"
-    other = emphasis[1].text.strip() if len(emphasis) > 1 else "Next"
-    end = min(duration_us, 800_000)
-    if end <= 0:
-        raise MediaError("advanced diagram needs a positive time map")
-    return [
-        DiagramEvent(
-            event_id=stable_id("diagram", candidate_id, "comparison"),
-            interval=OutputInterval(output_start_us=0, output_end_us=end),
-            purpose=MotionPurpose.COMPARISON,
-            component_id="number-comparison-v1",
-            payload=DiagramPayload(
-                kind="number_comparison",
-                left_label=label[:40],
-                right_label=other[:40],
-                left_value=_number(label),
-                right_value=_number(other),
-            ),
-            x=120,
-            y=280,
-            width=840,
-            height=360,
+def _drop_caption_duplicates(
+    typography: list[TypographyEvent], captions: list[TypographyEvent]
+) -> list[TypographyEvent]:
+    """Retain directed events so Remotion can draw their non-text treatment.
+
+    Directed cards are source-bound to the same words as captions. The
+    renderer therefore suppresses duplicate glyphs while still drawing the
+    declarative card geometry. Dropping the event here discarded the intended
+    motion graphic before the render-input boundary and made a valid direction
+    visually inert.
+    """
+    del captions
+    return list(typography)
+
+
+def _phrase(words: list[AlignedWord]) -> str:
+    """Join exact aligned words into a readable teaser without changing wording."""
+    text = " ".join(word.text.strip() for word in words if word.text.strip())
+    return re.sub(r"\s+([,.;?!…。？！:])", r"\1", text).strip()  # noqa: RUF001
+
+
+def _captions(
+    alignment: ForcedAlignmentDocument, candidate_id: str, *, style_id: str = ""
+) -> list[TypographyEvent]:
+    """Persist grouped forced captions separately from optional typography cards."""
+    events: list[TypographyEvent] = []
+    modern = style_id not in {"", "legacy-v1"}
+    readable = style_id == "quran-readable-v2"
+    style = style_for_id(style_id) if modern else None
+    pieces = hero_caption_pieces(
+        alignment.words,
+        # Production styles carry a one-line contract. This is a plan-time
+        # grouping constraint, not a renderer fallback: captions stop before
+        # they can wrap, while retaining exact word timing and full coverage.
+        max_words=style.caption_max_words if style is not None else 8,
+        max_chars=style.caption_max_chars if style is not None else 42,
+        max_duration_us=2_500_000 if modern else 3_000_000,
+    )
+    for index, piece in enumerate(pieces):
+        text = piece.cue.text.strip()
+        if not text:
+            continue
+        events.append(
+            TypographyEvent(
+                event_id=stable_id("caption", candidate_id, str(index)),
+                interval=piece.cue.interval,
+                purpose=MotionPurpose.KEY_PHRASE,
+                component_id=f"caption-{index}",
+                text=text,
+                x=72,
+                y=style.caption_y if style is not None else (1560 if readable else 1540),
+                font_size=66 if readable else 54,
+                words=[
+                    CaptionWordTiming(
+                        word_id=word.word_id,
+                        text=word.text,
+                        output_start_us=word.output_start_us,
+                        output_end_us=word.output_end_us,
+                        output_start_frame=word.output_start_frame,
+                        output_end_frame_exclusive=word.output_end_frame_exclusive,
+                        verification_status=word.verification_status,
+                        source_word_ids=word.source_word_ids or [word.word_id],
+                    )
+                    for word in piece.words
+                ],
+            )
         )
-    ]
+    validate_caption_word_coverage(
+        alignment.words,
+        [word for event in events for word in event.words],
+    )
+    return events
 
 
-def _number(text: str) -> int:
-    digits = "".join(character for character in text if character.isdigit())
-    if not digits:
-        return 0
-    return min(int(digits[:9]), 1_000_000_000)
+def _transitions(
+    candidate_id: str,
+    time_map: TimeMapDocument,
+    duration_us: int,
+    style: str,
+    directed_specs: list[DirectionTransitionSpec] | None = None,
+) -> list[TransitionEvent]:
+    """Create restrained bridges only where the reviewed TimeMap actually cuts."""
+    mapped = time_map.to_time_map().segments
+    events: list[TransitionEvent] = []
+    if style not in {"none", "clean_cut_v1", "concat_push_v1", "concat_blur_dissolve_v1"}:
+        raise MediaError(f"unsupported cut transition style: {style}")
+    if directed_specs:
+        interior_cut_starts = {segment.output_start_us for segment in mapped[1:]}
+        for spec in directed_specs:
+            if spec.interval.output_start_us not in interior_cut_starts:
+                raise MediaError("directed transition must remain on an interior TimeMap cut")
+            if spec.interval.output_end_us > duration_us:
+                raise MediaError("directed transition extends past the output")
+        return [
+            TransitionEvent(
+                event_id=stable_id("transition", candidate_id, spec.transition_id),
+                interval=spec.interval,
+                style=spec.style,
+                source_evidence_ids=spec.source_evidence_ids,
+                direction_purpose=spec.purpose,
+                sfx_placement_id=spec.sfx_placement_id,
+            )
+            for spec in directed_specs
+        ]
+    if style == "none":
+        return events
+    for index, segment in enumerate(mapped[1:], start=1):
+        if mapped[index - 1].source_end_us == segment.source_start_us:
+            continue
+        start = segment.output_start_us
+        end = min(duration_us, start + 133_333)
+        if end <= start:
+            continue
+        events.append(
+            TransitionEvent(
+                event_id=stable_id("transition", candidate_id, str(index), str(start)),
+                interval=OutputInterval(output_start_us=start, output_end_us=end),
+            )
+        )
+    return events
+
+
+def _effective_transition_style(style: str, directed: bool) -> str:
+    """Resolve a new-plan default without overriding an explicit arc choice."""
+    if style:
+        return style
+    return "concat_blur_dissolve_v1" if directed else "none"
 
 
 def _windows(
@@ -323,9 +864,12 @@ def _windows(
     elif strategy == "center_crop":
         box = _center_crop(width, height)
     elif strategy == "manual_window":
-        if profile.manual_window is None:
-            raise MediaError("manual_window strategy requires a reframing window")
-        return [profile.manual_window], None
+        windows = profile.manual_windows
+        if not windows and profile.manual_window is not None:
+            windows = [profile.manual_window]
+        if not windows:
+            raise MediaError("manual_window strategy requires reviewed crop windows")
+        return windows, None
     else:
         boxes = _face_boxes(visual, width, height)
         if strategy == "multi_face_safe_window" and len(boxes) < 2:
@@ -490,8 +1034,18 @@ def _broll(
     duration_us: int,
     asset_ids: list[str],
     assets: list[AssetBinding],
+    placements: list[DirectionAssetPlacement] | None = None,
 ) -> list[BrollEvent]:
     events: list[BrollEvent] = []
+    if placements:
+        placement_ids = [item.asset_id for item in placements]
+        if asset_ids and asset_ids != placement_ids:
+            raise MediaError("B-roll asset ids do not match the reviewed direction placements")
+        asset_ids = placement_ids
+    elif asset_ids:
+        # Keep old documents readable, but make the unsafe behavior explicit
+        # in the event. The browser production gate rejects these events.
+        placements = None
     slot = max(1, duration_us // (len(asset_ids) + 1)) if asset_ids else duration_us
     for index, asset_id in enumerate(asset_ids):
         entry, license_record, _path = require_asset(
@@ -502,17 +1056,53 @@ def _broll(
             expected_kind="graphic",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record, slot="graphic"))
-        start = min(duration_us - 2, index * slot)
-        end = min(duration_us, start + max(1, slot // 2))
+        if not any(item.asset_id == asset_id for item in assets):
+            assets.append(binding_for(entry, license_record, slot="graphic"))
+        # Placement order is part of the declarative direction contract.  Do
+        # not look up by asset id: one asset may intentionally be reused at
+        # different output times or source in-points.
+        placement = (placements or [])[index] if placements is not None else None
+        if placement is None:
+            start = min(duration_us - 2, index * slot)
+            end = min(duration_us, start + max(1, slot // 2))
+            source_in_us = 0
+            evidence_ids: list[str] = []
+            note = "legacy_auto_spacing: no reviewed source-grounded placement"
+        else:
+            start = placement.interval.output_start_us
+            end = placement.interval.output_end_us
+            source_in_us = placement.source_in_us
+            evidence_ids = list(placement.source_evidence_ids)
+            note = placement.relevance_note
+            catalog_tags = tuple(entry.reference.content_tags)
+            placement_tags = tuple(
+                sorted({item.casefold().strip() for item in placement.asset_tags if item.strip()})
+            )
+            if not catalog_tags:
+                raise MediaError(
+                    f"B-roll asset {asset_id} has no reviewed content tags; "
+                    "tag the local asset before selecting it"
+                )
+            if placement_tags != tuple(sorted(catalog_tags)):
+                raise MediaError(
+                    f"B-roll asset {asset_id} placement tags do not match its reviewed catalog tags"
+                )
+            if not _tags_support_note(catalog_tags, note):
+                raise MediaError(
+                    f"B-roll asset {asset_id} relevance note does not mention a reviewed content tag"
+                )
         if end <= start:
             raise MediaError("B-roll interval is empty")
         events.append(
             BrollEvent(
-                event_id=stable_id("broll", candidate_id, asset_id),
+                event_id=stable_id(
+                    "broll", candidate_id, asset_id, placement.placement_id if placement else str(index)
+                ),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 asset_id=asset_id,
-                broll_source_in_us=0,
+                broll_source_in_us=source_in_us,
+                source_evidence_ids=evidence_ids,
+                relevance_note=note,
             )
         )
     return events
@@ -528,8 +1118,16 @@ def _sfx(
     asset_ids: list[str],
     assets: list[AssetBinding],
     profile: AdvancedHeroProfile,
+    placements: list[DirectionAssetPlacement] | None = None,
 ) -> list[AudioMixEvent]:
     events: list[AudioMixEvent] = []
+    if placements:
+        placement_ids = [item.asset_id for item in placements]
+        if asset_ids and asset_ids != placement_ids:
+            raise MediaError("SFX asset ids do not match the reviewed direction placements")
+        asset_ids = placement_ids
+    elif asset_ids:
+        placements = None
     for index, asset_id in enumerate(asset_ids):
         entry, license_record, _path = require_asset(
             database,
@@ -539,18 +1137,292 @@ def _sfx(
             expected_kind="audio",
             work_root=work_root,
         )
-        assets.append(binding_for(entry, license_record, slot="audio"))
-        start = min(duration_us - 2, 200_000 + (index * 100_000))
-        end = min(duration_us, start + 300_000)
+        if not any(item.asset_id == asset_id for item in assets):
+            assets.append(binding_for(entry, license_record, slot="audio"))
+        placement = (placements or [])[index] if placements is not None else None
+        gain: float
+        if placement is None:
+            start = min(duration_us - 2, 200_000 + (index * 100_000))
+            end = min(duration_us, start + 300_000)
+            gain = min(
+                profile.max_gain_db,
+                max(
+                    profile.min_gain_db,
+                    -6 if profile.renderer_recipe_version == "advanced-hero-renderer-v1" else -12,
+                ),
+            )
+            evidence_ids: list[str] = []
+            purpose = None
+            note = "legacy_auto_spacing: no reviewed source-grounded placement"
+            source_in_us = 0
+        else:
+            start = placement.interval.output_start_us
+            end = placement.interval.output_end_us
+            gain = float(placement.gain_db if placement.gain_db is not None else profile.sfx_default_gain_db)
+            evidence_ids = list(placement.source_evidence_ids)
+            purpose = placement.purpose
+            note = placement.relevance_note
+            source_in_us = placement.source_in_us
         if end <= start:
             raise MediaError("SFX interval is empty")
-        gain = min(profile.max_gain_db, max(profile.min_gain_db, -6))
+        sfx_limit = (
+            profile.max_gain_db
+            if profile.renderer_recipe_version == "advanced-hero-renderer-v1"
+            else profile.sfx_max_gain_db
+        )
+        gain = min(profile.max_gain_db, sfx_limit, max(profile.min_gain_db, gain))
         events.append(
             AudioMixEvent(
-                event_id=stable_id("sfx", candidate_id, asset_id),
+                event_id=stable_id(
+                    "sfx", candidate_id, asset_id, placement.placement_id if placement else str(index)
+                ),
                 interval=OutputInterval(output_start_us=start, output_end_us=end),
                 asset_id=asset_id,
                 gain_db=gain,
+                sfx_source_in_us=source_in_us,
+                fade_in_us=profile.sfx_fade_in_us,
+                fade_out_us=profile.sfx_fade_out_us,
+                source_evidence_ids=evidence_ids,
+                purpose=purpose,
+                relevance_note=note,
             )
         )
     return events
+
+
+def _build_treatment_audio_mix(
+    direction: DirectionDocument | None,
+    events: list[AudioMixEvent],
+    profile: AdvancedHeroProfile,
+    words: list[AlignedWord],
+) -> TreatmentAudioMixResult | None:
+    """Bind requested/applied SFX values to the Advanced plan identity."""
+    if direction is None:
+        return None
+    treatment_sha = direction.treatment_fingerprint or "0" * 64
+    policy_sha = advanced_fingerprint(
+        {
+            "audio_mix_version": profile.audio_mix_version,
+            "sfx_default_gain_db": profile.sfx_default_gain_db,
+            "sfx_max_gain_db": profile.sfx_max_gain_db,
+            "sfx_fade_in_us": profile.sfx_fade_in_us,
+            "sfx_fade_out_us": profile.sfx_fade_out_us,
+            "narration_duck_db": profile.narration_duck_db,
+        }
+    )
+    speech_windows_v2: list[list[OutputInterval]] = []
+    silence_windows_v2: list[list[OutputInterval]] = []
+    for event in events:
+        overlaps = [
+            OutputInterval(
+                output_start_us=max(event.interval.output_start_us, word.output_start_us),
+                output_end_us=min(event.interval.output_end_us, word.output_end_us),
+            )
+            for word in words
+            if word.output_start_us < event.interval.output_end_us
+            and event.interval.output_start_us < word.output_end_us
+        ]
+        overlaps.sort(key=lambda item: item.output_start_us)
+        merged: list[OutputInterval] = []
+        for item in overlaps:
+            if merged and item.output_start_us <= merged[-1].output_end_us:
+                merged[-1] = merged[-1].model_copy(
+                    update={"output_end_us": max(merged[-1].output_end_us, item.output_end_us)}
+                )
+            else:
+                merged.append(item)
+        silences: list[OutputInterval] = []
+        cursor = event.interval.output_start_us
+        for item in merged:
+            if cursor < item.output_start_us:
+                silences.append(OutputInterval(output_start_us=cursor, output_end_us=item.output_start_us))
+            cursor = item.output_end_us
+        if cursor < event.interval.output_end_us:
+            silences.append(OutputInterval(output_start_us=cursor, output_end_us=event.interval.output_end_us))
+        speech_windows_v2.append(merged)
+        silence_windows_v2.append(silences)
+    legacy_windows = [windows[0] if windows else None for windows in speech_windows_v2]
+    return TreatmentAudioMixResult(
+        mix_id=stable_id("treatment-audio-mix", direction.direction_id, treatment_sha),
+        treatment_fingerprint=treatment_sha,
+        policy_fingerprint=policy_sha,
+        cue_event_ids=[event.event_id for event in events],
+        applied_gain_db=[event.gain_db for event in events],
+        duck_db=[abs(profile.narration_duck_db) for _event in events],
+        source_in_us=[event.sfx_source_in_us for event in events],
+        fade_in_us=[event.fade_in_us for event in events],
+        fade_out_us=[event.fade_out_us for event in events],
+        speech_overlap_windows=legacy_windows,
+        silence_windows=[item for group in silence_windows_v2 for item in group],
+        speech_overlap_windows_v2=speech_windows_v2,
+        silence_windows_v2=silence_windows_v2,
+        intelligibility_status="unverified",
+        status="planned",
+    )
+
+
+def treatment_evidence_digest(bundle: TreatmentEvidenceBundle) -> str:
+    """Hash the exact canonical JSON bytes that are persisted for the bundle."""
+    from clipforge.transcription.io import dump_json
+
+    return hashlib.sha256(dump_json(bundle).encode("utf-8")).hexdigest()
+
+
+def _build_treatment_evidence_bundle(
+    *,
+    direction: DirectionDocument,
+    direction_sha256: str,
+    project_id: str,
+    source_asset_id: str,
+    candidate_id: str,
+    audio_mix: TreatmentAudioMixResult | None,
+    actor: str,
+    work_root: Path,
+) -> TreatmentEvidenceBundle:
+    from clipforge.editorial.presets import PresetCatalog
+    from clipforge.hero.treatment_policy import evaluate_treatment_policy
+
+    selected = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    policy = PresetCatalog.load().find(direction.preset_id or "clean_explainer").treatment_policy
+    receipts = [
+        TreatmentAssetReceipt(
+            placement_id=placement.placement_id,
+            request_id=placement.request_id or "unbound",
+            asset_id=placement.asset_id,
+            kind=placement.kind,
+            interval=placement.interval,
+            source_in_us=placement.source_in_us,
+            provider_response_sha256=placement.provider_response_sha256 or "0" * 64,
+            selection_id=placement.selection_id or "unbound",
+            acquisition_id=placement.acquisition_id or "unbound",
+            license_evidence_sha256=placement.license_evidence_sha256 or "0" * 64,
+            registered_asset_sha256=placement.registered_asset_sha256 or "0" * 64,
+            observation_id=placement.observation_id,
+            observation_sha256=placement.observation_sha256,
+        )
+        for placement in selected.asset_placements
+    ]
+    observations: list[TreatmentAssetObservation] = []
+    for receipt in receipts:
+        if receipt.observation_id is None:
+            continue
+        observation_path = (
+            work_root / "editorial" / "treatment-observations" / receipt.observation_id / "observation.json"
+        )
+        if (
+            observation_path.is_symlink()
+            or not observation_path.is_file()
+            or receipt.observation_sha256 != sha256_file(observation_path)
+        ):
+            raise MediaError(f"treatment observation is missing or stale: {receipt.observation_id}")
+        try:
+            observation = TreatmentAssetObservation.model_validate_json(
+                observation_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MediaError(f"treatment observation is invalid: {receipt.observation_id}") from exc
+        if (
+            observation.observation_id != receipt.observation_id
+            or observation.asset_id != receipt.asset_id
+            or observation.media_sha256 != receipt.registered_asset_sha256
+        ):
+            raise MediaError(f"treatment observation binding is stale: {receipt.observation_id}")
+        for frame in observation.frames:
+            frame_path = work_root / frame.relative_path
+            if frame_path.is_symlink() or not frame_path.is_file() or sha256_file(frame_path) != frame.sha256:
+                raise MediaError(f"treatment observation frame is missing or stale: {frame.relative_path}")
+        observations.append(observation)
+    findings = [
+        TreatmentPolicyFinding(**item.model_dump(mode="json"))
+        for item in evaluate_treatment_policy(selected, policy)
+    ]
+    return TreatmentEvidenceBundle(
+        bundle_id=stable_id(
+            "treatment-evidence", direction.direction_id, direction.treatment_fingerprint or ""
+        ),
+        project_id=project_id,
+        source_asset_id=source_asset_id,
+        candidate_id=candidate_id,
+        direction_id=direction.direction_id,
+        direction_sha256=direction_sha256,
+        treatment_fingerprint=direction.treatment_fingerprint or treatment_fingerprint(selected),
+        decisions=selected.treatment_decisions,
+        asset_receipts=receipts,
+        observations=observations,
+        policy_findings=findings,
+        audio_mix=audio_mix,
+        created_at=direction.provenance.created_at,
+        provenance=ArtifactProvenance(
+            created_at=direction.provenance.created_at,
+            created_by=actor,
+            tool="clipforge advanced treatment evidence",
+            tool_version=__version__,
+            source_asset_ids=[source_asset_id],
+            parent_artifact_ids=[direction.direction_id],
+            inputs_sha256=direction_sha256,
+        ),
+    )
+
+
+def _validate_treatment_event_consistency(
+    direction: DirectionDocument | None,
+    camera_motion: list[CameraMotionEvent],
+    transitions: list[TransitionEvent],
+    broll: list[BrollEvent],
+    sfx: list[AudioMixEvent],
+    motion_graphics: list[MotionGraphicEvent],
+) -> None:
+    """Reject render events that a treatment decision omitted or blocked."""
+    if direction is None or direction.direction_recipe_version not in {"direction-v3", "direction-v4"}:
+        return
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    from clipforge.hero.treatment_policy import treatment_event_ownership
+
+    errors = treatment_event_ownership(option)
+    if errors:
+        raise MediaError("; ".join(item.message for item in errors))
+    expected = {
+        "camera": [
+            stable_id("direction-camera", direction.direction_id, item.motion_id)
+            for item in option.camera_motion
+        ],
+        "transition": [
+            stable_id("transition", direction.candidate_id, item.transition_id) for item in option.transitions
+        ],
+        "broll": [
+            stable_id("broll", direction.candidate_id, item.asset_id, item.placement_id)
+            for item in option.asset_placements
+            if item.kind == "graphic"
+        ],
+        "sfx": [
+            stable_id("sfx", direction.candidate_id, item.asset_id, item.placement_id)
+            for item in option.asset_placements
+            if item.kind == "audio"
+        ],
+        "motion_graphics": [
+            stable_id("direction-graphic", direction.direction_id, item.graphic_id)
+            for item in option.motion_graphics
+        ],
+    }
+    actual = {
+        "camera": [item.event_id for item in camera_motion],
+        "transition": [item.event_id for item in transitions],
+        "broll": [item.event_id for item in broll],
+        "sfx": [item.event_id for item in sfx],
+        "motion_graphics": [item.event_id for item in motion_graphics],
+    }
+    for layer, ids in expected.items():
+        if Counter(ids) != Counter(actual[layer]):
+            raise MediaError(f"{layer} render events do not match treatment decisions")
+
+
+def _tags_support_note(tags: tuple[str, ...], note: str) -> bool:
+    """Require an explicit reviewed label in the placement explanation.
+
+    Tags are operator-confirmed metadata, not an automated relevance claim.
+    The deterministic check prevents a direction from silently substituting an
+    unrelated stock clip; human review remains the final editorial authority.
+    """
+    normalized = re.sub(r"[^\w%$']+", " ", note.casefold())
+    tokens = set(normalized.split())
+    return any(set(re.sub(r"[^\w%$']+", " ", tag.casefold()).split()) <= tokens for tag in tags)

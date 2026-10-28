@@ -80,7 +80,7 @@ function renderDraft(board, draft) {
   for (const item of draft.history || []) {
     const entry = document.createElement("li");
     const scope = item.current_artifact ? "current artifact" : "older artifact";
-    text(entry, item.decision + " by " + item.reviewer_id + " (" + scope + ") " + (item.notes || ""));
+    text(entry, item.decision + " by " + item.reviewer_id + " (" + (item.reviewer_role || "human_reviewer") + ", " + scope + ") " + (item.notes || ""));
     history.append(entry);
   }
   article.append(history);

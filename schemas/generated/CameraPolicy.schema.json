@@ -1,0 +1,53 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "max_events": {
+      "default": 4,
+      "maximum": 12,
+      "minimum": 0,
+      "title": "Max Events",
+      "type": "integer"
+    },
+    "max_scale_delta": {
+      "default": 0.08,
+      "maximum": 0.14,
+      "minimum": 0,
+      "title": "Max Scale Delta",
+      "type": "number"
+    },
+    "max_subject_drift_px": {
+      "default": 80,
+      "maximum": 194,
+      "minimum": 0,
+      "title": "Max Subject Drift Px",
+      "type": "integer"
+    },
+    "min_events": {
+      "default": 0,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Min Events",
+      "type": "integer"
+    },
+    "mode": {
+      "enum": [
+        "preferred",
+        "allowed",
+        "blocked"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mode"
+  ],
+  "title": "CameraPolicy",
+  "type": "object"
+}

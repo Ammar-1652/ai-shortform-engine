@@ -31,11 +31,16 @@ from clipforge.policy.loader import PolicyError, ProfileResolution, resolve_prof
 from clipforge.preview.inputs import PreviewInputs, load_preview_inputs
 from clipforge.preview.service import default_profile
 from clipforge.qa.technical import TechnicalInputs, technical_checks
-from clipforge.schemas.advanced import AdvancedHeroDraftSetDocument, AdvancedHeroPlanDocument
+from clipforge.schemas.advanced import (
+    AdvancedHeroDraftSetDocument,
+    AdvancedHeroPlanDocument,
+    advanced_fingerprint,
+)
 from clipforge.schemas.governance import AssetLicenseRecord, ComplianceStatus
 from clipforge.schemas.jobs import JobRecord, QACheck, QAKind, QAResult, QAStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.qa import PolicyDigest, QACacheRecord, QASetDocument, aggregate_status
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.storage import (
     Database,
     find_artifact,
@@ -407,7 +412,33 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
     policies = [
         PolicyDigest(policy_id=item.policy_id, sha256=item.sha256) for item in prepared.resolution.policies
     ]
+    treatment_fingerprints = {
+        plan.treatment_fingerprint for plan in prepared.plans if plan.treatment_fingerprint
+    }
+    treatment_evidence_fingerprints = {
+        plan.treatment_evidence_sha256 for plan in prepared.plans if plan.treatment_evidence_sha256
+    }
+    treatment_mix_fingerprints = {
+        advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
+        for plan in prepared.plans
+        if plan.treatment_audio_mix is not None
+    }
+    treatment_audio_measurements = {
+        (draft.treatment_audio_measurement_relative_path, draft.treatment_audio_measurement_sha256)
+        for draft in document.drafts
+        if draft.treatment_audio_measurement_relative_path
+    }
+    if len(treatment_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment fingerprints")
+    if len(treatment_evidence_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment evidence fingerprints")
+    if len(treatment_mix_fingerprints) > 1:
+        raise QAError("QA plans have inconsistent treatment audio mix fingerprints")
+    if len(treatment_audio_measurements) > 1:
+        raise QAError("QA drafts have inconsistent treatment audio measurement evidence")
+    measurement_path, measurement_sha256 = next(iter(treatment_audio_measurements), ("", ""))
     return QASetDocument(
+        workflow_roles=WorkflowRolePolicy(),
         qa_set_id=str(uuid.uuid4()),
         project_id=prepared.project_id,
         source_asset_id=prepared.source_asset_id,
@@ -420,6 +451,23 @@ def _build_document(prepared: _Prepared, job_id: str, actor: str, now: datetime)
         technical=technical_result,
         campaign=campaign_result,
         status=status,
+        treatment_fingerprint=next(iter(treatment_fingerprints), ""),
+        treatment_evidence_sha256=next(iter(treatment_evidence_fingerprints), ""),
+        treatment_evidence_relative_path=next(
+            (
+                plan.treatment_evidence_relative_path
+                for plan in prepared.plans
+                if plan.treatment_evidence_relative_path
+            ),
+            "",
+        ),
+        # The evidence digest covers the complete direction option, request
+        # bindings, collision/omission receipts, and the audio mix.  Keep the
+        # legacy field name for compatibility, but never substitute the audio
+        # sub-hash for the canonical treatment summary.
+        treatment_summary_sha256=next(iter(treatment_evidence_fingerprints), ""),
+        treatment_audio_measurement_relative_path=measurement_path,
+        treatment_audio_measurement_sha256=measurement_sha256,
         provenance=ArtifactProvenance(
             created_at=now,
             created_by=actor,
@@ -441,6 +489,7 @@ def _campaign_checks(prepared: _Prepared) -> list[QACheck]:
         plans=prepared.plans,
         work_root=prepared.root,
         workspace=prepared.workspace,
+        profile_id=prepared.resolution.profile_id,
     )
     checks: list[QACheck] = []
     for policy in prepared.resolution.policies:
@@ -517,6 +566,7 @@ def _cache_record(document: QASetDocument, artifact_id: str, digest: str, size: 
         manifest_sha256=digest,
         manifest_size_bytes=size,
         status=document.status,
+        treatment_audio_measurement_sha256=document.treatment_audio_measurement_sha256,
         created_at=document.provenance.created_at,
     )
 

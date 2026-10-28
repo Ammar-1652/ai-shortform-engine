@@ -1,0 +1,119 @@
+{
+  "additionalProperties": false,
+  "description": "Checkpoint for a resumable Advanced Remotion run.",
+  "properties": {
+    "advanced_set_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Advanced Set Id",
+      "type": "string"
+    },
+    "artifact_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Id"
+    },
+    "batch_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Batch Sha256",
+      "type": "string"
+    },
+    "candidate_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Candidate Ids",
+      "type": "array"
+    },
+    "completed_candidate_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Completed Candidate Ids",
+      "type": "array"
+    },
+    "completed_media_sha256": {
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$": {
+          "type": "string"
+        }
+      },
+      "propertyNames": {
+        "description": "Stable id. UUID text is the usual value."
+      },
+      "title": "Completed Media Sha256",
+      "type": "object"
+    },
+    "hero_review_status": {
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
+    "renderer_dependency_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "state": {
+      "default": "running",
+      "enum": [
+        "running",
+        "failed",
+        "complete"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "advanced_set_id",
+    "source_asset_id",
+    "source_sha256",
+    "hero_review_status",
+    "candidate_ids",
+    "batch_sha256",
+    "renderer_dependency_sha256",
+    "updated_at"
+  ],
+  "title": "AdvancedRenderProgress",
+  "type": "object"
+}

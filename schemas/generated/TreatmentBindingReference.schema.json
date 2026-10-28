@@ -1,0 +1,34 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "binding_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Binding Id",
+      "type": "string"
+    },
+    "relative_path": {
+      "pattern": "^editorial/treatment-bindings/[A-Za-z0-9._:-]+\\.json$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "binding_id",
+    "relative_path",
+    "sha256"
+  ],
+  "title": "TreatmentBindingReference",
+  "type": "object"
+}

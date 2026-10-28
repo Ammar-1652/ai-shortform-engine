@@ -1,0 +1,174 @@
+{
+  "additionalProperties": false,
+  "description": "A pinned repository, page, policy, or authorized reference source.",
+  "properties": {
+    "allowed_uses": {
+      "items": {
+        "enum": [
+          "analysis",
+          "guidance",
+          "code",
+          "asset_reuse"
+        ],
+        "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Allowed Uses",
+      "type": "array"
+    },
+    "attribution": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attribution"
+    },
+    "captured_at": {
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "content_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Sha256"
+    },
+    "kind": {
+      "enum": [
+        "repository",
+        "web_page",
+        "reference_video",
+        "reference_audio",
+        "campaign_document",
+        "internal_policy"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "license_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Id"
+    },
+    "license_url": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Url"
+    },
+    "locator": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Locator",
+      "type": "string"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes"
+    },
+    "permission": {
+      "enum": [
+        "analysis_allowed",
+        "reuse_allowed",
+        "blocked",
+        "unknown"
+      ],
+      "title": "Permission",
+      "type": "string"
+    },
+    "repository_commit": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repository Commit"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selected_paths": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Selected Paths",
+      "type": "array"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_version": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Source Version",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "kind",
+    "title",
+    "locator",
+    "permission",
+    "captured_at",
+    "source_version"
+  ],
+  "title": "KnowledgeSource",
+  "type": "object"
+}

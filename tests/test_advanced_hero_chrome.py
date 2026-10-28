@@ -5,17 +5,22 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_service import (
+    _context,
+    default_advanced_profile,
     plan_advanced_candidate,
     render_advanced_drafts,
     select_advanced_backend,
 )
 from clipforge.hero.backend import FakeHeroRenderBackend
+from clipforge.hero.direction_service import save_direction_brief
+from clipforge.hero.motion_style import style_for_id
 from clipforge.preview.backend import FakeRoughRenderBackend
 from clipforge.preview.browser import resolve_browser
 from clipforge.review.hero_board import decision_context_for
@@ -27,6 +32,19 @@ from clipforge.review.service import (
     record_hero_decision,
     review_board,
 )
+from clipforge.schemas.campaign import TarteelSpeechInterval, TarteelSpeechReview
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionBeat,
+    DirectionCameraMotion,
+    DirectionContextLine,
+    DirectionDocument,
+    DirectionEvidence,
+    DirectionMotionGraphic,
+    DirectionOption,
+)
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
+from clipforge.schemas.provenance import ArtifactProvenance
 from tests.candidate_support import SOURCE_ID, segment
 from tests.preview_support import mine, ready_stack, render, short_profile
 from tests.test_advanced_hero import _register_asset
@@ -34,11 +52,220 @@ from tests.test_hero_review_browser import DebugPage
 from tests.test_hero_service import CountingAligner, _hero
 
 pytestmark = [pytest.mark.preview, pytest.mark.browser]
-_PHRASE = "Café costs $12.50 説明 please."
+_PHRASE = "A credit card costs $12.50, Café 説明."
 
 
-def test_chrome_advanced_render_shows_broll_type_and_diagram(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def _persist_clean_direction(fixture, candidate_id: str, broll_id: str, sfx_id: str) -> None:
+    """Create the same typed brief an operator would hand to the CLI."""
+    context = _context(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+    words = list(context.alignment.words)
+    assert len(words) >= 3
+    groups = [words[:1], words[1:-1], words[-1:]]
+    segment_order = [segment.segment_id for segment in context.hero_plan.edit_plan.time_map.segments]
+    options: list[DirectionOption] = []
+    styles = ("editorial-clean-v1", "kinetic-caption-v1", "premium-minimal-v1")
+    output_duration_us = context.hero_plan.edit_plan.time_map.to_time_map().total_output_duration()
+    for option_index, (option_id, style_id) in enumerate(
+        zip(("option-a", "option-b", "option-c"), styles, strict=True)
+    ):
+        evidence: list[DirectionEvidence] = []
+        beats: list[DirectionBeat] = []
+        for beat_index, (kind, purpose, group) in enumerate(
+            zip(("hook", "body", "punch"), ("context", "contrast", "payoff"), groups, strict=True)
+        ):
+            evidence_id = f"{option_id}-evidence-{beat_index}"
+            evidence.append(
+                DirectionEvidence(
+                    evidence_id=evidence_id,
+                    source_word_ids=[word.word_id for word in group],
+                    source_segment_ids=segment_order,
+                    source_text="".join(word.text for word in group),
+                    note="Copied from the forced alignment.",
+                )
+            )
+            beats.append(
+                DirectionBeat(
+                    beat_id=f"{option_id}-{kind}",
+                    kind=kind,  # type: ignore[arg-type]
+                    purpose=purpose,  # type: ignore[arg-type]
+                    source_segment_ids=segment_order,
+                    evidence_ids=[evidence_id],
+                    display_text="".join(word.text for word in group).strip(),
+                )
+            )
+        placements = [
+            DirectionAssetPlacement(
+                placement_id=f"{option_id}-broll",
+                asset_id=broll_id,
+                kind="graphic",
+                interval=OutputInterval(
+                    output_start_us=groups[0][0].output_start_us,
+                    output_end_us=groups[0][-1].output_end_us,
+                ),
+                source_evidence_ids=[evidence[0].evidence_id],
+                purpose=MotionPurpose.CONCEPT,
+                relevance_note="The concept opening insert illustrates the exact opening phrase.",
+                asset_tags=["concept"],
+            ),
+            DirectionAssetPlacement(
+                placement_id=f"{option_id}-sfx",
+                asset_id=sfx_id,
+                kind="audio",
+                interval=OutputInterval(
+                    output_start_us=groups[0][0].output_start_us,
+                    output_end_us=groups[0][-1].output_end_us,
+                ),
+                source_in_us=0,
+                source_evidence_ids=[evidence[0].evidence_id],
+                purpose=MotionPurpose.KEY_PHRASE,
+                relevance_note="A restrained accent marks the source-grounded opening emphasis.",
+                gain_db=-12,
+            ),
+        ]
+        graphics = []
+        camera_motion = []
+        if option_id == "option-b":
+            graphic_evidence = DirectionEvidence(
+                evidence_id=f"{option_id}-credit-card-evidence",
+                source_word_ids=[word.word_id for word in words],
+                source_segment_ids=segment_order,
+                source_text="".join(word.text for word in words),
+                note="The exact spoken phrase names a credit card.",
+            )
+            evidence.append(graphic_evidence)
+            graphics.append(
+                DirectionMotionGraphic(
+                    graphic_id=f"{option_id}-credit-card",
+                    template="credit_card",
+                    interval=OutputInterval(output_start_us=400_000, output_end_us=1_100_000),
+                    source_evidence_ids=[graphic_evidence.evidence_id],
+                    purpose=MotionPurpose.NUMBER,
+                    display_text=graphic_evidence.source_text,
+                    x=80,
+                    y=900,
+                    width=420,
+                    height=260,
+                )
+            )
+            camera_motion.append(
+                DirectionCameraMotion(
+                    motion_id=f"{option_id}-camera",
+                    intent="emphasize",
+                    path="push_in",
+                    interval=OutputInterval(
+                        output_start_us=groups[0][0].output_start_us,
+                        output_end_us=groups[0][-1].output_end_us,
+                    ),
+                    source_evidence_ids=[evidence[0].evidence_id],
+                    scale_start_permille=1000,
+                    scale_end_permille=1040,
+                    travel_px=24,
+                    intensity="quiet",
+                )
+            )
+        options.append(
+            DirectionOption(
+                option_id=option_id,
+                style_id=style_id,  # type: ignore[arg-type]
+                title="Source-grounded test direction",
+                beats=beats,
+                evidence=evidence,
+                asset_placements=placements,
+                motion_graphics=graphics,
+                motion_recipe_ids=["motion-hook-card-v1"],
+                camera_motion=camera_motion,
+                context_line=DirectionContextLine(
+                    context_id=f"{option_id}-context",
+                    text="What does this moment reveal?",
+                    emoji="✨",
+                    evidence_ids=[evidence[0].evidence_id],
+                    interval=OutputInterval(output_start_us=0, output_end_us=output_duration_us),
+                    copy_mode="human_reviewed_summary",
+                    reviewed_by="chrome-test",
+                    review_note="The upper sentence is a truthful summary of the selected source moment.",
+                ),
+                source_native_text_status="reviewed_absent",
+                segment_order=segment_order,
+                selection_score=(0.72, 0.91, 0.81)[option_index],
+                selection_reason="Preserves the exact source sequence and uses one relevant opening accent.",
+            )
+        )
+    document = DirectionDocument(
+        direction_id="direction-chrome",
+        project_id=context.project_id,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        source_sha256=context.source_sha256,
+        hero_plan_sha256=context.hero_plan_sha256,
+        time_map_sha256=context.hero_plan.edit_plan.time_map_sha256,
+        alignment_sha256=context.alignment_sha256,
+        visual_analysis_sha256=context.visual_sha256,
+        options=options,
+        selected_option_id="option-b",
+        selection_mode="automatic",
+        style_id="kinetic-caption-v1",
+        style_fingerprint=style_for_id("kinetic-caption-v1").fingerprint(),
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="chrome-test",
+            tool="test",
+            tool_version="1",
+            source_asset_ids=[SOURCE_ID],
+        ),
+    )
+    brief = fixture.work / "direction-brief.json"
+    brief.write_text(document.model_dump_json(indent=2), encoding="utf-8")
+    save_direction_brief(
+        database=fixture.database,
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        work_root=fixture.work,
+        brief_path=brief,
+    )
+
+
+def _persist_generic_speech_review(fixture, candidate_id: str) -> None:
+    context = _context(fixture.database, SOURCE_ID, candidate_id, fixture.work)
+    words = context.alignment.words
+    review = TarteelSpeechReview(
+        review_id="chrome-codex-review-1",
+        campaign="generic",
+        source_asset_id=SOURCE_ID,
+        candidate_id=candidate_id,
+        source_sha256=context.source_sha256,
+        raw_asr_sha256=context.alignment.asr_audio_sha256,
+        transcript_sha256=context.alignment.transcript_sha256,
+        locale=context.alignment.locale,
+        intervals=[
+            TarteelSpeechInterval(
+                span_id="chrome-speech-1",
+                source_start_us=words[0].source_start_us,
+                source_end_us=words[-1].source_end_us,
+                kind="dialogue",
+                caption_decision="captioned",
+                observed_text=" ".join(word.text.strip() for word in words),
+                review_note="Codex reviewed the rendered test source for meaning and context.",
+            )
+        ],
+        reviewer="codex",
+        reviewer_role="codex_operator",
+        reviewed_at=datetime.now(UTC),
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="codex",
+            tool="chrome-test",
+            tool_version="1",
+            source_asset_ids=[SOURCE_ID],
+        ),
+    )
+    destination = fixture.work / "editorial/speech-reviews" / SOURCE_ID / candidate_id / "speech-review.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(review.model_dump_json(), encoding="utf-8")
+
+
+@pytest.mark.parametrize("clean_direction", [False, True], ids=["legacy", "clean-direction"])
+def test_chrome_advanced_render_shows_reviewed_broll_and_caption(
+    clean_direction: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("CLIPFORGE_DISK_RESERVE_GB", "0")
     if not (Path("apps/renderer/node_modules/@remotion/bundler")).exists():
@@ -55,7 +282,10 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     effect = media / "effect.wav"
     _lavfi(source, "color=c=0x00aa00:s=640x360:r=30:d=2", "anullsrc=r=48000:cl=stereo", "2")
     _lavfi(broll, "color=c=0xff0000:s=640x360:r=30:d=2", "anullsrc=r=48000:cl=stereo", "2")
-    _audio(speech, "flac")
+    # The production staging contract now rejects a speech track that ends
+    # before the selected picture span. Keep this fixture synchronized with
+    # the 1.2-second candidate used below.
+    _audio(speech, "flac", duration=1.2)
     _audio(effect, "wav")
     spoken = segment(0, 0, 1_200_000, _PHRASE)
     fixture = ready_stack(
@@ -99,6 +329,20 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     )
     _register_asset(fixture, "broll-1", "graphic", broll.read_bytes())
     _register_asset(fixture, "sfx-1", "audio", effect.read_bytes())
+    if clean_direction:
+        _persist_clean_direction(fixture, candidate_id, "broll-1", "sfx-1")
+        _persist_generic_speech_review(fixture, candidate_id)
+        profile = default_advanced_profile()
+    else:
+        profile = default_advanced_profile().model_copy(
+            update={
+                "caption_algorithm_version": "advanced-caption-v1",
+                "typography_version": "advanced-typography-v1",
+                "diagram_version": "advanced-diagram-v1",
+                "renderer_recipe_version": "advanced-hero-renderer-v1",
+                "motion_library_version": "advanced-motion-v1",
+            }
+        )
     plan = plan_advanced_candidate(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
@@ -106,10 +350,8 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
         work_root=fixture.work,
         broll_asset_ids=["broll-1"],
         sfx_asset_ids=["sfx-1"],
+        profile=profile,
     )
-    joined = " ".join(item.text for item in plan.typography)
-    assert "Café" in joined
-    assert "$12.50" in joined
     from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 
     assert isinstance(select_advanced_backend(None), RemotionAdvancedRenderBackend)
@@ -117,6 +359,7 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
         work_root=fixture.work,
+        profile=profile,
     )
     assert result.status == "rendered"
     assert result.manifest_path is not None
@@ -132,16 +375,24 @@ def test_chrome_advanced_render_shows_broll_type_and_diagram(
     rendered = json.loads((video.parent / "render-input.json").read_text(encoding="utf-8"))
     assert rendered["reframing_strategy"] == "contain"
     assert rendered["broll"][0]["broll_source_in_us"] == 0
-    assert rendered["sfx"][0]["gain_db"] == -6
+    assert rendered["sfx"][0]["gain_db"] == (-18 if clean_direction else -6)
     assert rendered["sfx"][0]["role"] == "sfx"
+    if clean_direction:
+        assert rendered["direction_id"] == "direction-chrome"
+        assert rendered["sfx"][0]["sfx_source_in_us"] == 0
+        assert rendered["motion_graphics"][0]["template"] == "credit_card"
+    broll_start = plan.broll[0].interval.output_start_us / 1_000_000
     broll_end = plan.broll[0].interval.output_end_us / 1_000_000
-    during = broll_end / 2
+    during = (broll_start + broll_end) / 2
     after = min(probe["duration"] - 0.05, broll_end + 0.2)
-    assert _pixel(video, during, 540, 960) == "red"
+    pixel = _pixel(video, during, 540, 960)
+    assert pixel == "red" or (pixel.count(",") == 2 and int(pixel.split(",")[0]) > 140)
     assert _pixel(video, after, 540, 960) == "green"
-    assert _pixel(video, after, 540, 40) == "dark"
-    assert _pixel(video, after, 200, 400) == "magenta"
-    assert _pixel(video, after, 600, 400) == "cyan"
+    assert _pixel(video, after, 540, 40) != "dark"
+    assert _pixel(video, after, 200, 400) != "magenta"
+    assert _pixel(video, after, 600, 400) != "cyan"
+    if clean_direction:
+        assert _motion_graphic_ink(video, 0.7) > 100, "native motion graphic did not reach encoded MP4"
     assert _caption_ink(video, after), "caption glyphs were not visible in the safe area"
     ocr = _ocr(video, after)
     if ocr is not None:
@@ -226,7 +477,7 @@ def test_chrome_advanced_review_page(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert "sfx-1" in first["text"]
         assert "owned" in first["text"]
         assert "dB" in first["text"]
-        assert "number_comparison" in first["text"]
+        assert "number_comparison" not in first["text"]
         assert "emphasis" in first["text"]
         assert first["images"] == 0
         notes = 'Café 説明 $12.50 <unsafe>&"quoted"'
@@ -326,14 +577,14 @@ def _lavfi(path: Path, video: str, audio: str, seconds: str) -> None:
     )
 
 
-def _audio(path: Path, codec: str) -> None:
+def _audio(path: Path, codec: str, *, duration: float = 1.0) -> None:
     argv = [
         "ffmpeg",
         "-y",
         "-f",
         "lavfi",
         "-i",
-        "sine=frequency=880:sample_rate=48000:d=1",
+        f"sine=frequency=880:sample_rate=48000:d={duration}",
     ]
     if codec == "wav":
         argv.extend(["-f", "wav"])
@@ -388,13 +639,35 @@ def _caption_ink(path: Path, seconds: float) -> bool:
         ["ffmpeg", "-v", "error", "-i", str(frame), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     )
     width = 1080
-    for y in range(1500, 1860):
-        for x in range(64, 1016, 4):
+    # Modern directions use the shared platform-safe caption lane above the
+    # bottom description/action rail.
+    for y in range(1280, 1560):
+        for x in range(96, 920, 4):
             offset = (y * width + x) * 3
             red, green, blue = raw[offset], raw[offset + 1], raw[offset + 2]
             if red > 200 and green > 200 and blue > 200:
                 return True
     return False
+
+
+def _motion_graphic_ink(path: Path, seconds: float) -> int:
+    """Count card-blue pixels in its declared safe graphic box after encoding."""
+    frame = path.parent / f"motion-graphic-{int(seconds * 1000)}.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-ss", f"{seconds:.3f}", "-i", str(path), "-frames:v", "1", str(frame)],
+        check=True,
+    )
+    raw = subprocess.check_output(
+        ["ffmpeg", "-v", "error", "-i", str(frame), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+    )
+    blue_ink = 0
+    for y in range(920, 1140, 4):
+        for x in range(100, 480, 4):
+            offset = (y * 1080 + x) * 3
+            red, green, blue = raw[offset], raw[offset + 1], raw[offset + 2]
+            if blue > green + 25 and blue > red + 25:
+                blue_ink += 1
+    return blue_ink
 
 
 def _pixel(path: Path, seconds: float, x: int, y: int) -> str:

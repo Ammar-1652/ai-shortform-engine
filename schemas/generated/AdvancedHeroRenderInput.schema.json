@@ -16,6 +16,22 @@
           "title": "Event Id",
           "type": "string"
         },
+        "fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade In Us",
+          "type": "integer"
+        },
+        "fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Fade Out Us",
+          "type": "integer"
+        },
         "gain_db": {
           "maximum": 6,
           "minimum": -24,
@@ -24,6 +40,23 @@
         },
         "interval": {
           "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotionPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
         },
         "role": {
           "const": "sfx",
@@ -36,6 +69,23 @@
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "sfx_source_in_us": {
+          "default": 0,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Source In Us",
+          "type": "integer"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -73,11 +123,26 @@
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
+        "relevance_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Relevance Note",
+          "type": "string"
+        },
         "schema_version": {
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
           "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Evidence Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -87,6 +152,424 @@
         "broll_source_in_us"
       ],
       "title": "BrollEvent",
+      "type": "object"
+    },
+    "CameraMotionEvent": {
+      "additionalProperties": false,
+      "description": "A deterministic output-space camera move selected by direction.",
+      "properties": {
+        "easing": {
+          "default": "ease_in_out_cubic",
+          "enum": [
+            "linear",
+            "ease_out_cubic",
+            "ease_in_out_cubic"
+          ],
+          "title": "Easing",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "intensity": {
+          "default": "gentle",
+          "enum": [
+            "quiet",
+            "gentle",
+            "active",
+            "peak"
+          ],
+          "title": "Intensity",
+          "type": "string"
+        },
+        "intent": {
+          "enum": [
+            "orient",
+            "follow",
+            "reveal",
+            "emphasize",
+            "transition",
+            "settle"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "path": {
+          "enum": [
+            "hold",
+            "push_in",
+            "pull_out",
+            "pan_x",
+            "pan_y",
+            "drift",
+            "parallax",
+            "match_cut"
+          ],
+          "title": "Path",
+          "type": "string"
+        },
+        "scale_end_permille": {
+          "default": 1000,
+          "maximum": 1140,
+          "minimum": 1000,
+          "title": "Scale End Permille",
+          "type": "integer"
+        },
+        "scale_start_permille": {
+          "default": 1000,
+          "maximum": 1140,
+          "minimum": 1000,
+          "title": "Scale Start Permille",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "target_x_permille": {
+          "default": 500,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Target X Permille",
+          "type": "integer"
+        },
+        "target_y_permille": {
+          "default": 500,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Target Y Permille",
+          "type": "integer"
+        },
+        "travel_px": {
+          "default": 0,
+          "maximum": 194,
+          "minimum": 0,
+          "title": "Travel Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval",
+        "intent",
+        "path"
+      ],
+      "title": "CameraMotionEvent",
+      "type": "object"
+    },
+    "CampaignOverlaySpec": {
+      "additionalProperties": false,
+      "description": "Source-bound branding required by a campaign delivery profile.\n\nThe renderer receives safe staging names only. Asset ids and hashes stay\nin the typed plan/catalogue, so an overlay cannot be swapped after QA.\nTarteel CTA clips are green-screen files; ``chroma_key_v1`` records that\nthe green background was removed before Remotion compositing.",
+      "properties": {
+        "campaign_id": {
+          "const": "tarteel",
+          "default": "tarteel",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "cta_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Cta Asset Id",
+          "type": "string"
+        },
+        "cta_asset_name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Cta Asset Name",
+          "type": "string"
+        },
+        "cta_asset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Cta Asset Sha256",
+          "type": "string"
+        },
+        "cta_background_removal": {
+          "const": "chroma_key_v1",
+          "default": "chroma_key_v1",
+          "title": "Cta Background Removal",
+          "type": "string"
+        },
+        "cta_clearance": {
+          "const": "faces_and_captions_clear_v1",
+          "default": "faces_and_captions_clear_v1",
+          "title": "Cta Clearance",
+          "type": "string"
+        },
+        "cta_end_us": {
+          "exclusiveMinimum": 0,
+          "title": "Cta End Us",
+          "type": "integer"
+        },
+        "cta_frame_count": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cta Frame Count"
+        },
+        "cta_frame_prefix": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cta Frame Prefix"
+        },
+        "cta_frame_rate": {
+          "const": 30,
+          "default": 30,
+          "title": "Cta Frame Rate",
+          "type": "integer"
+        },
+        "cta_left_permille": {
+          "default": 80,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Cta Left Permille",
+          "type": "integer"
+        },
+        "cta_position": {
+          "default": "foreground_attention_v1",
+          "enum": [
+            "foreground_attention_v1",
+            "top_left_brand_rail_v1"
+          ],
+          "title": "Cta Position",
+          "type": "string"
+        },
+        "cta_render_mode": {
+          "default": "alpha_video_v1",
+          "enum": [
+            "alpha_video_v1",
+            "alpha_png_sequence_v1"
+          ],
+          "title": "Cta Render Mode",
+          "type": "string"
+        },
+        "cta_start_us": {
+          "minimum": 0,
+          "title": "Cta Start Us",
+          "type": "integer"
+        },
+        "cta_top_permille": {
+          "default": 360,
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Cta Top Permille",
+          "type": "integer"
+        },
+        "cta_width_permille": {
+          "default": 240,
+          "maximum": 600,
+          "minimum": 80,
+          "title": "Cta Width Permille",
+          "type": "integer"
+        },
+        "first_post_caption_line": {
+          "const": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+          "default": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+          "title": "First Post Caption Line",
+          "type": "string"
+        },
+        "overlay_coordinate_space": {
+          "default": "foreground_v1",
+          "enum": [
+            "foreground_v1",
+            "canvas_v1"
+          ],
+          "title": "Overlay Coordinate Space",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sizing_measurement_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Sizing Measurement Sha256",
+          "type": "string"
+        },
+        "sizing_method": {
+          "default": "legacy_fixed_v1",
+          "enum": [
+            "source_frame_scan_v1",
+            "legacy_fixed_v1"
+          ],
+          "title": "Sizing Method",
+          "type": "string"
+        },
+        "watermark_asset_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Watermark Asset Id",
+          "type": "string"
+        },
+        "watermark_asset_name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Watermark Asset Name",
+          "type": "string"
+        },
+        "watermark_asset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Watermark Asset Sha256",
+          "type": "string"
+        },
+        "watermark_mode": {
+          "const": "alpha_v1",
+          "default": "alpha_v1",
+          "title": "Watermark Mode",
+          "type": "string"
+        },
+        "watermark_position": {
+          "default": "foreground_top_right_v1",
+          "enum": [
+            "foreground_top_right_v1",
+            "top_right"
+          ],
+          "title": "Watermark Position",
+          "type": "string"
+        },
+        "watermark_visibility": {
+          "default": "overlay_required_v1",
+          "enum": [
+            "overlay_required_v1",
+            "source_visible_v1"
+          ],
+          "title": "Watermark Visibility",
+          "type": "string"
+        },
+        "watermark_width_permille": {
+          "default": 55,
+          "maximum": 280,
+          "minimum": 24,
+          "title": "Watermark Width Permille",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cta_asset_id",
+        "cta_asset_sha256",
+        "cta_asset_name",
+        "cta_start_us",
+        "cta_end_us",
+        "watermark_asset_id",
+        "watermark_asset_sha256",
+        "watermark_asset_name"
+      ],
+      "title": "CampaignOverlaySpec",
+      "type": "object"
+    },
+    "CaptionWordTiming": {
+      "additionalProperties": false,
+      "description": "One forced word inside a grouped Advanced Hero caption.",
+      "properties": {
+        "output_end_frame_exclusive": {
+          "minimum": 1,
+          "title": "Output End Frame Exclusive",
+          "type": "integer"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_frame": {
+          "minimum": 0,
+          "title": "Output Start Frame",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Word Ids",
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "correct",
+            "incorrect"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        },
+        "word_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Word Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "word_id",
+        "text",
+        "output_start_us",
+        "output_end_us",
+        "output_start_frame",
+        "output_end_frame_exclusive"
+      ],
+      "title": "CaptionWordTiming",
       "type": "object"
     },
     "DiagramEvent": {
@@ -170,6 +653,20 @@
           "title": "Kind",
           "type": "string"
         },
+        "left_display": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left Display"
+        },
         "left_label": {
           "maxLength": 40,
           "minLength": 1,
@@ -181,6 +678,20 @@
           "minimum": 0,
           "title": "Left Value",
           "type": "integer"
+        },
+        "right_display": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right Display"
         },
         "right_label": {
           "maxLength": 40,
@@ -290,6 +801,176 @@
       "title": "EmphasisEvent",
       "type": "object"
     },
+    "FramePaletteSpec": {
+      "additionalProperties": false,
+      "description": "Source-bound, allowlisted palette for an editorial frame treatment.",
+      "properties": {
+        "accent_hex": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Accent Hex",
+          "type": "string"
+        },
+        "analyzer_version": {
+          "const": "source-frame-palette-v1",
+          "default": "source-frame-palette-v1",
+          "title": "Analyzer Version",
+          "type": "string"
+        },
+        "backdrop_alt_hex": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Backdrop Alt Hex",
+          "type": "string"
+        },
+        "backdrop_hex": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Backdrop Hex",
+          "type": "string"
+        },
+        "dominant_hex": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Dominant Hex",
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "olive",
+            "sage",
+            "charcoal"
+          ],
+          "title": "Family",
+          "type": "string"
+        },
+        "primary_hex": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Primary Hex",
+          "type": "string"
+        },
+        "sample_times_us": {
+          "items": {
+            "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+            "maximum": 604800000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Sample Times Us",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_sha256",
+        "family",
+        "dominant_hex",
+        "primary_hex",
+        "accent_hex",
+        "backdrop_hex",
+        "backdrop_alt_hex",
+        "sample_times_us"
+      ],
+      "title": "FramePaletteSpec",
+      "type": "object"
+    },
+    "MotionGraphicEvent": {
+      "additionalProperties": false,
+      "description": "One source-grounded native Remotion illustration.\n\nThe template is an allowlisted renderer component, never operator-supplied\nJSX, SVG, CSS, or a remote asset.  Text and evidence stay in the typed plan\nso a visual cannot become a free-floating unsupported claim.",
+      "properties": {
+        "display_text": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Display Text",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "height": {
+          "maximum": 560,
+          "minimum": 180,
+          "title": "Height",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "template": {
+          "enum": [
+            "credit_card",
+            "travel_postcard",
+            "business_identity",
+            "business_spotlight",
+            "quran_challenge"
+          ],
+          "title": "Template",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 840,
+          "minimum": 220,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 812,
+          "minimum": 48,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1240,
+          "minimum": 120,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "template",
+        "interval",
+        "purpose",
+        "source_evidence_ids",
+        "display_text",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "MotionGraphicEvent",
+      "type": "object"
+    },
     "MotionPurpose": {
       "enum": [
         "number",
@@ -304,6 +985,170 @@
       ],
       "title": "MotionPurpose",
       "type": "string"
+    },
+    "MotionStyleSpec": {
+      "additionalProperties": false,
+      "description": "Serializable numeric style choices consumed by Python and Remotion.",
+      "properties": {
+        "accent": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "title": "Accent",
+          "type": "string"
+        },
+        "caption_max_chars": {
+          "maximum": 64,
+          "minimum": 16,
+          "title": "Caption Max Chars",
+          "type": "integer"
+        },
+        "caption_max_lines": {
+          "const": 1,
+          "default": 1,
+          "title": "Caption Max Lines",
+          "type": "integer"
+        },
+        "caption_max_words": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Caption Max Words",
+          "type": "integer"
+        },
+        "caption_mode": {
+          "enum": [
+            "phrase_active_word",
+            "phrase_whole_run"
+          ],
+          "title": "Caption Mode",
+          "type": "string"
+        },
+        "caption_y": {
+          "maximum": 1700,
+          "minimum": 300,
+          "title": "Caption Y",
+          "type": "integer"
+        },
+        "contrast": {
+          "enum": [
+            "legacy",
+            "outline_shadow_backplate",
+            "soft_backplate",
+            "minimal_outline"
+          ],
+          "title": "Contrast",
+          "type": "string"
+        },
+        "easing": {
+          "enum": [
+            "linear",
+            "ease_out_cubic",
+            "ease_in_out_cubic"
+          ],
+          "title": "Easing",
+          "type": "string"
+        },
+        "enter_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Enter Frames",
+          "type": "integer"
+        },
+        "exit_frames": {
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Exit Frames",
+          "type": "integer"
+        },
+        "font_identity": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Font Identity",
+          "type": "string"
+        },
+        "font_sha256": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Font Sha256",
+          "type": "array"
+        },
+        "max_scale_permille": {
+          "maximum": 1100,
+          "minimum": 1000,
+          "title": "Max Scale Permille",
+          "type": "integer"
+        },
+        "max_simultaneous_emphasis": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Max Simultaneous Emphasis",
+          "type": "integer"
+        },
+        "max_travel_px": {
+          "maximum": 80,
+          "minimum": 0,
+          "title": "Max Travel Px",
+          "type": "integer"
+        },
+        "safe_bottom": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Safe Bottom",
+          "type": "integer"
+        },
+        "safe_left": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Left",
+          "type": "integer"
+        },
+        "safe_right": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Safe Right",
+          "type": "integer"
+        },
+        "safe_top": {
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Safe Top",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "style_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "style_id",
+        "easing",
+        "enter_frames",
+        "exit_frames",
+        "max_travel_px",
+        "max_scale_permille",
+        "caption_mode",
+        "contrast",
+        "font_identity",
+        "accent",
+        "safe_left",
+        "safe_right",
+        "safe_top",
+        "safe_bottom",
+        "max_simultaneous_emphasis",
+        "caption_max_words",
+        "caption_max_chars",
+        "caption_y"
+      ],
+      "title": "MotionStyleSpec",
+      "type": "object"
     },
     "OutputInterval": {
       "additionalProperties": false,
@@ -446,6 +1291,384 @@
       "title": "ReframingWindow",
       "type": "object"
     },
+    "SourceNativeText": {
+      "additionalProperties": false,
+      "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "region_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Region Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "visual_scene_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Visual Scene Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "region_id",
+        "interval",
+        "text",
+        "visual_scene_ids",
+        "note"
+      ],
+      "title": "SourceNativeText",
+      "type": "object"
+    },
+    "TransitionEvent": {
+      "additionalProperties": false,
+      "description": "A short, deterministic bridge at a reviewed TimeMap cut.",
+      "properties": {
+        "direction_purpose": {
+          "default": "cut",
+          "enum": [
+            "cut",
+            "time_shift",
+            "location_change",
+            "reveal",
+            "emphasis",
+            "settle"
+          ],
+          "title": "Direction Purpose",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/OutputInterval"
+        },
+        "purpose": {
+          "const": "visual_reveal",
+          "default": "visual_reveal",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx_placement_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sfx Placement Id"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Evidence Ids",
+          "type": "array"
+        },
+        "style": {
+          "default": "clean_cut_v1",
+          "enum": [
+            "clean_cut_v1",
+            "concat_push_v1",
+            "concat_blur_dissolve_v1"
+          ],
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "interval"
+      ],
+      "title": "TransitionEvent",
+      "type": "object"
+    },
+    "TreatmentAudioMixResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound requested/applied SFX mix policy and measured output facts.",
+      "properties": {
+        "applied_gain_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Applied Gain Db",
+          "type": "array"
+        },
+        "cue_event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Cue Event Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Duck Db",
+          "type": "array"
+        },
+        "fade_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade In Us",
+          "type": "array"
+        },
+        "fade_out_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade Out Us",
+          "type": "array"
+        },
+        "intelligibility_checked_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Checked Windows",
+          "type": "array"
+        },
+        "intelligibility_encoded_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Encoded Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_failed_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Failed Windows",
+          "type": "array"
+        },
+        "intelligibility_margin_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Margin Db",
+          "type": "array"
+        },
+        "intelligibility_method": {
+          "default": "",
+          "enum": [
+            "",
+            "decoded_window_signal_v1",
+            "decoded_window_signal_v2",
+            "no_audio_cues_v1"
+          ],
+          "title": "Intelligibility Method",
+          "type": "string"
+        },
+        "intelligibility_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Intelligibility Note",
+          "type": "string"
+        },
+        "intelligibility_sfx_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Sfx Reference Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_speech_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Speech Reference Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "pass",
+            "fail"
+          ],
+          "title": "Intelligibility Status",
+          "type": "string"
+        },
+        "measured_integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Integrated Lufs"
+        },
+        "measured_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 128,
+          "title": "Measured Rms Windows",
+          "type": "array"
+        },
+        "measured_true_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured True Peak Dbfs"
+        },
+        "mix_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Mix Id",
+          "type": "string"
+        },
+        "policy_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Fingerprint",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "silence_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows",
+          "type": "array"
+        },
+        "silence_windows_v2": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/OutputInterval"
+            },
+            "type": "array"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows V2",
+          "type": "array"
+        },
+        "source_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Source In Us",
+          "type": "array"
+        },
+        "speech_overlap_windows": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputInterval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows",
+          "type": "array"
+        },
+        "speech_overlap_windows_v2": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/OutputInterval"
+            },
+            "type": "array"
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows V2",
+          "type": "array"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "measured"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix_id",
+        "treatment_fingerprint",
+        "policy_fingerprint"
+      ],
+      "title": "TreatmentAudioMixResult",
+      "type": "object"
+    },
     "TypographyEvent": {
       "additionalProperties": false,
       "description": "On-screen text copied from alignment or a validated payload. It is not HTML.",
@@ -462,6 +1685,37 @@
           "title": "Component Id",
           "type": "string"
         },
+        "emoji": {
+          "anyOf": [
+            {
+              "enum": [
+                "\ud83d\udcd6",
+                "\ud83d\udca1",
+                "\ud83c\udfaf",
+                "\u2728",
+                "\u26a1",
+                "\ud83e\udde0",
+                "\u2705",
+                "\ud83d\udd0e",
+                "\ud83d\udd4c",
+                "\ud83d\ude02",
+                "\ud83d\ude2e",
+                "\ud83d\ude22",
+                "\ud83e\udd29",
+                "\ud83d\udc4f",
+                "\u2764\ufe0f",
+                "\ud83d\udd25",
+                "\ud83d\ude04"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emoji"
+        },
         "event_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -469,7 +1723,7 @@
           "type": "string"
         },
         "font_size": {
-          "maximum": 96,
+          "maximum": 160,
           "minimum": 24,
           "title": "Font Size",
           "type": "integer"
@@ -491,6 +1745,13 @@
           "minLength": 1,
           "title": "Text",
           "type": "string"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/CaptionWordTiming"
+          },
+          "title": "Words",
+          "type": "array"
         },
         "x": {
           "maximum": 1032,
@@ -517,6 +1778,50 @@
       ],
       "title": "TypographyEvent",
       "type": "object"
+    },
+    "WorkflowRolePolicy": {
+      "additionalProperties": false,
+      "description": "The responsibility split for one production run.\n\nCodex owns source-grounded editorial choices and orchestration. Clipforge\nowns deterministic media, provenance, rights, timing, cache, and QA gates.\nA person remains the only authority that can accept the final playback.",
+      "properties": {
+        "deterministic_enforcer": {
+          "const": "system_enforcer",
+          "default": "system_enforcer",
+          "title": "Deterministic Enforcer",
+          "type": "string"
+        },
+        "editorial_operator": {
+          "const": "codex_operator",
+          "default": "codex_operator",
+          "title": "Editorial Operator",
+          "type": "string"
+        },
+        "external_publishing": {
+          "const": "deferred",
+          "default": "deferred",
+          "title": "External Publishing",
+          "type": "string"
+        },
+        "final_playback_required": {
+          "const": true,
+          "default": true,
+          "title": "Final Playback Required",
+          "type": "boolean"
+        },
+        "final_reviewer": {
+          "const": "human_reviewer",
+          "default": "human_reviewer",
+          "title": "Final Reviewer",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowRolePolicy",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -538,12 +1843,39 @@
       "title": "Alignment Sha256",
       "type": "string"
     },
+    "arabic_corrections_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Arabic Corrections Sha256",
+      "type": "string"
+    },
     "asset_names": {
       "additionalProperties": {
         "type": "string"
       },
       "title": "Asset Names",
       "type": "object"
+    },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
     },
     "base_video_name": {
       "const": "analysis.mp4",
@@ -558,17 +1890,54 @@
       "title": "Broll",
       "type": "array"
     },
+    "camera_motion": {
+      "items": {
+        "$ref": "#/$defs/CameraMotionEvent"
+      },
+      "title": "Camera Motion",
+      "type": "array"
+    },
+    "campaign_overlay": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CampaignOverlaySpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "candidate_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Candidate Id",
       "type": "string"
     },
+    "caption_alignment_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Caption Alignment Sha256",
+      "type": "string"
+    },
+    "captions": {
+      "items": {
+        "$ref": "#/$defs/TypographyEvent"
+      },
+      "title": "Captions",
+      "type": "array"
+    },
     "composition_id": {
       "const": "AdvancedHeroDraft",
       "default": "AdvancedHeroDraft",
       "title": "Composition Id",
       "type": "string"
+    },
+    "debug_overlays": {
+      "const": false,
+      "default": false,
+      "title": "Debug Overlays",
+      "type": "boolean"
     },
     "diagrams": {
       "items": {
@@ -577,10 +1946,40 @@
       "title": "Diagrams",
       "type": "array"
     },
+    "direction_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Direction Id",
+      "type": "string"
+    },
+    "direction_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Direction Sha256",
+      "type": "string"
+    },
     "duration_in_frames": {
       "minimum": 1,
       "title": "Duration In Frames",
       "type": "integer"
+    },
+    "editorial_arc_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Editorial Arc Id",
+      "type": "string"
+    },
+    "editorial_arc_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Review Sha256",
+      "type": "string"
+    },
+    "editorial_arc_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Editorial Arc Sha256",
+      "type": "string"
     },
     "emphasis": {
       "items": {
@@ -601,6 +2000,42 @@
       "title": "Fps Numerator",
       "type": "integer"
     },
+    "frame_backdrop_id": {
+      "default": "blurred-source-v1",
+      "enum": [
+        "blurred-source-v1",
+        "palette-solid-v1"
+      ],
+      "title": "Frame Backdrop Id",
+      "type": "string"
+    },
+    "frame_layout_id": {
+      "default": "standard-card-v1",
+      "enum": [
+        "standard-card-v1",
+        "platform-bleed-v1"
+      ],
+      "title": "Frame Layout Id",
+      "type": "string"
+    },
+    "frame_palette": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FramePaletteSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "frame_style_id": {
+      "default": "none-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Frame Style Id",
+      "type": "string"
+    },
     "height": {
       "const": 1920,
       "default": 1920,
@@ -612,10 +2047,90 @@
       "title": "Hero Plan Sha256",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
+    "knowledge_context_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Context Id",
+      "type": "string"
+    },
+    "knowledge_context_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Knowledge Context Sha256",
+      "type": "string"
+    },
+    "knowledge_decision_trace_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Decision Trace Id",
+      "type": "string"
+    },
+    "knowledge_decision_trace_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Knowledge Decision Trace Sha256",
+      "type": "string"
+    },
+    "knowledge_release_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Knowledge Release Id",
+      "type": "string"
+    },
     "language": {
       "default": "en-US",
       "title": "Language",
       "type": "string"
+    },
+    "motion_catalog_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Motion Catalog Sha256",
+      "type": "string"
+    },
+    "motion_graphics": {
+      "items": {
+        "$ref": "#/$defs/MotionGraphicEvent"
+      },
+      "title": "Motion Graphics",
+      "type": "array"
+    },
+    "motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Motion Recipe Ids",
+      "type": "array"
+    },
+    "motion_style": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MotionStyleSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "narration_gain_db": {
+      "default": 0,
+      "maximum": 6,
+      "minimum": -24,
+      "title": "Narration Gain Db",
+      "type": "number"
     },
     "output_duration_us": {
       "default": 0,
@@ -623,9 +2138,39 @@
       "title": "Output Duration Us",
       "type": "integer"
     },
+    "overlay_exclusion_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Overlay Exclusion Sha256",
+      "type": "string"
+    },
+    "pilot_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Pilot Sha256",
+      "type": "string"
+    },
+    "preset_id": {
+      "default": "",
+      "maxLength": 64,
+      "title": "Preset Id",
+      "type": "string"
+    },
     "profile_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Profile Fingerprint",
+      "type": "string"
+    },
+    "quran_review_id": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Quran Review Id",
+      "type": "string"
+    },
+    "quran_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Quran Review Sha256",
       "type": "string"
     },
     "reframing_config_sha256": {
@@ -637,6 +2182,25 @@
       "maxLength": 40,
       "minLength": 1,
       "title": "Reframing Strategy",
+      "type": "string"
+    },
+    "renderer_recipe_version": {
+      "default": "advanced-hero-renderer-v1",
+      "enum": [
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4"
+      ],
+      "title": "Renderer Recipe Version",
+      "type": "string"
+    },
+    "safe_region_id": {
+      "default": "portrait-safe-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Safe Region Id",
       "type": "string"
     },
     "schema_version": {
@@ -652,6 +2216,20 @@
       "title": "Sfx",
       "type": "array"
     },
+    "source_gain_db": {
+      "default": 0,
+      "maximum": 6,
+      "minimum": -24,
+      "title": "Source Gain Db",
+      "type": "number"
+    },
+    "source_native_text": {
+      "items": {
+        "$ref": "#/$defs/SourceNativeText"
+      },
+      "title": "Source Native Text",
+      "type": "array"
+    },
     "source_sha256": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",
@@ -664,6 +2242,25 @@
       "title": "Speech Name",
       "type": "string"
     },
+    "speech_review_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Speech Review Sha256",
+      "type": "string"
+    },
+    "style_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Style Fingerprint",
+      "type": "string"
+    },
+    "style_id": {
+      "default": "legacy-v1",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Style Id",
+      "type": "string"
+    },
     "time_map_sha256": {
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",
@@ -674,6 +2271,42 @@
       "default": "",
       "pattern": "^$|^[0-9a-f]{64}$",
       "title": "Trajectory Sha256",
+      "type": "string"
+    },
+    "transitions": {
+      "items": {
+        "$ref": "#/$defs/TransitionEvent"
+      },
+      "title": "Transitions",
+      "type": "array"
+    },
+    "treatment_audio_mix": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TreatmentAudioMixResult"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "treatment_evidence_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Treatment Evidence Relative Path",
+      "type": "string"
+    },
+    "treatment_evidence_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Evidence Sha256",
+      "type": "string"
+    },
+    "treatment_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Fingerprint",
       "type": "string"
     },
     "typography": {
@@ -695,6 +2328,17 @@
       },
       "title": "Windows",
       "type": "array"
+    },
+    "workflow_roles": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowRolePolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

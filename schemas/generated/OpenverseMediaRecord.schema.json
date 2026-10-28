@@ -1,0 +1,245 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "attribution": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attribution"
+    },
+    "creator": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creator"
+    },
+    "creator_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creator Url"
+    },
+    "direct_download_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Direct Download Url"
+    },
+    "discovered_at": {
+      "format": "date-time",
+      "title": "Discovered At",
+      "type": "string"
+    },
+    "duration_us": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Us"
+    },
+    "file_type": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File Type"
+    },
+    "height": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Height"
+    },
+    "landing_url": {
+      "title": "Landing Url",
+      "type": "string"
+    },
+    "license_code": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Code"
+    },
+    "license_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Url"
+    },
+    "license_version": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Version"
+    },
+    "media_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Media Id",
+      "type": "string"
+    },
+    "media_type": {
+      "enum": [
+        "image",
+        "audio"
+      ],
+      "title": "Media Type",
+      "type": "string"
+    },
+    "policy_reason": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Reason"
+    },
+    "provider": {
+      "const": "openverse",
+      "default": "openverse",
+      "title": "Provider",
+      "type": "string"
+    },
+    "rights_status": {
+      "default": "unverified",
+      "enum": [
+        "unverified",
+        "eligible_pending_verification",
+        "blocked"
+      ],
+      "title": "Rights Status",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_name": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Name"
+    },
+    "source_response_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Response Sha256",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Tags",
+      "type": "array"
+    },
+    "title": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "width": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Width"
+    }
+  },
+  "required": [
+    "media_id",
+    "media_type",
+    "title",
+    "landing_url",
+    "source_response_sha256",
+    "discovered_at"
+  ],
+  "title": "OpenverseMediaRecord",
+  "type": "object"
+}

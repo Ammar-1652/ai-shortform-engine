@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "description": "A separate human playback observation; automation cannot create approval.",
+  "properties": {
+    "decision": {
+      "enum": [
+        "needs_changes",
+        "reviewed_pending_final",
+        "accepted_for_final_review"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "observations": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Observations",
+      "type": "array"
+    },
+    "player": {
+      "default": "",
+      "maxLength": 200,
+      "title": "Player",
+      "type": "string"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "title": "Reviewed At",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "watched_muted": {
+      "title": "Watched Muted",
+      "type": "boolean"
+    },
+    "watched_with_audio": {
+      "title": "Watched With Audio",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "reviewer",
+    "watched_with_audio",
+    "watched_muted",
+    "observations",
+    "decision",
+    "reviewed_at"
+  ],
+  "title": "HumanWatchRecord",
+  "type": "object"
+}

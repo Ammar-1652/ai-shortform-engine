@@ -1,0 +1,323 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "ReferenceMetric": {
+      "additionalProperties": false,
+      "description": "One measured or explicitly unavailable reference-video metric.",
+      "properties": {
+        "evidence_kind": {
+          "enum": [
+            "observed",
+            "heuristic",
+            "technical",
+            "viewer_review",
+            "performance"
+          ],
+          "title": "Evidence Kind",
+          "type": "string"
+        },
+        "limitation": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limitation"
+        },
+        "method": {
+          "enum": [
+            "ffprobe",
+            "frame_probe",
+            "audio_probe",
+            "transcript",
+            "human_watch",
+            "unavailable"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "name": {
+          "enum": [
+            "duration",
+            "audio_duration",
+            "integrated_loudness",
+            "true_peak",
+            "hook_duration",
+            "first_visual_change",
+            "shot_count",
+            "median_shot_duration",
+            "cut_density",
+            "words_per_second",
+            "caption_line_count",
+            "caption_position",
+            "transition_class",
+            "sfx_timing",
+            "silence_windows",
+            "motion_intensity",
+            "payoff_position",
+            "cta_hold"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "microseconds",
+                "cuts_per_minute",
+                "words_per_second",
+                "lines",
+                "ratio",
+                "LUFS",
+                "dBFS",
+                "count"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "name",
+        "evidence_kind",
+        "method"
+      ],
+      "title": "ReferenceMetric",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Bounded analysis record for an authorized reference video or audio file.",
+  "properties": {
+    "analysis_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Analysis Sha256",
+      "type": "string"
+    },
+    "analyzer_version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Analyzer Version",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "evidence_paths": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Evidence Paths",
+      "type": "array"
+    },
+    "media_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Media Sha256",
+      "type": "string"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/ReferenceMetric"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Metrics",
+      "type": "array"
+    },
+    "observation_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 128,
+      "title": "Observation Ids",
+      "type": "array"
+    },
+    "permission": {
+      "enum": [
+        "analysis_allowed",
+        "reuse_allowed",
+        "blocked",
+        "unknown"
+      ],
+      "title": "Permission",
+      "type": "string"
+    },
+    "permission_evidence": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Permission Evidence",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_locator": {
+      "maxLength": 400,
+      "minLength": 1,
+      "title": "Source Locator",
+      "type": "string"
+    },
+    "unknowns": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Unknowns",
+      "type": "array"
+    }
+  },
+  "required": [
+    "analysis_id",
+    "source_id",
+    "source_locator",
+    "permission",
+    "permission_evidence",
+    "media_sha256",
+    "analyzer_version",
+    "metrics",
+    "analysis_sha256",
+    "provenance",
+    "created_at"
+  ],
+  "title": "ReferenceAnalysis",
+  "type": "object"
+}

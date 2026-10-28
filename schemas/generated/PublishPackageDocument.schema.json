@@ -124,6 +124,27 @@
       "title": "Approval Review Id",
       "type": "string"
     },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
+    },
     "cache_fingerprint": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Cache Fingerprint",
@@ -216,6 +237,13 @@
     "qa_set_sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Qa Set Sha256",
+      "type": "string"
+    },
+    "reframing_strategy": {
+      "default": "contain",
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Reframing Strategy",
       "type": "string"
     },
     "schema_version": {

@@ -9,9 +9,21 @@
       "type": "boolean"
     },
     "background": {
-      "const": "neutral-dark-v1",
       "default": "neutral-dark-v1",
+      "enum": [
+        "neutral-dark-v1",
+        "blurred-source-v1"
+      ],
       "title": "Background",
+      "type": "string"
+    },
+    "campaign_id": {
+      "default": "none",
+      "enum": [
+        "none",
+        "tarteel"
+      ],
+      "title": "Campaign Id",
       "type": "string"
     },
     "caption_algorithm_version": {

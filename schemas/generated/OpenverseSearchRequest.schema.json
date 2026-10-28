@@ -1,0 +1,84 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "category": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Category"
+    },
+    "length": {
+      "anyOf": [
+        {
+          "enum": [
+            "shortest",
+            "short",
+            "medium",
+            "long"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Length"
+    },
+    "license_filter": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "License Filter",
+      "type": "array"
+    },
+    "media_type": {
+      "enum": [
+        "image",
+        "audio"
+      ],
+      "title": "Media Type",
+      "type": "string"
+    },
+    "page": {
+      "default": 1,
+      "maximum": 500,
+      "minimum": 1,
+      "title": "Page",
+      "type": "integer"
+    },
+    "page_size": {
+      "default": 10,
+      "maximum": 20,
+      "minimum": 1,
+      "title": "Page Size",
+      "type": "integer"
+    },
+    "query": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Query",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "media_type",
+    "query"
+  ],
+  "title": "OpenverseSearchRequest",
+  "type": "object"
+}

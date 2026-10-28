@@ -268,6 +268,30 @@ def test_manual_registration_probe_cache_and_recovery(tmp_path: Path, monkeypatc
     assert again.cache_status == "hit"
     assert _job_count(database) == jobs_before
     assert (work / "campaigns" / "envato-assets" / first.asset_id / "manifest.json").read_bytes() == manifest
+    tagged = register_envato_asset(
+        work,
+        database,
+        request.request_id,
+        relative_file="incoming/clip.mp4",
+        project_id="project-1",
+        license_relative="incoming/license.txt",
+        rights="allowed",
+        content_tags=["credit", "finance"],
+    )
+    assert tagged.asset_id != first.asset_id
+    assert tagged.content_tags == ["credit", "finance"]
+    tagged_again = register_envato_asset(
+        work,
+        database,
+        request.request_id,
+        relative_file="incoming/clip.mp4",
+        project_id="project-1",
+        license_relative="incoming/license.txt",
+        rights="allowed",
+        content_tags=["finance", "credit"],
+    )
+    assert tagged_again.asset_id == tagged.asset_id
+    assert tagged_again.cache_status == "hit"
     _place_video(work, "incoming/other.mp4", color="white")
     changed = register_envato_asset(
         work,

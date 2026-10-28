@@ -6,10 +6,12 @@ Stored records may name a public https URL. They do not store credentials.
 from __future__ import annotations
 
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
-from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.common import EntityId, Microseconds, Versioned
+from clipforge.schemas.provenance import ArtifactProvenance
 
 _SHA = r"^[0-9a-f]{64}$"
 _SECRET = ("bearer ", "password=", "token=", "api_key", "authorization:", "cookie=", "secret=")
@@ -37,6 +39,356 @@ DownloadStatus = Literal[
     "manual_download_required",
     "rejected",
 ]
+
+
+class QuranCanonicalSource(Versioned):
+    provider: Literal["Quran.com"]
+    url: str = Field(min_length=1, max_length=300)
+    surah: int = Field(ge=1, le=114)
+    ayah_start: int = Field(ge=1)
+    ayah_end: int = Field(ge=1)
+    text_uthmani: list[str] = Field(min_length=1)
+    snapshot_relative_path: str = ""
+    snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    snapshot_url: str = ""
+
+    @model_validator(mode="after")
+    def range_is_ordered(self) -> Self:
+        if self.ayah_end < self.ayah_start:
+            raise ValueError("Quran ayah range must be ordered")
+        if len(self.text_uthmani) != self.ayah_end - self.ayah_start + 1:
+            raise ValueError("Quran canonical text must contain exactly one entry per declared ayah")
+        for url in (self.url, self.snapshot_url):
+            if not url:
+                continue
+            parsed = urlsplit(url)
+            if parsed.scheme != "https" or parsed.hostname not in {"quran.com", "api.quran.com"}:
+                raise ValueError("Quran canonical evidence must use an official HTTPS Quran.com source")
+            if parsed.username or parsed.password or parsed.port not in {None, 443}:
+                raise ValueError("Quran canonical evidence URL cannot contain credentials or a custom port")
+        if any((self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)) and not all(
+            (self.snapshot_relative_path, self.snapshot_sha256, self.snapshot_url)
+        ):
+            raise ValueError("Quran snapshot path, hash, and URL must be supplied together")
+        if self.snapshot_relative_path:
+            _relative(self.snapshot_relative_path)
+        return self
+
+
+class QuranAudioMapping(Versioned):
+    source_start_us: Microseconds
+    source_end_us: Microseconds
+    ayah: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def interval_is_positive(self) -> Self:
+        if self.source_end_us <= self.source_start_us:
+            raise ValueError("Quran audio mapping interval must be positive")
+        return self
+
+
+class QuranVerificationPolicy(Versioned):
+    quran_text: Literal["canonical_uthmani_only"]
+    timing: Literal["forced_alignment_required"]
+    pronunciation_status: Literal[
+        "human_review_required",
+        "canonical_match_verified",
+        "human_reviewed",
+    ]
+    unverified_words_must_not_be_colored_green: Literal[True] = True
+    incorrect_words_require_human_evidence: Literal[True] = True
+    font_identity: Literal["amiri-quran-local-v1"]
+    font_relative_path: str = Field(min_length=1, max_length=300)
+    font_sha256: str = Field(pattern=_SHA)
+
+
+class TarteelDisplayCorrection(Versioned):
+    """Reviewed source-text replacement for one forced word interval."""
+
+    source_word_id: EntityId
+    display_text: str = Field(min_length=1, max_length=120)
+
+    @field_validator("display_text")
+    @classmethod
+    def display_text_is_one_line(cls, value: str) -> str:
+        if "\n" in value or "\r" in value:
+            raise ValueError("Tarteel display correction must be one line")
+        return value
+
+
+class TarteelArabicCorrection(Versioned):
+    """A reviewed spelling correction that keeps the observed source word."""
+
+    correction_id: EntityId
+    source_word_id: EntityId
+    source_window_us: tuple[Microseconds, Microseconds]
+    original_text: str = Field(min_length=1, max_length=200)
+    corrected_text: str = Field(min_length=1, max_length=200)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    evidence_kind: Literal["listening_context", "campaign_subtitle", "canonical_quran"]
+    reviewer: str = Field(min_length=1, max_length=120)
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def correction_is_bounded(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("Arabic correction source window must be positive")
+        if "\n" in self.corrected_text or "\r" in self.corrected_text:
+            raise ValueError("Arabic correction must stay one line")
+        return self
+
+
+class TarteelArabicCorrectionDocument(Versioned):
+    """Immutable source-bound ordinary-Arabic correction evidence."""
+
+    correction_set_id: EntityId
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    raw_asr_sha256: str = Field(pattern=_SHA)
+    transcript_sha256: str = Field(pattern=_SHA)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    corrections: list[TarteelArabicCorrection] = Field(default_factory=list)
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def is_source_bound(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("Arabic correction provenance must include its source")
+        ids = [item.correction_id for item in self.corrections]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Arabic correction ids must be unique")
+        return self
+
+
+class TarteelSpeechInterval(Versioned):
+    """Reviewed inventory of audible source material for caption coverage."""
+
+    span_id: EntityId
+    source_start_us: Microseconds
+    source_end_us: Microseconds
+    kind: Literal["dialogue", "recitation", "reaction", "nasheed", "silence", "uncertain"]
+    caption_decision: Literal["captioned", "reviewed_excluded"]
+    subject_kind: Literal["quran", "quotation", "proper_noun", "number", "factual_claim"] | None = None
+    subject_word_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    observed_text: str = ""
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def interval_is_reviewed(self) -> Self:
+        if self.source_end_us <= self.source_start_us:
+            raise ValueError("speech inventory interval must be positive")
+        if self.caption_decision == "reviewed_excluded" and not self.review_note.strip():
+            raise ValueError("excluded speech requires a review note")
+        if (
+            self.kind in {"dialogue", "recitation", "reaction", "nasheed"}
+            and self.caption_decision == "captioned"
+            and not self.observed_text.strip()
+        ):
+            raise ValueError("captioned audible speech requires observed text")
+        return self
+
+
+class SpeechCaptionCorrection(Versioned):
+    """Codex correction of displayed text without mutating forced alignment."""
+
+    correction_id: EntityId
+    source_word_ids: list[EntityId] = Field(min_length=1, max_length=32)
+    source_window_us: tuple[Microseconds, Microseconds]
+    original_text: str = Field(min_length=1, max_length=500)
+    corrected_text: str = Field(min_length=1, max_length=500)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    evidence_kind: Literal[
+        "listening_context",
+        "campaign_subtitle",
+        "canonical_quran",
+        "quotation",
+        "proper_noun",
+        "number",
+        "factual_claim",
+    ]
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def correction_is_safe(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("speech correction source window must be positive")
+        if any(char in self.corrected_text for char in "\r\n<>"):
+            raise ValueError("speech correction contains unsafe display text")
+        if len(set(self.source_word_ids)) != len(self.source_word_ids):
+            raise ValueError("speech correction source word ids must be unique")
+        return self
+
+
+class SpeechEmotionAnnotation(Versioned):
+    """Codex-supported reaction annotation displayed beside spoken words."""
+
+    annotation_id: EntityId
+    source_word_ids: list[EntityId] = Field(min_length=1, max_length=32)
+    source_window_us: tuple[Microseconds, Microseconds]
+    emotion: Literal["laughter", "surprise", "excitement", "sadness", "applause", "fire", "celebration"]
+    emoji: Literal["😂", "😮", "🤩", "😢", "👏", "🔥", "✨", "😄"]
+    evidence_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def annotation_is_bounded(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("emotion annotation source window must be positive")
+        if len(set(self.source_word_ids)) != len(self.source_word_ids):
+            raise ValueError("emotion annotation source word ids must be unique")
+        return self
+
+
+class SpeechVerification(Versioned):
+    """Codex evidence for text that must not be guessed."""
+
+    verification_id: EntityId
+    subject_kind: Literal["quran", "quotation", "proper_noun", "number", "factual_claim"]
+    source_word_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    expected_text: str = Field(default="", max_length=500)
+    source_url: str = Field(default="", max_length=500)
+    snapshot_relative_path: str = Field(default="", max_length=500)
+    snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    note: str = Field(min_length=1, max_length=500)
+    status: Literal["verified"] = "verified"
+
+    @model_validator(mode="after")
+    def has_reliable_source(self) -> Self:
+        if not self.source_word_ids:
+            raise ValueError("sensitive text verification must bind source word ids")
+        if not self.expected_text.strip():
+            raise ValueError("sensitive text verification must include expected text")
+        if self.source_url:
+            parsed = urlsplit(self.source_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError("sensitive text verification URL must be a valid http(s) URL")
+            if parsed.username or parsed.password or parsed.port is not None:
+                raise ValueError("sensitive text verification URL cannot contain credentials or a custom port")
+        if bool(self.snapshot_relative_path) != bool(self.snapshot_sha256):
+            raise ValueError("sensitive text snapshot path and hash must be supplied together")
+        if not self.source_url and not self.snapshot_relative_path:
+            raise ValueError("sensitive text verification requires a URL or hashed snapshot")
+        if self.snapshot_relative_path:
+            _relative(self.snapshot_relative_path)
+        return self
+
+
+class SpeechReviewPointer(Versioned):
+    """Hash-bound pointer to the current immutable Codex speech review."""
+
+    pointer_kind: Literal["codex_speech_review_current"] = "codex_speech_review_current"
+    review_id: EntityId
+    relative_path: str = Field(min_length=1, max_length=500)
+    review_sha256: str = Field(pattern=_SHA)
+
+    @model_validator(mode="after")
+    def pointer_is_confined(self) -> Self:
+        _relative(self.relative_path)
+        return self
+
+
+class TarteelSpeechReview(Versioned):
+    """Codex-reviewed source speech inventory used to upgrade caption coverage.
+
+    The historical class name is retained for stored Tarteel documents. The
+    same source-bound contract is also valid for generic campaigns when
+    ``campaign="generic"`` and ``reviewer_role="codex_operator"``.
+    """
+
+    review_id: EntityId
+    campaign: Literal["tarteel", "generic"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    raw_asr_sha256: str = Field(pattern=_SHA)
+    transcript_sha256: str = Field(pattern=_SHA)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    intervals: list[TarteelSpeechInterval] = Field(min_length=1)
+    corrections: list[SpeechCaptionCorrection] = Field(default_factory=list, max_length=128)
+    emotions: list[SpeechEmotionAnnotation] = Field(default_factory=list, max_length=128)
+    verifications: list[SpeechVerification] = Field(default_factory=list, max_length=32)
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def intervals_are_ordered(self) -> Self:
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("speech review provenance must include its source")
+        ids = [item.span_id for item in self.intervals]
+        if len(ids) != len(set(ids)):
+            raise ValueError("speech review span ids must be unique")
+        correction_ids = [item.correction_id for item in self.corrections]
+        if len(correction_ids) != len(set(correction_ids)):
+            raise ValueError("speech correction ids must be unique")
+        emotion_ids = [item.annotation_id for item in self.emotions]
+        if len(emotion_ids) != len(set(emotion_ids)):
+            raise ValueError("speech emotion annotation ids must be unique")
+        verification_ids = [item.verification_id for item in self.verifications]
+        if len(verification_ids) != len(set(verification_ids)):
+            raise ValueError("speech verification ids must be unique")
+        for interval in self.intervals:
+            if interval.subject_kind is not None and not interval.subject_word_ids:
+                raise ValueError(f"sensitive speech interval requires source words: {interval.span_id}")
+            if interval.subject_kind is not None and not any(
+                verification.subject_kind == interval.subject_kind
+                and set(interval.subject_word_ids) <= set(verification.source_word_ids)
+                for verification in self.verifications
+            ):
+                raise ValueError(f"sensitive speech interval requires verification: {interval.span_id}")
+        previous = -1
+        for item in sorted(self.intervals, key=lambda value: value.source_start_us):
+            if item.source_start_us < previous:
+                raise ValueError("speech review intervals must not overlap")
+            previous = item.source_end_us
+        return self
+
+
+class QuranCaptionReview(Versioned):
+    review_kind: Literal["source_grounded_quran_caption"]
+    campaign: Literal["tarteel"]
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_window_us: tuple[Microseconds, Microseconds]
+    source_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    transcript_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    display_evidence_relative_path: str = ""
+    display_evidence_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    canonical_source: QuranCanonicalSource
+    source_audio_mapping: list[QuranAudioMapping] = Field(min_length=1)
+    display_corrections: list[TarteelDisplayCorrection] = Field(default_factory=list)
+    verification_policy: QuranVerificationPolicy
+    notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def window_is_positive(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("Quran review source window must be positive")
+        if any((self.display_evidence_relative_path, self.display_evidence_sha256)) and not all(
+            (self.display_evidence_relative_path, self.display_evidence_sha256)
+        ):
+            raise ValueError("display evidence path and hash must be supplied together")
+        if self.display_evidence_relative_path:
+            _relative(self.display_evidence_relative_path)
+        previous_end = self.source_window_us[0]
+        for mapping in self.source_audio_mapping:
+            if not self.canonical_source.ayah_start <= mapping.ayah <= self.canonical_source.ayah_end:
+                raise ValueError("Quran audio mapping names an ayah outside the canonical range")
+            if mapping.source_start_us < previous_end or mapping.source_end_us > self.source_window_us[1]:
+                raise ValueError(
+                    "Quran audio mappings must be ordered, non-overlapping, and inside the source window"
+                )
+            previous_end = mapping.source_end_us
+        return self
 
 
 def _plain(value: str, *, label: str, allow_https: bool = False) -> str:
@@ -86,6 +438,235 @@ class Campaign(Versioned):
         if value is None:
             return None
         return _plain(value, label="campaign url", allow_https=True)
+
+
+class CampaignOverlaySpec(Versioned):
+    """Source-bound branding required by a campaign delivery profile.
+
+    The renderer receives safe staging names only. Asset ids and hashes stay
+    in the typed plan/catalogue, so an overlay cannot be swapped after QA.
+    Tarteel CTA clips are green-screen files; ``chroma_key_v1`` records that
+    the green background was removed before Remotion compositing.
+    """
+
+    campaign_id: Literal["tarteel"] = "tarteel"
+    cta_asset_id: EntityId
+    cta_asset_sha256: str = Field(pattern=_SHA)
+    cta_asset_name: str = Field(min_length=1, max_length=80)
+    cta_background_removal: Literal["chroma_key_v1"] = "chroma_key_v1"
+    # Production uses the original animated CTA as an alpha video.  The PNG
+    # sequence value remains readable for old review sidecars, but is not
+    # accepted by the Tarteel delivery policy.
+    cta_render_mode: Literal["alpha_video_v1", "alpha_png_sequence_v1"] = "alpha_video_v1"
+    cta_frame_prefix: str | None = Field(default=None, min_length=1, max_length=64)
+    cta_frame_count: int | None = Field(default=None, ge=1, le=600)
+    cta_frame_rate: Literal[30] = 30
+    # New campaign renders place both brand layers inside the contained source
+    # picture. The old value remains readable for immutable pre-checkpoint
+    # artifacts, but policy and new staging require the foreground space.
+    cta_position: Literal["foreground_attention_v1", "top_left_brand_rail_v1"] = "foreground_attention_v1"
+    overlay_coordinate_space: Literal["foreground_v1", "canvas_v1"] = "foreground_v1"
+    cta_clearance: Literal["faces_and_captions_clear_v1"] = "faces_and_captions_clear_v1"
+    # These coordinates are relative to the original foreground picture, not
+    # the blurred portrait canvas. Permille values keep the placement
+    # deterministic across review and delivery resolutions.
+    cta_left_permille: int = Field(default=80, ge=0, le=1000)
+    cta_top_permille: int = Field(default=360, ge=0, le=1000)
+    # This is intentionally capped. The campaign CTA is a small brand cue,
+    # never a foreground card over a child or a caption.
+    # New renders use a measured ratio from the source-native CTA. The wider
+    # legacy range remains readable for immutable historical artifacts.
+    cta_width_permille: int = Field(default=240, ge=80, le=600)
+    cta_start_us: int = Field(ge=0)
+    cta_end_us: int = Field(gt=0)
+    watermark_asset_id: EntityId
+    watermark_asset_sha256: str = Field(pattern=_SHA)
+    watermark_asset_name: str = Field(min_length=1, max_length=80)
+    watermark_mode: Literal["alpha_v1"] = "alpha_v1"
+    watermark_position: Literal["foreground_top_right_v1", "top_right"] = "foreground_top_right_v1"
+    watermark_visibility: Literal["overlay_required_v1", "source_visible_v1"] = "overlay_required_v1"
+    watermark_width_permille: int = Field(default=55, ge=24, le=280)
+    sizing_method: Literal["source_frame_scan_v1", "legacy_fixed_v1"] = "legacy_fixed_v1"
+    sizing_measurement_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+    first_post_caption_line: Literal["اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"] = (
+        "اشترك في قناة ترتيل على اليوتيوب: @tarteelarabic"
+    )
+
+    @model_validator(mode="after")
+    def interval_and_names_are_safe(self) -> Self:
+        if self.cta_end_us <= self.cta_start_us:
+            raise ValueError("campaign CTA interval must be positive")
+        names = [("CTA", self.cta_asset_name), ("watermark", self.watermark_asset_name)]
+        if self.cta_render_mode == "alpha_png_sequence_v1":
+            if self.cta_frame_prefix is None or self.cta_frame_count is None:
+                raise ValueError("PNG CTA overlays require a frame prefix and count")
+            names.append(("CTA frame prefix", self.cta_frame_prefix))
+        elif self.cta_frame_prefix is not None or self.cta_frame_count is not None:
+            raise ValueError("alpha video CTA overlays must not declare PNG frames")
+        if self.cta_render_mode == "alpha_video_v1" and not self.cta_asset_name.lower().endswith(
+            (".mov", ".webm")
+        ):
+            raise ValueError("alpha video CTA must use a transparent video staging filename")
+        if self.cta_clearance != "faces_and_captions_clear_v1":
+            raise ValueError("Tarteel CTA must declare face and caption clearance")
+        if self.sizing_method == "source_frame_scan_v1" and not self.sizing_measurement_sha256:
+            raise ValueError("source-measured campaign overlays require a measurement digest")
+        if self.overlay_coordinate_space != "foreground_v1" and self.cta_position == "foreground_attention_v1":
+            raise ValueError("foreground CTA placement requires foreground coordinate space")
+        for label, name in names:
+            if (
+                name != name.strip()
+                or "/" in name
+                or "\\" in name
+                or ".." in name
+                or not all(character.isalnum() or character in ".-_" for character in name)
+            ):
+                raise ValueError(f"campaign {label} asset name must be a safe staging filename")
+        return self
+
+
+class OverlayExclusionRegion(Versioned):
+    """One transformed region that a campaign overlay must avoid."""
+
+    kind: Literal[
+        "face",
+        "child_body",
+        "tablet",
+        "caption",
+        "context_line",
+        "source_logo",
+        "watermark",
+        "platform_rail",
+    ]
+    status: Literal["present", "absent_reviewed", "unknown"]
+    left: int | None = Field(default=None, ge=0, le=1080)
+    top: int | None = Field(default=None, ge=0, le=1920)
+    width: int | None = Field(default=None, ge=1, le=1080)
+    height: int | None = Field(default=None, ge=1, le=1920)
+    annotation_id: EntityId | None = None
+
+    @model_validator(mode="after")
+    def bounds_match_status(self) -> Self:
+        bounds = (self.left, self.top, self.width, self.height)
+        if self.status == "present":
+            if any(value is None for value in bounds):
+                raise ValueError("present overlay exclusion requires output bounds")
+            assert self.left is not None and self.top is not None
+            assert self.width is not None and self.height is not None
+            if self.left + self.width > 1080 or self.top + self.height > 1920:
+                raise ValueError("overlay exclusion extends past the portrait output")
+        elif any(value is not None for value in bounds):
+            raise ValueError("absent or unknown overlay exclusion cannot declare bounds")
+        if self.status == "unknown" and self.annotation_id is not None:
+            raise ValueError("unknown overlay exclusion cannot claim an annotation")
+        return self
+
+
+class OverlayExclusionSample(Versioned):
+    """One decoded or reviewed sample over the complete CTA animation."""
+
+    sample_id: EntityId
+    phase: Literal["entrance", "hold", "exit", "maximum_extent"]
+    output_frame_index: int = Field(ge=0)
+    output_time_us: Microseconds
+    sample_frame_sha256: str = Field(pattern=_SHA)
+    sample_frame_relative_path: str = Field(default="", max_length=512)
+    cta_left: int = Field(ge=0, le=1080)
+    cta_top: int = Field(ge=0, le=1920)
+    cta_width: int = Field(ge=1, le=1080)
+    cta_height: int = Field(ge=1, le=1920)
+    exclusions: list[OverlayExclusionRegion] = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def sample_is_complete(self) -> Self:
+        if self.cta_left + self.cta_width > 1080 or self.cta_top + self.cta_height > 1920:
+            raise ValueError("CTA sample extends past the portrait output")
+        kinds = [item.kind for item in self.exclusions]
+        required = {
+            "face",
+            "child_body",
+            "tablet",
+            "caption",
+            "context_line",
+            "source_logo",
+            "watermark",
+            "platform_rail",
+        }
+        if set(kinds) != required:
+            raise ValueError("overlay exclusion sample must account for every required region kind")
+        for kind in required:
+            regions = [region for region in self.exclusions if region.kind == kind]
+            if len(regions) > 1:
+                ids = [region.annotation_id for region in regions]
+                if (
+                    any(region.status != "present" for region in regions)
+                    or None in ids
+                    or len(ids) != len(set(ids))
+                ):
+                    raise ValueError("multiple exclusion regions need unique present annotations")
+        if self.sample_frame_relative_path:
+            _relative(self.sample_frame_relative_path)
+        return self
+
+
+class OverlayExclusionEvidence(Versioned):
+    """Source-bound clearance proof for a moving campaign overlay."""
+
+    evidence_id: EntityId
+    campaign: Literal["tarteel"] = "tarteel"
+    source_asset_id: EntityId
+    candidate_id: EntityId
+    source_sha256: str = Field(pattern=_SHA)
+    time_map_sha256: str = Field(pattern=_SHA)
+    overlay_spec_sha256: str = Field(pattern=_SHA)
+    transform_sha256: str = Field(pattern=_SHA)
+    cta_start_us: Microseconds
+    cta_end_us: Microseconds
+    samples: list[OverlayExclusionSample] = Field(min_length=4, max_length=32)
+    decision: Literal["clear", "blocked"]
+    reviewer: str = Field(min_length=1, max_length=120)
+    reviewed_at: AwareDatetime
+    provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def clearance_is_safe(self) -> Self:
+        if self.cta_end_us <= self.cta_start_us:
+            raise ValueError("overlay exclusion CTA interval must be positive")
+        if self.source_asset_id not in self.provenance.source_asset_ids:
+            raise ValueError("overlay exclusion provenance must include its source")
+        phases = [sample.phase for sample in self.samples]
+        if set(phases) != {"entrance", "hold", "exit", "maximum_extent"}:
+            raise ValueError("overlay exclusion evidence needs entrance, hold, exit, and maximum samples")
+        if len({sample.sample_id for sample in self.samples}) != len(self.samples):
+            raise ValueError("overlay exclusion sample ids must be unique")
+        for sample in self.samples:
+            if not self.cta_start_us <= sample.output_time_us < self.cta_end_us:
+                raise ValueError("overlay exclusion sample lies outside the CTA interval")
+            if self.decision == "clear":
+                if any(region.status == "unknown" for region in sample.exclusions):
+                    raise ValueError("clear overlay exclusion evidence cannot contain unknown regions")
+                cta = (
+                    sample.cta_left,
+                    sample.cta_top,
+                    sample.cta_width,
+                    sample.cta_height,
+                )
+                for region in sample.exclusions:
+                    if region.status != "present":
+                        continue
+                    assert region.left is not None and region.top is not None
+                    assert region.width is not None and region.height is not None
+                    if _rectangles_overlap(cta, (region.left, region.top, region.width, region.height)):
+                        raise ValueError(f"clear overlay exclusion intersects {region.kind}")
+        return self
+
+
+def _rectangles_overlap(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> bool:
+    left_x, left_y, left_width, left_height = left
+    right_x, right_y, right_width, right_height = right
+    return max(left_x, right_x) < min(left_x + left_width, right_x + right_width) and max(
+        left_y, right_y
+    ) < min(left_y + left_height, right_y + right_height)
 
 
 class CampaignPolicyRule(Versioned):

@@ -28,6 +28,9 @@ SPANISH_ALIGNMENT_MODEL = "jonatasgrosman/wav2vec2-large-xlsr-53-spanish"
 SPANISH_ALIGNMENT_REVISION = "96d7e9b4e4a78af515a3c6d3cee7c0826045d276"
 GERMAN_ALIGNMENT_MODEL = "jonatasgrosman/wav2vec2-large-xlsr-53-german"
 GERMAN_ALIGNMENT_REVISION = "4b8a02957378d0f2da2ef74091156b032c485a89"
+ARABIC_ALIGNMENT_MODEL = "jonatasgrosman/wav2vec2-large-xlsr-53-arabic"
+ARABIC_ALIGNMENT_REVISION = "af46c2d8531b8dcbb5e23b952f739b372c2e5d2d"
+ARABIC_ALIGNMENT_CHECKPOINT = "a0b26f6d9d3edfde1784aef863c192a8cc1e438a23b45910ab648531ebe1857b"
 
 _PROHIBITED_MODELS = frozenset(
     {
@@ -200,7 +203,14 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
             live_status="available_not_smoked",
             reason="available_not_smoked",
         ),
-        "ar": _unclaimed("ar", "alignment_not_claimed"),
+        "ar": _whisperx(
+            "ar",
+            model_id=ARABIC_ALIGNMENT_MODEL,
+            model_revision=ARABIC_ALIGNMENT_REVISION,
+            checkpoint_sha256=ARABIC_ALIGNMENT_CHECKPOINT,
+            live_status="available_not_smoked",
+            reason="available_not_smoked",
+        ),
         "zh-CN": _unclaimed("zh-CN", "unsupported_language"),
     }
 
@@ -208,6 +218,26 @@ def _catalog() -> dict[str, AlignmentProviderRecord]:
 def provider_for(locale: str) -> AlignmentProviderRecord:
     """Resolve one locale. Live status is measured. It is not copied from a table."""
     canonical = canonical_locale(locale)
+    # Arabic selected-clip alignment has a separately pinned WhisperX model,
+    # but full-source language alignment is still intentionally unclaimed.
+    # Keep this public capability lookup closed until that broader evidence
+    # path is independently smoked.
+    if canonical == "ar":
+        return _unclaimed("ar", "alignment_not_claimed")
+    return _measured_provider(canonical)
+
+
+def selected_clip_provider_for(locale: str) -> AlignmentProviderRecord:
+    """Resolve the provider permitted for a selected Hero clip.
+
+    This scope may use a measured local Arabic checkpoint without promoting
+    the full-source language capability or public ``alignment_claim``.
+    """
+    canonical = canonical_locale(locale)
+    return _measured_provider(canonical)
+
+
+def _measured_provider(canonical: str) -> AlignmentProviderRecord:
     row = _catalog().get(canonical)
     if row is None:
         return _unclaimed("zh-CN", "unsupported_language")

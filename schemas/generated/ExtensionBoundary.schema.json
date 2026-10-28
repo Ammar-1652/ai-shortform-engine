@@ -1,0 +1,58 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "approved_location": {
+      "minLength": 1,
+      "title": "Approved Location",
+      "type": "string"
+    },
+    "consumer": {
+      "minLength": 1,
+      "title": "Consumer",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "skill",
+        "editorial_reference",
+        "local_tool",
+        "mcp",
+        "renderer_component",
+        "asset_pack"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "prohibited_authority": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Prohibited Authority",
+      "type": "array"
+    },
+    "required_evidence": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Required Evidence",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "approved_location",
+    "consumer",
+    "required_evidence",
+    "prohibited_authority"
+  ],
+  "title": "ExtensionBoundary",
+  "type": "object"
+}

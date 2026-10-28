@@ -16,9 +16,11 @@ from clipforge.hero.alignment import (
     _align_with_side_python,
     _require_worker_identity,
     _stored_locale,
+    _validate_cut_boundaries,
     build_alignment,
 )
 from clipforge.hero.captions import _MAX_GAP_US, hero_caption_pieces
+from clipforge.hero.integrity import _alignment_identity_complete
 from clipforge.hero.service import _require_fresh_alignment
 from clipforge.language.model_manifest import (
     english_checkpoint_file,
@@ -166,8 +168,8 @@ def _built(aligner: FakeForcedAlignment | None = None):
     return document, inputs, backend
 
 
-def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+def test_catalog_constants_are_not_speech_proof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing-evidence"))
     assert provider_for("en-US").live_status != "verified_live"
     assert provider_for("en-GB").live_status != "verified_live"
     assert provider_for("ja").live_status != "verified_live"
@@ -175,11 +177,13 @@ def test_catalog_constants_are_not_speech_proof(monkeypatch: pytest.MonkeyPatch)
     assert alignment_claim("en-US") == "alignment_not_claimed"
 
 
-def test_a_manifest_string_without_audio_does_not_promote(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_manifest_string_without_audio_does_not_promote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = english_checkpoint_file()
     if path is None:
         pytest.skip("english checkpoint is not installed")
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing-evidence"))
     monkeypatch.setattr(
         "clipforge.language.model_manifest.speech_smoke_manifest",
         lambda _locale, evidence_root=None: measure_english_checkpoint(path).manifest_sha256,
@@ -382,6 +386,13 @@ def test_boundary_duplicate_skipped_and_wrong_segment_fail() -> None:
         _built(_Endpoint())
 
 
+def test_timemap_boundary_inside_word_is_rejected_before_alignment() -> None:
+    words = [TranscriptWord(word_id="w-how", text=" How", start_us=100_000, end_us=300_000)]
+    segments = [TimelineSegment(segment_id="cut", source_start_us=0, source_end_us=200_000)]
+    with pytest.raises(MediaError, match="inside a transcript word"):
+        _validate_cut_boundaries(words, segments)
+
+
 def test_caption_gap_above_the_cadence_splits_the_cue() -> None:
     first = AlignedWord(
         word_id="w-a",
@@ -417,6 +428,35 @@ def test_caption_gap_above_the_cadence_splits_the_cue() -> None:
         }
     )
     assert len(hero_caption_pieces([first, later])) == 2
+
+
+def test_caption_never_spans_a_timemap_segment_boundary() -> None:
+    first = AlignedWord(
+        word_id="w-first",
+        candidate_id="cand-1",
+        text="first",
+        source_start_us=0,
+        source_end_us=100_000,
+        output_start_us=0,
+        output_end_us=100_000,
+        output_start_frame=0,
+        output_end_frame_exclusive=3,
+        segment_index=0,
+    )
+    second = first.model_copy(
+        update={
+            "word_id": "w-second",
+            "text": "second",
+            "source_start_us": 100_000,
+            "source_end_us": 200_000,
+            "output_start_us": 100_000,
+            "output_end_us": 200_000,
+            "output_start_frame": 3,
+            "output_end_frame_exclusive": 6,
+            "segment_index": 1,
+        }
+    )
+    assert [piece.cue.text for piece in hero_caption_pieces([first, second])] == ["first", "second"]
 
 
 def test_aliases_store_one_locale_and_cache_rejects_each_identity_change() -> None:
@@ -458,6 +498,21 @@ def test_aliases_store_one_locale_and_cache_rejects_each_identity_change() -> No
     moved = _Inputs(_Pair(inputs.pair.transcript, _TRANSCRIPT, _SHA), _ASR)
     with pytest.raises(MediaError):
         _require_fresh_alignment(document, moved, _candidate(), _review(), "rough-1", aligner)
+
+
+def test_legacy_alignment_identity_is_incomplete_before_plan_hash_check() -> None:
+    document, _inputs, _aligner = _built()
+    assert _alignment_identity_complete(document)
+    legacy = document.model_copy(
+        update={
+            "alignment_status": "unspecified",
+            "binding_sha256": "",
+            "model_revision": "",
+            "checkpoint_sha256": "",
+            "manifest_sha256": "",
+        }
+    )
+    assert not _alignment_identity_complete(legacy)
 
 
 def _locale_backend(locale: str, language: str) -> FakeForcedAlignment:

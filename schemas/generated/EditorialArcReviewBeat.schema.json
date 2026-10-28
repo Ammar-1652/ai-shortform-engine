@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "Inspectible evidence for one source-grounded story beat.",
+  "properties": {
+    "beat": {
+      "enum": [
+        "hook",
+        "body",
+        "punch"
+      ],
+      "title": "Beat",
+      "type": "string"
+    },
+    "beat_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Beat Id",
+      "type": "string"
+    },
+    "continuity_to_next": {
+      "enum": [
+        "accepted",
+        "requires_review",
+        "not_applicable"
+      ],
+      "title": "Continuity To Next",
+      "type": "string"
+    },
+    "event_label": {
+      "maxLength": 160,
+      "minLength": 1,
+      "title": "Event Label",
+      "type": "string"
+    },
+    "rationale": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "representative_frame_relative_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Representative Frame Relative Path",
+      "type": "string"
+    },
+    "representative_frame_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Representative Frame Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "segment_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Segment Id",
+      "type": "string"
+    },
+    "source_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source End Us",
+      "type": "integer"
+    },
+    "source_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Source Start Us",
+      "type": "integer"
+    },
+    "subject_label": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Subject Label",
+      "type": "string"
+    },
+    "transcript_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Transcript Word Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "beat_id",
+    "segment_id",
+    "beat",
+    "source_start_us",
+    "source_end_us",
+    "transcript_word_ids",
+    "representative_frame_relative_path",
+    "representative_frame_sha256",
+    "subject_label",
+    "event_label",
+    "continuity_to_next",
+    "rationale"
+  ],
+  "title": "EditorialArcReviewBeat",
+  "type": "object"
+}

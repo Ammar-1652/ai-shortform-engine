@@ -71,6 +71,9 @@
     });
     candidateId = payload.candidate_id;
     card = payload;
+    document.getElementById("playback-fields").hidden = !payload.playback_required;
+    document.getElementById("watched-audio").checked = false;
+    document.getElementById("watched-muted").checked = false;
     video.src = "/media/final/" + candidateId;
     video.autoplay = false;
   }
@@ -88,6 +91,29 @@
   document.getElementById("decision-form").addEventListener("submit", function (event) {
     event.preventDefault();
     var decision = event.submitter ? event.submitter.getAttribute("data-decision") : "approved";
+    var playback = null;
+    if (card.playback_required && decision === "approved") {
+      var audio = document.getElementById("watched-audio").checked;
+      var muted = document.getElementById("watched-muted").checked;
+      var observation = document.getElementById("watch-observations").value.trim();
+      var player = document.getElementById("watch-player").value.trim();
+      if (!audio || !muted || !observation || !player) {
+        status.textContent = "Watch with audio and muted; record player and observations before approval.";
+        return;
+      }
+      playback = Object.assign({}, card.playback_target, {
+        automated: false,
+        watch: {
+          reviewer: reviewer.value.trim(),
+          watched_with_audio: audio,
+          watched_muted: muted,
+          player: player,
+          observations: [observation],
+          decision: "accepted_for_final_review",
+          reviewed_at: new Date().toISOString()
+        }
+      });
+    }
     fetch("/api/review/decisions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,6 +126,7 @@
         decision: decision,
         reviewer_id: reviewer.value,
         notes: notes.value,
+        playback: playback,
         automated: false
       })
     }).then(function (response) {

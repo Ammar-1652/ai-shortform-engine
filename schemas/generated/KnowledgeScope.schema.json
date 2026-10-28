@@ -1,0 +1,58 @@
+{
+  "additionalProperties": false,
+  "description": "Scope limits keep a useful pattern from becoming a universal claim.",
+  "properties": {
+    "campaign_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Campaign Ids",
+      "type": "array"
+    },
+    "genres": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Genres",
+      "type": "array"
+    },
+    "languages": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Languages",
+      "type": "array"
+    },
+    "platforms": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Platforms",
+      "type": "array"
+    },
+    "profile_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Profile Ids",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "title": "KnowledgeScope",
+  "type": "object"
+}

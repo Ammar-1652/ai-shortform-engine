@@ -119,11 +119,32 @@
       "title": "Audio Codec",
       "type": "string"
     },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
     "audio_sample_rate": {
       "const": 48000,
       "default": 48000,
       "title": "Audio Sample Rate",
       "type": "integer"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
     },
     "background": {
       "const": "neutral-dark-v1",
@@ -138,14 +159,20 @@
       "type": "string"
     },
     "caption_algorithm_version": {
-      "const": "advanced-caption-v1",
-      "default": "advanced-caption-v1",
+      "default": "advanced-caption-clean-v1",
+      "enum": [
+        "advanced-caption-v1",
+        "advanced-caption-clean-v1"
+      ],
       "title": "Caption Algorithm Version",
       "type": "string"
     },
     "diagram_version": {
-      "const": "advanced-diagram-v1",
-      "default": "advanced-diagram-v1",
+      "default": "advanced-diagram-grounded-v1",
+      "enum": [
+        "advanced-diagram-v1",
+        "advanced-diagram-grounded-v1"
+      ],
       "title": "Diagram Version",
       "type": "string"
     },
@@ -184,6 +211,13 @@
       ],
       "default": null
     },
+    "manual_windows": {
+      "items": {
+        "$ref": "#/$defs/ReframingWindow"
+      },
+      "title": "Manual Windows",
+      "type": "array"
+    },
     "max_broll_events": {
       "default": 4,
       "maximum": 8,
@@ -210,9 +244,18 @@
       "title": "Min Gain Db",
       "type": "integer"
     },
+    "motion_graphics_version": {
+      "const": "advanced-motion-graphics-v1",
+      "default": "advanced-motion-graphics-v1",
+      "title": "Motion Graphics Version",
+      "type": "string"
+    },
     "motion_library_version": {
-      "const": "advanced-motion-v1",
-      "default": "advanced-motion-v1",
+      "default": "advanced-motion-clean-v1",
+      "enum": [
+        "advanced-motion-v1",
+        "advanced-motion-clean-v1"
+      ],
       "title": "Motion Library Version",
       "type": "string"
     },
@@ -221,6 +264,11 @@
       "default": false,
       "title": "Music Allowed",
       "type": "boolean"
+    },
+    "narration_duck_db": {
+      "default": -12,
+      "title": "Narration Duck Db",
+      "type": "number"
     },
     "pixel_format": {
       "const": "yuv420p",
@@ -238,8 +286,14 @@
       "$ref": "#/$defs/ReframingStrategy"
     },
     "renderer_recipe_version": {
-      "const": "advanced-hero-renderer-v1",
-      "default": "advanced-hero-renderer-v1",
+      "default": "advanced-hero-renderer-directed-v3",
+      "enum": [
+        "advanced-hero-renderer-v1",
+        "advanced-hero-renderer-clean-v1",
+        "advanced-hero-renderer-directed-v2",
+        "advanced-hero-renderer-directed-v3",
+        "advanced-hero-renderer-directed-v4"
+      ],
       "title": "Renderer Recipe Version",
       "type": "string"
     },
@@ -249,15 +303,56 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "sfx_default_gain_db": {
+      "default": -18,
+      "maximum": 0,
+      "minimum": -24,
+      "title": "Sfx Default Gain Db",
+      "type": "number"
+    },
+    "sfx_fade_in_us": {
+      "default": 20000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Sfx Fade In Us",
+      "type": "integer"
+    },
+    "sfx_fade_out_us": {
+      "default": 60000,
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Sfx Fade Out Us",
+      "type": "integer"
+    },
+    "sfx_max_gain_db": {
+      "const": -18,
+      "default": -18,
+      "title": "Sfx Max Gain Db",
+      "type": "integer"
+    },
     "sfx_policy": {
       "const": "rights_cleared_local",
       "default": "rights_cleared_local",
       "title": "Sfx Policy",
       "type": "string"
     },
+    "staging_recipe_version": {
+      "default": "time-map-v2-frame-quantized",
+      "enum": [
+        "time-map-v1-audio-envelope",
+        "time-map-v2-frame-quantized"
+      ],
+      "title": "Staging Recipe Version",
+      "type": "string"
+    },
     "typography_version": {
-      "const": "advanced-typography-v1",
-      "default": "advanced-typography-v1",
+      "default": "advanced-typography-clean-v1",
+      "enum": [
+        "advanced-typography-v1",
+        "advanced-typography-clean-v1"
+      ],
       "title": "Typography Version",
       "type": "string"
     },

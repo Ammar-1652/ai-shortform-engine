@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "description": "One decoded image/contact sheet bound to the current encoded draft.",
+  "properties": {
+    "frame_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Frame Index"
+    },
+    "kind": {
+      "maxLength": 60,
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+    },
+    "relative_path": {
+      "pattern": "^candidates/[A-Za-z0-9][A-Za-z0-9._:-]{0,127}/viewer-evidence/[A-Za-z0-9][A-Za-z0-9._-]{0,100}(?:/[A-Za-z0-9][A-Za-z0-9._-]{0,100})*$",
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "relative_path",
+    "sha256",
+    "kind"
+  ],
+  "title": "ViewerEvidenceFile",
+  "type": "object"
+}

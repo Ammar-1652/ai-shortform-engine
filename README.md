@@ -2,7 +2,14 @@
 
 Clipforge is a local-first engine for turning authorized long-form video into reviewed short-form edits. Organic posts and paid campaigns share one processing core. Profiles and policies carry the differences.
 
-The local path is ingest, prepare, transcript, visual analysis, candidate mining, a rough preview, and a human review. Round 8 renders a separate Hero draft for candidates approved on the current rough preview. The draft is reviewable. It does not publish.
+The local path is ingest, prepare, transcript, visual analysis, candidate mining, a rough preview, and an operator-led Hero workflow. Codex is the editorial brain, Clipforge is the deterministic media and evidence engine, and a human reviews the exact final playback before delivery. The draft is reviewable. It does not publish.
+
+The responsibility contract is recorded in [SKILLS.md](SKILLS.md) and
+[ADR 0101](docs/adr/0101-codex-operator-system-enforcer-human-final-role-boundary.md).
+Codex can choose candidates, arcs, captions, framing, graphics, B-roll, and
+SFX and invoke the corresponding typed tools. Candidate, Hero, caption, and
+framing decisions can carry `reviewer_role=codex_operator`; final approval
+always requires `reviewer_role=human_reviewer` plus audio and muted playback.
 
 ## What works
 
@@ -11,6 +18,38 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge project create` and `clipforge project list` store project rows. `--profile-id` validates a profile before insert. `clipforge project set-profile` assigns one later.
 - `clipforge profile doctor`, `list`, `show`, and `verify` read `configs/profiles` and `configs/policies`. They do not execute those files.
 - `clipforge schema export` and `clipforge schema check` write and verify JSON Schema.
+- `clipforge operator roles`, `tools`, `show`, `extensions`, and `verify` expose the role split and the real typed tool catalogue to Codex without executing media or provider work.
+The editorial knowledge and motion catalog commands expose versioned guidance,
+source-grounded patterns, approved local Remotion recipes, and hash-bound
+direction contexts. A context records selected guidance, rejected alternatives,
+source facts, unknowns, and motion-catalog identity.
+
+The dependency-ordered upgrade path for the knowledge, direction, motion,
+reference-analysis, resumable-run, viewer-QA, cache, and delivery layers is
+documented in [the editorial system upgrade plan](docs/operations/editorial-system-upgrade-plan.md).
+
+Reference intake probes authorized local files and records measured media facts
+plus explicit unavailable creative metrics; it does not invent hook, caption,
+or performance evidence.
+`clipforge editorial reference propose-style-card` creates an inactive,
+reviewable style-card proposal from those measurements. It does not alter the
+active knowledge release.
+
+Openverse is an optional bounded discovery path. Search and selection never
+download media or grant rights; acquisition remains a separate verified asset
+operation.
+For an independently verified selection, `clipforge assets openverse acquire`
+confines, hashes, and probes the bytes; `openverse verify` rechecks them.
+
+`clipforge operator release capture` records the current code and dependency
+fingerprint under the ignored work root. Production checkpoints bind to that
+release and become stale when the checkout changes.
+
+Campaign runs write durable progress under the ignored work root. Inspect that
+state with `clipforge campaign checkpoint show`, `verify`, and `find`. Resume
+reuses a source only after the normal current evidence checks pass; a checkpoint
+cannot approve or deliver an artifact.
+
 - The timeline mapper converts source time, output time, and frames for jump cuts.
 - Pydantic contracts reject illegal timing, missing provenance, weighted compliance, and automated final approval.
 - `clipforge source inspect` probes a local file without writing a database row.
@@ -33,14 +72,24 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge preview list`, `clipforge preview show`, and `clipforge preview verify` read the current set. Verify does not render or repair. Captions stay provisional. Verify also checks each MP4 with ffprobe.
 - `clipforge review doctor` reports the review contract and that the server binds to loopback.
 - `clipforge review open SOURCE_ID` serves a local page for the current rough previews. The host must be `127.0.0.1`.
-- `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append human decisions. A decision does not change the preview files.
-- `clipforge hero doctor` reports WhisperX, the alignment model cache, and that a normal run does not download.
+- `clipforge review list`, `clipforge review decide`, and `clipforge review verify` read or append role-labelled editorial decisions. Use `--reviewer-role codex_operator` when Codex is operating the workflow; a decision does not change the preview files.
+- `clipforge hero doctor` reports the WhisperX side interpreter, the alignment model cache, the speech-evidence gate, and that a normal run does not download. Production and tests discover an installed evidence pack at `~/.local/clipforge-speech-evidence`, or use an explicit `CLIPFORGE_SPEECH_EVIDENCE_ROOT`. An invalid explicit directory fails closed instead of falling back; discovery still requires matching WAV bytes and model evidence before live status is granted.
 - `clipforge hero align SOURCE_ID CANDIDATE_ID` force-aligns one approved clip from the ASR FLAC. It does not align the rest of the source. `--allow-model-download` is required before a missing model can be fetched.
 - `clipforge hero plan SOURCE_ID CANDIDATE_ID` writes a Hero edit plan from that forced alignment. Provisional timing is refused.
-- `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. `--force` keeps the previous run.
+- `clipforge hero render SOURCE_ID` renders approved candidates in rank order into a separate Hero draft set. Browser rendering is checkpointed in bounded global-frame units; if a run stops, the command reports its `hero_set_id`, and `clipforge hero render SOURCE_ID --resume HERO_SET_ID` verifies and reuses complete units while rerendering only the missing or stale unit. `--force` keeps the previous run and starts a new set.
 - `clipforge hero list`, `clipforge hero show`, and `clipforge hero verify` read that set. Verify does not align, render, or repair.
-- `clipforge hero review open SOURCE_ID` serves a loopback page for the current Hero drafts. `doctor`, `list`, `show`, and `verify` only read. `decide` appends a decision bound to that Hero artifact, plan, and alignment. Approval does not publish or encode a new file.
-- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Local B-roll, typography, diagrams, SFX, and semantic emphasis are supported. Music and Envato are not included. The picture uses contain framing unless `--reframing face_follow` is set. `face_follow` crops from stored face-track geometry through the candidate TimeMap. It does not identify a person or infer a speaker. A missing or ineligible track fails closed. `hero advanced reframe doctor`, `show`, and `verify` only read. Rendering does not upload.
+- `clipforge hero review open SOURCE_ID` serves a loopback page for the current Hero drafts. `doctor`, `list`, `show`, and `verify` only read. `decide` appends a role-labelled decision bound to that Hero artifact, plan, and alignment. Use `--reviewer-role codex_operator` for Codex-operated editorial promotion. Approval does not publish or encode a new file.
+- `clipforge hero advanced plan` and `clipforge hero advanced render` write a separate advanced Hero set. Clean production requires a persisted source-grounded direction brief; it never invents hook/body/punch cards from word-position or character heuristics. New treatment-aware directions use `direction-v3`: one reviewed upper context sentence is mandatory, every spoken caption is grouped into one readable line before Remotion, and every hook/body/punch beat records B-roll, SFX, camera, transition, and graphics decisions as use, omission, policy block, or review. Use `clipforge editorial treatment plan/show/lint` before Advanced Hero planning. Modern styles use the platform-resilient inner band (96px left, 160px right, 270px top, 360px bottom) so search/header, side rails, descriptions, and actions do not cover captions, context, logos, or CTAs. A line that cannot fit at the pinned local font size fails before rendering. Local B-roll, typography, diagrams, SFX, grouped captions, and semantic emphasis are supported. B-roll/SFX must be explicit direction placements with source evidence, purpose, relevance, and output timing; asset ids alone are a legacy compatibility path that QA and Remotion reject for clean production. Generic presets emit bounded asset requests for Codex/provider review; restricted campaigns record policy blocks. Music and external Envato media are not included automatically. Final portrait delivery uses a deliberate full-frame treatment: `contain` keeps the source legible over a blurred background, `center_crop` uses the stored portrait crop, `face_follow` uses eligible stored face-track geometry through the candidate TimeMap, and `manual_window` uses reviewed source-bound 9:16 crop coordinates. Use `--focus-x/--focus-y` for a fixed subject position or `--manual-windows-file` for a typed, ordered crop trajectory that Remotion interpolates deterministically. A face box is not a speaker. An ineligible face-follow track fails closed; no strategy silently falls back to contain. The selected strategy is recorded in the render input, advanced manifest, QA evidence, final review evidence, and local delivery metadata. `hero advanced reframe doctor`, `show`, and `verify` only read. Rendering does not upload.
+- Clean Advanced planning emits a hash-bound pilot preflight receipt. Run `clipforge hero advanced pilot SOURCE_ID CANDIDATE_ID` before encoding; a missing or stale receipt blocks browser rendering. `clipforge editorial presets` lists the six narrative routing presets, and `clipforge editorial treatment doctor` verifies their typed B-roll, SFX, camera, transition, and graphics policies. Knowledge references use `clipforge editorial knowledge intake`, `evaluate`, and `admit`; admission creates a new versioned release and retires the previous release without approving a media artifact.
+- `clipforge hero advanced plan` accepts `--editorial-arc-file` for a typed source-grounded hook/body/punch assembly. The arc names complete forced words and an ordered TimeMap; picture and speech are staged from that map and the parent Hero artifact remains immutable. The resulting Advanced draft is still unapproved until its exact MP4 receives QA and human final review.
+- Presentation direction is audited through the project-local `.codex/skills/clipforge-motion-direction/SKILL.md`. It reads policy, transcript, alignment, profile, and current artifacts before returning exactly three source-grounded declarative hook/body/punch options. `clipforge hero advanced direction plan` binds the selected option to the current Hero plan and TimeMap and chooses among eight pinned styles (`editorial-clean-v1`, `quran-editorial-v1`, `quran-readable-v2`, `kinetic-caption-v1`, `documentary-broll-v1`, `data-explainer-v1`, `paper-explainer-v1`, `premium-minimal-v1`). A direction may also use one audited native illustration (`credit_card`, `travel_postcard`, `business_identity`, or quantitative `business_spotlight`) only when its interval, exact copied evidence text, purpose, and geometry pass validation; it is optional, stays above captions, and never carries downloaded media or executable code. A reviewed `SourceNativeText` annotation can identify a baked title or quote so duplicate baseline captions and optional typography are suppressed without editing source pixels. Numeric motion, local font identity/hashes, contrast, safe margins, and emphasis limits flow into the render identity; an explicit operator override is allowlisted. A diagram is omitted unless an operator provides explicit, unit-consistent source facts; unsupported kinds and unsafe geometry fail before rendering. Upstream iart guidance is provenance-locked in `docs/third_party/motion-skills.lock.json` and is not downloaded at runtime.
+- `editorial-clean-v1` uses the locally installed DejaVu Sans Bold and Noto Sans CJK Bold fallback stack; their observed hashes and licenses (Bitstream Vera/DejaVu and SIL OFL) are recorded in the style profile and validated render-input fingerprint. The opt-in `quran-editorial-v1` style keeps the compact Quran treatment; `quran-readable-v2` is the public-readable variant with centered large lower captions, a larger centered upper context line, and word-id-bound active coloring. Both use the locally licensed Amiri Quran font through `CLIPFORGE_QURAN_FONT_DIR`. The renderer does not fetch fonts or use CDN assets.
+- Burned-in captions normalize whitespace, group short words into readable phrases, keep punctuation with its phrase, and render in the final 1080×1920 safe area. Rough Preview keeps provisional ASR captions phrase-only by default; an explicit review-only `word_highlight_mode=reviewed` may show the stored word evidence, but it is not a forced-alignment claim. New Advanced direction styles carry a one-line caption contract, a reviewed upper context line, safe margins of 96px left/160px right/270px top/360px bottom, contrast, and local font identity into the renderer. Forced words can carry `unverified`, `correct`, or `incorrect` review status: active correct words turn green then settle white, incorrect words remain red, and unverified words never claim correctness. Rough review variants may use a bounded uniform `video_scale_permille` and `video_offset_x_px`; these preserve aspect ratio and are not a substitute for final portrait reframing. The pinned local caption fonts and license evidence are documented in [caption-fonts.md](docs/architecture/caption-fonts.md). The current deterministic caption layout evidence covers English, French, Japanese, and Arabic/RTL; unsupported locales fail closed. Production Advanced Hero inputs reject debug overlays and diagnostic event ids. The old magenta/cyan fixture panels are not a production component.
+- Clean Tarteel Advanced Hero renders require a source-bound `OverlayExclusionEvidence` record for the final transform. It proves CTA clearance from faces, children/body, tablet, captions, context, logos, watermark, and platform rails across the full CTA animation. Missing or unknown evidence blocks the service, Remotion worker, cache, and technical QA; historical legacy artifacts remain readable.
+- Tarteel Quran captions use a pinned, hashed Quran.com Uthmani snapshot stored under the ignored work root. The existing display-correction sidecar can replace reviewed visible spelling while retaining the source word's old timing; it does not establish that corrected ordinary dialogue was re-aligned to what was actually spoken. Canonical-matched Quran words can receive green active-word display treatment; canonical text is not pronunciation proof. The snapshot, source hash, transcript hash, subtitle-evidence hash, and mapping are stale gates; production never fetches Quran text at render time. Current clean Advanced QA remains insufficient until the reviewed speech inventory and decoded visual assessment described in [the Tarteel repair plan](docs/operations/tarteel-review-trio-system-repair-next-round.md) exist.
+- When Hero and Advanced Hero need to be reviewed together, `direction plan`, `advanced plan`, `advanced render`, and `advanced verify --draft-only` use an isolated review-draft namespace. The resulting files carry `hero_review_status: pending`; they remain review-only and cannot pass delivery until the current Hero receives a human approval. Editorial arc beats also require explicit claim closure before rendering.
+- Advanced audio targets `-16 LUFS` integrated, `-1.5 dBTP` true peak, and `11 LU` LRA. Narration ducks source audio by `-12 dB`, must cover the declared edit window within 100 ms, and is normalized after rendering. A near-silent output is rejected. Audio policy and narration evidence are part of render and delivery identity.
+- Advanced jump-cut staging trims picture and speech from the same ordered integer-microsecond `TimeMap`. Picture frames are allocated on the canonical 30 fps output grid (including off-grid cuts), and speech gets only an 8 ms discontinuity fade; the staging recipe and profile fingerprint change when this policy changes. A cut through a forced word is rejected before rendering.
 - `clipforge qa run SOURCE_ID` writes a `qa_set_json` artifact for the current advanced Hero draft. `list`, `show`, and `verify` only read. `qa gate` succeeds only when technical and campaign QA both pass and still match the current artifact.
 - `clipforge job list`, `show`, and `verify` read recorded jobs. `recover` marks a stale running job failed. `resume` and `retry` start a new attempt and keep the previous row. A changed source hash or blocked rights record is refused.
 - `clipforge batch run` prepares several sources in one SQLite database, in the order given. `list`, `show`, and `verify` only read. `resume` reruns children that are not a verified success. One source failure does not erase another source. The batch does not approve or publish.
@@ -51,9 +100,9 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - `clipforge platform doctor` and `clipforge platform capabilities` describe the optional adapter. `publish dry-run` checks a target against the verified local package and does not open a socket. `publish submit` does not upload unless `CLIPFORGE_PLATFORM_LIVE_SMOKE=1` and a real adapter are both configured. No production adapter is registered. `status` does not submit again. `cancel` is not success. Output keeps `local delivery` separate from `external platform`.
 - `clipforge language doctor` and `clipforge language list` report which languages have a real aligner or narrator. `language align` writes a full-source alignment only when that provider is `verified_live`. `language check` still draws caption stills and does not claim Arabic or Japanese alignment. `language show` and `language verify` only read. A fake provider cannot be reported as `verified_live`. en-US, fr-FR, and ja are `verified_live` only when an external speech file under `CLIPFORGE_SPEECH_EVIDENCE_ROOT` matches the packaged speech record and the model measured on disk. Clipforge checks the file SHA-256, sample rate, channel count, and duration. The record must also match the measured locale, model id, revision, checkpoint, manifest, WhisperX version, and device. A missing directory, a missing file, a tone, a sine wave, noise, silence, a catalog constant, or a JSON row alone stays non-live. en-GB stays `available_not_smoked` unless that locale has its own speech record. Spanish and German stay `model_missing`. Arabic stays `alignment_not_claimed`. Full-source alignment stays `not_configured`. Selected-clip `hero align` is the production path.
 - `clipforge campaign` records policy, inventory, and an explicit acquisition plan. `clipforge campaign operator` selects catalogue sources into an append-only sidecar and can serve a loopback board on `127.0.0.1`. `doctor`, `list`, `show`, `sources`, `verify`, and `status` only read. `select`, `import`, `run`, and `resume` validate first. `acquire plan`, `acquire list`, `acquire show`, and `acquire verify` only read. `acquire run` and `acquire resume` copy selected, policy-allowed sources into the work root after hash, size, and ffprobe checks. `produce` runs that selection through the existing campaign runner and writes an aggregate manifest. `production-plan`, `production-show`, `production-list`, `production-verify`, and `production-report` only read. `run` and `resume` call the existing campaign runner. An allowed source does not wait for a second confirmation. `campaign operator whop import` reads a sanitized snapshot and labels it `credentials_stored: not_stored` and `live_transport: not_claimed`. `whop auth doctor` reports Grok, the Whop plugin, and the connector without opening a browser or a socket. `whop auth login` installs `whopio/plugins#dist/grok/whop` when needed. If this Grok build cannot run `/mcps`, login tells the operator to authorize Whop in Grok and exits `auth_required`. `whop tools refresh` writes a verified read-only map outside the repository only after the official connector is ready. `whop discover` reports `not_configured` and does not connect. `whop discover --live` calls the public MCP adapter, the `official-grok` connector, or a loopback test double only when `CLIPFORGE_WHOP_LIVE_SMOKE=1` and the connector is set. An in-memory registry is not that connector. Credentials stay outside Clipforge. Doctor does not open a session. The packaged Whop tool map stays empty until a real tools list verifies names. Envato search sends only filters the selected tool supports. External publishing stays deferred.
-- `clipforge assets doctor` reports the Envato MCP endpoint. Search writes a manual download request and does not fetch the file. `assets envato register` accepts a file the operator already placed under `incoming/` after hash, ffprobe, license, and confinement checks. Antoine stock rows are blocked. A direct download URL is stored only when the provider returned one, and it is not fetched.
+- `clipforge assets doctor` reports the Envato MCP endpoint. Search writes a typed manual download request. `assets envato auth setup` can store an optional portal login in the OS keyring through an interactive TTY; it never stores a password in the repository, work root, SQLite, logs, or artifacts. `auth status` reports presence only, and `auth forget --yes` removes the local entry without claiming remote logout. `assets envato fetch --request REQUEST_ID --project PROJECT_ID` uses the saved login to resolve the MCP item page, create a license, download the portal archive and certificate, extract one supported media file, and pass it through the normal hash, probe, rights, policy, and provenance gates. Audio/SFX and fonts are typed separately (`search_sound_effects` and `search_fonts`), with `fc-scan` validation for `.ttf`, `.otf`, `.woff`, and `.woff2`. `--portal-item-uuid UUID` is an optional identity assertion, not a substitute for page resolution. `assets envato register` remains available for a manually placed file. Antoine stock rows are blocked, and signed download URLs are never stored or printed.
 
-- `clipforge final review doctor` reports that final approval is human, Whop MCP is deferred, and external publishing is deferred. `open`, `list`, `show`, and `verify` only read. `decide` appends one final `ReviewDecision` for the current Advanced Hero evidence. The loopback page is `127.0.0.1` only.
+- `clipforge final review doctor` reports the role split: Codex editorial operator, deterministic system enforcer, and human final reviewer. Whop MCP and external publishing remain deferred. `open`, `list`, `show`, and `verify` only read. `decide` appends one human-only final `ReviewDecision` for the current Advanced Hero evidence. The loopback page is `127.0.0.1` only.
 
 ## What does not work yet
 
@@ -62,7 +111,7 @@ The local path is ingest, prepare, transcript, visual analysis, candidate mining
 - Music. Local B-roll and SFX are supported. Music is prohibited.
 - External platform publishing. The adapter interface and dry-run path exist. Upload is `not_configured` until an operator sets `CLIPFORGE_PLATFORM_LIVE_SMOKE=1` and a real adapter. There is no TikTok, Instagram, or YouTube client. Credentials are not stored in SQLite or artifacts.
 - A review UI on any address other than loopback
-- Envato file download. Search and manual registration exist. Clipforge does not fetch the file. Antoine campaign stock stays blocked.
+- Envato remains fail-closed for unsupported or unlicensed portal flows. The reviewed `assets envato fetch` path handles explicitly selected audio/SFX, fonts, video, image, and graphic items; manual registration remains available, and Antoine campaign stock stays blocked.
 - An unattended Whop login, and a claimed live Whop pass. The operator still installs the Whop plugin, opens Grok, runs `/mcps`, authorizes Whop, and runs `/whop-connect`. Clipforge does not store the password, cookies, tokens, or browser profile, and it does not join campaigns or publish. `discover` without `--live` stays `not_configured`. A skipped live smoke stays `live_smoke: not_executed`. `live_claim` stays `not_claimed` until `https://mcp.whop.com/mcp` accepts a verified read-only call.
 - Platform API clients, viewer tracking, and automatic optimization
 - A required VoiceStudio install. The live narration engine is optional, local-only by default, and may be unavailable. Clipforge does not download its models automatically.
@@ -127,7 +176,7 @@ pnpm typecheck
 pnpm test
 ```
 
-Optional environment variables are listed in `.env.example`. The program does not read that file. Export `DATABASE_PATH`, `CLIPFORGE_WORK_ROOT`, or `WORK_ROOT` when you want a non-default location. `CLIPFORGE_SPEECH_EVIDENCE_ROOT` is the external directory of speech WAV files used for `verified_live`. Those files stay outside the repository. `CLIPFORGE_WORK_ROOT` wins over `WORK_ROOT`. Defaults are `var/clipforge.sqlite3` and `var/work`. `CLIPFORGE_DISK_RESERVE_GB` defaults to 10. Both directories are gitignored.
+Optional environment variables are listed in `.env.example`. The program does not read that file. Export `DATABASE_PATH`, `CLIPFORGE_WORK_ROOT`, or `WORK_ROOT` when you want a non-default location. `CLIPFORGE_SPEECH_EVIDENCE_ROOT` overrides the installed `~/.local/clipforge-speech-evidence` directory of provider smoke WAVs used for `verified_live`; it is separate from selected-clip source audio. Those files stay outside the repository. Directory discovery never replaces hash/model validation. `CLIPFORGE_WORK_ROOT` wins over `WORK_ROOT`. Defaults are `var/clipforge.sqlite3` and `var/work`. `CLIPFORGE_DISK_RESERVE_GB` defaults to 10. Both directories are gitignored.
 
 ## Everyday commands
 
@@ -141,6 +190,23 @@ uv run clipforge schema check
 uv run clipforge storage status
 uv run clipforge source inspect /path/to/video.mp4
 ```
+
+Register campaign-provided CTA, watermark, graphic, or audio material before
+an Advanced Hero plan references it. Use paths relative to the work root and
+repeat `--source-asset-id` for every source catalog that may use the asset:
+
+```bash
+uv run clipforge assets register-local \
+  --project PROJECT_ID \
+  --source-asset-id SOURCE_ID \
+  --file campaigns/Campaign/cta/cta.mp4 \
+  --license-file campaigns/Campaign/intake/campaign-provided-rights-assertion.md \
+  --kind graphic --confirm-rights --tag cta --tag campaign-provided
+uv run clipforge assets verify-local SOURCE_ID
+```
+
+This records a campaign-provided rights row and a hash-bound Advanced Hero
+catalog entry. It never downloads media or substitutes for human review.
 
 Ingest and prepare, after `db init` and `project create`:
 
@@ -160,6 +226,45 @@ uv run clipforge transcript show SOURCE_ID
 
 `--confirm-rights` records your assertion. It does not verify the license. The original file stays where it is. A second `media prepare` reuses a valid proxy and FLAC instead of transcoding again. A second `transcript run` reuses a valid transcript instead of calling the model again. `--allow-model-download` is required only when the model is not already under `CLIPFORGE_MODEL_ROOT` (default `var/models`). Inference is local. The model download is the only optional network step.
 
+For Advanced Hero, let the current visual analysis choose portrait framing and
+resume a failed browser render from its verified run receipts:
+
+```bash
+uv run clipforge hero advanced plan SOURCE_ID CANDIDATE_ID \
+  --reframing auto --db PATH --work-dir PATH
+uv run clipforge hero advanced render SOURCE_ID --db PATH --work-dir PATH
+# If the command reports a resumable advanced_set_id after a crash:
+uv run clipforge hero advanced render SOURCE_ID --resume RUN_ID \
+  --db PATH --work-dir PATH
+```
+
+`auto` uses a complete frame-level face trajectory only when it is valid for
+the current TimeMap and does not crop reviewed source-native text; otherwise
+it records an explicit contain strategy. Advanced browser rendering saves a
+validated 120-frame video receipt and one full-length PCM audio receipt after
+each unit, then assembles and normalizes the final MP4. `clipforge qa run`
+also evaluates the viewer-quality contract (caption coverage, duplicate
+forced words, repeated source ranges, graphic evidence, and crop collisions),
+and clean renders persist a hash-bound viewer-evidence bundle containing
+decoded first/middle/last frames, 4:5 and 1:1 platform-crop previews, contact
+sheets, and ebur128 loudness facts. Missing or stale evidence is
+`INSUFFICIENT_EVIDENCE`; it cannot authorize cache reuse or delivery. A human
+must still watch the exact MP4 with audio and muted before final review.
+
+Clean final review records that watch separately from the immutable render
+bundle. Open `clipforge final review open SOURCE_ID CANDIDATE_ID` after technical
+QA; explicitly record complete audio/muted playback, player and timestamped
+observations before approving. A CLI reviewer can inspect the exact identity
+with `clipforge final review watch-target SOURCE_ID CANDIDATE_ID --db PATH
+--work-dir PATH`, then supply a strict `HumanPlaybackReview` JSON file to
+`clipforge final review decide SOURCE_ID CANDIDATE_ID --decision approved
+--reviewer NAME --watch-record FILE --db PATH --work-dir PATH`. Use the target's
+fields unchanged and add `automated: false` and `watch` (`reviewer`,
+`watched_with_audio`, `watched_muted`, `player`, `observations`, `reviewed_at`,
+`decision: accepted_for_final_review`). Never manufacture observations from ASR
+or tests. A rejection can be recorded without a watch. Technical QA is not
+human acceptance or permission to export.
+
 `clipforge doctor` exits `0` when every check is `PASS` or `WARN`. It exits `1` when a check is `FAIL` (Python older than 3.11, an unwritable work directory, or a broken SQLite library).
 
 ## Checks
@@ -171,7 +276,14 @@ make typecheck
 make validate
 ```
 
-`./scripts/validate.sh` runs Ruff, mypy, pytest, schema check, and the renderer lint, typecheck, and tests. `make doctor` runs the CLI doctor.
+`./scripts/validate.sh` runs Ruff, mypy, both mandatory pytest partitions
+(`not browser`, then `browser` in a fresh process), schema check, renderer
+lint/typecheck/tests and doctor. This matches CI's browser process boundary
+without dropping tests. Renderer logs emit `render-stage` start/running/end
+records with monotonic elapsed time and available-memory facts, so a stalled
+import, bundle, browser setup or render can be distinguished. The heartbeat
+does not drive animation; rendering still uses the canonical frame clock.
+`make doctor` runs the CLI doctor.
 
 ## Repository layout
 

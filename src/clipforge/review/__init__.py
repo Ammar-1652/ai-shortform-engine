@@ -1,1 +1,1 @@
-"""Local human review of the current rough-preview set."""
+"""Local role-labelled review of the current rough-preview set."""

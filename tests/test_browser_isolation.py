@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from clipforge.errors import MediaError
+from clipforge.hero.advanced_backend import RemotionAdvancedRenderBackend
 from clipforge.hero.backend import RemotionHeroRenderBackend
 from clipforge.media.process import ProcessResult, ProcessRunner
 from clipforge.preview.isolation import browser_render_lock, chrome_socket_fits
@@ -23,6 +24,7 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
         recorded["argv"] = argv
         recorded["env"] = kwargs.get("env")
         recorded["reap_group"] = kwargs.get("reap_group")
+        recorded["timeout_s"] = kwargs.get("timeout_s")
         env = kwargs.get("env")
         assert isinstance(env, dict)
         private = str(env["TMPDIR"])
@@ -36,7 +38,7 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr("clipforge.preview.isolation.resolve_browser", lambda: browser)
     monkeypatch.setattr("clipforge.preview.isolation.resolve_executable", lambda *_args: "node")
     batch = tmp_path / "batch.json"
-    batch.write_text("{}", encoding="utf-8")
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
     before = os.environ.get("TMPDIR")
     RemotionHeroRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
     RemotionHeroRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
@@ -52,10 +54,32 @@ def test_each_render_gets_a_private_temp_dir(tmp_path: Path, monkeypatch: pytest
     assert isinstance(argv, list)
     assert argv[-1] == str(private)
     assert recorded["reap_group"] is True
+    assert recorded["timeout_s"] == 120.0
     assert os.environ.get("TMPDIR") == before
     script = Path("apps/renderer/scripts/render-hero.mjs").read_text(encoding="utf-8")
     assert "process.env.TMPDIR" in script
     assert 'import("@remotion/renderer")' in script
+
+
+def test_advanced_renderer_is_marked_as_service_launched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded: dict[str, object] = {}
+
+    def fake_run(self: ProcessRunner, argv: list[str], **kwargs: object) -> ProcessResult:
+        del self
+        recorded["env"] = kwargs.get("env")
+        return ProcessResult(tuple(argv), 0, "", "", 0.0, tmp_path / "render.log")
+
+    monkeypatch.setattr(ProcessRunner, "run", fake_run)
+    monkeypatch.setattr("clipforge.preview.isolation.resolve_browser", lambda: Path("/usr/bin/chrome"))
+    monkeypatch.setattr("clipforge.preview.isolation.resolve_executable", lambda *_args: "node")
+    batch = tmp_path / "batch.json"
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
+    RemotionAdvancedRenderBackend().render_batch(batch, log_path=tmp_path / "render.log")
+    env = recorded["env"]
+    assert isinstance(env, dict)
+    assert env["CLIPFORGE_RENDER_AUTHORITY"] == "advanced_service"
 
 
 def test_long_temp_base_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -117,3 +141,15 @@ def test_node_failure_includes_the_renderer_log() -> None:
     )
     assert "renderer log" in message
     assert "Page crashed" in message
+
+
+def test_remotion_deadline_scales_with_declared_frames(tmp_path: Path) -> None:
+    from clipforge.preview.isolation import _remotion_process_deadline_s
+
+    batch = tmp_path / "batch.json"
+    batch.write_text('{"items":[{"input":{"duration_in_frames":60}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 120.0
+    batch.write_text('{"items":[{"input":{"duration_in_frames":1800}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 450.0
+    batch.write_text('{"items":[{"input":{"duration_in_frames":9000}}]}', encoding="utf-8")
+    assert _remotion_process_deadline_s(batch) == 600.0

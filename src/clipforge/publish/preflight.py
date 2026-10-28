@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from clipforge.errors import ClipforgeError, MediaError, StorageError
 from clipforge.hero.advanced_assets import confine_file_uri, confine_work_path, require_asset
 from clipforge.hero.advanced_service import JOB_ADVANCED, KIND_ADVANCED
 from clipforge.hero.probe import probe_hero
+from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.workspace import SourceWorkspace
@@ -24,12 +25,15 @@ from clipforge.schemas.advanced import (
     AdvancedHeroDraftSetDocument,
     AdvancedHeroPlanDocument,
     AdvancedHeroRenderInput,
+    advanced_fingerprint,
 )
+from clipforge.schemas.direction import DirectionDocument
 from clipforge.schemas.governance import ReviewDecision, RightsStatus
 from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobStatus, QAStatus
 from clipforge.schemas.publish import PublishProfile
 from clipforge.schemas.qa import QACacheRecord, QASetDocument
+from clipforge.schemas.treatment import TreatmentEvidenceBundle
 from clipforge.schemas.voice import NarrationAudioArtifact
 from clipforge.storage import (
     Database,
@@ -118,6 +122,29 @@ class DeliveryFacts:
     narration_voice_id: str | None = None
     narration_model_license: str | None = None
     narration_requested: bool = False
+    direction_id: str = ""
+    direction_sha256: str = ""
+    treatment_fingerprint: str = ""
+    treatment_evidence_sha256: str = ""
+    treatment_evidence_relative_path: str = ""
+    treatment_audio_mix_sha256: str = ""
+    treatment_audio_measurement_relative_path: str = ""
+    treatment_audio_measurement_sha256: str = ""
+    style_id: str = "legacy-v1"
+    style_fingerprint: str = ""
+    safe_region_id: str = "portrait-safe-v1"
+    # Creative dependencies are repeated here so final review and local
+    # delivery cannot reuse an approval after a direction-layer dependency
+    # changes. These mirror the bound Advanced Hero plan fields.
+    preset_id: str = ""
+    pilot_sha256: str = ""
+    motion_recipe_ids: tuple[str, ...] = field(default_factory=tuple)
+    motion_catalog_sha256: str = ""
+    knowledge_context_id: str = ""
+    knowledge_release_id: str = ""
+    knowledge_context_sha256: str = ""
+    knowledge_decision_trace_id: str = ""
+    knowledge_decision_trace_sha256: str = ""
 
 
 def preflight_delivery(
@@ -195,10 +222,18 @@ def preflight_delivery(
         root,
         workspace,
         draft,
+        project_id=source.project_id,
+        source_asset_id=source_asset_id,
         source_sha256=manifest.content_sha256,
     )
     _hero_plan(root, workspace, draft)
     video = _video(root, manifest_path, draft)
+    input_path = video.parent / "render-input.json"
+    if draft.editorial_arc_id:
+        if input_path.is_symlink() or not input_path.is_file():
+            raise PublishError("editorial render input is missing or unsafe", category="artifact_changed")
+        if sha256_file(input_path) != draft.render_input_sha256:
+            raise PublishError("editorial render input hash changed", category="artifact_changed")
     _reject_render_strategy(video.parent / "render-input.json", workspace, plan, reframe)
     if probe:
         try:
@@ -231,6 +266,9 @@ def preflight_delivery(
         source_asset_id,
         artifact,
         draft.advanced_plan_sha256,
+        expected_audio_measurement_relative_path=draft.treatment_audio_measurement_relative_path,
+        expected_audio_measurement_sha256=draft.treatment_audio_measurement_sha256,
+        expected_audio_measurement_run_dir=workspace.advanced_run_dir(document.advanced_set_id),
     )
     narration_path, narration_doc = narration
     rights_fingerprint = hashlib.sha256(license_record.status.value.encode("utf-8")).hexdigest()
@@ -254,6 +292,30 @@ def preflight_delivery(
         advanced_artifact_size=manifest_size,
         advanced_plan_id=plan.plan_id,
         advanced_plan_sha256=draft.advanced_plan_sha256,
+        direction_id=plan.direction_id,
+        direction_sha256=plan.direction_sha256,
+        treatment_fingerprint=plan.treatment_fingerprint,
+        treatment_evidence_sha256=plan.treatment_evidence_sha256,
+        treatment_evidence_relative_path=plan.treatment_evidence_relative_path,
+        treatment_audio_mix_sha256=(
+            advanced_fingerprint(plan.treatment_audio_mix.model_dump(mode="json"))
+            if plan.treatment_audio_mix is not None
+            else ""
+        ),
+        treatment_audio_measurement_relative_path=draft.treatment_audio_measurement_relative_path,
+        treatment_audio_measurement_sha256=draft.treatment_audio_measurement_sha256,
+        style_id=plan.style_id,
+        style_fingerprint=plan.style_fingerprint,
+        safe_region_id=plan.safe_region_id,
+        preset_id=plan.preset_id,
+        pilot_sha256=plan.pilot_sha256,
+        motion_recipe_ids=tuple(plan.motion_recipe_ids),
+        motion_catalog_sha256=plan.motion_catalog_sha256,
+        knowledge_context_id=plan.knowledge_context_id,
+        knowledge_release_id=plan.knowledge_release_id,
+        knowledge_context_sha256=plan.knowledge_context_sha256,
+        knowledge_decision_trace_id=plan.knowledge_decision_trace_id,
+        knowledge_decision_trace_sha256=plan.knowledge_decision_trace_sha256,
         alignment_id=alignment_id,
         alignment_sha256=alignment_sha,
         qa_set_id=qa_set_id,
@@ -332,9 +394,31 @@ def cache_fingerprint(facts: DeliveryFacts) -> str:
         "narration_sha256": facts.narration_sha256 or "",
         "plan_sha256": facts.advanced_plan_sha256,
         "profile_fingerprint": facts.profile_fingerprint,
+        "direction_id": facts.direction_id,
+        "direction_sha256": facts.direction_sha256,
+        "treatment_fingerprint": facts.treatment_fingerprint,
+        "treatment_evidence_sha256": facts.treatment_evidence_sha256,
+        "treatment_evidence_relative_path": facts.treatment_evidence_relative_path,
+        "treatment_audio_mix_sha256": facts.treatment_audio_mix_sha256,
+        "style_id": facts.style_id,
+        "style_fingerprint": facts.style_fingerprint,
+        "safe_region_id": facts.safe_region_id,
+        "preset_id": facts.preset_id,
+        "pilot_sha256": facts.pilot_sha256,
+        "motion_recipe_ids": list(facts.motion_recipe_ids),
+        "motion_catalog_sha256": facts.motion_catalog_sha256,
+        "knowledge_context_id": facts.knowledge_context_id,
+        "knowledge_release_id": facts.knowledge_release_id,
+        "knowledge_context_sha256": facts.knowledge_context_sha256,
+        "knowledge_decision_trace_id": facts.knowledge_decision_trace_id,
+        "knowledge_decision_trace_sha256": facts.knowledge_decision_trace_sha256,
         "qa_set_id": facts.qa_set_id,
         "qa_set_sha256": facts.qa_set_sha256,
         "reframing_strategy": facts.reframing_strategy,
+        "reframe_requested": facts.reframe_requested,
+        "reframe_applied": facts.reframe_applied,
+        "reframe_fallback": facts.reframe_fallback,
+        "audio_policy": "advanced-audio-mix-v1|-16|-1.5|11",
         "source_sha256": facts.source_sha256,
         "time_map_sha256": facts.time_map_sha256,
         "trajectory_sha256": facts.trajectory_sha256,
@@ -363,10 +447,10 @@ def _reframe_binding(
     source_sha256: str,
 ) -> _ReframeBinding:
     """Contain needs no face evidence. face_follow must match the stored trajectory."""
-    if plan.reframing_strategy == "contain":
+    if plan.reframing_strategy in {"contain", "center_crop"}:
         stored_map = getattr(plan, "time_map_sha256", "")
         map_hash = stored_map if isinstance(stored_map, str) else ""
-        return _ReframeBinding("contain", "contain", "", "", "", map_hash, "")
+        return _ReframeBinding(plan.reframing_strategy, plan.reframing_strategy, "", "", "", map_hash, "")
     if plan.reframing_strategy != "face_follow":
         raise PublishError(
             f"reframing strategy {plan.reframing_strategy} is not supported",
@@ -431,6 +515,74 @@ def _reject_render_strategy(
         raise PublishError("advanced render input could not be read", category="artifact_changed") from exc
     if rendered.reframing_strategy != plan.reframing_strategy or rendered.reframing_strategy != reframe.applied:
         raise PublishError("render used a different reframing strategy", category="stale_final_review")
+    if plan.direction_id or plan.motion_style is not None:
+        if (
+            rendered.direction_id != plan.direction_id
+            or rendered.direction_sha256 != plan.direction_sha256
+            or rendered.treatment_fingerprint != plan.treatment_fingerprint
+            or rendered.treatment_evidence_sha256 != plan.treatment_evidence_sha256
+            or rendered.style_id != plan.style_id
+            or rendered.style_fingerprint != plan.style_fingerprint
+            or rendered.safe_region_id != plan.safe_region_id
+        ):
+            raise PublishError("motion direction changed", category="stale_final_review")
+        if plan.motion_style is not None and rendered.motion_style != plan.motion_style:
+            raise PublishError("motion style recipe changed", category="stale_final_review")
+        if plan.treatment_evidence_sha256:
+            if not plan.treatment_evidence_relative_path:
+                raise PublishError("treatment evidence bundle path is missing", category="stale_final_review")
+            bundle_path = confine_work_path(
+                workspace.root, plan.treatment_evidence_relative_path, label="treatment evidence bundle"
+            )
+            if (
+                bundle_path.is_symlink()
+                or not bundle_path.is_file()
+                or sha256_file(bundle_path) != plan.treatment_evidence_sha256
+            ):
+                raise PublishError(
+                    "treatment evidence bundle is missing or stale", category="stale_final_review"
+                )
+            try:
+                bundle = TreatmentEvidenceBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+                raise PublishError(
+                    "treatment evidence bundle is invalid", category="stale_final_review"
+                ) from exc
+            if (
+                bundle.direction_id != plan.direction_id
+                or bundle.direction_sha256 != plan.direction_sha256
+                or bundle.treatment_fingerprint != plan.treatment_fingerprint
+            ):
+                raise PublishError(
+                    "treatment evidence bundle is bound to a different direction", category="stale_final_review"
+                )
+        direction_path = (
+            workspace.advanced_review_direction_file(plan.candidate_id)
+            if plan.hero_review_status == "pending"
+            else workspace.direction_file(plan.candidate_id)
+        )
+        if direction_path.is_symlink() or not direction_path.is_file():
+            raise PublishError("direction is missing", category="stale_final_review")
+        try:
+            direction = DirectionDocument.model_validate_json(direction_path.read_text(encoding="utf-8"))
+            selected = next(
+                item for item in direction.options if item.option_id == direction.selected_option_id
+            )
+            if direction.direction_recipe_version in {"direction-v3", "direction-v4"}:
+                from clipforge.editorial.presets import PresetCatalog
+
+                policy = PresetCatalog.load().find(direction.preset_id or "clean_explainer").treatment_policy
+                errors = [
+                    item for item in evaluate_treatment_policy(selected, policy) if item.severity == "error"
+                ]
+                if errors:
+                    raise PublishError(
+                        f"treatment policy failed: {errors[0].code}", category="stale_final_review"
+                    )
+        except PublishError:
+            raise
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise PublishError("direction could not be validated", category="stale_final_review") from exc
     if reframe.applied != "face_follow":
         return
     if rendered.trajectory_sha256 != reframe.trajectory_sha256 or not rendered.trajectory_sha256:
@@ -544,6 +696,11 @@ def _advanced_document(
         raise PublishError("advanced Hero manifest could not be read", category="artifact_missing") from exc
     if document.advanced_set_id != record.advanced_set_id or document.project_id != record.project_id:
         raise PublishError("advanced Hero sidecar does not match the manifest", category="artifact_changed")
+    if document.hero_review_status != "approved":
+        raise PublishError(
+            "Advanced Hero is an unapproved review draft; approve the current Hero before delivery",
+            category="approval_missing",
+        )
     with database.connect() as connection:
         row = find_artifact(connection, document.project_id, document.source_asset_id, KIND_ADVANCED)
         if row is None or row.job_id is None:
@@ -688,9 +845,15 @@ def _alignment(
     workspace: SourceWorkspace,
     draft: AdvancedHeroDraftOutput,
     *,
+    project_id: str,
+    source_asset_id: str,
     source_sha256: str,
 ) -> tuple[str | None, str | None, tuple[tuple[int, int, str], ...]]:
-    path = workspace.hero_alignment_file(draft.candidate_id)
+    path = (
+        workspace.advanced_alignment_file(draft.candidate_id)
+        if draft.editorial_arc_id
+        else workspace.hero_alignment_file(draft.candidate_id)
+    )
     try:
         path = confine_work_path(root, path.relative_to(root).as_posix(), label="alignment")
     except MediaError as exc:
@@ -716,15 +879,15 @@ def _alignment(
         and document.alignment_id == draft.alignment_id
         and document.candidate_id == draft.candidate_id
     ):
-        cues = tuple((word.output_start_us, word.output_end_us, word.text) for word in document.words)
+        cues = tuple((word.output_start_us, word.output_end_us, word.text.strip()) for word in document.words)
         if document.alignment_status == "verified_live":
             from clipforge.language.evidence import validate_current_alignment_evidence
 
             evidence = validate_current_alignment_evidence(
                 document=document,
                 candidate_id=draft.candidate_id,
-                source_asset_id=document.source_asset_id,
-                project_id=document.project_id,
+                source_asset_id=source_asset_id,
+                project_id=project_id,
                 source_sha256=source_sha256,
                 file_sha256=digest,
             )
@@ -970,6 +1133,10 @@ def _qa(
     source_asset_id: str,
     artifact: ArtifactRow,
     plan_sha256: str,
+    *,
+    expected_audio_measurement_relative_path: str = "",
+    expected_audio_measurement_sha256: str = "",
+    expected_audio_measurement_run_dir: Path | None = None,
 ) -> tuple[str, str]:
     with database.connect() as connection:
         row = find_artifact(connection, project_id, source_asset_id, KIND_QA)
@@ -995,6 +1162,26 @@ def _qa(
         raise PublishError(f"QA status is {qa.status.value}", category="qa_failed")
     if qa.source_asset_id != source_asset_id or qa.target_artifact_id != artifact.artifact_id:
         raise PublishError("QA is not bound to the current advanced Hero artifact", category="qa_stale")
+    if (
+        qa.treatment_audio_measurement_relative_path != expected_audio_measurement_relative_path
+        or qa.treatment_audio_measurement_sha256 != expected_audio_measurement_sha256
+        or record.treatment_audio_measurement_sha256 != expected_audio_measurement_sha256
+    ):
+        raise PublishError("QA audio measurement evidence changed", category="qa_stale")
+    if expected_audio_measurement_relative_path and expected_audio_measurement_run_dir is not None:
+        measurement_path = confine_work_path(
+            root,
+            (expected_audio_measurement_run_dir / expected_audio_measurement_relative_path)
+            .relative_to(root)
+            .as_posix(),
+            label="treatment audio measurement",
+        )
+        if (
+            measurement_path.is_symlink()
+            or not measurement_path.is_file()
+            or sha256_file(measurement_path) != expected_audio_measurement_sha256
+        ):
+            raise PublishError("QA audio measurement file is missing or stale", category="qa_stale")
     if qa.target_artifact_kind != KIND_ADVANCED or qa.target_manifest_sha256 != record.target_manifest_sha256:
         raise PublishError("QA target manifest does not match", category="qa_stale")
     if record.target_artifact_id != artifact.artifact_id:
@@ -1006,6 +1193,19 @@ def _qa(
         raise PublishError("QA is not bound to the current advanced plan", category="qa_stale")
     if plan_row is not None and sha256_file(_artifact_file(root, plan_row)) != plan_sha256:
         raise PublishError("QA plan hash changed", category="qa_stale")
+    if plan_row is not None:
+        try:
+            plan = AdvancedHeroPlanDocument.model_validate_json(
+                _artifact_file(root, plan_row).read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise PublishError(
+                "advanced plan could not be read for treatment binding", category="qa_stale"
+            ) from exc
+        if qa.treatment_fingerprint != plan.treatment_fingerprint:
+            raise PublishError("QA treatment fingerprint changed", category="qa_stale")
+        if qa.treatment_evidence_sha256 != plan.treatment_evidence_sha256:
+            raise PublishError("QA treatment evidence changed", category="qa_stale")
     return qa.qa_set_id, digest
 
 

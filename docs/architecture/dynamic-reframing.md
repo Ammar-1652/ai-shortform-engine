@@ -2,6 +2,8 @@
 
 `contain` is the default Advanced Hero picture strategy. `face_follow` is an explicit crop built from stored face-detection and face-track geometry.
 
+`manual_window` is an explicit portrait crop for a reviewed clip when automatic face tracking is ineligible or unsuitable. Supply `--focus-x` and `--focus-y` for a fixed crop, or `--manual-windows-file` with a JSON array of typed `ReframingWindow` records for a moving subject. A trajectory must be in output order, gap-free, non-overlapping, cover the exact output duration, use the analyzed visual-frame dimensions, and contain only in-bounds 9:16 crops. For multi-window input, Remotion deterministically interpolates crop coordinates between adjacent reviewed windows using output frame time; it does not re-detect a face. The complete trajectory is fingerprinted into the plan/cache. Manual crop coordinates describe composition only; they do not identify a speaker.
+
 ## What face_follow is
 
 The trajectory is a deterministic crop for each output frame. Output time is mapped through the candidate `TimeMap`. Word spans are not a second clock. The plan stores `time_map_sha256` and rejects a mismatched digest. Face samples use the visual analyzer's cadence. The production cadence is 500_000 us. A gap fails only when it is longer than that cadence plus one decoded-frame period of the selected source's rational frame rate. The crop keeps one face box inside a 9:16 window, with a fixed headroom inset, integer smoothing, and a maximum step of 12 pixels per frame. Frame count uses the same 30/1 half-open rule as `TimeMap.output_frame_count`. The frame that starts at the exact output endpoint is excluded.
@@ -27,6 +29,8 @@ The renderer applies the stored windows. It does not detect faces again. Caption
 QA records the requested strategy, the applied strategy, the track id, the trajectory hash, the crop size, safe-area compliance, movement, coverage, confidence, and any blocker. The final-review page shows those facts. Its evidence digest includes the strategy and the trajectory hash. A changed trajectory invalidates QA, the final approval, the local package, and the campaign production cache.
 
 `clipforge hero advanced plan SOURCE_ID CANDIDATE_ID --reframing face_follow` opts in. `clipforge hero advanced reframe doctor`, `show`, and `verify` only read.
+
+For a reviewed, fixed crop, use `clipforge hero advanced plan SOURCE_ID CANDIDATE_ID --reframing manual_window --focus-x PIXELS --focus-y PIXELS`. For a moving subject, provide an ordered JSON array of `ReframingWindow` records with integer microsecond output intervals and full crop/frame geometry, then pass `--manual-windows-file PATH`. Inspect decoded frames across every interval and its boundaries because crop positions are editorial composition choices, not face or speaker labels.
 
 ## Deferred
 

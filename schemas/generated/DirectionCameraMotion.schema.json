@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A bounded, source-grounded camera move for one output interval.",
+  "properties": {
+    "easing": {
+      "default": "ease_in_out_cubic",
+      "enum": [
+        "linear",
+        "ease_out_cubic",
+        "ease_in_out_cubic"
+      ],
+      "title": "Easing",
+      "type": "string"
+    },
+    "fallback": {
+      "default": "hold",
+      "enum": [
+        "hold",
+        "contain"
+      ],
+      "title": "Fallback",
+      "type": "string"
+    },
+    "intensity": {
+      "default": "gentle",
+      "enum": [
+        "quiet",
+        "gentle",
+        "active",
+        "peak"
+      ],
+      "title": "Intensity",
+      "type": "string"
+    },
+    "intent": {
+      "enum": [
+        "orient",
+        "follow",
+        "reveal",
+        "emphasize",
+        "transition",
+        "settle"
+      ],
+      "title": "Intent",
+      "type": "string"
+    },
+    "interval": {
+      "$ref": "#/$defs/OutputInterval"
+    },
+    "motion_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Motion Id",
+      "type": "string"
+    },
+    "path": {
+      "enum": [
+        "hold",
+        "push_in",
+        "pull_out",
+        "pan_x",
+        "pan_y",
+        "drift",
+        "parallax",
+        "match_cut"
+      ],
+      "title": "Path",
+      "type": "string"
+    },
+    "scale_end_permille": {
+      "default": 1000,
+      "maximum": 1140,
+      "minimum": 1000,
+      "title": "Scale End Permille",
+      "type": "integer"
+    },
+    "scale_start_permille": {
+      "default": 1000,
+      "maximum": 1140,
+      "minimum": 1000,
+      "title": "Scale Start Permille",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "target_x_permille": {
+      "default": 500,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Target X Permille",
+      "type": "integer"
+    },
+    "target_y_permille": {
+      "default": 500,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Target Y Permille",
+      "type": "integer"
+    },
+    "travel_px": {
+      "default": 0,
+      "maximum": 194,
+      "minimum": 0,
+      "title": "Travel Px",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "motion_id",
+    "intent",
+    "path",
+    "interval",
+    "source_evidence_ids"
+  ],
+  "title": "DirectionCameraMotion",
+  "type": "object"
+}

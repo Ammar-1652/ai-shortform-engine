@@ -20,10 +20,34 @@
           "title": "Alignment Sha256",
           "type": "string"
         },
+        "arabic_corrections_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Arabic Corrections Sha256",
+          "type": "string"
+        },
         "candidate_id": {
           "description": "Stable id. UUID text is the usual value.",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Candidate Id",
+          "type": "string"
+        },
+        "caption_alignment_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Caption Alignment Sha256",
+          "type": "string"
+        },
+        "caption_coverage_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Caption Coverage Relative Path",
+          "type": "string"
+        },
+        "caption_coverage_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Caption Coverage Sha256",
           "type": "string"
         },
         "detected_audio_codec": {
@@ -56,9 +80,39 @@
           "title": "Detected Video Codec",
           "type": "string"
         },
+        "direction_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Direction Id",
+          "type": "string"
+        },
+        "direction_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Direction Sha256",
+          "type": "string"
+        },
         "duration_error_us": {
           "title": "Duration Error Us",
           "type": "integer"
+        },
+        "editorial_arc_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Editorial Arc Id",
+          "type": "string"
+        },
+        "editorial_arc_review_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Editorial Arc Review Sha256",
+          "type": "string"
+        },
+        "editorial_arc_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Editorial Arc Sha256",
+          "type": "string"
         },
         "height": {
           "const": 1920,
@@ -88,6 +142,61 @@
           "title": "Hero Review Id",
           "type": "string"
         },
+        "hero_review_status": {
+          "default": "approved",
+          "enum": [
+            "approved",
+            "pending"
+          ],
+          "title": "Hero Review Status",
+          "type": "string"
+        },
+        "knowledge_context_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Knowledge Context Id",
+          "type": "string"
+        },
+        "knowledge_context_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Knowledge Context Sha256",
+          "type": "string"
+        },
+        "knowledge_decision_trace_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Knowledge Decision Trace Id",
+          "type": "string"
+        },
+        "knowledge_decision_trace_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Knowledge Decision Trace Sha256",
+          "type": "string"
+        },
+        "knowledge_release_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Knowledge Release Id",
+          "type": "string"
+        },
+        "motion_catalog_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Motion Catalog Sha256",
+          "type": "string"
+        },
+        "motion_recipe_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Motion Recipe Ids",
+          "type": "array"
+        },
         "output_duration_us": {
           "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
           "maximum": 604800000000,
@@ -107,6 +216,30 @@
           "title": "Output Fps Numerator",
           "type": "integer"
         },
+        "overlay_exclusion_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Overlay Exclusion Relative Path",
+          "type": "string"
+        },
+        "overlay_exclusion_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Overlay Exclusion Sha256",
+          "type": "string"
+        },
+        "pilot_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Pilot Sha256",
+          "type": "string"
+        },
+        "preset_id": {
+          "default": "",
+          "maxLength": 64,
+          "title": "Preset Id",
+          "type": "string"
+        },
         "preview_relative_path": {
           "maxLength": 512,
           "minLength": 1,
@@ -123,6 +256,18 @@
           "title": "Preview Size Bytes",
           "type": "integer"
         },
+        "quran_review_id": {
+          "default": "",
+          "maxLength": 128,
+          "title": "Quran Review Id",
+          "type": "string"
+        },
+        "quran_review_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Quran Review Sha256",
+          "type": "string"
+        },
         "rank": {
           "minimum": 1,
           "title": "Rank",
@@ -137,6 +282,72 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "speech_review_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Speech Review Sha256",
+          "type": "string"
+        },
+        "style_id": {
+          "default": "legacy-v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Style Id",
+          "type": "string"
+        },
+        "treatment_audio_measurement_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Treatment Audio Measurement Relative Path",
+          "type": "string"
+        },
+        "treatment_audio_measurement_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Treatment Audio Measurement Sha256",
+          "type": "string"
+        },
+        "treatment_audio_mix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TreatmentAudioMixResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "treatment_evidence_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Treatment Evidence Relative Path",
+          "type": "string"
+        },
+        "treatment_evidence_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Treatment Evidence Sha256",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        },
+        "viewer_evidence_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Viewer Evidence Relative Path",
+          "type": "string"
+        },
+        "viewer_evidence_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Viewer Evidence Sha256",
           "type": "string"
         },
         "width": {
@@ -181,11 +392,32 @@
           "title": "Audio Codec",
           "type": "string"
         },
+        "audio_loudness_lufs": {
+          "default": -16,
+          "title": "Audio Loudness Lufs",
+          "type": "number"
+        },
+        "audio_lra_lu": {
+          "default": 11,
+          "title": "Audio Lra Lu",
+          "type": "number"
+        },
+        "audio_mix_version": {
+          "const": "advanced-audio-mix-v1",
+          "default": "advanced-audio-mix-v1",
+          "title": "Audio Mix Version",
+          "type": "string"
+        },
         "audio_sample_rate": {
           "const": 48000,
           "default": 48000,
           "title": "Audio Sample Rate",
           "type": "integer"
+        },
+        "audio_true_peak_dbfs": {
+          "default": -1.5,
+          "title": "Audio True Peak Dbfs",
+          "type": "number"
         },
         "background": {
           "const": "neutral-dark-v1",
@@ -200,14 +432,20 @@
           "type": "string"
         },
         "caption_algorithm_version": {
-          "const": "advanced-caption-v1",
-          "default": "advanced-caption-v1",
+          "default": "advanced-caption-clean-v1",
+          "enum": [
+            "advanced-caption-v1",
+            "advanced-caption-clean-v1"
+          ],
           "title": "Caption Algorithm Version",
           "type": "string"
         },
         "diagram_version": {
-          "const": "advanced-diagram-v1",
-          "default": "advanced-diagram-v1",
+          "default": "advanced-diagram-grounded-v1",
+          "enum": [
+            "advanced-diagram-v1",
+            "advanced-diagram-grounded-v1"
+          ],
           "title": "Diagram Version",
           "type": "string"
         },
@@ -246,6 +484,13 @@
           ],
           "default": null
         },
+        "manual_windows": {
+          "items": {
+            "$ref": "#/$defs/ReframingWindow"
+          },
+          "title": "Manual Windows",
+          "type": "array"
+        },
         "max_broll_events": {
           "default": 4,
           "maximum": 8,
@@ -272,9 +517,18 @@
           "title": "Min Gain Db",
           "type": "integer"
         },
+        "motion_graphics_version": {
+          "const": "advanced-motion-graphics-v1",
+          "default": "advanced-motion-graphics-v1",
+          "title": "Motion Graphics Version",
+          "type": "string"
+        },
         "motion_library_version": {
-          "const": "advanced-motion-v1",
-          "default": "advanced-motion-v1",
+          "default": "advanced-motion-clean-v1",
+          "enum": [
+            "advanced-motion-v1",
+            "advanced-motion-clean-v1"
+          ],
           "title": "Motion Library Version",
           "type": "string"
         },
@@ -283,6 +537,11 @@
           "default": false,
           "title": "Music Allowed",
           "type": "boolean"
+        },
+        "narration_duck_db": {
+          "default": -12,
+          "title": "Narration Duck Db",
+          "type": "number"
         },
         "pixel_format": {
           "const": "yuv420p",
@@ -300,8 +559,14 @@
           "$ref": "#/$defs/ReframingStrategy"
         },
         "renderer_recipe_version": {
-          "const": "advanced-hero-renderer-v1",
-          "default": "advanced-hero-renderer-v1",
+          "default": "advanced-hero-renderer-directed-v3",
+          "enum": [
+            "advanced-hero-renderer-v1",
+            "advanced-hero-renderer-clean-v1",
+            "advanced-hero-renderer-directed-v2",
+            "advanced-hero-renderer-directed-v3",
+            "advanced-hero-renderer-directed-v4"
+          ],
           "title": "Renderer Recipe Version",
           "type": "string"
         },
@@ -311,15 +576,56 @@
           "title": "Schema Version",
           "type": "string"
         },
+        "sfx_default_gain_db": {
+          "default": -18,
+          "maximum": 0,
+          "minimum": -24,
+          "title": "Sfx Default Gain Db",
+          "type": "number"
+        },
+        "sfx_fade_in_us": {
+          "default": 20000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade In Us",
+          "type": "integer"
+        },
+        "sfx_fade_out_us": {
+          "default": 60000,
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Sfx Fade Out Us",
+          "type": "integer"
+        },
+        "sfx_max_gain_db": {
+          "const": -18,
+          "default": -18,
+          "title": "Sfx Max Gain Db",
+          "type": "integer"
+        },
         "sfx_policy": {
           "const": "rights_cleared_local",
           "default": "rights_cleared_local",
           "title": "Sfx Policy",
           "type": "string"
         },
+        "staging_recipe_version": {
+          "default": "time-map-v2-frame-quantized",
+          "enum": [
+            "time-map-v1-audio-envelope",
+            "time-map-v2-frame-quantized"
+          ],
+          "title": "Staging Recipe Version",
+          "type": "string"
+        },
         "typography_version": {
-          "const": "advanced-typography-v1",
-          "default": "advanced-typography-v1",
+          "default": "advanced-typography-clean-v1",
+          "enum": [
+            "advanced-typography-v1",
+            "advanced-typography-clean-v1"
+          ],
           "title": "Typography Version",
           "type": "string"
         },
@@ -430,6 +736,38 @@
       "title": "ArtifactProvenance",
       "type": "object"
     },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    },
     "ReframingStrategy": {
       "additionalProperties": false,
       "description": "Named crop strategy. It does not identify a speaker.",
@@ -538,6 +876,296 @@
       ],
       "title": "ReframingWindow",
       "type": "object"
+    },
+    "TreatmentAudioMixResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound requested/applied SFX mix policy and measured output facts.",
+      "properties": {
+        "applied_gain_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Applied Gain Db",
+          "type": "array"
+        },
+        "cue_event_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Cue Event Ids",
+          "type": "array"
+        },
+        "duck_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Duck Db",
+          "type": "array"
+        },
+        "fade_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade In Us",
+          "type": "array"
+        },
+        "fade_out_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Fade Out Us",
+          "type": "array"
+        },
+        "intelligibility_checked_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Checked Windows",
+          "type": "array"
+        },
+        "intelligibility_encoded_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Encoded Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_failed_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Failed Windows",
+          "type": "array"
+        },
+        "intelligibility_margin_db": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Margin Db",
+          "type": "array"
+        },
+        "intelligibility_method": {
+          "default": "",
+          "enum": [
+            "",
+            "decoded_window_signal_v1",
+            "decoded_window_signal_v2",
+            "no_audio_cues_v1"
+          ],
+          "title": "Intelligibility Method",
+          "type": "string"
+        },
+        "intelligibility_note": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Intelligibility Note",
+          "type": "string"
+        },
+        "intelligibility_sfx_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Sfx Reference Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_speech_reference_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 32,
+          "title": "Intelligibility Speech Reference Rms Windows",
+          "type": "array"
+        },
+        "intelligibility_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "pass",
+            "fail"
+          ],
+          "title": "Intelligibility Status",
+          "type": "string"
+        },
+        "measured_integrated_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Integrated Lufs"
+        },
+        "measured_rms_windows": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 128,
+          "title": "Measured Rms Windows",
+          "type": "array"
+        },
+        "measured_true_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured True Peak Dbfs"
+        },
+        "mix_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Mix Id",
+          "type": "string"
+        },
+        "policy_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Fingerprint",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "silence_windows": {
+          "items": {
+            "$ref": "#/$defs/OutputInterval"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows",
+          "type": "array"
+        },
+        "silence_windows_v2": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/OutputInterval"
+            },
+            "type": "array"
+          },
+          "maxItems": 32,
+          "title": "Silence Windows V2",
+          "type": "array"
+        },
+        "source_in_us": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "title": "Source In Us",
+          "type": "array"
+        },
+        "speech_overlap_windows": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/OutputInterval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows",
+          "type": "array"
+        },
+        "speech_overlap_windows_v2": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/OutputInterval"
+            },
+            "type": "array"
+          },
+          "maxItems": 32,
+          "title": "Speech Overlap Windows V2",
+          "type": "array"
+        },
+        "status": {
+          "default": "planned",
+          "enum": [
+            "planned",
+            "measured"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "treatment_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Treatment Fingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mix_id",
+        "treatment_fingerprint",
+        "policy_fingerprint"
+      ],
+      "title": "TreatmentAudioMixResult",
+      "type": "object"
+    },
+    "WorkflowRolePolicy": {
+      "additionalProperties": false,
+      "description": "The responsibility split for one production run.\n\nCodex owns source-grounded editorial choices and orchestration. Clipforge\nowns deterministic media, provenance, rights, timing, cache, and QA gates.\nA person remains the only authority that can accept the final playback.",
+      "properties": {
+        "deterministic_enforcer": {
+          "const": "system_enforcer",
+          "default": "system_enforcer",
+          "title": "Deterministic Enforcer",
+          "type": "string"
+        },
+        "editorial_operator": {
+          "const": "codex_operator",
+          "default": "codex_operator",
+          "title": "Editorial Operator",
+          "type": "string"
+        },
+        "external_publishing": {
+          "const": "deferred",
+          "default": "deferred",
+          "title": "External Publishing",
+          "type": "string"
+        },
+        "final_playback_required": {
+          "const": true,
+          "default": true,
+          "title": "Final Playback Required",
+          "type": "boolean"
+        },
+        "final_reviewer": {
+          "const": "human_reviewer",
+          "default": "human_reviewer",
+          "title": "Final Reviewer",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowRolePolicy",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -565,6 +1193,13 @@
       "title": "Candidate Set Sha256",
       "type": "string"
     },
+    "direction_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Direction Sha256S",
+      "type": "array"
+    },
     "drafts": {
       "items": {
         "$ref": "#/$defs/AdvancedHeroDraftOutput"
@@ -584,11 +1219,34 @@
       "title": "Hero Manifest Sha256",
       "type": "string"
     },
+    "hero_review_status": {
+      "default": "approved",
+      "enum": [
+        "approved",
+        "pending"
+      ],
+      "title": "Hero Review Status",
+      "type": "string"
+    },
     "hero_set_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Hero Set Id",
       "type": "string"
+    },
+    "knowledge_context_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Knowledge Context Sha256S",
+      "type": "array"
+    },
+    "knowledge_decision_trace_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Knowledge Decision Trace Sha256S",
+      "type": "array"
     },
     "profile": {
       "$ref": "#/$defs/AdvancedHeroProfile"
@@ -616,6 +1274,12 @@
       "maxLength": 40,
       "minLength": 1,
       "title": "Reframing Strategy",
+      "type": "string"
+    },
+    "renderer_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Renderer Dependency Sha256",
       "type": "string"
     },
     "rough_manifest_sha256": {
@@ -646,6 +1310,13 @@
       "title": "Source Sha256",
       "type": "string"
     },
+    "style_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Style Ids",
+      "type": "array"
+    },
     "visual_analysis_id": {
       "description": "Stable id. UUID text is the usual value.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
@@ -656,6 +1327,17 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Visual Analysis Sha256",
       "type": "string"
+    },
+    "workflow_roles": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowRolePolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

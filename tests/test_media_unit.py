@@ -345,6 +345,8 @@ def test_process_runner_cancels_and_keeps_arguments_unsplit(tmp_path: Path) -> N
     threading.Thread(target=trip, daemon=True).start()
     with pytest.raises(MediaError, match="cancelled"):
         runner.run(["sleep", "30"], log_path=tmp_path / "cancel.log", cancel_event=cancel)
+    with pytest.raises(MediaError, match="process deadline"):
+        runner.run(["sleep", "30"], log_path=tmp_path / "timeout.log", timeout_s=0.1)
     assert is_transcode(["ffmpeg", "-c:v", "libx264"])
     assert not is_transcode(["ffprobe", "-show_format"])
     assert "shell=True" not in Path("src/clipforge/media/process.py").read_text(encoding="utf-8")
@@ -395,7 +397,7 @@ def test_migration_4_upgrades_a_version_3_file(tmp_path: Path) -> None:
     connection.commit()
     connection.close()
     database = Database(path)
-    assert database.initialize() == 6
+    assert database.initialize() == 7
     database.health_check()
     with database.connect() as checked:
         assert get_project(checked, "project-keep").name == "Keep"

@@ -8,6 +8,27 @@
       "title": "Audio Codec",
       "type": "string"
     },
+    "audio_loudness_lufs": {
+      "default": -16,
+      "title": "Audio Loudness Lufs",
+      "type": "number"
+    },
+    "audio_lra_lu": {
+      "default": 11,
+      "title": "Audio Lra Lu",
+      "type": "number"
+    },
+    "audio_mix_version": {
+      "const": "advanced-audio-mix-v1",
+      "default": "advanced-audio-mix-v1",
+      "title": "Audio Mix Version",
+      "type": "string"
+    },
+    "audio_true_peak_dbfs": {
+      "default": -1.5,
+      "title": "Audio True Peak Dbfs",
+      "type": "number"
+    },
     "destination": {
       "const": "local",
       "default": "local",

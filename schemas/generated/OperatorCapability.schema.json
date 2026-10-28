@@ -1,0 +1,92 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "capability_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Command",
+      "type": "array"
+    },
+    "execution": {
+      "enum": [
+        "read",
+        "write",
+        "human_decision"
+      ],
+      "title": "Execution",
+      "type": "string"
+    },
+    "limitation": {
+      "minLength": 1,
+      "title": "Limitation",
+      "type": "string"
+    },
+    "owner": {
+      "default": "codex_operator",
+      "enum": [
+        "codex_operator",
+        "human_reviewer"
+      ],
+      "title": "Owner",
+      "type": "string"
+    },
+    "plane": {
+      "enum": [
+        "control",
+        "media",
+        "decision",
+        "asset",
+        "review"
+      ],
+      "title": "Plane",
+      "type": "string"
+    },
+    "produces": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Produces",
+      "type": "array"
+    },
+    "purpose": {
+      "minLength": 1,
+      "title": "Purpose",
+      "type": "string"
+    },
+    "requires": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Requires",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "capability_id",
+    "purpose",
+    "plane",
+    "command",
+    "requires",
+    "produces",
+    "execution",
+    "limitation"
+  ],
+  "title": "OperatorCapability",
+  "type": "object"
+}

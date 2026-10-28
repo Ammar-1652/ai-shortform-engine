@@ -1,0 +1,51 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "forbid_on_continuous_dialogue": {
+      "default": true,
+      "title": "Forbid On Continuous Dialogue",
+      "type": "boolean"
+    },
+    "max_cues_per_30s": {
+      "default": 3,
+      "maximum": 12,
+      "minimum": 0,
+      "title": "Max Cues Per 30S",
+      "type": "integer"
+    },
+    "max_gain_db": {
+      "default": -18.0,
+      "maximum": 0.0,
+      "minimum": -24.0,
+      "title": "Max Gain Db",
+      "type": "number"
+    },
+    "mode": {
+      "enum": [
+        "accent_only",
+        "allowed",
+        "blocked"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "speech_duck_db": {
+      "default": 6.0,
+      "maximum": 18.0,
+      "minimum": 0.0,
+      "title": "Speech Duck Db",
+      "type": "number"
+    }
+  },
+  "required": [
+    "mode"
+  ],
+  "title": "SfxPolicy",
+  "type": "object"
+}
