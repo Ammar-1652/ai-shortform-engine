@@ -7,10 +7,17 @@ from clipforge.campaign.quran import load_codex_speech_review
 from clipforge.campaign.speech import apply_speech_review_emojis
 from clipforge.errors import MediaError
 from clipforge.schemas.advanced import TypographyEvent
-from clipforge.schemas.campaign import SpeechVerification, TarteelSpeechInterval, TarteelSpeechReview
+from clipforge.schemas.campaign import (
+    SpeechCaptionCorrection,
+    SpeechReviewPointer,
+    SpeechVerification,
+    TarteelSpeechInterval,
+    TarteelSpeechReview,
+)
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
+from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
-from clipforge.schemas.time import TimelineSegment, TimeMapDocument
+from clipforge.schemas.time import TimelineSegment, TimeMapDocument, digest_time_map
 
 
 def _time_map() -> TimeMapDocument:
@@ -62,10 +69,12 @@ def test_generic_codex_review_preserves_emotion_emoji_and_role() -> None:
 
 
 def test_sensitive_text_verification_requires_reliable_evidence() -> None:
-    with pytest.raises(ValueError, match="source URL or hashed snapshot"):
+    with pytest.raises(ValueError, match="requires a URL or hashed snapshot"):
         SpeechVerification(
             verification_id="verification-1",
             subject_kind="quran",
+            source_word_ids=["word-1"],
+            expected_text="قُلْ هُوَ ٱللَّهُ أَحَدٌ",
             note="Codex checked the wording.",
         )
 
@@ -74,17 +83,104 @@ def test_sensitive_text_verification_accepts_url_or_snapshot() -> None:
     by_url = SpeechVerification(
         verification_id="verification-url",
         subject_kind="quotation",
+        source_word_ids=["word-1"],
+        expected_text="That is the verified quote.",
         source_url="https://example.test/quote",
         note="Codex checked the quotation against the cited source.",
     )
     by_snapshot = SpeechVerification(
         verification_id="verification-snapshot",
         subject_kind="quran",
+        source_word_ids=["word-2"],
+        expected_text="قُلْ هُوَ ٱللَّهُ أَحَدٌ",
+        snapshot_relative_path="evidence/quran.txt",
         snapshot_sha256="d" * 64,
         note="Codex checked the verse against the captured local source.",
     )
     assert by_url.status == "verified"
     assert by_snapshot.snapshot_sha256 == "d" * 64
+
+
+def test_sensitive_interval_requires_matching_verification() -> None:
+    with pytest.raises(ValueError, match="requires verification"):
+        payload = _review().model_dump(mode="json")
+        payload["intervals"][0].update({"subject_kind": "quotation", "subject_word_ids": ["word-1"]})
+        TarteelSpeechReview.model_validate(payload)
+
+
+def test_caption_correction_requires_source_grounded_display_text() -> None:
+    correction = SpeechCaptionCorrection(
+        correction_id="correction-1",
+        source_word_ids=["word-1"],
+        source_window_us=(0, 500_000),
+        original_text="teh",
+        corrected_text="the",
+        locale="en-US",
+        evidence_kind="listening_context",
+        review_note="Codex corrected the ASR typo after listening to the source.",
+    )
+    assert correction.corrected_text == "the"
+
+
+def test_caption_correction_derives_display_alignment_without_mutating_raw_words() -> None:
+    from clipforge.campaign.speech import apply_speech_corrections
+
+    alignment = ForcedAlignmentDocument(
+        alignment_id="alignment-1",
+        project_id="project-1",
+        source_asset_id="source-1",
+        candidate_id="candidate-1",
+        transcript_id="transcript-1",
+        transcript_sha256="c" * 64,
+        asr_audio_sha256="b" * 64,
+        time_map_sha256=digest_time_map(_time_map()),
+        review_id="review-1",
+        review_digest="d" * 64,
+        rough_preview_artifact_id="rough-1",
+        model_name="forced-align-test",
+        whisperx_version="test",
+        device="cpu",
+        config_sha256="e" * 64,
+        words=[
+            AlignedWord(
+                word_id="word-1",
+                candidate_id="candidate-1",
+                text=" teh",
+                source_start_us=0,
+                source_end_us=500_000,
+                output_start_us=0,
+                output_end_us=500_000,
+                output_start_frame=0,
+                output_end_frame_exclusive=15,
+            )
+        ],
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="test",
+            tool="test",
+            tool_version="1",
+            source_asset_ids=["source-1"],
+        ),
+    )
+    review = _review().model_copy(
+        update={
+            "corrections": [
+                SpeechCaptionCorrection(
+                    correction_id="correction-1",
+                    source_word_ids=["word-1"],
+                    source_window_us=(0, 500_000),
+                    original_text="teh",
+                    corrected_text="the",
+                    locale="en-US",
+                    evidence_kind="listening_context",
+                    review_note="Codex corrected the ASR typo.",
+                )
+            ]
+        }
+    )
+    corrected = apply_speech_corrections(alignment, review, time_map=_time_map())
+    assert alignment.words[0].text == " teh"
+    assert corrected.words[0].text == " the"
 
 
 def test_codex_emotion_annotation_reaches_caption_event() -> None:
@@ -169,6 +265,32 @@ def test_generic_review_loader_binds_all_lineage_hashes(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded[0].review_id == "codex-review-1"
     assert loaded[1] == __import__("hashlib").sha256(path.read_bytes()).hexdigest()
+
+
+def test_generic_review_loader_uses_hash_bound_immutable_pointer(tmp_path: Path) -> None:
+    revision = tmp_path / "editorial/speech-reviews/source-1/candidate-1/revisions/review-1.json"
+    revision.parent.mkdir(parents=True)
+    revision.write_text(_review().model_dump_json(), encoding="utf-8")
+    digest = __import__("hashlib").sha256(revision.read_bytes()).hexdigest()
+    pointer = revision.parent.parent / "current.json"
+    pointer.write_text(
+        SpeechReviewPointer(
+            review_id="codex-review-1",
+            relative_path=revision.relative_to(tmp_path).as_posix(),
+            review_sha256=digest,
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    loaded = load_codex_speech_review(
+        tmp_path,
+        source_asset_id="source-1",
+        candidate_id="candidate-1",
+        source_sha256="a" * 64,
+        raw_asr_sha256="b" * 64,
+        transcript_sha256="c" * 64,
+    )
+    assert loaded is not None
+    assert loaded[2] == revision
 
 
 def test_generic_review_rejects_stale_source_hash(tmp_path: Path) -> None:

@@ -282,6 +282,8 @@ export type AdvancedHeroInput = {
     fade_out_us?: number[];
     speech_overlap_windows?: (Interval | null)[];
     silence_windows?: Interval[];
+    speech_overlap_windows_v2?: Interval[][];
+    silence_windows_v2?: Interval[][];
     intelligibility_status?: "unverified" | "pass" | "fail";
     status?: "planned" | "measured";
   };
@@ -869,11 +871,14 @@ export function AdvancedHeroDraft(input: AdvancedHeroInput) {
         durationInFrames={input.duration_in_frames}
         volume={(frame) => {
           const mix = input.treatment_audio_mix;
-          if (!mix || !mix.speech_overlap_windows?.length) {
+          if (!mix || (!mix.speech_overlap_windows?.length && !mix.speech_overlap_windows_v2?.length)) {
             return linearVolume(input.source_gain_db ?? 0);
           }
-          const duck = mix.speech_overlap_windows.reduce((maximum, interval, index) => {
-            if (!interval || !active(frame, interval)) return maximum;
+          const duck = (mix.speech_overlap_windows_v2?.length
+            ? mix.speech_overlap_windows_v2
+            : (mix.speech_overlap_windows ?? []).map((interval) => (interval ? [interval] : []))
+          ).reduce((maximum, windows, index) => {
+            if (!windows.some((interval) => active(frame, interval))) return maximum;
             return Math.max(maximum, mix.duck_db?.[index] ?? 0);
           }, 0);
           const duckedGain = Math.max(-24, (input.source_gain_db ?? 0) - duck);

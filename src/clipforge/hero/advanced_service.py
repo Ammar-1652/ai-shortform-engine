@@ -38,6 +38,7 @@ from clipforge.campaign.quran import (
 )
 from clipforge.campaign.speech import (
     apply_arabic_corrections,
+    apply_speech_corrections,
     apply_speech_review_emojis,
     load_arabic_corrections,
     retained_recitation,
@@ -459,6 +460,20 @@ def plan_advanced_candidate(
         )
         if loaded_speech is not None:
             speech_review, speech_review_sha256, _speech_path = loaded_speech
+            corrected_alignment = apply_speech_corrections(
+                context.alignment,
+                speech_review,
+                time_map=context.hero_plan.edit_plan.time_map,
+            )
+        elif (
+            stored_direction is not None
+            and stored_direction.style_id not in {"", "legacy-v1"}
+            and not allow_unapproved
+        ):
+            raise MediaError(
+                "clean generic Advanced Hero production requires a Codex speech review; "
+                "use an explicitly draft-only render for exploratory work"
+            )
     render_alignment = context.alignment
     render_hero_plan = context.hero_plan
     render_direction = stored_direction
@@ -2660,8 +2675,6 @@ def _reviewed_caption_alignment(plan: AdvancedHeroPlanDocument, context: _Contex
             review, source_alignment=context.alignment, target_alignment=alignment
         )
         alignment = canonicalize_quran_alignment(alignment, render_review)
-    if hashlib.sha256(dump_json(alignment).encode("utf-8")).hexdigest() != plan.caption_alignment_sha256:
-        raise MediaError("advanced plan is stale: reviewed caption alignment changed")
     speech = (
         load_tarteel_speech_review(
             root,
@@ -2683,6 +2696,10 @@ def _reviewed_caption_alignment(plan: AdvancedHeroPlanDocument, context: _Contex
     )
     if speech is None or speech[1] != plan.speech_review_sha256 or plan.time_map is None:
         raise MediaError("advanced plan is stale: reviewed speech inventory is missing or changed")
+    if plan.campaign_overlay is None:
+        alignment = apply_speech_corrections(alignment, speech[0], time_map=plan.time_map)
+    if hashlib.sha256(dump_json(alignment).encode("utf-8")).hexdigest() != plan.caption_alignment_sha256:
+        raise MediaError("advanced plan is stale: reviewed caption alignment changed")
     if retained_recitation(speech[0], plan.time_map) and not plan.quran_review_sha256:
         raise MediaError("retained Quran recitation requires canonical review evidence")
     validate_speech_captions(speech[0], alignment=alignment, time_map=plan.time_map, captions=plan.captions)

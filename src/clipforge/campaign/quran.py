@@ -13,7 +13,12 @@ from pydantic import ValidationError
 
 from clipforge.errors import MediaError
 from clipforge.media.hashing import sha256_file
-from clipforge.schemas.campaign import QuranCaptionReview, QuranVerificationPolicy, TarteelSpeechReview
+from clipforge.schemas.campaign import (
+    QuranCaptionReview,
+    QuranVerificationPolicy,
+    SpeechReviewPointer,
+    TarteelSpeechReview,
+)
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 
 _ARABIC_LETTERS = re.compile(r"[\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u06AF\u06CC]")
@@ -114,7 +119,26 @@ def load_tarteel_speech_review(
     if not base.is_dir() or base.is_symlink():
         raise MediaError("Tarteel speech review directory is missing")
     matches: list[tuple[TarteelSpeechReview, str, Path]] = []
-    for path in sorted(base.rglob("speech-review.json")):
+    candidate_root = base / source_asset_id / candidate_id
+    pointer_path = candidate_root / "current.json"
+    review_paths: list[Path]
+    if pointer_path.is_file() and not pointer_path.is_symlink():
+        try:
+            pointer = SpeechReviewPointer.model_validate_json(pointer_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"invalid Codex speech review pointer: {exc}") from exc
+        review_path = root / pointer.relative_path
+        _confined_regular_path(root, review_path)
+        if not review_path.is_relative_to(candidate_root):
+            raise MediaError("Codex speech review pointer escapes its candidate directory")
+        if sha256_file(review_path) != pointer.review_sha256:
+            raise MediaError("Codex speech review pointer hash changed")
+        review_paths = [review_path]
+    elif (candidate_root / "speech-review.json").is_file():
+        review_paths = [candidate_root / "speech-review.json"]
+    else:
+        review_paths = sorted(base.rglob("speech-review.json"))
+    for path in review_paths:
         _confined_regular_path(root, path)
         if path.is_symlink() or not path.is_file():
             raise MediaError("Tarteel speech review sidecar must be a regular file")
@@ -158,7 +182,25 @@ def load_codex_speech_review(
         return None
     _confined_regular_path(root, base, directory=True)
     matches: list[tuple[TarteelSpeechReview, str, Path]] = []
-    for path in sorted(base.rglob("speech-review.json")):
+    candidate_root = base / source_asset_id / candidate_id
+    pointer_path = candidate_root / "current.json"
+    if pointer_path.is_file() and not pointer_path.is_symlink():
+        try:
+            pointer = SpeechReviewPointer.model_validate_json(pointer_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+            raise MediaError(f"invalid Codex speech review pointer: {exc}") from exc
+        path = root / pointer.relative_path
+        _confined_regular_path(root, path)
+        if not path.is_relative_to(candidate_root):
+            raise MediaError("Codex speech review pointer escapes its candidate directory")
+        if sha256_file(path) != pointer.review_sha256:
+            raise MediaError("Codex speech review pointer hash changed")
+        review_paths = [path]
+    elif (candidate_root / "speech-review.json").is_file():
+        review_paths = [candidate_root / "speech-review.json"]
+    else:
+        review_paths = sorted(base.rglob("speech-review.json"))
+    for path in review_paths:
         _confined_regular_path(root, path)
         if path.is_symlink() or not path.is_file():
             raise MediaError("Codex speech review sidecar must be a regular file")

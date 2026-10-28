@@ -195,6 +195,59 @@ def validate_speech_captions(
         raise MediaError("speech review does not account for every retained forced word")
 
 
+def apply_speech_corrections(
+    alignment: ForcedAlignmentDocument,
+    review: TarteelSpeechReview,
+    *,
+    time_map: TimeMapDocument,
+) -> ForcedAlignmentDocument:
+    """Derive reviewed display words without mutating raw forced alignment."""
+    if not review.corrections:
+        return alignment
+    by_id = {word.word_id: word for word in alignment.words}
+    updates: dict[str, str] = {}
+    mapped = time_map.to_time_map().segments
+    for correction in review.corrections:
+        words = [by_id.get(word_id) for word_id in correction.source_word_ids]
+        if any(word is None for word in words):
+            raise MediaError(f"speech correction names an unknown forced word: {correction.correction_id}")
+        checked = [word for word in words if word is not None]
+        if any(
+            not (
+                correction.source_window_us[0] <= word.source_start_us
+                and word.source_end_us <= correction.source_window_us[1]
+            )
+            for word in checked
+        ):
+            raise MediaError(f"speech correction window does not contain its words: {correction.correction_id}")
+        if not any(
+            segment.source_start_us <= correction.source_window_us[0]
+            and correction.source_window_us[1] <= segment.source_end_us
+            for segment in mapped
+        ):
+            raise MediaError(f"speech correction crosses a retained TimeMap cut: {correction.correction_id}")
+        original = " ".join(word.text.strip() for word in checked)
+        if original != correction.original_text.strip():
+            raise MediaError(f"speech correction original text differs: {correction.correction_id}")
+        corrected_tokens = correction.corrected_text.strip().split()
+        if len(corrected_tokens) != len(checked):
+            raise MediaError(
+                f"speech correction must preserve the number of forced words: {correction.correction_id}"
+            )
+        for word, token in zip(checked, corrected_tokens, strict=True):
+            prefix = word.text[: len(word.text) - len(word.text.lstrip())]
+            suffix = word.text[len(word.text.rstrip()) :]
+            updates[word.word_id] = prefix + token + suffix
+    return alignment.model_copy(
+        update={
+            "words": [
+                word.model_copy(update={"text": updates[word.word_id]}) if word.word_id in updates else word
+                for word in alignment.words
+            ]
+        }
+    )
+
+
 def apply_speech_review_emojis(
     review: TarteelSpeechReview,
     captions: list[TypographyEvent],
@@ -209,26 +262,32 @@ def apply_speech_review_emojis(
     """
     updated = list(captions)
     mapped = time_map.to_time_map()
-    for interval in review.intervals:
-        emojis = [
-            item
-            for item in re.findall(r"😂|😮|😢|🤩|👏|❤️|🔥|✨|😄", interval.observed_text)
-            if item in _EMOTION_EMOJIS
-        ]
-        if not emojis:
-            continue
+    annotation_windows: list[tuple[str, int, int, str]] = [
+        (item.annotation_id, item.source_window_us[0], item.source_window_us[1], item.emoji)
+        for item in review.emotions
+    ]
+    if not annotation_windows:
+        # Backward-compatible interpretation for existing review documents.
+        for interval in review.intervals:
+            emojis = [
+                item
+                for item in re.findall(r"😂|😮|😢|🤩|👏|❤️|🔥|✨|😄", interval.observed_text)
+                if item in _EMOTION_EMOJIS
+            ]
+            if emojis:
+                annotation_windows.append(
+                    (interval.span_id, interval.source_start_us, interval.source_end_us, emojis[0])
+                )
+    for annotation_id, source_start_us, source_end_us, emoji in annotation_windows:
         output_ranges = [
             (
                 segment.output_start_us
-                + max(interval.source_start_us, segment.source_start_us)
+                + max(source_start_us, segment.source_start_us)
                 - segment.source_start_us,
-                segment.output_start_us
-                + min(interval.source_end_us, segment.source_end_us)
-                - segment.source_start_us,
+                segment.output_start_us + min(source_end_us, segment.source_end_us) - segment.source_start_us,
             )
             for segment in mapped.segments
-            if segment.source_start_us < interval.source_end_us
-            and interval.source_start_us < segment.source_end_us
+            if segment.source_start_us < source_end_us and source_start_us < segment.source_end_us
         ]
         overlaps = [
             index
@@ -239,8 +298,7 @@ def apply_speech_review_emojis(
             )
         ]
         if not overlaps:
-            raise MediaError(f"emotion annotation has no caption cue: {interval.span_id}")
-        emoji = emojis[0]
+            raise MediaError(f"emotion annotation has no caption cue: {annotation_id}")
         for index in overlaps:
             if updated[index].emoji is not None and updated[index].emoji != emoji:
                 raise MediaError(f"conflicting emotion emojis overlap caption cue: {updated[index].event_id}")

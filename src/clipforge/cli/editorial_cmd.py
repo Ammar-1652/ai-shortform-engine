@@ -103,12 +103,15 @@ def captions_review(
     for sensitive text. It cannot approve delivery.
     """
     from clipforge.campaign.quran import validate_tarteel_speech_review_ranges
+    from clipforge.campaign.speech import apply_speech_corrections
+    from clipforge.hero.advanced_assets import confine_work_path
+    from clipforge.media.hashing import sha256_file
     from clipforge.media.workspace import ensure_within
     from clipforge.paths import resolve_db_path, resolve_work_dir
     from clipforge.preview.inputs import load_preview_inputs
     from clipforge.preview.service import default_profile
-    from clipforge.schemas.campaign import TarteelSpeechReview
-    from clipforge.schemas.hero import HeroPlanDocument
+    from clipforge.schemas.campaign import SpeechReviewPointer, TarteelSpeechReview
+    from clipforge.schemas.hero import ForcedAlignmentDocument, HeroPlanDocument
     from clipforge.storage import Database
     from clipforge.transcription.io import publish_json
 
@@ -145,14 +148,46 @@ def captions_review(
             for segment in hero_plan.edit_plan.time_map.segments
         ]
         validate_tarteel_speech_review_ranges(document, ranges)
+        alignment_path = inputs.pair.workspace.hero_alignment_file(candidate_id)
+        if not alignment_path.is_file() or alignment_path.is_symlink():
+            raise MediaError("subtitle review requires the selected forced alignment")
+        alignment = ForcedAlignmentDocument.model_validate_json(alignment_path.read_text(encoding="utf-8"))
+        if document.corrections:
+            apply_speech_corrections(alignment, document, time_map=hero_plan.edit_plan.time_map)
+        source_word_ids = {word.word_id for word in alignment.words}
+        for verification in document.verifications:
+            if not set(verification.source_word_ids) <= source_word_ids:
+                raise MediaError("sensitive verification names an unknown forced word")
+            if verification.snapshot_relative_path:
+                snapshot = confine_work_path(
+                    root, verification.snapshot_relative_path, label="speech verification"
+                )
+                if sha256_file(snapshot) != verification.snapshot_sha256:
+                    raise MediaError("sensitive verification snapshot hash changed")
         if not document.intervals:
             raise MediaError("subtitle review requires at least one reviewed interval")
-        destination = (
-            root / "editorial" / "speech-reviews" / source_asset_id / candidate_id / "speech-review.json"
+        revision = (
+            root
+            / "editorial"
+            / "speech-reviews"
+            / source_asset_id
+            / candidate_id
+            / "revisions"
+            / f"{document.review_id}.json"
         )
+        pointer = revision.parent.parent / "current.json"
+        destination = revision
         ensure_within(root, destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        digest, _ = publish_json(destination, document, root, destination.with_suffix(".json.partial"))
+        if destination.exists() and sha256_file(destination) != sha256_file(review):
+            raise MediaError("speech review id already exists with different bytes")
+        digest, _ = publish_json(destination, document, root, destination.with_suffix(".partial"))
+        pointer_doc = SpeechReviewPointer(
+            review_id=document.review_id,
+            relative_path=destination.relative_to(root).as_posix(),
+            review_sha256=digest,
+        )
+        publish_json(pointer, pointer_doc, root, pointer.with_suffix(".partial"))
     except (ClipforgeError, ValidationError, OSError, ValueError) as exc:
         _fail(exc)
     typer.echo(f"review_id: {document.review_id}")

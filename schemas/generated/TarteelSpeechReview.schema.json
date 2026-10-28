@@ -88,10 +88,205 @@
       "title": "ArtifactProvenance",
       "type": "object"
     },
+    "SpeechCaptionCorrection": {
+      "additionalProperties": false,
+      "description": "Codex correction of displayed text without mutating forced alignment.",
+      "properties": {
+        "corrected_text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Corrected Text",
+          "type": "string"
+        },
+        "correction_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Correction Id",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "enum": [
+            "listening_context",
+            "campaign_subtitle",
+            "canonical_quran",
+            "quotation",
+            "proper_noun",
+            "number",
+            "factual_claim"
+          ],
+          "title": "Evidence Kind",
+          "type": "string"
+        },
+        "locale": {
+          "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+          "title": "Locale",
+          "type": "string"
+        },
+        "original_text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Original Text",
+          "type": "string"
+        },
+        "review_note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Review Note",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_window_us": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Source Window Us",
+          "type": "array"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Source Word Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "correction_id",
+        "source_word_ids",
+        "source_window_us",
+        "original_text",
+        "corrected_text",
+        "locale",
+        "evidence_kind",
+        "review_note"
+      ],
+      "title": "SpeechCaptionCorrection",
+      "type": "object"
+    },
+    "SpeechEmotionAnnotation": {
+      "additionalProperties": false,
+      "description": "Codex-supported reaction annotation displayed beside spoken words.",
+      "properties": {
+        "annotation_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Annotation Id",
+          "type": "string"
+        },
+        "emoji": {
+          "enum": [
+            "\ud83d\ude02",
+            "\ud83d\ude2e",
+            "\ud83e\udd29",
+            "\ud83d\ude22",
+            "\ud83d\udc4f",
+            "\ud83d\udd25",
+            "\u2728",
+            "\ud83d\ude04"
+          ],
+          "title": "Emoji",
+          "type": "string"
+        },
+        "emotion": {
+          "enum": [
+            "laughter",
+            "surprise",
+            "excitement",
+            "sadness",
+            "applause",
+            "fire",
+            "celebration"
+          ],
+          "title": "Emotion",
+          "type": "string"
+        },
+        "evidence_note": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Evidence Note",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_window_us": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+              "maximum": 604800000000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Source Window Us",
+          "type": "array"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Source Word Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "annotation_id",
+        "source_word_ids",
+        "source_window_us",
+        "emotion",
+        "emoji",
+        "evidence_note"
+      ],
+      "title": "SpeechEmotionAnnotation",
+      "type": "object"
+    },
     "SpeechVerification": {
       "additionalProperties": false,
       "description": "Codex evidence for text that must not be guessed.",
       "properties": {
+        "expected_text": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Expected Text",
+          "type": "string"
+        },
         "note": {
           "maxLength": 500,
           "minLength": 1,
@@ -102,6 +297,12 @@
           "const": "1.0.0",
           "default": "1.0.0",
           "title": "Schema Version",
+          "type": "string"
+        },
+        "snapshot_relative_path": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Snapshot Relative Path",
           "type": "string"
         },
         "snapshot_sha256": {
@@ -115,6 +316,16 @@
           "maxLength": 500,
           "title": "Source Url",
           "type": "string"
+        },
+        "source_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Source Word Ids",
+          "type": "array"
         },
         "status": {
           "const": "verified",
@@ -208,6 +419,35 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
           "title": "Span Id",
           "type": "string"
+        },
+        "subject_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "quran",
+                "quotation",
+                "proper_noun",
+                "number",
+                "factual_claim"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Kind"
+        },
+        "subject_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Subject Word Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -238,6 +478,22 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Candidate Id",
       "type": "string"
+    },
+    "corrections": {
+      "items": {
+        "$ref": "#/$defs/SpeechCaptionCorrection"
+      },
+      "maxItems": 128,
+      "title": "Corrections",
+      "type": "array"
+    },
+    "emotions": {
+      "items": {
+        "$ref": "#/$defs/SpeechEmotionAnnotation"
+      },
+      "maxItems": 128,
+      "title": "Emotions",
+      "type": "array"
     },
     "intervals": {
       "items": {

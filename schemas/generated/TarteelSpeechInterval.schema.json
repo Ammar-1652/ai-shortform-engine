@@ -58,6 +58,35 @@
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
       "title": "Span Id",
       "type": "string"
+    },
+    "subject_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "quran",
+            "quotation",
+            "proper_noun",
+            "number",
+            "factual_claim"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject Kind"
+    },
+    "subject_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Subject Word Ids",
+      "type": "array"
     }
   },
   "required": [

@@ -329,6 +329,8 @@ class TreatmentAudioMixResult(Versioned):
     fade_out_us: list[int] = Field(default_factory=list, max_length=32)
     speech_overlap_windows: list[OutputInterval | None] = Field(default_factory=list, max_length=32)
     silence_windows: list[OutputInterval] = Field(default_factory=list, max_length=32)
+    speech_overlap_windows_v2: list[list[OutputInterval]] = Field(default_factory=list, max_length=32)
+    silence_windows_v2: list[list[OutputInterval]] = Field(default_factory=list, max_length=32)
     intelligibility_status: Literal["unverified", "pass", "fail"] = "unverified"
     intelligibility_method: Literal[
         "", "decoded_window_signal_v1", "decoded_window_signal_v2", "no_audio_cues_v1"
@@ -399,6 +401,10 @@ class TreatmentAudioMixResult(Versioned):
                 raise ValueError(f"audio mix {label} facts must match cue event ids")
         if len(self.speech_overlap_windows) != len(self.cue_event_ids):
             raise ValueError("audio mix speech-overlap facts must match cue event ids")
+        if self.speech_overlap_windows_v2 and len(self.speech_overlap_windows_v2) != len(self.cue_event_ids):
+            raise ValueError("audio mix v2 speech-overlap facts must match cue event ids")
+        if self.silence_windows_v2 and len(self.silence_windows_v2) != len(self.cue_event_ids):
+            raise ValueError("audio mix v2 silence facts must match cue event ids")
         return self
 
 

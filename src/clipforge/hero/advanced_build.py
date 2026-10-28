@@ -1210,7 +1210,8 @@ def _build_treatment_audio_mix(
             "narration_duck_db": profile.narration_duck_db,
         }
     )
-    speech_windows: list[OutputInterval | None] = []
+    speech_windows_v2: list[list[OutputInterval]] = []
+    silence_windows_v2: list[list[OutputInterval]] = []
     for event in events:
         overlaps = [
             OutputInterval(
@@ -1221,14 +1222,26 @@ def _build_treatment_audio_mix(
             if word.output_start_us < event.interval.output_end_us
             and event.interval.output_start_us < word.output_end_us
         ]
-        speech_windows.append(
-            None
-            if not overlaps
-            else OutputInterval(
-                output_start_us=min(item.output_start_us for item in overlaps),
-                output_end_us=max(item.output_end_us for item in overlaps),
-            )
-        )
+        overlaps.sort(key=lambda item: item.output_start_us)
+        merged: list[OutputInterval] = []
+        for item in overlaps:
+            if merged and item.output_start_us <= merged[-1].output_end_us:
+                merged[-1] = merged[-1].model_copy(
+                    update={"output_end_us": max(merged[-1].output_end_us, item.output_end_us)}
+                )
+            else:
+                merged.append(item)
+        silences: list[OutputInterval] = []
+        cursor = event.interval.output_start_us
+        for item in merged:
+            if cursor < item.output_start_us:
+                silences.append(OutputInterval(output_start_us=cursor, output_end_us=item.output_start_us))
+            cursor = item.output_end_us
+        if cursor < event.interval.output_end_us:
+            silences.append(OutputInterval(output_start_us=cursor, output_end_us=event.interval.output_end_us))
+        speech_windows_v2.append(merged)
+        silence_windows_v2.append(silences)
+    legacy_windows = [windows[0] if windows else None for windows in speech_windows_v2]
     return TreatmentAudioMixResult(
         mix_id=stable_id("treatment-audio-mix", direction.direction_id, treatment_sha),
         treatment_fingerprint=treatment_sha,
@@ -1239,8 +1252,10 @@ def _build_treatment_audio_mix(
         source_in_us=[event.sfx_source_in_us for event in events],
         fade_in_us=[event.fade_in_us for event in events],
         fade_out_us=[event.fade_out_us for event in events],
-        speech_overlap_windows=speech_windows,
-        silence_windows=[],
+        speech_overlap_windows=legacy_windows,
+        silence_windows=[item for group in silence_windows_v2 for item in group],
+        speech_overlap_windows_v2=speech_windows_v2,
+        silence_windows_v2=silence_windows_v2,
         intelligibility_status="unverified",
         status="planned",
     )

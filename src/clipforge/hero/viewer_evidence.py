@@ -257,7 +257,12 @@ def _decoded_intelligibility(
                 "intelligibility_note": "No treatment audio cues required a speech-overlap check.",
             }
         )
-    checked = [window for window in mix.speech_overlap_windows if window is not None]
+    overlap_groups = (
+        mix.speech_overlap_windows_v2
+        if mix.speech_overlap_windows_v2
+        else [[window] if window is not None else [] for window in mix.speech_overlap_windows]
+    )
+    checked = [window for group in overlap_groups for window in group]
     failed = []
     encoded_rms: list[float] = []
     speech_rms: list[float] = []
@@ -302,12 +307,13 @@ def _decoded_intelligibility(
                 overlapping_duck: list[float] = []
                 for event_index, event_id in enumerate(mix.cue_event_ids):
                     event = sfx_by_id.get(event_id)
-                    event_window = mix.speech_overlap_windows[event_index]
-                    if event is None or event_window is None:
+                    event_windows = overlap_groups[event_index] if event_index < len(overlap_groups) else []
+                    if event is None or not event_windows:
                         continue
-                    if not (
+                    if not any(
                         event_window.output_start_us < window.output_end_us
                         and window.output_start_us < event_window.output_end_us
+                        for event_window in event_windows
                     ):
                         continue
                     name = render_input.asset_names.get(event.asset_id)
@@ -384,7 +390,7 @@ def _decoded_intelligibility(
         )
         if rms_db <= _RMS_WINDOW_LIMIT_DB:
             failed.append(window)
-    overlap_indices = [index for index, window in enumerate(mix.speech_overlap_windows) if window is not None]
+    overlap_indices = [index for index, windows in enumerate(overlap_groups) if windows]
     ducking_ok = all(mix.duck_db[index] > 0 for index in overlap_indices)
     peak_ok = true_peak_dbfs <= peak_limit_dbfs + 0.1
     passed = not failed and ducking_ok and peak_ok

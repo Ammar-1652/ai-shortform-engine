@@ -2,6 +2,12 @@
   "additionalProperties": false,
   "description": "Codex evidence for text that must not be guessed.",
   "properties": {
+    "expected_text": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Expected Text",
+      "type": "string"
+    },
     "note": {
       "maxLength": 500,
       "minLength": 1,
@@ -12,6 +18,12 @@
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_relative_path": {
+      "default": "",
+      "maxLength": 500,
+      "title": "Snapshot Relative Path",
       "type": "string"
     },
     "snapshot_sha256": {
@@ -25,6 +37,16 @@
       "maxLength": 500,
       "title": "Source Url",
       "type": "string"
+    },
+    "source_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Source Word Ids",
+      "type": "array"
     },
     "status": {
       "const": "verified",

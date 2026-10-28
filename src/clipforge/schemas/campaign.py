@@ -175,6 +175,8 @@ class TarteelSpeechInterval(Versioned):
     source_end_us: Microseconds
     kind: Literal["dialogue", "recitation", "reaction", "nasheed", "silence", "uncertain"]
     caption_decision: Literal["captioned", "reviewed_excluded"]
+    subject_kind: Literal["quran", "quotation", "proper_noun", "number", "factual_claim"] | None = None
+    subject_word_ids: list[EntityId] = Field(default_factory=list, max_length=32)
     observed_text: str = ""
     review_note: str = Field(min_length=1, max_length=500)
 
@@ -193,24 +195,101 @@ class TarteelSpeechInterval(Versioned):
         return self
 
 
+class SpeechCaptionCorrection(Versioned):
+    """Codex correction of displayed text without mutating forced alignment."""
+
+    correction_id: EntityId
+    source_word_ids: list[EntityId] = Field(min_length=1, max_length=32)
+    source_window_us: tuple[Microseconds, Microseconds]
+    original_text: str = Field(min_length=1, max_length=500)
+    corrected_text: str = Field(min_length=1, max_length=500)
+    locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    evidence_kind: Literal[
+        "listening_context",
+        "campaign_subtitle",
+        "canonical_quran",
+        "quotation",
+        "proper_noun",
+        "number",
+        "factual_claim",
+    ]
+    review_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def correction_is_safe(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("speech correction source window must be positive")
+        if any(char in self.corrected_text for char in "\r\n<>"):
+            raise ValueError("speech correction contains unsafe display text")
+        if len(set(self.source_word_ids)) != len(self.source_word_ids):
+            raise ValueError("speech correction source word ids must be unique")
+        return self
+
+
+class SpeechEmotionAnnotation(Versioned):
+    """Codex-supported reaction annotation displayed beside spoken words."""
+
+    annotation_id: EntityId
+    source_word_ids: list[EntityId] = Field(min_length=1, max_length=32)
+    source_window_us: tuple[Microseconds, Microseconds]
+    emotion: Literal["laughter", "surprise", "excitement", "sadness", "applause", "fire", "celebration"]
+    emoji: Literal["😂", "😮", "🤩", "😢", "👏", "🔥", "✨", "😄"]
+    evidence_note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def annotation_is_bounded(self) -> Self:
+        if self.source_window_us[1] <= self.source_window_us[0]:
+            raise ValueError("emotion annotation source window must be positive")
+        if len(set(self.source_word_ids)) != len(self.source_word_ids):
+            raise ValueError("emotion annotation source word ids must be unique")
+        return self
+
+
 class SpeechVerification(Versioned):
     """Codex evidence for text that must not be guessed."""
 
     verification_id: EntityId
     subject_kind: Literal["quran", "quotation", "proper_noun", "number", "factual_claim"]
+    source_word_ids: list[EntityId] = Field(default_factory=list, max_length=32)
+    expected_text: str = Field(default="", max_length=500)
     source_url: str = Field(default="", max_length=500)
+    snapshot_relative_path: str = Field(default="", max_length=500)
     snapshot_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     note: str = Field(min_length=1, max_length=500)
     status: Literal["verified"] = "verified"
 
     @model_validator(mode="after")
     def has_reliable_source(self) -> Self:
-        if not self.source_url and not self.snapshot_sha256:
-            raise ValueError("sensitive text verification requires a source URL or hashed snapshot")
-        if self.source_url and not (
-            self.source_url.startswith("https://") or self.source_url.startswith("http://")
-        ):
-            raise ValueError("sensitive text verification URL must be http(s)")
+        if not self.source_word_ids:
+            raise ValueError("sensitive text verification must bind source word ids")
+        if not self.expected_text.strip():
+            raise ValueError("sensitive text verification must include expected text")
+        if self.source_url:
+            parsed = urlsplit(self.source_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError("sensitive text verification URL must be a valid http(s) URL")
+            if parsed.username or parsed.password or parsed.port is not None:
+                raise ValueError("sensitive text verification URL cannot contain credentials or a custom port")
+        if bool(self.snapshot_relative_path) != bool(self.snapshot_sha256):
+            raise ValueError("sensitive text snapshot path and hash must be supplied together")
+        if not self.source_url and not self.snapshot_relative_path:
+            raise ValueError("sensitive text verification requires a URL or hashed snapshot")
+        if self.snapshot_relative_path:
+            _relative(self.snapshot_relative_path)
+        return self
+
+
+class SpeechReviewPointer(Versioned):
+    """Hash-bound pointer to the current immutable Codex speech review."""
+
+    pointer_kind: Literal["codex_speech_review_current"] = "codex_speech_review_current"
+    review_id: EntityId
+    relative_path: str = Field(min_length=1, max_length=500)
+    review_sha256: str = Field(pattern=_SHA)
+
+    @model_validator(mode="after")
+    def pointer_is_confined(self) -> Self:
+        _relative(self.relative_path)
         return self
 
 
@@ -231,6 +310,8 @@ class TarteelSpeechReview(Versioned):
     transcript_sha256: str = Field(pattern=_SHA)
     locale: str = Field(pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
     intervals: list[TarteelSpeechInterval] = Field(min_length=1)
+    corrections: list[SpeechCaptionCorrection] = Field(default_factory=list, max_length=128)
+    emotions: list[SpeechEmotionAnnotation] = Field(default_factory=list, max_length=128)
     verifications: list[SpeechVerification] = Field(default_factory=list, max_length=32)
     reviewer: str = Field(min_length=1, max_length=120)
     reviewer_role: Literal["codex_operator", "human_reviewer"] | None = Field(
@@ -246,6 +327,24 @@ class TarteelSpeechReview(Versioned):
         ids = [item.span_id for item in self.intervals]
         if len(ids) != len(set(ids)):
             raise ValueError("speech review span ids must be unique")
+        correction_ids = [item.correction_id for item in self.corrections]
+        if len(correction_ids) != len(set(correction_ids)):
+            raise ValueError("speech correction ids must be unique")
+        emotion_ids = [item.annotation_id for item in self.emotions]
+        if len(emotion_ids) != len(set(emotion_ids)):
+            raise ValueError("speech emotion annotation ids must be unique")
+        verification_ids = [item.verification_id for item in self.verifications]
+        if len(verification_ids) != len(set(verification_ids)):
+            raise ValueError("speech verification ids must be unique")
+        for interval in self.intervals:
+            if interval.subject_kind is not None and not interval.subject_word_ids:
+                raise ValueError(f"sensitive speech interval requires source words: {interval.span_id}")
+            if interval.subject_kind is not None and not any(
+                verification.subject_kind == interval.subject_kind
+                and set(interval.subject_word_ids) <= set(verification.source_word_ids)
+                for verification in self.verifications
+            ):
+                raise ValueError(f"sensitive speech interval requires verification: {interval.span_id}")
         previous = -1
         for item in sorted(self.intervals, key=lambda value: value.source_start_us):
             if item.source_start_us < previous:
