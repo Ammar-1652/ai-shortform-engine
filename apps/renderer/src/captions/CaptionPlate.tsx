@@ -169,7 +169,25 @@ export function CaptionPlate({ text, language, emoji, variant = "body", emphasis
           // Keep RTL and CJK as whole shaped runs. Splitting their characters
           // into independently styled spans can change joining, grapheme
           // shaping, or punctuation placement in the browser.
-          if ((layout.direction === "rtl" && wordStatuses === undefined) || /[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
+          if (layout.direction === "rtl") {
+            // Keep Arabic as one shaped run. Per-word spans can break joining
+            // and Quran marks; use the reviewed line status as a safe visual
+            // cue while preserving the exact glyph run.
+            const activeStatus = wordStatuses?.find((word) => word.word_id === activeWordId)?.verification_status;
+            const lineStatus = wordStatuses?.some((word) => word.verification_status === "incorrect")
+              ? "incorrect"
+              : activeStatus;
+            const lineColor = captionWordColor(lineStatus, Boolean(activeWordId), style?.accent);
+            return (
+              <div
+                key={`${line}-${lineIndex}`}
+                style={lineColor ? { color: lineColor, textShadow: "0 2px 5px rgba(0,0,0,0.7)" } : undefined}
+              >
+                {line}
+              </div>
+            );
+          }
+          if (/[\u3040-\u30ff\u4e00-\u9fff]/u.test(line)) {
             return <div key={`${line}-${lineIndex}`}>{line}</div>;
           }
           return (
