@@ -180,10 +180,12 @@ def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence
     binding = TreatmentAssetBindingDocument.model_validate(
         {
             **binding.model_dump(mode="json"),
-            "placement": binding.placement.model_copy(update={"output_region": region}).model_dump(mode="json"),
-            "observation": binding.observation.model_copy(update={"regions": [observed_region]}).model_dump(
-                mode="json"
-            ),
+            "placement": binding.placement.model_copy(
+                update={"output_region": region, "geometry_dependency_sha256": "f" * 64}
+            ).model_dump(mode="json"),
+            "observation": binding.observation.model_copy(
+                update={"regions": [observed_region], "geometry_dependency_sha256": "f" * 64}
+            ).model_dump(mode="json"),
         }
     )
     revised = apply_treatment_bindings(

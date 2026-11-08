@@ -185,6 +185,7 @@ class DirectionAssetPlacement(Versioned):
     purpose: MotionPurpose
     relevance_note: str = Field(min_length=1, max_length=500)
     output_region: DirectionPlacementRegion | None = None
+    geometry_dependency_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     # Exact labels copied from the reviewed local asset catalog. A prose note
     # is editorial context, not semantic proof that a stock clip is relevant.
     asset_tags: list[str] = Field(default_factory=list, max_length=24)
@@ -247,6 +248,10 @@ class TreatmentAssetBindingDocument(Versioned):
             or self.provenance.source_asset_ids != [self.observation.source_asset_id]
         ):
             raise ValueError("treatment observation source span or evidence does not match the placement")
+        if self.observation is not None and (
+            self.observation.geometry_dependency_sha256 != placement.geometry_dependency_sha256
+        ):
+            raise ValueError("visual placement geometry dependency differs from its observation")
         observed_broll_regions = (
             [region for region in self.observation.regions if region.role == "broll"]
             if self.observation

@@ -180,6 +180,7 @@ def observe_registered_visual_asset(
     relevance_threshold: float,
     reviewed_by: str,
     review_note: str,
+    geometry_dependency_sha256: str = "",
     source_in_us: int = 0,
     output_region: tuple[int, int, int, int] | None = None,
 ) -> tuple[Path, TreatmentAssetObservation]:
@@ -247,6 +248,7 @@ def observe_registered_visual_asset(
                     observed_labels,
                     relevance_score,
                     relevance_threshold,
+                    geometry_dependency_sha256,
                     output_region,
                     reviewed_by,
                     review_note,
@@ -281,6 +283,7 @@ def observe_registered_visual_asset(
             or existing.observed_labels != observed_labels
             or existing.relevance_score != relevance_score
             or existing.relevance_threshold != relevance_threshold
+            or existing.geometry_dependency_sha256 != geometry_dependency_sha256
             or existing_output_region != output_region
             or existing.reviewed_by != reviewed_by
             or existing.review_note != review_note
@@ -311,6 +314,7 @@ def observe_registered_visual_asset(
             observed_labels=observed_labels,
             relevance_score=relevance_score,
             relevance_threshold=relevance_threshold,
+            geometry_dependency_sha256=geometry_dependency_sha256,
             reviewed_by=reviewed_by,
             review_note=review_note,
             output_region=output_region,
@@ -344,6 +348,7 @@ def _decode_visual_observation(
     observed_labels: list[str],
     relevance_score: float,
     relevance_threshold: float,
+    geometry_dependency_sha256: str,
     reviewed_by: str,
     review_note: str,
     output_region: tuple[int, int, int, int] | None,
@@ -410,6 +415,7 @@ def _decode_visual_observation(
         observed_labels=observed_labels,
         relevance_score=relevance_score,
         relevance_threshold=relevance_threshold,
+        geometry_dependency_sha256=geometry_dependency_sha256,
         regions=regions,
         reviewed_by=reviewed_by,
         review_note=review_note,

@@ -146,6 +146,12 @@
           "default": null,
           "title": "Gain Db"
         },
+        "geometry_dependency_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Geometry Dependency Sha256",
+          "type": "string"
+        },
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
@@ -432,6 +438,12 @@
           "minItems": 1,
           "title": "Frames",
           "type": "array"
+        },
+        "geometry_dependency_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Geometry Dependency Sha256",
+          "type": "string"
         },
         "media_sha256": {
           "pattern": "^[0-9a-f]{64}$",

@@ -149,6 +149,12 @@
       "default": null,
       "title": "Gain Db"
     },
+    "geometry_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Geometry Dependency Sha256",
+      "type": "string"
+    },
     "interval": {
       "$ref": "#/$defs/OutputInterval"
     },

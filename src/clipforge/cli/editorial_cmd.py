@@ -566,6 +566,9 @@ def treatment_observe_asset(
     relevance_threshold: Annotated[float, typer.Option("--relevance-threshold")],
     reviewed_by: Annotated[str, typer.Option("--reviewed-by")],
     review_note: Annotated[str, typer.Option("--review-note")],
+    geometry_dependency_sha256: Annotated[
+        str, typer.Option("--geometry-dependency-sha256", help="Hash of crop/reframe/camera geometry evidence.")
+    ] = "",
     source_in_us: Annotated[int, typer.Option("--source-in-us")] = 0,
     region_x: Annotated[
         int | None, typer.Option("--region-x", help="Output-region x in portrait pixels.")
@@ -613,6 +616,7 @@ def treatment_observe_asset(
             observed_labels=observed_label,
             relevance_score=relevance_score,
             relevance_threshold=relevance_threshold,
+            geometry_dependency_sha256=geometry_dependency_sha256,
             reviewed_by=reviewed_by,
             review_note=review_note,
             output_region=output_region,
