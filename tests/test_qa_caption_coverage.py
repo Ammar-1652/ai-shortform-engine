@@ -1,7 +1,11 @@
 from types import SimpleNamespace
 
-from clipforge.qa.technical import _caption_alignment_problems, _duration_within_tolerance
-from clipforge.schemas.advanced import CaptionWordTiming
+from clipforge.qa.technical import (
+    _caption_alignment_problems,
+    _duration_within_tolerance,
+    _treatment_audio_fingerprint,
+)
+from clipforge.schemas.advanced import AdvancedHeroPlanDocument, CaptionWordTiming
 from clipforge.schemas.hero import AlignedWord, ForcedAlignmentDocument
 from clipforge.schemas.provenance import ArtifactProvenance
 
@@ -85,3 +89,13 @@ def test_qa_rejects_caption_timing_that_drifted_from_alignment() -> None:
 def test_viewer_duration_binding_allows_bounded_container_padding() -> None:
     assert _duration_within_tolerance(34_366_667, 34_334_300)
     assert not _duration_within_tolerance(34_500_001, 34_334_300)
+
+
+def test_no_treatment_plan_uses_zero_audio_fingerprint_sentinel() -> None:
+    # A clean direction with no SFX still emits a measured audio sidecar. Its
+    # mix uses the typed all-zero sentinel while the plan omits a treatment
+    # fingerprint; QA must bind those two representations consistently.
+    plan = AdvancedHeroPlanDocument.model_construct(treatment_fingerprint="")
+    assert _treatment_audio_fingerprint(plan) == "0" * 64
+    plan_with_treatment = AdvancedHeroPlanDocument.model_construct(treatment_fingerprint="a" * 64)
+    assert _treatment_audio_fingerprint(plan_with_treatment) == "a" * 64

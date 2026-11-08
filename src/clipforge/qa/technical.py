@@ -761,7 +761,7 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
                             or measurement.candidate_id != plan.candidate_id
                             or measurement.treatment_evidence_sha256 != plan.treatment_evidence_sha256
                             or measurement.encoded_media_sha256 != draft.preview_sha256
-                            or measurement.mix.treatment_fingerprint != plan.treatment_fingerprint
+                            or measurement.mix.treatment_fingerprint != _treatment_audio_fingerprint(plan)
                             or measurement.mix.mix_id != plan.treatment_audio_mix.mix_id
                             or measurement.mix.intelligibility_status != "pass"
                         ):
@@ -959,6 +959,11 @@ def _viewer_quality(inputs: TechnicalInputs) -> QACheck:
 def _duration_within_tolerance(actual_us: int, expected_us: int) -> bool:
     """Allow the bounded encoder/container duration error already used by probe QA."""
     return abs(actual_us - expected_us) <= DURATION_TOLERANCE_US
+
+
+def _treatment_audio_fingerprint(plan: AdvancedHeroPlanDocument) -> str:
+    """Return the measured mix identity, including the no-treatment sentinel."""
+    return plan.treatment_fingerprint or "0" * 64
 
 
 def _caption_alignment_problems(
