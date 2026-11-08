@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `36cffd7`
+**Planning head:** `98f2a76`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `36cffd7`
+## Implementation ledger at `98f2a76`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
@@ -83,7 +83,7 @@ schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 do not substitute for the real-source, human playback, local delivery, or
 self-hosted CI evidence required by Phase 8.
 
-The latest exact-head validation at `9aff06a` passed `978 passed, 2 skipped,
+The latest exact-head validation at `98f2a76` passed `979 passed, 2 skipped,
 18 deselected`, 18 real browser/Remotion tests, and 64 renderer tests. Schema
 export/check, Ruff check/format, mypy, renderer lint/typecheck, and doctor all
 passed; doctor reported 10 pass, 0 warnings, and 0 failures. The two skips
