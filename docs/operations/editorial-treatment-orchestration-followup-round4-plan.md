@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `9aff06a`
+**Audited head:** `36cffd7`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
@@ -27,12 +27,17 @@ represent all of the promised behavior. The old round-3 ledger also records
 
 The implementation repairs through R4-2, R4-6, R4-7's selected-visual
 placement/geometry binding, R4-8's checkpoint state, and R4-9's immutable
-review path are present on `31344ad`. The current owned-source draft render
+review path are present on `36cffd7`. The current owned-source draft render
 also exercised the exact caption-phrase normalizer and AAC headroom guard. The
 exact sensitive-verification span/text gate is now implemented and covered by
 regression tests. The remaining acceptance work is Phase 8 human playback, local delivery, and
 exact-head self-hosted CI; those are external gates and are not represented as
 passed by this code run.
+
+The non-draft production path is also exercised: QA run
+`2f406811-8c5e-4898-b078-f1f54706d7b6`, `qa verify`, and `qa gate` pass after
+the no-treatment audio-sentinel repair at `36cffd7`. Final review and delivery
+remain correctly blocked by their independent human and path-confinement gates.
 
 ## What landed correctly
 

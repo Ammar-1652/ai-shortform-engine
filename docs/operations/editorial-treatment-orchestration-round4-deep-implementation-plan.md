@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `9aff06a`
+**Planning head:** `36cffd7`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `9aff06a`
+## Implementation ledger at `36cffd7`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
@@ -127,6 +127,14 @@ ledger update are at `9aff06a`.
 This is still draft-only technical proof. No human playback receipt, final
 approval, local delivery package, or self-hosted CI result has been fabricated;
 Phase 8 remains open until those external gates are supplied.
+
+The same source was also exercised through the non-draft Advanced namespace
+using the existing Codex Hero approval and the same immutable direction and
+speech review. Production run `b18cb24e-6065-4c76-b33b-dcc7529a20e7` completed
+with the same decoded caption/audio evidence. QA run
+`2f406811-8c5e-4898-b078-f1f54706d7b6`, `qa verify`, and `qa gate` now pass
+after the no-treatment audio sentinel repair committed at `36cffd7`.
+Final review and delivery remain independently gated.
 
 ## Phase 0 — Establish the implementation boundary
 
