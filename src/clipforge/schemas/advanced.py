@@ -369,6 +369,10 @@ class AdvancedHeroProfile(Versioned):
     broll_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
     sfx_policy: Literal["rights_cleared_local"] = "rights_cleared_local"
     music_allowed: Literal[False] = False
+    # New clean directions require Codex to review display text before a
+    # viewer-facing render. Legacy artifacts remain readable through their
+    # recorded style and recipe identities.
+    codex_speech_review_required: bool = True
     max_broll_events: int = Field(default=4, ge=0, le=8)
     max_sfx_events: int = Field(default=4, ge=0, le=8)
     min_gain_db: Literal[-24] = -24
@@ -413,12 +417,14 @@ class AdvancedHeroProfile(Versioned):
                 "audio_mix_version",
                 "staging_recipe_version",
                 "motion_graphics_version",
+                "codex_speech_review_required",
             ):
                 payload.pop(key, None)
         # v2 predates native illustration events.  Its recorded fingerprints
         # must remain verifiable when a stored profile is read by this build.
         elif self.renderer_recipe_version == "advanced-hero-renderer-directed-v2":
             payload.pop("motion_graphics_version", None)
+            payload.pop("codex_speech_review_required", None)
         return advanced_fingerprint(payload)
 
 

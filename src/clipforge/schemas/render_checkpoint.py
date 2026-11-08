@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal, Self
 
 from pydantic import AwareDatetime, Field, model_validator
@@ -73,6 +74,7 @@ class RenderUnitReceipt(Versioned):
     end_frame_exclusive: int = Field(ge=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     size_bytes: int = Field(gt=0)
+    attempts: int = Field(default=1, ge=1, le=8)
 
     @model_validator(mode="after")
     def positive_range(self) -> Self:
@@ -88,6 +90,12 @@ class CandidateRenderCheckpoint(Versioned):
     duration_in_frames: int = Field(ge=1)
     chunk_frames: int = Field(ge=1, le=300)
     receipts: list[RenderUnitReceipt] = Field(default_factory=list)
+    unit_attempts: dict[str, int] = Field(default_factory=dict)
+    active_unit_id: str | None = Field(default=None, pattern=r"^(video-[0-9]{6}|audio)$")
+    active_attempt: int = Field(default=0, ge=0, le=8)
+    last_error_category: str | None = Field(default=None, min_length=1, max_length=80)
+    resume_eligibility: Literal["eligible", "blocked", "complete"] = "eligible"
+    process_cleanup_status: Literal["unknown", "clean", "failed"] = "unknown"
     updated_at: AwareDatetime
 
     @model_validator(mode="after")
@@ -97,4 +105,15 @@ class CandidateRenderCheckpoint(Versioned):
         for item in self.receipts:
             if item.end_frame_exclusive > self.duration_in_frames:
                 raise ValueError("checkpoint receipt extends beyond composition")
+        for unit_id, attempts in self.unit_attempts.items():
+            if not (unit_id == "audio" or re.fullmatch(r"video-[0-9]{6}", unit_id)):
+                raise ValueError("checkpoint attempt map contains an invalid unit id")
+            if isinstance(attempts, bool) or attempts < 1 or attempts > 8:
+                raise ValueError("checkpoint unit attempts must be between one and eight")
+        if self.active_unit_id is None and self.active_attempt != 0:
+            raise ValueError("checkpoint active_attempt requires an active unit")
+        if self.active_unit_id is not None and self.active_attempt < 1:
+            raise ValueError("checkpoint active unit requires a positive attempt")
+        if self.resume_eligibility == "complete" and self.last_error_category is not None:
+            raise ValueError("complete checkpoint cannot retain a last error")
         return self

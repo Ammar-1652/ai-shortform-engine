@@ -145,6 +145,12 @@ def apply_treatment_bindings(
                 evidence = decision.visual_evidence
                 if evidence is None:
                     raise MediaError("visual treatment decision is missing its evidence container")
+                evidence_regions = {region.region_id: region for region in evidence.regions}
+                for region in observation.regions:
+                    existing_region = evidence_regions.get(region.region_id)
+                    if existing_region is not None and existing_region != region:
+                        raise MediaError("visual observation region conflicts with planned output geometry")
+                    evidence_regions[region.region_id] = region
                 updates[layer_name] = BrollTreatmentDecision.model_validate(layer_payload)
                 updates["visual_evidence"] = evidence.model_copy(
                     update={
@@ -152,6 +158,7 @@ def apply_treatment_bindings(
                         "relevance_score": observation.relevance_score,
                         "relevance_threshold": observation.relevance_threshold,
                         "evidence_ids": sorted(set([*evidence.evidence_ids, *observation.source_evidence_ids])),
+                        "regions": list(evidence_regions.values()),
                         "note": (
                             "Decoded observation matched the selected asset to the source-grounded beat; "
                             f"reviewed by {observation.reviewed_by}."

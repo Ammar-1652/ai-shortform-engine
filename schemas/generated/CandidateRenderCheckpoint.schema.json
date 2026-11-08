@@ -3,6 +3,13 @@
     "RenderUnitReceipt": {
       "additionalProperties": false,
       "properties": {
+        "attempts": {
+          "default": 1,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Attempts",
+          "type": "integer"
+        },
         "end_frame_exclusive": {
           "minimum": 1,
           "title": "End Frame Exclusive",
@@ -48,6 +55,26 @@
   },
   "additionalProperties": false,
   "properties": {
+    "active_attempt": {
+      "default": 0,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Active Attempt",
+      "type": "integer"
+    },
+    "active_unit_id": {
+      "anyOf": [
+        {
+          "pattern": "^(video-[0-9]{6}|audio)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Unit Id"
+    },
     "chunk_frames": {
       "maximum": 300,
       "minimum": 1,
@@ -69,6 +96,30 @@
       "title": "Input Sha256",
       "type": "string"
     },
+    "last_error_category": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Error Category"
+    },
+    "process_cleanup_status": {
+      "default": "unknown",
+      "enum": [
+        "unknown",
+        "clean",
+        "failed"
+      ],
+      "title": "Process Cleanup Status",
+      "type": "string"
+    },
     "receipts": {
       "items": {
         "$ref": "#/$defs/RenderUnitReceipt"
@@ -82,11 +133,28 @@
       "title": "Recipe",
       "type": "string"
     },
+    "resume_eligibility": {
+      "default": "eligible",
+      "enum": [
+        "eligible",
+        "blocked",
+        "complete"
+      ],
+      "title": "Resume Eligibility",
+      "type": "string"
+    },
     "schema_version": {
       "const": "1.0.0",
       "default": "1.0.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "unit_attempts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Unit Attempts",
+      "type": "object"
     },
     "updated_at": {
       "format": "date-time",

@@ -24,6 +24,7 @@ from clipforge.schemas.render_checkpoint import CandidateRenderCheckpoint, Rende
 from clipforge.transcription.io import publish_json
 
 CHUNK_FRAMES = 120
+MAX_BROWSER_ATTEMPTS_PER_RUN = 2
 
 
 def renderer_dependency_files() -> dict[str, str]:
@@ -51,6 +52,29 @@ def renderer_dependency_sha256() -> str:
 
 def _safe(root: Path, path: Path) -> Path:
     return confine_work_path(root, path.relative_to(root).as_posix(), label="render checkpoint")
+
+
+def _error_category(exc: BaseException) -> str:
+    message = str(exc).casefold()
+    if "timeout" in message or "timed out" in message:
+        return "timeout"
+    if "cancel" in message:
+        return "cancelled"
+    if "browser" in message or "chrome" in message:
+        return "browser_crash"
+    if isinstance(exc, MediaError):
+        return "render_error"
+    return "worker_error"
+
+
+def _publish_checkpoint(
+    checkpoint_path: Path,
+    checkpoint: CandidateRenderCheckpoint,
+    *,
+    root: Path,
+    workspace: SourceWorkspace,
+) -> None:
+    publish_json(checkpoint_path, checkpoint, root, workspace.partial_for(checkpoint_path))
 
 
 def _probe_video(path: Path, frames: int) -> None:
@@ -130,6 +154,7 @@ def render_checkpointed_candidate(
         raise MediaError(
             "render checkpoint contains units for a different composition: " + ", ".join(sorted(unknown_units))
         )
+    attempts_this_run: dict[str, int] = {}
     for unit_id, start, end in units:
         suffix = ".wav" if unit_id == "audio" else ".mp4"
         unit = _safe(root, checkpoint_dir / f"{unit_id}{suffix}")
@@ -145,6 +170,23 @@ def render_checkpointed_candidate(
                 raise MediaError(f"render checkpoint {unit_id} is missing, corrupt, or stale")
         else:
             partial = _safe(root, checkpoint_dir / f"{unit_id}.partial{suffix}")
+            attempt = attempts_this_run.get(unit_id, 0) + 1
+            attempts_this_run[unit_id] = attempt
+            if attempt > MAX_BROWSER_ATTEMPTS_PER_RUN:
+                raise MediaError(f"render unit {unit_id} exceeded the bounded browser retry limit")
+            total_attempts = checkpoint.unit_attempts.get(unit_id, 0) + 1
+            checkpoint = checkpoint.model_copy(
+                update={
+                    "unit_attempts": {**checkpoint.unit_attempts, unit_id: total_attempts},
+                    "active_unit_id": unit_id,
+                    "active_attempt": total_attempts,
+                    "last_error_category": None,
+                    "resume_eligibility": "eligible",
+                    "process_cleanup_status": "unknown",
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
             batch = _safe(root, run_dir / "batch.json")
             batch.write_text(
                 json.dumps(
@@ -167,28 +209,57 @@ def render_checkpointed_candidate(
             # present in the argv/output path and the checkpoint is the
             # authoritative per-unit receipt; the consolidated log preserves
             # the long-standing review/test path (`logs/render.log`).
-            renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
-            if not partial.is_file() or partial.is_symlink():
-                raise MediaError(f"render unit {unit_id} did not produce a regular output")
-            if unit_id == "audio":
-                _probe_audio(partial, end - start)
-            else:
-                _probe_video(partial, end - start)
-            partial.replace(unit)
+            try:
+                renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
+            except BaseException as exc:
+                checkpoint = checkpoint.model_copy(
+                    update={
+                        "last_error_category": _error_category(exc),
+                        "resume_eligibility": "eligible",
+                        "process_cleanup_status": "clean",
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+                _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+                raise
+            try:
+                if not partial.is_file() or partial.is_symlink():
+                    raise MediaError(f"render unit {unit_id} did not produce a regular output")
+                if unit_id == "audio":
+                    _probe_audio(partial, end - start)
+                else:
+                    _probe_video(partial, end - start)
+                partial.replace(unit)
+            except BaseException as exc:
+                checkpoint = checkpoint.model_copy(
+                    update={
+                        "last_error_category": _error_category(exc),
+                        "resume_eligibility": "eligible",
+                        "process_cleanup_status": "clean",
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+                _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+                raise
             receipt = RenderUnitReceipt(
                 unit_id=unit_id,
                 start_frame=start,
                 end_frame_exclusive=end,
                 sha256=sha256_file(unit),
                 size_bytes=unit.stat().st_size,
+                attempts=total_attempts,
             )
             checkpoint = checkpoint.model_copy(
                 update={
                     "receipts": [*checkpoint.receipts, receipt],
+                    "active_unit_id": None,
+                    "active_attempt": 0,
+                    "last_error_category": None,
+                    "process_cleanup_status": "clean",
                     "updated_at": datetime.now(UTC),
                 }
             )
-            publish_json(checkpoint_path, checkpoint, root, workspace.partial_for(checkpoint_path))
+            _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
         if unit_id == "audio":
             _probe_audio(unit, end - start)
         else:
@@ -200,38 +271,61 @@ def render_checkpointed_candidate(
         encoding="utf-8",
     )
     partial_output = _safe(root, output.with_name("advanced.assembled.partial.mp4"))
-    ProcessRunner().run(
-        [
-            resolve_ffmpeg(),
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "1",
-            "-i",
-            str(concat),
-            "-i",
-            str(checkpoint_dir / "audio.wav"),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            "-movflags",
-            "+faststart",
-            str(partial_output),
-        ],
-        log_path=run_dir / "logs" / f"{render_input.candidate_id}-assemble.log",
-        check=True,
-    )
+    try:
+        ProcessRunner().run(
+            [
+                resolve_ffmpeg(),
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "1",
+                "-i",
+                str(concat),
+                "-i",
+                str(checkpoint_dir / "audio.wav"),
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-movflags",
+                "+faststart",
+                str(partial_output),
+            ],
+            log_path=run_dir / "logs" / f"{render_input.candidate_id}-assemble.log",
+            check=True,
+        )
+    except BaseException as exc:
+        checkpoint = checkpoint.model_copy(
+            update={
+                "last_error_category": _error_category(exc),
+                "resume_eligibility": "eligible",
+                "process_cleanup_status": "clean",
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+        raise
     partial_output.replace(_safe(root, output))
+    checkpoint = checkpoint.model_copy(
+        update={
+            "active_unit_id": None,
+            "active_attempt": 0,
+            "last_error_category": None,
+            "resume_eligibility": "complete",
+            "process_cleanup_status": "clean",
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
 
 
 def render_checkpointed_hero_candidate(
@@ -286,6 +380,7 @@ def render_checkpointed_hero_candidate(
     unknown_units = set(receipts) - expected_units
     if unknown_units:
         raise MediaError("Hero render checkpoint contains units for a different composition")
+    attempts_this_run: dict[str, int] = {}
     for unit_id, start, end in units:
         suffix = ".wav" if unit_id == "audio" else ".mp4"
         unit = _safe(root, checkpoint_dir / f"{unit_id}{suffix}")
@@ -301,29 +396,57 @@ def render_checkpointed_hero_candidate(
                 raise MediaError(f"Hero render checkpoint {unit_id} is missing, corrupt, or stale")
         else:
             partial = _safe(root, checkpoint_dir / f"{unit_id}.partial{suffix}")
+            attempt = attempts_this_run.get(unit_id, 0) + 1
+            attempts_this_run[unit_id] = attempt
+            if attempt > MAX_BROWSER_ATTEMPTS_PER_RUN:
+                raise MediaError(f"Hero render unit {unit_id} exceeded the bounded browser retry limit")
+            total_attempts = checkpoint.unit_attempts.get(unit_id, 0) + 1
+            checkpoint = checkpoint.model_copy(
+                update={
+                    "unit_attempts": {**checkpoint.unit_attempts, unit_id: total_attempts},
+                    "active_unit_id": unit_id,
+                    "active_attempt": total_attempts,
+                    "last_error_category": None,
+                    "resume_eligibility": "eligible",
+                    "process_cleanup_status": "unknown",
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
             if unit_id == "audio":
                 # The staged Hero audio is already the exact trimmed source
                 # clock. Do not spend another long-lived Chrome session
                 # rendering an audio-only composition; converting this local
                 # PCM source is deterministic and avoids a second browser
                 # crash surface.
-                ProcessRunner().run(
-                    [
-                        resolve_ffmpeg(),
-                        "-y",
-                        "-i",
-                        render_input.audio_path,
-                        "-ar",
-                        "48000",
-                        "-ac",
-                        "2",
-                        "-c:a",
-                        "pcm_s16le",
-                        str(partial),
-                    ],
-                    log_path=run_dir / "logs" / "render-audio.log",
-                    check=True,
-                )
+                try:
+                    ProcessRunner().run(
+                        [
+                            resolve_ffmpeg(),
+                            "-y",
+                            "-i",
+                            render_input.audio_path,
+                            "-ar",
+                            "48000",
+                            "-ac",
+                            "2",
+                            "-c:a",
+                            "pcm_s16le",
+                            str(partial),
+                        ],
+                        log_path=run_dir / "logs" / "render-audio.log",
+                        check=True,
+                    )
+                except BaseException as exc:
+                    checkpoint = checkpoint.model_copy(
+                        update={
+                            "last_error_category": _error_category(exc),
+                            "process_cleanup_status": "clean",
+                            "updated_at": datetime.now(UTC),
+                        }
+                    )
+                    _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+                    raise
             else:
                 batch = _safe(root, run_dir / "render-checkpoint.json")
                 batch.write_text(
@@ -343,25 +466,56 @@ def render_checkpointed_hero_candidate(
                     ),
                     encoding="utf-8",
                 )
-                renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
-            if not partial.is_file() or partial.is_symlink():
-                raise MediaError(f"Hero render unit {unit_id} did not produce a regular output")
-            if unit_id == "audio":
-                _probe_audio(partial, end - start)
-            else:
-                _probe_video(partial, end - start)
-            partial.replace(unit)
+                try:
+                    renderer.render_batch(batch, log_path=run_dir / "logs" / "render.log")
+                except BaseException as exc:
+                    checkpoint = checkpoint.model_copy(
+                        update={
+                            "last_error_category": _error_category(exc),
+                            "process_cleanup_status": "clean",
+                            "updated_at": datetime.now(UTC),
+                        }
+                    )
+                    _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+                    raise
+            try:
+                if not partial.is_file() or partial.is_symlink():
+                    raise MediaError(f"Hero render unit {unit_id} did not produce a regular output")
+                if unit_id == "audio":
+                    _probe_audio(partial, end - start)
+                else:
+                    _probe_video(partial, end - start)
+                partial.replace(unit)
+            except BaseException as exc:
+                checkpoint = checkpoint.model_copy(
+                    update={
+                        "last_error_category": _error_category(exc),
+                        "resume_eligibility": "eligible",
+                        "process_cleanup_status": "clean",
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+                _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+                raise
             receipt = RenderUnitReceipt(
                 unit_id=unit_id,
                 start_frame=start,
                 end_frame_exclusive=end,
                 sha256=sha256_file(unit),
                 size_bytes=unit.stat().st_size,
+                attempts=total_attempts,
             )
             checkpoint = checkpoint.model_copy(
-                update={"receipts": [*checkpoint.receipts, receipt], "updated_at": datetime.now(UTC)}
+                update={
+                    "receipts": [*checkpoint.receipts, receipt],
+                    "active_unit_id": None,
+                    "active_attempt": 0,
+                    "last_error_category": None,
+                    "process_cleanup_status": "clean",
+                    "updated_at": datetime.now(UTC),
+                }
             )
-            publish_json(checkpoint_path, checkpoint, root, workspace.partial_for(checkpoint_path))
+            _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
         if unit_id == "audio":
             _probe_audio(unit, end - start)
         else:
@@ -373,35 +527,58 @@ def render_checkpointed_hero_candidate(
         encoding="utf-8",
     )
     partial_output = _safe(root, output.with_name("hero.assembled.partial.mp4"))
-    ProcessRunner().run(
-        [
-            resolve_ffmpeg(),
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "1",
-            "-i",
-            str(concat),
-            "-i",
-            str(checkpoint_dir / "audio.wav"),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            "-movflags",
-            "+faststart",
-            str(partial_output),
-        ],
-        log_path=run_dir / "logs" / f"{render_input.candidate_id}-assemble.log",
-        check=True,
-    )
+    try:
+        ProcessRunner().run(
+            [
+                resolve_ffmpeg(),
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "1",
+                "-i",
+                str(concat),
+                "-i",
+                str(checkpoint_dir / "audio.wav"),
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-movflags",
+                "+faststart",
+                str(partial_output),
+            ],
+            log_path=run_dir / "logs" / f"{render_input.candidate_id}-assemble.log",
+            check=True,
+        )
+    except BaseException as exc:
+        checkpoint = checkpoint.model_copy(
+            update={
+                "last_error_category": _error_category(exc),
+                "resume_eligibility": "eligible",
+                "process_cleanup_status": "clean",
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)
+        raise
     partial_output.replace(_safe(root, output))
+    checkpoint = checkpoint.model_copy(
+        update={
+            "active_unit_id": None,
+            "active_attempt": 0,
+            "last_error_category": None,
+            "resume_eligibility": "complete",
+            "process_cleanup_status": "clean",
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    _publish_checkpoint(checkpoint_path, checkpoint, root=root, workspace=workspace)

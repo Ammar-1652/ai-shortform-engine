@@ -167,6 +167,11 @@
       "title": "Caption Algorithm Version",
       "type": "string"
     },
+    "codex_speech_review_required": {
+      "default": true,
+      "title": "Codex Speech Review Required",
+      "type": "boolean"
+    },
     "diagram_version": {
       "default": "advanced-diagram-grounded-v1",
       "enum": [

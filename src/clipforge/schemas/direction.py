@@ -247,6 +247,22 @@ class TreatmentAssetBindingDocument(Versioned):
             or self.provenance.source_asset_ids != [self.observation.source_asset_id]
         ):
             raise ValueError("treatment observation source span or evidence does not match the placement")
+        observed_broll_regions = (
+            [region for region in self.observation.regions if region.role == "broll"]
+            if self.observation
+            else []
+        )
+        if observed_broll_regions:
+            if placement.output_region is None:
+                raise ValueError("visual placement is missing the reviewed output region")
+            region = observed_broll_regions[0]
+            if (
+                placement.output_region.x,
+                placement.output_region.y,
+                placement.output_region.width,
+                placement.output_region.height,
+            ) != (region.x, region.y, region.width, region.height):
+                raise ValueError("visual placement output region differs from its observation")
         if placement.kind == "graphic" and self.observation is None:
             raise ValueError("graphic treatment bindings require decoded visual observation evidence")
         if placement.kind != request.kind or checked.provider not in request.provider_classes:

@@ -20,6 +20,7 @@ from clipforge.media.hashing import sha256_file
 from clipforge.schemas.direction import (
     DirectionAssetPlacement,
     DirectionDocument,
+    DirectionPlacementRegion,
     TreatmentAssetBindingDocument,
 )
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
@@ -28,6 +29,7 @@ from clipforge.schemas.treatment import (
     TreatmentAssetObservation,
     TreatmentAssetVerification,
     TreatmentObservationFrame,
+    TreatmentRegion,
 )
 from tests.test_direction import _aligned_words, _document
 
@@ -158,6 +160,42 @@ def test_revision_fulfills_pending_request_without_hand_editing_placement() -> N
     assert all(
         item.dependency_fingerprint == treatment_fingerprint(selected) for item in selected.treatment_decisions
     )
+
+
+def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence() -> None:
+    parent = pending_direction()
+    binding = binding_for_direction(parent)
+    assert binding.observation is not None
+    region = DirectionPlacementRegion(x=120, y=520, width=720, height=400)
+    observed_region = TreatmentRegion(
+        region_id="broll:asset-1",
+        role="broll",
+        interval=binding.placement.interval,
+        x=region.x,
+        y=region.y,
+        width=region.width,
+        height=region.height,
+        source="render_input",
+    )
+    binding = TreatmentAssetBindingDocument.model_validate(
+        {
+            **binding.model_dump(mode="json"),
+            "placement": binding.placement.model_copy(update={"output_region": region}).model_dump(mode="json"),
+            "observation": binding.observation.model_copy(update={"regions": [observed_region]}).model_dump(
+                mode="json"
+            ),
+        }
+    )
+    revised = apply_treatment_bindings(
+        parent,
+        [binding],
+        parent_direction_sha256="d" * 64,
+        binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+    )
+    selected = next(item for item in revised.options if item.option_id == revised.selected_option_id)
+    evidence = selected.treatment_decisions[0].visual_evidence
+    assert evidence is not None
+    assert any(item.region_id == "broll:asset-1" and item.x == 120 for item in evidence.regions)
 
 
 @pytest.mark.parametrize("change", ["query_terms", "role", "source_evidence_ids"])
