@@ -25,6 +25,7 @@ from clipforge.hero.advanced_build import (
     _typography,
 )
 from clipforge.hero.advanced_service import (
+    _AAC_POST_FILTER_ATTENUATION_DB,
     _require_production_direction,
     _require_reviewed_tarteel_arc,
     _restage_candidate_evidence_inputs,
@@ -126,6 +127,12 @@ def test_caption_word_verification_status_is_typed_and_default_unverified() -> N
     )
     assert word.verification_status == "unverified"
     assert word.model_copy(update={"verification_status": "correct"}).verification_status == "correct"
+
+
+def test_aac_true_peak_guard_leaves_encoded_headroom() -> None:
+    profile = default_advanced_profile()
+    assert _AAC_POST_FILTER_ATTENUATION_DB == 0.8
+    assert profile.audio_true_peak_dbfs - _AAC_POST_FILTER_ATTENUATION_DB == -2.3
 
 
 def test_directed_recuts_default_to_a_soft_bridge_but_keep_explicit_hard_cuts() -> None:

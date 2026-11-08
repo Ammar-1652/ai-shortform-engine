@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
 
 from clipforge.campaign.quran import validate_tarteel_speech_review_ranges
@@ -118,6 +119,20 @@ def _tokens(text: str) -> list[str]:
     return plain.split()
 
 
+def _display_phrase(value: str | Sequence[object]) -> str:
+    """Normalize an exact forced-word phrase without merging punctuation fragments."""
+    if isinstance(value, str):
+        text = value
+    else:
+        text = " ".join(str(getattr(item, "text", "")).strip() for item in value)
+    # The forced aligner may split `1.0` or `numbers-demo.py` into several
+    # words. Reconstruct the displayed phrase using the same punctuation
+    # spacing rule as the caption builder, while retaining internal hyphens
+    # and decimal points as part of the exact source text.
+    text = re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+([,.;?!…。？！:\-])", r"\1", text)  # noqa: RUF001
+
+
 def retained_recitation(review: TarteelSpeechReview, time_map: TimeMapDocument) -> bool:
     """Require Quran evidence for retained recitation, including partial ranges."""
     return any(
@@ -152,7 +167,7 @@ def validate_speech_captions(
         raise MediaError("speech review differs from alignment identity, audio, locale, or TimeMap")
     validate_caption_word_coverage(alignment.words, (word for cue in captions for word in cue.words))
     for cue in captions:
-        if _tokens(cue.text) != [token for word in cue.words for token in _tokens(word.text)]:
+        if _display_phrase(cue.text) != _display_phrase(list(cue.words)):
             raise MediaError("caption phrase text differs from its rendered forced words")
     ranges = [(segment.source_start_us, segment.source_end_us) for segment in time_map.segments]
     validate_tarteel_speech_review_ranges(review, ranges)
@@ -187,8 +202,8 @@ def validate_speech_captions(
             for word in words
         ):
             raise MediaError("speech review boundary cuts through a forced word")
-        displayed_tokens = [token for word in words for token in _tokens(word.text)]
-        if not displayed_tokens or displayed_tokens != _tokens(interval.observed_text):
+        displayed_phrase = _display_phrase(words)
+        if not displayed_phrase or displayed_phrase != _display_phrase(interval.observed_text):
             raise MediaError(f"reviewed speech text differs from rendered forced words in {interval.span_id}")
         accounted.update(word.word_id for word in words)
     if accounted != {word.word_id for word in alignment.words}:

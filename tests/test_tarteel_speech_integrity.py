@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
-from clipforge.campaign.speech import apply_arabic_corrections, retained_recitation, validate_speech_captions
+from clipforge.campaign.speech import (
+    _display_phrase,
+    apply_arabic_corrections,
+    retained_recitation,
+    validate_speech_captions,
+)
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_build import _captions
 from clipforge.schemas.campaign import (
@@ -111,6 +117,13 @@ def _validate(review: TarteelSpeechReview) -> None:
 
 def test_matching_review_has_exact_retained_caption_coverage() -> None:
     _validate(_review())
+
+
+def test_display_phrase_preserves_numeric_and_hyphenated_forced_fragments() -> None:
+    assert _display_phrase([SimpleNamespace(text=" 1"), SimpleNamespace(text=".0.")]) == "1.0."
+    assert _display_phrase(
+        [SimpleNamespace(text=" numbers"), SimpleNamespace(text="-demo"), SimpleNamespace(text=".py")]
+    ) == ("numbers-demo.py")
 
 
 def test_review_cannot_certify_a_phrase_with_different_visible_text() -> None:

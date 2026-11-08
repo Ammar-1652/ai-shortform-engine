@@ -169,6 +169,12 @@ _PROFILE = AdvancedHeroProfile(
     motion_library_version="advanced-motion-clean-v1",
 )
 
+# AAC encoding can raise measured true peak above the single-pass loudnorm
+# target. Apply a deterministic post-filter attenuation so the encoded MP4
+# satisfies the viewer-facing profile limit rather than relying on the
+# pre-encode estimate.
+_AAC_POST_FILTER_ATTENUATION_DB = 0.8
+
 
 @dataclass(frozen=True, slots=True)
 class AdvancedRenderResult:
@@ -2025,6 +2031,7 @@ def _normalize_audio(
     filter_value = (
         f"loudnorm=I={render_input.audio_loudness_lufs}:"
         f"TP={render_input.audio_true_peak_dbfs}:LRA={render_input.audio_lra_lu},"
+        f"volume=-{_AAC_POST_FILTER_ATTENUATION_DB}dB,"
         # loudnorm can flush a partial AAC frame at the end of a cut.  The
         # TimeMap is the sole program clock, so pad before the deterministic
         # trim and reset timestamps rather than accepting an AV drift that
