@@ -74,7 +74,7 @@ evidence from the remaining real-source and human gates.
 | Phase 5 | implemented for selected visual layers | reviewed B-roll observations now bind output rectangles and crop/reframe/camera dependency hashes into treatment evidence; remaining detector coverage is recorded as an external proof limitation until real source samples are run |
 | Phase 6 | implemented | clean generic review gate, cache/stale bindings, immutable review revisions, shared QA/delivery checks |
 | Phase 7 | implemented in code | bounded process deadline, renderer retry bound, per-unit failure receipts, deterministic crash/resume regression |
-| Phase 8 | pending external evidence | real generic non-campaign source packet, human playback, local delivery, self-hosted CI, and final exact-head package review |
+| Phase 8 | pending external evidence | owned-source production proof and QA are complete; human playback, local delivery, self-hosted CI, and final exact-head package review remain external |
 
 The prior exact-head local validation at `f11dd6e` recorded 974 Python tests
 passed, 2 documented skips, 18 browser tests passed, 64 renderer tests passed,

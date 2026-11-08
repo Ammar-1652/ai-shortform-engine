@@ -58,36 +58,34 @@ records are not rewritten in place.
 
 ## Remaining blockers and repair plan
 
-### R4-1 — Complete the required real proof and external gates
+### R4-1 — Complete the remaining real proof and external gates
 
-**Observed problem:** R3-6 uses the authorized Jingle Jared/Rebel Audio
-campaign source. The plan explicitly requires a separate authorized generic
-non-campaign source for the generic provider proof. The campaign source’s
-eligibility is `unknown`, so the packet remains draft-only. The current PR’s
-self-hosted CI check is queued because the repository has zero registered
-`clipforge-local` runners. No human audio/muted playback receipt or local
-delivery package exists for the new Codex-reviewed draft.
+**Observed problem:** the authorized owned source now has a complete Codex
+review, production Advanced render, decoded evidence, and passing QA. The
+remaining gates are a human audio/muted playback receipt, local delivery, and
+exact-head self-hosted CI. The current PR check is queued because the
+repository has no registered `clipforge-local` runner. The existing proof
+source was ingested before the rights-evidence confinement repair, so delivery
+also rejects its recorded evidence URI outside the work root.
 
 **Repair steps:**
 
-1. In an ignored work root, ingest one authorized non-campaign source with a
-   persisted `campaign_provided` or provider rights record and verified bytes.
-2. Acquire one relevant visual asset and one SFX through the existing provider
-   boundaries. Preserve response, selection, acquisition, license, registered
-   byte, and observation hashes.
-3. Create a Codex speech review for every retained interval, including any
-   corrections and sensitive-text verification records required by R4-2/R4-3.
-4. Run direction revision, Advanced planning, pilot, Remotion render, decoded
-   viewer evidence, QA, final-review verification, and local delivery.
-5. Register a self-hosted runner with `self-hosted`, `linux`, `x64`, and
+1. Have a human reviewer watch the exact production MP4 with audio and muted
+   playback, then record the append-only final decision.
+2. Re-ingest or otherwise provide a fresh authorized source packet whose local
+   rights evidence is inside the work root; do not rewrite the existing source
+   record in place.
+3. Run the local delivery preflight/export against that exact approved artifact.
+4. Register a self-hosted runner with `self-hosted`, `linux`, `x64`, and
    `clipforge` labels, then rerun CI on the exact head. A queued job is never
    a pass.
-6. Record MP4, decoded frames, contact sheets, audio measurements, provider
-   receipts, rights evidence, QA, final-review, delivery, and cache facts.
+5. Record MP4, decoded frames, contact sheets, audio measurements, rights
+   evidence, QA, final-review, delivery, and cache facts. A provider-specific
+   packet is only needed when a provider-policy test is explicitly required.
 
-**Acceptance:** the generic path has a non-campaign source, a verified package,
-complete Codex speech evidence, a human playback receipt, local delivery, and
-green CI on the exact reviewed commit.
+**Acceptance:** the owned-source path has complete Codex speech evidence,
+human playback, local delivery, and green CI on the exact reviewed commit;
+provider tests, when requested, remain separate rights-bound fixtures.
 
 ### R4-2 — Add an explicit generic caption-correction contract
 
