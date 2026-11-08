@@ -83,6 +83,13 @@ schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 do not substitute for the real-source, human playback, local delivery, or
 self-hosted CI evidence required by Phase 8.
 
+The latest exact-head validation at `d6c078d` passed `976 passed, 2 skipped,
+18 deselected`, 18 real browser/Remotion tests, and 64 renderer tests. Schema
+export/check, Ruff check/format, mypy, renderer lint/typecheck, and doctor all
+passed; doctor reported 10 pass, 0 warnings, and 0 failures. The two skips
+remain the unavailable VoiceStudio live smoke and unconfigured Whop live
+smoke. No Chrome, Node renderer, ffmpeg, or test process remained afterward.
+
 The available owned generic source `b9efa942-7762-417c-a0bc-9f2995a79080`
 was rechecked in `var/operation`: rights are `owned`, transcript and visual
 analysis completed, and candidate mining produced 25 eligible candidates. A
