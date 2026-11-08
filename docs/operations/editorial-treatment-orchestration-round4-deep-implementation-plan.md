@@ -83,6 +83,16 @@ schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 do not substitute for the real-source, human playback, local delivery, or
 self-hosted CI evidence required by Phase 8.
 
+The available owned generic source `b9efa942-7762-417c-a0bc-9f2995a79080`
+was rechecked in `var/operation`: rights are `owned`, transcript and visual
+analysis completed, and candidate mining produced 25 eligible candidates. A
+rough-preview batch was intentionally interrupted after four candidate files
+because the all-candidate operation had no useful completion signal; no
+production render or approval is claimed from that exploratory batch. The
+existing provider-backed packet remains immutable evidence, while the new
+owned-source Advanced Hero packet still requires the normal candidate/Hero
+review, decoded proof, human playback, delivery, and CI gates.
+
 ## Phase 0 — Establish the implementation boundary
 
 Before code changes:
