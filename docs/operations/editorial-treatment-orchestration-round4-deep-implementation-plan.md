@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `e667f53`
+**Planning head:** `9aff06a`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `e667f53`
+## Implementation ledger at `9aff06a`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
@@ -83,7 +83,7 @@ schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 do not substitute for the real-source, human playback, local delivery, or
 self-hosted CI evidence required by Phase 8.
 
-The latest exact-head validation at `d6c078d` passed `976 passed, 2 skipped,
+The latest exact-head validation at `9aff06a` passed `978 passed, 2 skipped,
 18 deselected`, 18 real browser/Remotion tests, and 64 renderer tests. Schema
 export/check, Ruff check/format, mypy, renderer lint/typecheck, and doctor all
 passed; doctor reported 10 pass, 0 warnings, and 0 failures. The two skips
@@ -104,13 +104,15 @@ The current owned-source proof now exercises the complete draft-only Advanced
 Hero render after the round-4 fixes. Source
 `b9efa942-7762-417c-a0bc-9f2995a79080`, candidate
 `0c48320e-8609-5485-8917-7586bf7c258c`, and run
-`ea860738-52ca-440c-9c76-b1ff574793fd` produced an encoded MP4 with SHA-256
-`27836a8c66534b54ec01dcb97d4412730730c0900d891442400e56dea7042f01`.
+`49e49bb8-659b-4360-ad79-1437b91ae916` produced an encoded MP4 with SHA-256
+`7799125c83c9e517964389144a65d5d7362774a2cea2a8da98cd5530aceab781`.
 ffprobe reports 1080x1920, 30 fps, 33.2 seconds, H.264 video, AAC 48 kHz
 stereo audio, and 996 frames. Post-encode measurement is -17.2 LUFS
 integrated and -2.1 dBFS true peak. Caption coverage is complete for all 76
 forced words; decoded caption and viewer evidence is complete; the checkpoint
-reports all nine render units complete with clean process cleanup.
+reports all nine video units plus the audio stage complete with clean process
+cleanup. The new run was a cache miss caused by the sensitive-verification gate
+change, proving the renderer dependency fingerprint invalidates the older draft.
 
 That render exposed and then exercised two production fixes: punctuation-bearing
 forced-word fragments are compared as the exact displayed phrase rather than
@@ -119,7 +121,8 @@ headroom to prevent true-peak overshoot. These changes are committed at
 `31344ad`. Sensitive-text verification is now also bound to one exact
 reviewed forced-word set and exact reviewed display text; mismatched spans,
 orphan verifications, and wrong expected text fail the production caption gate.
-That contract repair is committed at `e667f53`.
+That contract repair is committed at `e667f53`; the exact-head validation and
+ledger update are at `9aff06a`.
 
 This is still draft-only technical proof. No human playback receipt, final
 approval, local delivery package, or self-hosted CI result has been fabricated;
