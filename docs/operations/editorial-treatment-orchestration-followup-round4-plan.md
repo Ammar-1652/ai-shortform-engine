@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `98f2a76`
+**Audited head:** `4d9c524`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
@@ -38,6 +38,10 @@ The non-draft production path is also exercised: QA run
 `2f406811-8c5e-4898-b078-f1f54706d7b6`, `qa verify`, and `qa gate` pass after
 the no-treatment audio-sentinel repair at `36cffd7`. Final review and delivery
 remain correctly blocked by their independent human and path-confinement gates.
+
+The ingest boundary now stages local rights evidence into the confined work
+root before persistence (`4d9c524`), with regression coverage. Existing source
+records are not rewritten in place.
 
 ## What landed correctly
 

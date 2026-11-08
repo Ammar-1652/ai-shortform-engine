@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `98f2a76`
+**Planning head:** `4d9c524`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -83,7 +83,7 @@ schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 do not substitute for the real-source, human playback, local delivery, or
 self-hosted CI evidence required by Phase 8.
 
-The latest exact-head validation at `98f2a76` passed `979 passed, 2 skipped,
+The latest exact-head validation at `4d9c524` passed `980 passed, 2 skipped,
 18 deselected`, 18 real browser/Remotion tests, and 64 renderer tests. Schema
 export/check, Ruff check/format, mypy, renderer lint/typecheck, and doctor all
 passed; doctor reported 10 pass, 0 warnings, and 0 failures. The two skips
@@ -135,6 +135,11 @@ with the same decoded caption/audio evidence. QA run
 `2f406811-8c5e-4898-b078-f1f54706d7b6`, `qa verify`, and `qa gate` now pass
 after the no-treatment audio sentinel repair committed at `36cffd7`.
 Final review and delivery remain independently gated.
+
+Future source ingests now stage local rights evidence outside the work root
+into a confined source-bound evidence file before persistence. The existing
+proof source predates this repair and remains immutable, so its path-confinement
+blocker is still reported rather than silently rewritten.
 
 ## Phase 0 — Establish the implementation boundary
 
