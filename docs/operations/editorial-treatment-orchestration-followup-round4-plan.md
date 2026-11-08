@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `ff3c917`
+**Audited head:** `31344ad`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
@@ -22,14 +22,16 @@ renders the `🤩` annotation.
 The execution is not complete because the plan’s strongest acceptance criteria
 are still open, and because the audit found code contracts that cannot yet
 represent all of the promised behavior. The old round-3 ledger also records
-`4e372db` as its reviewed head even though the current branch has advanced to
-`ff3c917`; the ledger must not be treated as exact-head evidence until a new
-round-4 evidence row is recorded.
+`4e372db` as its reviewed head; the current round-4 evidence row is
+`31344ad`.
 
 The implementation repairs through R4-2, R4-6, R4-7's selected-visual
 placement/geometry binding, R4-8's checkpoint state, and R4-9's immutable
-review path are now present on `ff3c917`. The remaining acceptance work is Phase 8 real
-proof, human playback, local delivery, and exact-head self-hosted CI.
+review path are present on `31344ad`. The current owned-source draft render
+also exercised the exact caption-phrase normalizer and AAC headroom guard. The
+remaining acceptance work is Phase 8 human playback, local delivery, and
+exact-head self-hosted CI; those are external gates and are not represented as
+passed by this code run.
 
 ## What landed correctly
 
@@ -312,8 +314,10 @@ silently overwritten; every render names the exact immutable review artifact.
 1. Run targeted tests for each R4 item, including a failing case.
 2. Regenerate schemas and run `clipforge schema check` after contract changes.
 3. Run `./scripts/validate.sh` on the exact implementation head.
-4. Execute the real generic non-campaign provider proof, including a complete
-   Codex review and a human playback receipt.
+4. Execute the real generic source proof, including a complete Codex review and
+   a human playback receipt. The current owned source proves the offline
+   production path; a separate non-campaign provider packet remains optional
+   unless a provider-policy test explicitly requires it.
 5. Inspect decoded Arabic/RTL, corrected-caption, emoji, cut-boundary, visual
    collision, and disjoint-audio frames/windows.
 6. Run cache/stale checks after changing source, review, correction,

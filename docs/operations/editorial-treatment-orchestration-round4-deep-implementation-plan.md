@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `ff3c917`
+**Planning head:** `31344ad`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `f8a8931`
+## Implementation ledger at `31344ad`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
@@ -76,7 +76,7 @@ evidence from the remaining real-source and human gates.
 | Phase 7 | implemented in code | bounded process deadline, renderer retry bound, per-unit failure receipts, deterministic crash/resume regression |
 | Phase 8 | pending external evidence | real generic non-campaign source packet, human playback, local delivery, self-hosted CI, and final exact-head package review |
 
-The exact-head local validation at `f11dd6e` recorded 974 Python tests
+The prior exact-head local validation at `f11dd6e` recorded 974 Python tests
 passed, 2 documented skips, 18 browser tests passed, 64 renderer tests passed,
 schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 0 warnings, 0 failures. Those results prove the code paths and fixtures; they
@@ -92,6 +92,28 @@ production render or approval is claimed from that exploratory batch. The
 existing provider-backed packet remains immutable evidence, while the new
 owned-source Advanced Hero packet still requires the normal candidate/Hero
 review, decoded proof, human playback, delivery, and CI gates.
+
+The current owned-source proof now exercises the complete draft-only Advanced
+Hero render after the round-4 fixes. Source
+`b9efa942-7762-417c-a0bc-9f2995a79080`, candidate
+`0c48320e-8609-5485-8917-7586bf7c258c`, and run
+`ea860738-52ca-440c-9c76-b1ff574793fd` produced an encoded MP4 with SHA-256
+`27836a8c66534b54ec01dcb97d4412730730c0900d891442400e56dea7042f01`.
+ffprobe reports 1080x1920, 30 fps, 33.2 seconds, H.264 video, AAC 48 kHz
+stereo audio, and 996 frames. Post-encode measurement is -17.2 LUFS
+integrated and -2.1 dBFS true peak. Caption coverage is complete for all 76
+forced words; decoded caption and viewer evidence is complete; the checkpoint
+reports all nine render units complete with clean process cleanup.
+
+That render exposed and then exercised two production fixes: punctuation-bearing
+forced-word fragments are compared as the exact displayed phrase rather than
+merged lexical tokens, and AAC encoding receives deterministic post-loudnorm
+headroom to prevent true-peak overshoot. These changes are committed at
+`31344ad`.
+
+This is still draft-only technical proof. No human playback receipt, final
+approval, local delivery package, or self-hosted CI result has been fabricated;
+Phase 8 remains open until those external gates are supplied.
 
 ## Phase 0 — Establish the implementation boundary
 
