@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `f0e9140`
+**Planning head:** `f11dd6e`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -76,7 +76,7 @@ evidence from the remaining real-source and human gates.
 | Phase 7 | implemented in code | bounded process deadline, renderer retry bound, per-unit failure receipts, deterministic crash/resume regression |
 | Phase 8 | pending external evidence | real generic non-campaign source packet, human playback, local delivery, self-hosted CI, and final exact-head package review |
 
-The exact-head local validation at this checkpoint recorded 974 Python tests
+The exact-head local validation at `f11dd6e` recorded 974 Python tests
 passed, 2 documented skips, 18 browser tests passed, 64 renderer tests passed,
 schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
 0 warnings, 0 failures. Those results prove the code paths and fixtures; they
