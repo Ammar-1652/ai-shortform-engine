@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `4d9c524`
+**Planning head:** `665464a`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `98f2a76`
+## Implementation ledger at `665464a`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
