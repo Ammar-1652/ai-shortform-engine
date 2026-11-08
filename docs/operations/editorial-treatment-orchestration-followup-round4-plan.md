@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `f6ae786`
+**Audited head:** `e667f53`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
@@ -23,13 +23,14 @@ The execution is not complete because the plan’s strongest acceptance criteria
 are still open, and because the audit found code contracts that cannot yet
 represent all of the promised behavior. The old round-3 ledger also records
 `4e372db` as its reviewed head; the current round-4 evidence row is
-`31344ad`.
+`e667f53`.
 
 The implementation repairs through R4-2, R4-6, R4-7's selected-visual
 placement/geometry binding, R4-8's checkpoint state, and R4-9's immutable
 review path are present on `31344ad`. The current owned-source draft render
 also exercised the exact caption-phrase normalizer and AAC headroom guard. The
-remaining acceptance work is Phase 8 human playback, local delivery, and
+exact sensitive-verification span/text gate is now implemented and covered by
+regression tests. The remaining acceptance work is Phase 8 human playback, local delivery, and
 exact-head self-hosted CI; those are external gates and are not represented as
 passed by this code run.
 

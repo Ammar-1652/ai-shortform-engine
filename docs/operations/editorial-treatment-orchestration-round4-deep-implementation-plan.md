@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `f6ae786`
+**Planning head:** `e667f53`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -58,7 +58,7 @@ source + raw ASR + forced alignment + TimeMap
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
 
-## Implementation ledger at `f6ae786`
+## Implementation ledger at `e667f53`
 
 The following code-level work is present on the branch and was exercised by
 the exact-head validation run. This ledger deliberately separates automated
@@ -116,7 +116,10 @@ That render exposed and then exercised two production fixes: punctuation-bearing
 forced-word fragments are compared as the exact displayed phrase rather than
 merged lexical tokens, and AAC encoding receives deterministic post-loudnorm
 headroom to prevent true-peak overshoot. These changes are committed at
-`31344ad`.
+`31344ad`. Sensitive-text verification is now also bound to one exact
+reviewed forced-word set and exact reviewed display text; mismatched spans,
+orphan verifications, and wrong expected text fail the production caption gate.
+That contract repair is committed at `e667f53`.
 
 This is still draft-only technical proof. No human playback receipt, final
 approval, local delivery package, or self-hosted CI result has been fabricated;
