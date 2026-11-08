@@ -20,6 +20,59 @@ from clipforge.schemas.time import TimeMapDocument, digest_time_map
 _EMOTION_EMOJIS = frozenset({"😂", "😮", "😢", "🤩", "👏", "❤️", "🔥", "✨", "😄"})
 
 
+def _verified_phrase(text: str) -> str:
+    """Normalize verified text without weakening its lexical or punctuation proof."""
+    for emoji in _EMOTION_EMOJIS:
+        text = text.replace(emoji, "")
+    return _display_phrase(text)
+
+
+def validate_speech_verifications(
+    review: TarteelSpeechReview,
+    *,
+    alignment: ForcedAlignmentDocument,
+) -> None:
+    """Require every marked sensitive span to match one exact verification.
+
+    The review model can express a subject kind, but it cannot know the live
+    alignment words or the reviewed display text by itself. This gate binds
+    the verification to the exact forced-word set and compares the verified
+    phrase with the Codex-reviewed interval text before a render is allowed.
+    """
+    by_id = {word.word_id: word for word in alignment.words}
+    used_verifications: set[str] = set()
+    for interval in review.intervals:
+        if interval.subject_kind is None:
+            continue
+        expected_ids = set(interval.subject_word_ids)
+        if not expected_ids:
+            raise MediaError(f"sensitive speech interval has no source words: {interval.span_id}")
+        words = [by_id.get(word_id) for word_id in interval.subject_word_ids]
+        if any(word is None for word in words):
+            raise MediaError(f"sensitive speech interval names an unknown forced word: {interval.span_id}")
+        checked = [word for word in words if word is not None]
+        if any(
+            word.source_start_us < interval.source_start_us or word.source_end_us > interval.source_end_us
+            for word in checked
+        ):
+            raise MediaError(f"sensitive speech interval cuts through a forced word: {interval.span_id}")
+        matches = [
+            verification
+            for verification in review.verifications
+            if verification.subject_kind == interval.subject_kind
+            and set(verification.source_word_ids) == expected_ids
+        ]
+        if len(matches) != 1:
+            raise MediaError(f"sensitive speech interval requires one exact verification: {interval.span_id}")
+        verification = matches[0]
+        if _verified_phrase(verification.expected_text) != _verified_phrase(interval.observed_text):
+            raise MediaError(f"sensitive verification text differs from reviewed speech: {interval.span_id}")
+        used_verifications.add(verification.verification_id)
+    orphaned = {item.verification_id for item in review.verifications} - used_verifications
+    if orphaned:
+        raise MediaError("sensitive verification is not bound to a reviewed speech interval")
+
+
 def load_arabic_corrections(
     root: Path,
     *,
@@ -165,6 +218,7 @@ def validate_speech_captions(
         or alignment.time_map_sha256 != digest_time_map(time_map)
     ):
         raise MediaError("speech review differs from alignment identity, audio, locale, or TimeMap")
+    validate_speech_verifications(review, alignment=alignment)
     validate_caption_word_coverage(alignment.words, (word for cue in captions for word in cue.words))
     for cue in captions:
         if _display_phrase(cue.text) != _display_phrase(list(cue.words)):

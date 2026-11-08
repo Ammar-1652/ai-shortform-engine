@@ -14,6 +14,7 @@ from clipforge.campaign.speech import (
 from clipforge.errors import MediaError
 from clipforge.hero.advanced_build import _captions
 from clipforge.schemas.campaign import (
+    SpeechVerification,
     TarteelArabicCorrection,
     TarteelArabicCorrectionDocument,
     TarteelSpeechInterval,
@@ -132,6 +133,56 @@ def test_review_cannot_certify_a_phrase_with_different_visible_text() -> None:
     captions[0] = captions[0].model_copy(update={"text": "نص غير مطابق"})
     with pytest.raises(MediaError, match="caption phrase text"):
         validate_speech_captions(_review(), alignment=alignment, time_map=_map(), captions=captions)
+
+
+def test_sensitive_verification_matches_exact_span_and_display_text() -> None:
+    review = _review().model_copy(
+        update={
+            "intervals": [
+                _review()
+                .intervals[0]
+                .model_copy(update={"subject_kind": "quotation", "subject_word_ids": ["word-0", "word-1"]})
+            ],
+            "verifications": [
+                SpeechVerification(
+                    verification_id="verification-1",
+                    subject_kind="quotation",
+                    source_word_ids=["word-0", "word-1"],
+                    expected_text="أفضل نصيحة؟",
+                    source_url="https://example.test/quote",
+                    note="Codex checked the exact reviewed quotation.",
+                )
+            ],
+        }
+    )
+    _validate(review)
+
+
+def test_sensitive_verification_rejects_wrong_text_or_span() -> None:
+    base = _review()
+    interval = base.intervals[0].model_copy(
+        update={"subject_kind": "quotation", "subject_word_ids": ["word-0", "word-1"]}
+    )
+    for verification in (
+        SpeechVerification(
+            verification_id="verification-wrong-text",
+            subject_kind="quotation",
+            source_word_ids=["word-0", "word-1"],
+            expected_text="عبارة مختلفة",
+            source_url="https://example.test/quote",
+            note="Wrong text must fail.",
+        ),
+        SpeechVerification(
+            verification_id="verification-wrong-span",
+            subject_kind="quotation",
+            source_word_ids=["word-0"],
+            expected_text="أفضل",
+            source_url="https://example.test/quote",
+            note="Partial span must fail.",
+        ),
+    ):
+        with pytest.raises(MediaError, match="sensitive"):
+            _validate(base.model_copy(update={"intervals": [interval], "verifications": [verification]}))
 
 
 @pytest.mark.parametrize(

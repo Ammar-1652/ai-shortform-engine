@@ -103,7 +103,7 @@ def captions_review(
     for sensitive text. It cannot approve delivery.
     """
     from clipforge.campaign.quran import validate_tarteel_speech_review_ranges
-    from clipforge.campaign.speech import apply_speech_corrections
+    from clipforge.campaign.speech import apply_speech_corrections, validate_speech_verifications
     from clipforge.hero.advanced_assets import confine_work_path
     from clipforge.media.hashing import sha256_file
     from clipforge.media.workspace import ensure_within
@@ -154,6 +154,7 @@ def captions_review(
         alignment = ForcedAlignmentDocument.model_validate_json(alignment_path.read_text(encoding="utf-8"))
         if document.corrections:
             apply_speech_corrections(alignment, document, time_map=hero_plan.edit_plan.time_map)
+        validate_speech_verifications(document, alignment=alignment)
         source_word_ids = {word.word_id for word in alignment.words}
         for verification in document.verifications:
             if not set(verification.source_word_ids) <= source_word_ids:
