@@ -6,10 +6,10 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `53c5879ef1c1c43ee8ee2e28a6dce8e7e86eaec2`  
+**Planning head:** `f8a8931`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
-**Status:** `PLAN READY — IMPLEMENTATION NOT STARTED`
+**Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
 
 This plan is intentionally deeper than a one-file patch. Each change must move
 through the typed contract, service, renderer adapter, QA/evidence, cache, and
@@ -57,6 +57,31 @@ source + raw ASR + forced alignment + TimeMap
 
 Each arrow carries a hash-bound typed artifact. A downstream stage must reject a
 missing, stale, mutable, or mismatched parent rather than reconstructing it.
+
+## Implementation ledger at `f8a8931`
+
+The following code-level work is present on the branch and was exercised by
+the exact-head validation run. This ledger deliberately separates automated
+evidence from the remaining real-source and human gates.
+
+| phase | current state | evidence |
+|---|---|---|
+| Phase 0 | implemented | ADR 0113 and ADR 0114, typed sidecar boundary, no SQLite migration |
+| Phase 1 | implemented | generic correction/emotion/verification contracts, disjoint audio windows, output-region observations, resumable checkpoint fields, generated schemas |
+| Phase 2 | implemented | Codex review revisions and current pointer, stale input checks, correction derivation, sensitive snapshot checks |
+| Phase 3 | implemented | shaped RTL caption path and browser coverage for the production composition |
+| Phase 4 | implemented | v2 disjoint speech/silence windows consumed by Remotion and decoded evidence |
+| Phase 5 | implemented for selected visual layers | reviewed B-roll observations now bind output rectangles into treatment evidence; remaining detector coverage is recorded as an external proof limitation until real source samples are run |
+| Phase 6 | implemented | clean generic review gate, cache/stale bindings, immutable review revisions, shared QA/delivery checks |
+| Phase 7 | implemented in code | bounded process deadline, renderer retry bound, per-unit failure receipts, deterministic crash/resume regression |
+| Phase 8 | pending external evidence | real generic non-campaign source packet, human playback, local delivery, self-hosted CI, and final exact-head package review |
+
+The exact-head local validation at this checkpoint recorded 974 Python tests
+passed, 2 documented skips, 18 browser tests passed, 64 renderer tests passed,
+schema/Ruff/format/mypy/renderer checks passed, and doctor reported 10 pass,
+0 warnings, 0 failures. Those results prove the code paths and fixtures; they
+do not substitute for the real-source, human playback, local delivery, or
+self-hosted CI evidence required by Phase 8.
 
 ## Phase 0 — Establish the implementation boundary
 

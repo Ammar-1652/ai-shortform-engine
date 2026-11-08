@@ -1,11 +1,11 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `cda133d7ece81760bd6e9736c7fc8777f61e86fa`  
+**Audited head:** `f8a8931`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
-**Status:** `REVIEW OPEN — R3 NOT COMPLETE`
+**Status:** `REVIEW OPEN — CODE REPAIRS VALIDATED; REAL PROOF AND HUMAN GATES NOT COMPLETE`
 
 This is an audit and repair plan. It does not change the approval model and it
 does not turn a draft render into a final delivery.
@@ -22,8 +22,14 @@ renders the `🤩` annotation.
 The execution is not complete because the plan’s strongest acceptance criteria
 are still open, and because the audit found code contracts that cannot yet
 represent all of the promised behavior. The old round-3 ledger also records
-`4e372db` as its reviewed head even though the current branch is `cda133d`; the
-ledger must not be treated as exact-head evidence until corrected.
+`4e372db` as its reviewed head even though the current branch has advanced to
+`f8a8931`; the ledger must not be treated as exact-head evidence until a new
+round-4 evidence row is recorded.
+
+The implementation repairs through R4-2, R4-6, R4-7's selected-visual
+placement binding, R4-8's checkpoint state, and R4-9's immutable review path
+are now present on `f8a8931`. The remaining acceptance work is Phase 8 real
+proof, human playback, local delivery, and exact-head self-hosted CI.
 
 ## What landed correctly
 

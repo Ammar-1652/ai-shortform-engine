@@ -9,6 +9,11 @@ round-2 implementation against its own acceptance criteria.
 
 **Current status:** `REVIEW OPEN — NOT COMPLETE`.
 
+This historical ledger is superseded for exact-head reporting by the Round 4
+implementation audit at `f8a8931` on the same branch. Its original reviewed
+head remains preserved as historical evidence; it must not be used as proof of
+the current implementation.
+
 This status is intentional. Passing local tests, completing a code slice, or
 having a draft PR does not authorize changing this plan to `COMPLETE`.
 
