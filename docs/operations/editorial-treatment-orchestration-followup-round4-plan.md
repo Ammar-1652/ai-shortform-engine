@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 4
 
 **Audit date:** 2026-10-27  
-**Audited head:** `0e0907d`
+**Audited head:** `db310e5`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
