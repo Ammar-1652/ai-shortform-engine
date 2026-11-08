@@ -85,10 +85,11 @@ Owns bytes, clocks, and pictures.
   provider requests. The renderer never performs provider discovery or adds a
   decorative effect that the selected treatment omitted. See [ADR 0111](docs/adr/0111-editorial-treatment-orchestration.md).
 - Reviewed visual observations may bind an immutable output-space B-roll
-  rectangle to the matching direction placement. The treatment revision copies
-  that region into collision evidence, so camera envelopes and QA use measured
-  placement geometry. Existing observations without regions remain readable;
-  new observations preserve the exact region in their identity. See [ADR
+  rectangle and crop/reframe/camera dependency hash to the matching direction
+  placement. The treatment revision copies that region into collision evidence,
+  so camera envelopes and QA use measured placement geometry. Existing
+  observations without regions remain readable; new observations preserve the
+  exact region and dependency identity. See [ADR
   0114](docs/adr/0114-resumable-failure-and-output-region-evidence.md).
 
 ### AI decision plane

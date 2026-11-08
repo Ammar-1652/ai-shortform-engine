@@ -15,10 +15,11 @@ failed run was safe to resume.
 ## Decision
 
 Reviewed visual observations may carry an immutable `broll` output-space
-region. A graphic placement that references such an observation must carry the
-same rectangle. Treatment revision binds the observation region into the
-shared visual evidence bundle, so camera collision checks and downstream QA
-consume the measured placement instead of a tag-only claim.
+region and a crop/reframe/camera geometry dependency hash. A graphic placement
+that references such an observation must carry the same rectangle and hash.
+Treatment revision binds the observation region into the shared visual evidence
+bundle, so camera collision checks and downstream QA consume the measured
+placement instead of a tag-only claim.
 
 Each checkpointed Hero or Advanced Hero render unit records its cumulative
 attempt count, active unit and attempt, bounded failure category, process

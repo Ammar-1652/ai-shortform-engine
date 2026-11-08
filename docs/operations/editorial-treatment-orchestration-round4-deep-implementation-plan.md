@@ -6,7 +6,7 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `f8a8931`
+**Planning head:** `f0e9140`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
 **Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
@@ -71,7 +71,7 @@ evidence from the remaining real-source and human gates.
 | Phase 2 | implemented | Codex review revisions and current pointer, stale input checks, correction derivation, sensitive snapshot checks |
 | Phase 3 | implemented | shaped RTL caption path and browser coverage for the production composition |
 | Phase 4 | implemented | v2 disjoint speech/silence windows consumed by Remotion and decoded evidence |
-| Phase 5 | implemented for selected visual layers | reviewed B-roll observations now bind output rectangles into treatment evidence; remaining detector coverage is recorded as an external proof limitation until real source samples are run |
+| Phase 5 | implemented for selected visual layers | reviewed B-roll observations now bind output rectangles and crop/reframe/camera dependency hashes into treatment evidence; remaining detector coverage is recorded as an external proof limitation until real source samples are run |
 | Phase 6 | implemented | clean generic review gate, cache/stale bindings, immutable review revisions, shared QA/delivery checks |
 | Phase 7 | implemented in code | bounded process deadline, renderer retry bound, per-unit failure receipts, deterministic crash/resume regression |
 | Phase 8 | pending external evidence | real generic non-campaign source packet, human playback, local delivery, self-hosted CI, and final exact-head package review |
