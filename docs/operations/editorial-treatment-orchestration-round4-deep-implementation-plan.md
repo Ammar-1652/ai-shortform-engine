@@ -6,10 +6,11 @@ visual-evidence, and render-recovery repairs as one coherent system change.
 **Audit source:**
 [editorial-treatment-orchestration-followup-round4-plan.md](editorial-treatment-orchestration-followup-round4-plan.md)
 
-**Planning head:** `db310e5`
+**Planning head:** `db310e5` (historical planning checkpoint)
+**Latest reviewed head:** `14ffe04b45087663bd23d46539490c7175a89aa8`
 **Branch:** `round-36-editorial-knowledge-engine`  
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
-**Status:** `IMPLEMENTATION IN PROGRESS — CODE GATES VALIDATED; REAL-PROOF AND EXTERNAL REVIEW OPEN`
+**Status:** `REVIEW OPEN — AUTOMATED CHECKS GREEN; see [round-5 follow-up plan](editorial-treatment-orchestration-followup-round5-plan.md) for remaining implementation gaps and external gates`
 
 This plan is intentionally deeper than a one-file patch. Each change must move
 through the typed contract, service, renderer adapter, QA/evidence, cache, and

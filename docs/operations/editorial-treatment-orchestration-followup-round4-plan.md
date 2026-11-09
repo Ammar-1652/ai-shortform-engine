@@ -7,6 +7,11 @@
 **Base:** `origin/main` `989bf5d6ec27878d46505dc09becedfc848cd749`  
 **Status:** `REVIEW OPEN — CODE REPAIRS VALIDATED; REAL PROOF AND HUMAN GATES NOT COMPLETE`
 
+The exact-head review after this round is recorded in
+[editorial-treatment-orchestration-followup-round5-plan.md](editorial-treatment-orchestration-followup-round5-plan.md).
+This document remains the historical round-4 audit; its remaining-work list
+must not be treated as proof that every item is complete.
+
 This is an audit and repair plan. It does not change the approval model and it
 does not turn a draft render into a final delivery.
 
