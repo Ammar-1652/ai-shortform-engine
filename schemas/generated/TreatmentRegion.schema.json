@@ -36,6 +36,33 @@
   "additionalProperties": false,
   "description": "One output-space protected region used by treatment collision checks.",
   "properties": {
+    "analyzer_version": {
+      "default": "geometry-v1",
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Analyzer Version",
+      "type": "string"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "geometry_dependency_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Geometry Dependency Sha256",
+      "type": "string"
+    },
     "height": {
       "exclusiveMinimum": 0,
       "maximum": 1920,
@@ -66,6 +93,25 @@
       ],
       "title": "Role",
       "type": "string"
+    },
+    "sample_frame_sha256s": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Sample Frame Sha256S",
+      "type": "array"
+    },
+    "sample_timestamps_us": {
+      "items": {
+        "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+        "maximum": 604800000000,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "title": "Sample Timestamps Us",
+      "type": "array"
     },
     "schema_version": {
       "const": "1.0.0",

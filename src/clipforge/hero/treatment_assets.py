@@ -400,6 +400,11 @@ def _decode_visual_observation(
                 width=width,
                 height=height,
                 source="render_input",
+                sample_timestamps_us=[frame.timestamp_us for frame in frames],
+                sample_frame_sha256s=[frame.sha256 for frame in frames],
+                confidence=relevance_score,
+                analyzer_version="ffmpeg-frame-probe-v2",
+                geometry_dependency_sha256=geometry_dependency_sha256,
             )
         )
     observation = TreatmentAssetObservation(

@@ -205,6 +205,11 @@ def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence
         width=region.width,
         height=region.height,
         source="render_input",
+        sample_timestamps_us=[0],
+        sample_frame_sha256s=["a" * 64],
+        confidence=0.9,
+        analyzer_version="ffmpeg-frame-probe-v2",
+        geometry_dependency_sha256="f" * 64,
     )
     binding = TreatmentAssetBindingDocument.model_validate(
         {
@@ -226,7 +231,10 @@ def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence
     selected = next(item for item in revised.options if item.option_id == revised.selected_option_id)
     evidence = selected.treatment_decisions[0].visual_evidence
     assert evidence is not None
-    assert any(item.region_id == "broll:asset-1" and item.x == 120 for item in evidence.regions)
+    region = next(item for item in evidence.regions if item.region_id == "broll:asset-1")
+    assert region.x == 120
+    assert region.analyzer_version == "ffmpeg-frame-probe-v2"
+    assert region.sample_frame_sha256s == ["a" * 64]
 
 
 @pytest.mark.parametrize("change", ["query_terms", "role", "source_evidence_ids"])

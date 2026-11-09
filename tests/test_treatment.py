@@ -14,6 +14,7 @@ from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
     BrollTreatmentDecision,
     SfxTreatmentDecision,
+    TreatmentRegion,
 )
 from tests.candidate_support import visual_document
 from tests.test_direction import _aligned_words, _document
@@ -61,6 +62,22 @@ def test_treatment_rejects_missing_omission_reason() -> None:
             state="omit_with_reason",
             rationale="missing reason",
             source_evidence_ids=["e-1"],
+        )
+
+
+def test_treatment_region_rejects_unpaired_frame_evidence() -> None:
+    with pytest.raises(ValidationError, match="timestamps and frame hashes"):
+        TreatmentRegion(
+            region_id="region-1",
+            role="broll",
+            interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+            x=10,
+            y=10,
+            width=100,
+            height=100,
+            source="render_input",
+            sample_timestamps_us=[0],
+            sample_frame_sha256s=[],
         )
 
 
@@ -137,6 +154,9 @@ def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:
     assert "motion_graphic" in roles
     assert "platform_rail" in roles
     assert "motion-graphic:graphic-1" in evidence.protected_region_ids
+    graphic_region = next(item for item in evidence.regions if item.role == "motion_graphic")
+    assert graphic_region.analyzer_version == "remotion-render-input-v1"
+    assert graphic_region.confidence == 1.0
 
 
 def test_face_collision_removes_camera_event_from_render_treatment() -> None:

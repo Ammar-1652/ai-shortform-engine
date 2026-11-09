@@ -338,6 +338,11 @@ def _visual_evidence(
             width=item.width,
             height=item.height,
             source="render_input",
+            confidence=1.0,
+            analyzer_version="remotion-render-input-v1",
+            geometry_dependency_sha256=hashlib.sha256(
+                f"{item.graphic_id}:{item.x}:{item.y}:{item.width}:{item.height}".encode()
+            ).hexdigest(),
         )
         for item in option.motion_graphics
         if _intervals_overlap(item.interval, interval)
@@ -355,6 +360,8 @@ def _visual_evidence(
             width=1080,
             height=270,
             source="platform_profile",
+            confidence=1.0,
+            analyzer_version="platform-profile-v1",
         ),
         TreatmentRegion(
             region_id="platform-rail-bottom",
@@ -365,6 +372,8 @@ def _visual_evidence(
             width=1080,
             height=360,
             source="platform_profile",
+            confidence=1.0,
+            analyzer_version="platform-profile-v1",
         ),
     ]
     all_regions = [*base_regions, *platform_rails, *native_regions, *broll_regions, *motion_graphic_regions]
@@ -421,6 +430,41 @@ def _visual_evidence(
                     width=max(1, round(sample.bounding_box.width * 1080)),
                     height=max(1, round(sample.bounding_box.height * 1920)),
                     source="visual_analysis",
+                    sample_timestamps_us=(
+                        [sample.timestamp_us]
+                        if next(
+                            (
+                                frame
+                                for frame in visual.frame_evidence
+                                if frame.scene_id == sample.scene_id
+                                and frame.actual_timestamp_us == sample.timestamp_us
+                            ),
+                            None,
+                        )
+                        is not None
+                        else []
+                    ),
+                    sample_frame_sha256s=(
+                        [
+                            next(
+                                frame.sha256
+                                for frame in visual.frame_evidence
+                                if frame.scene_id == sample.scene_id
+                                and frame.actual_timestamp_us == sample.timestamp_us
+                            )
+                        ]
+                        if any(
+                            frame.scene_id == sample.scene_id
+                            and frame.actual_timestamp_us == sample.timestamp_us
+                            for frame in visual.frame_evidence
+                        )
+                        else []
+                    ),
+                    confidence=sample.confidence,
+                    analyzer_version="visual-analysis-face-v1",
+                    geometry_dependency_sha256=hashlib.sha256(
+                        f"{sample.detection_id}:{sample.timestamp_us}:{sample.bounding_box.model_dump_json()}".encode()
+                    ).hexdigest(),
                 )
                 for sample in faces
             ],

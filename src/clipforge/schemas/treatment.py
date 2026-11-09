@@ -206,11 +206,25 @@ class TreatmentRegion(Versioned):
     width: int = Field(gt=0, le=1080)
     height: int = Field(gt=0, le=1920)
     source: Literal["visual_analysis", "platform_profile", "render_input"]
+    sample_timestamps_us: list[Microseconds] = Field(default_factory=list, max_length=8)
+    sample_frame_sha256s: list[str] = Field(default_factory=list, max_length=8)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    analyzer_version: str = Field(default="geometry-v1", min_length=1, max_length=80)
+    geometry_dependency_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def stays_in_output(self) -> Self:
         if self.x + self.width > 1080 or self.y + self.height > 1920:
             raise ValueError("treatment region must stay inside the portrait output")
+        if len(self.sample_timestamps_us) != len(self.sample_frame_sha256s):
+            raise ValueError("treatment region timestamps and frame hashes must have matching lengths")
+        if any(not (timestamp >= 0) for timestamp in self.sample_timestamps_us):
+            raise ValueError("treatment region sample timestamps must be non-negative")
+        if any(
+            len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest)
+            for digest in self.sample_frame_sha256s
+        ):
+            raise ValueError("treatment region frame hashes must be lowercase SHA-256 values")
         return self
 
 
