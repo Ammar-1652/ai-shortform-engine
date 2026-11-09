@@ -1,11 +1,11 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `14ffe04b45087663bd23d46539490c7175a89aa8`
+**Reviewed head:** `1cd7888a0c7c48257e9dc1883382de3e7652350f`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
-**Status:** `REVIEW OPEN — AUTOMATED CHECKS GREEN; IMPLEMENTATION GAPS AND EXTERNAL GATES REMAIN`
+**Status:** `REVIEW OPEN — R5-1/R5-2 IMPLEMENTED; R5-3 PARTIALLY IMPLEMENTED; EXTERNAL GATES REMAIN`
 
 This document records the result of a fresh review of the round-4 deep
 implementation. It is a fixing plan for the remaining work; it does not claim
@@ -34,6 +34,35 @@ that round 4 is complete and it does not approve or deliver an artifact.
   work root, but no human playback receipt or effective human final approval
   exists for that exact artifact.
 
+## Round-5 implementation update
+
+Commit `1cd7888a0c7c48257e9dc1883382de3e7652350f` implements the first three
+code-level corrections that can be verified locally:
+
+- **R5-1 implemented:** generic Codex speech reviews now validate local
+  snapshot bytes at load time and at aligned-span validation. Paths are
+  confined to the operation root, symlinks and non-files are rejected, hashes
+  are recomputed, and URL fragments/control characters are rejected. The
+  loader, CLI review command, caption evidence, and Advanced Hero path all use
+  the same root-bound checks.
+- **R5-2 implemented:** `codex_speech_review_required` is enforced by the
+  Advanced Hero planner, render/pilot binding, technical QA direction check,
+  and delivery preflight. The false value is accepted only with the legacy v1
+  renderer recipe. Directionless historical plans retain their recorded
+  compatibility path; directed clean plans cannot become final artifacts
+  without the Codex review hash.
+- **R5-3 geometry portion implemented:** typed treatment evidence now records
+  output-space motion-graphic rectangles and explicit top/bottom platform
+  rails. Camera collision protection includes authored motion graphics, and
+  the geometry is included in the generated treatment schemas and fingerprints.
+  Campaign CTA/logo clearance continues to use the existing decoded
+  `OverlayExclusionEvidence` gate.
+
+The focused suite for these changes passed, and the exact-head full validation
+passed with **985 Python tests, 2 skips, 18 browser/Remotion tests, and 64
+renderer tests**. No generated schema drift or orphaned render process was
+observed.
+
 ## What is verified as landed
 
 The following code paths are present and covered by the exact-head automated
@@ -61,12 +90,10 @@ human playback, final approval, delivery, or CI execution.
 
 ### R5-1 — Verify generic local speech snapshots at load time
 
-**Observed gap:** `SpeechVerification` requires a relative snapshot path and a
-64-character hash, but `validate_speech_verifications()` does not resolve the
-path inside the work root or compare the file's actual SHA-256. A syntactically
-valid review can therefore name a nonexistent or changed local snapshot. URL
-validation also needs an explicit policy for fragments and other hidden-data
-channels.
+**Status:** implemented in `1cd7888` and covered by loader/alignment tests.
+
+The remaining Quran canonical-source path is unchanged and continues to use
+its stronger official-source policy.
 
 **Fix steps:**
 
@@ -92,10 +119,9 @@ record.
 
 ### R5-2 — Make `codex_speech_review_required` the real policy authority
 
-**Observed gap:** `AdvancedHeroProfile.codex_speech_review_required` exists and
-changes the profile fingerprint, but the planning gate currently decides from
-the direction style id and `allow_unapproved`. The profile field is therefore
-not the authoritative switch promised by the contract.
+**Status:** implemented in `1cd7888`. The profile field now drives the
+production gates while preserving explicit legacy-v1 and directionless
+historical compatibility.
 
 **Fix steps:**
 
@@ -122,13 +148,13 @@ the hash, and every gate reports the same result.
 
 ### R5-3 — Complete output-space protected-region and relevance evidence
 
-**Observed gap:** the current treatment evidence includes fixed platform and
-caption rectangles, source-text rectangles, faces, and selected B-roll
-rectangles. It does not yet decode and measure every protected role in the
-final output space (active subject, source logo, CTA, platform rail, and all
-camera-envelope extrema), and relevance still begins with reviewed labels and
-transcript/tag intersection. This is sufficient for selected exercised layers,
-but not the full Phase-5 acceptance claim.
+**Status:** geometry is partially implemented in `1cd7888`; the full decoded
+role/relevance acceptance remains open.
+
+The current code now emits motion-graphic and platform-rail rectangles in the
+typed output-space evidence and protects authored graphics during camera
+collision checks. Full decoded active-subject/logo/CTA extrema and a
+frame-backed semantic relevance evaluator still require a follow-up round.
 
 **Fix steps:**
 
