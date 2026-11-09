@@ -520,6 +520,50 @@
       ],
       "title": "CampaignStageRecord",
       "type": "object"
+    },
+    "WorkflowRolePolicy": {
+      "additionalProperties": false,
+      "description": "The responsibility split for one production run.\n\nCodex owns source-grounded editorial choices and orchestration. Clipforge\nowns deterministic media, provenance, rights, timing, cache, and QA gates.\nA person remains the only authority that can accept the final playback.",
+      "properties": {
+        "deterministic_enforcer": {
+          "const": "system_enforcer",
+          "default": "system_enforcer",
+          "title": "Deterministic Enforcer",
+          "type": "string"
+        },
+        "editorial_operator": {
+          "const": "codex_operator",
+          "default": "codex_operator",
+          "title": "Editorial Operator",
+          "type": "string"
+        },
+        "external_publishing": {
+          "const": "deferred",
+          "default": "deferred",
+          "title": "External Publishing",
+          "type": "string"
+        },
+        "final_playback_required": {
+          "const": true,
+          "default": true,
+          "title": "Final Playback Required",
+          "type": "boolean"
+        },
+        "final_reviewer": {
+          "const": "human_reviewer",
+          "default": "human_reviewer",
+          "title": "Final Reviewer",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowRolePolicy",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -747,6 +791,17 @@
       ],
       "default": null,
       "title": "Voice Id"
+    },
+    "workflow_roles": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowRolePolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

@@ -1,0 +1,389 @@
+"""Treatment revisions must change the direction actually consumed by rendering."""
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from clipforge.editorial.presets import PresetCatalog
+from clipforge.errors import MediaError
+from clipforge.hero.direction_service import apply_treatment_bindings
+from clipforge.hero.treatment import materialize_treatment, treatment_fingerprint
+from clipforge.hero.treatment_assets import (
+    bind_acquired_request,
+    bind_placement_to_request,
+    persist_treatment_binding,
+    select_treatment_request,
+)
+from clipforge.media.hashing import sha256_file
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionDocument,
+    DirectionPlacementRegion,
+    TreatmentAssetBindingDocument,
+)
+from clipforge.schemas.editorial import MotionPurpose, OutputInterval
+from clipforge.schemas.provenance import ArtifactProvenance
+from clipforge.schemas.treatment import (
+    TreatmentAssetObservation,
+    TreatmentAssetVerification,
+    TreatmentObservationFrame,
+    TreatmentRegion,
+)
+from tests.test_direction import _aligned_words, _document
+
+
+def pending_direction() -> DirectionDocument:
+    parent = _document()
+    option = materialize_treatment(
+        parent.options[0].model_copy(update={"preset_id": "clean_explainer"}),
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+    )
+    return DirectionDocument.model_validate(
+        {
+            **parent.model_dump(mode="json"),
+            "options": [
+                option.model_dump(mode="json"),
+                *[item.model_dump(mode="json") for item in parent.options[1:]],
+            ],
+            "selected_option_id": option.option_id,
+            "style_id": option.style_id,
+            "preset_id": "clean_explainer",
+            "direction_recipe_version": "direction-v3",
+            "treatment_fingerprint": treatment_fingerprint(option),
+        }
+    )
+
+
+def binding_for_direction(direction: DirectionDocument) -> TreatmentAssetBindingDocument:
+    option = next(item for item in direction.options if item.option_id == direction.selected_option_id)
+    pending = option.treatment_decisions[0].asset_requests[0]
+    checked = TreatmentAssetVerification(
+        provider="local",
+        provider_response_sha256="a" * 64,
+        selection_id="selection-1",
+        acquisition_id="acquisition-1",
+        license_evidence_sha256="b" * 64,
+        registered_asset_id="asset-1",
+        registered_asset_sha256="c" * 64,
+        media_kind=pending.kind,
+    )
+    acquired = bind_acquired_request(
+        select_treatment_request(pending, provider_response_sha256="a" * 64, selection_id="selection-1"),
+        verification=checked,
+    )
+    placement = bind_placement_to_request(
+        DirectionAssetPlacement(
+            placement_id="placement-1",
+            asset_id="asset-1",
+            kind=pending.kind,
+            interval=pending.interval,
+            source_evidence_ids=pending.source_evidence_ids,
+            purpose=MotionPurpose.CONCEPT,
+            relevance_note="Reviewed source context",
+            asset_tags=["context"],
+            output_region=DirectionPlacementRegion(x=120, y=520, width=720, height=400),
+        ),
+        acquired,
+    )
+    observation = None
+    if pending.kind == "graphic":
+        now = datetime.now(UTC)
+        observation = TreatmentAssetObservation(
+            observation_id="observation-1",
+            asset_id="asset-1",
+            source_asset_id="source-1",
+            media_sha256="c" * 64,
+            output_interval=placement.interval,
+            source_evidence_ids=placement.source_evidence_ids,
+            frames=[
+                TreatmentObservationFrame(
+                    relative_path="editorial/treatment-observations/observation-1/frames/frame-000.jpg",
+                    sha256="a" * 64,
+                    timestamp_us=0,
+                )
+            ],
+            regions=[
+                TreatmentRegion(
+                    region_id="broll:asset-1",
+                    role="broll",
+                    interval=placement.interval,
+                    x=120,
+                    y=520,
+                    width=720,
+                    height=400,
+                    source="render_input",
+                )
+            ],
+            observed_labels=["context"],
+            relevance_score=0.9,
+            relevance_threshold=0.85,
+            reviewed_by="test",
+            review_note="Decoded frame matches the requested context.",
+            provenance=ArtifactProvenance(
+                created_at=now,
+                created_by="test",
+                tool="test",
+                tool_version="1",
+                source_asset_ids=["source-1"],
+                parent_artifact_ids=["asset-1"],
+            ),
+        )
+        placement = placement.model_copy(
+            update={"observation_id": observation.observation_id, "observation_sha256": "d" * 64}
+        )
+    now = datetime.now(UTC)
+    return TreatmentAssetBindingDocument(
+        binding_id="binding-1",
+        request=acquired,
+        placement=placement,
+        verification=checked,
+        observation=observation,
+        created_at=now,
+        provenance=ArtifactProvenance(
+            created_at=now,
+            created_by="test",
+            tool="test",
+            tool_version="1",
+            source_asset_ids=["source-1"],
+        ),
+    )
+
+
+def test_revision_fulfills_pending_request_without_hand_editing_placement() -> None:
+    parent = pending_direction()
+    before = parent.model_dump_json()
+    binding = binding_for_direction(parent)
+    revised = apply_treatment_bindings(
+        parent,
+        [binding],
+        parent_direction_sha256="d" * 64,
+        binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+    )
+    assert parent.model_dump_json() == before
+    assert revised.direction_id != parent.direction_id
+    assert revised.direction_recipe_version == "direction-v4"
+    assert revised.treatment_revision.parent_direction_id == parent.direction_id
+    selected = next(item for item in revised.options if item.option_id == revised.selected_option_id)
+    assert selected.asset_placements == [binding.placement]
+    assert selected.treatment_decisions[0].broll.state == "use"
+    assert selected.treatment_decisions[0].asset_requests[0] == binding.request
+    assert all(
+        item.dependency_fingerprint == treatment_fingerprint(selected) for item in selected.treatment_decisions
+    )
+
+
+def test_revision_rejects_visual_binding_without_final_geometry() -> None:
+    parent = pending_direction()
+    binding = binding_for_direction(parent)
+    assert binding.observation is not None
+    missing_geometry = binding.model_copy(
+        update={"observation": binding.observation.model_copy(update={"regions": []})}
+    )
+    with pytest.raises(MediaError, match="final output geometry"):
+        apply_treatment_bindings(
+            parent,
+            [missing_geometry],
+            parent_direction_sha256="d" * 64,
+            binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+        )
+
+
+def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence() -> None:
+    parent = pending_direction()
+    binding = binding_for_direction(parent)
+    assert binding.observation is not None
+    region = DirectionPlacementRegion(x=120, y=520, width=720, height=400)
+    observed_region = TreatmentRegion(
+        region_id="broll:asset-1",
+        role="broll",
+        interval=binding.placement.interval,
+        x=region.x,
+        y=region.y,
+        width=region.width,
+        height=region.height,
+        source="render_input",
+        sample_timestamps_us=[0],
+        sample_frame_sha256s=["a" * 64],
+        confidence=0.9,
+        analyzer_version="ffmpeg-frame-probe-v2",
+        geometry_dependency_sha256="f" * 64,
+    )
+    binding = TreatmentAssetBindingDocument.model_validate(
+        {
+            **binding.model_dump(mode="json"),
+            "placement": binding.placement.model_copy(
+                update={"output_region": region, "geometry_dependency_sha256": "f" * 64}
+            ).model_dump(mode="json"),
+            "observation": binding.observation.model_copy(
+                update={"regions": [observed_region], "geometry_dependency_sha256": "f" * 64}
+            ).model_dump(mode="json"),
+        }
+    )
+    revised = apply_treatment_bindings(
+        parent,
+        [binding],
+        parent_direction_sha256="d" * 64,
+        binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+    )
+    selected = next(item for item in revised.options if item.option_id == revised.selected_option_id)
+    evidence = selected.treatment_decisions[0].visual_evidence
+    assert evidence is not None
+    region = next(item for item in evidence.regions if item.region_id == "broll:asset-1")
+    assert region.x == 120
+    assert region.analyzer_version == "ffmpeg-frame-probe-v2"
+    assert region.sample_frame_sha256s == ["a" * 64]
+    broll_role = next(item for item in evidence.role_evidence if item.role == "broll")
+    assert broll_role.status == "present"
+    assert broll_role.region_ids == ["broll:asset-1"]
+
+
+@pytest.mark.parametrize("change", ["query_terms", "role", "source_evidence_ids"])
+def test_revision_rejects_changed_request_intent(change: str) -> None:
+    parent = pending_direction()
+    binding = binding_for_direction(parent)
+    value = ["unrelated"] if change != "role" else "unrelated"
+    forged = binding.model_copy(update={"request": binding.request.model_copy(update={change: value})})
+    with pytest.raises(MediaError, match="editorial intent"):
+        apply_treatment_bindings(
+            parent,
+            [forged],
+            parent_direction_sha256="d" * 64,
+            binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+        )
+
+
+def test_binding_schema_rejects_mismatched_license_and_interval() -> None:
+    binding = binding_for_direction(pending_direction())
+    payload = binding.model_dump(mode="json")
+    payload["placement"]["license_evidence_sha256"] = "f" * 64
+    with pytest.raises(ValidationError, match="license_evidence_sha256"):
+        TreatmentAssetBindingDocument.model_validate(payload)
+    payload = binding.model_dump(mode="json")
+    payload["placement"]["interval"]["output_end_us"] += 1
+    with pytest.raises(ValidationError, match=r"escapes|source span"):
+        TreatmentAssetBindingDocument.model_validate(payload)
+
+
+def test_binding_persistence_is_idempotent_and_confined(tmp_path: Path) -> None:
+    binding = binding_for_direction(pending_direction())
+    observation_path = tmp_path / "editorial" / "treatment-observations" / "observation-1" / "observation.json"
+    observation_path.parent.mkdir(parents=True)
+    assert binding.observation is not None
+    frame_path = tmp_path / binding.observation.frames[0].relative_path
+    frame_path.parent.mkdir(parents=True)
+    frame_path.write_bytes(b"immutable decoded frame fixture")
+    binding.observation.frames[0].sha256 = sha256_file(frame_path)
+    observation_path.write_text(binding.observation.model_dump_json(), encoding="utf-8")
+    kwargs = dict(
+        work_root=tmp_path,
+        request=binding.request,
+        placement=binding.placement,
+        verification=binding.verification,
+        source_asset_id="source-1",
+        observation_path=observation_path,
+    )
+    path = persist_treatment_binding(**kwargs)
+    before = path.read_bytes()
+    assert persist_treatment_binding(**kwargs) == path
+    assert path.read_bytes() == before
+    other = tmp_path / "other"
+    other.mkdir()
+    path.unlink()
+    path.symlink_to(other / path.name)
+    with pytest.raises(MediaError):
+        persist_treatment_binding(**kwargs)
+
+
+def test_visual_observation_requires_reviewed_numeric_relevance() -> None:
+    now = datetime.now(UTC)
+    provenance = ArtifactProvenance(
+        created_at=now,
+        created_by="reviewer",
+        tool="test",
+        tool_version="1",
+        source_asset_ids=["source-1"],
+        parent_artifact_ids=["asset-1"],
+    )
+    frame = TreatmentObservationFrame(
+        relative_path="editorial/treatment-observations/observation-1/frames/frame-000.jpg",
+        sha256="a" * 64,
+        timestamp_us=0,
+    )
+    observation = TreatmentAssetObservation(
+        observation_id="observation-1",
+        asset_id="asset-1",
+        source_asset_id="source-1",
+        media_sha256="b" * 64,
+        output_interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_evidence_ids=["evidence-1"],
+        frames=[frame],
+        observed_labels=["context"],
+        relevance_score=0.9,
+        relevance_threshold=0.85,
+        reviewed_by="reviewer",
+        review_note="Decoded frame matches the source-grounded context.",
+        provenance=provenance,
+    )
+    assert observation.relevance_score >= observation.relevance_threshold
+    with pytest.raises(ValidationError, match="below"):
+        TreatmentAssetObservation.model_validate(
+            {**observation.model_dump(mode="json"), "relevance_score": 0.4}
+        )
+
+
+def test_v2_visual_observation_binds_frames_to_the_selected_source_span() -> None:
+    now = datetime.now(UTC)
+    provenance = ArtifactProvenance(
+        created_at=now,
+        created_by="reviewer",
+        tool="test",
+        tool_version="2",
+        source_asset_ids=["source-1"],
+        parent_artifact_ids=["asset-1"],
+    )
+    payload = dict(
+        observation_id="observation-v2",
+        asset_id="asset-1",
+        source_asset_id="source-1",
+        media_sha256="b" * 64,
+        output_interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_in_us=5_000_000,
+        source_out_us=6_000_000,
+        source_evidence_ids=["evidence-1"],
+        frames=[
+            TreatmentObservationFrame(
+                relative_path="editorial/treatment-observations/observation-v2/frames/frame-000.jpg",
+                sha256="a" * 64,
+                timestamp_us=5_000_000,
+            ),
+            TreatmentObservationFrame(
+                relative_path="editorial/treatment-observations/observation-v2/frames/frame-001.jpg",
+                sha256="c" * 64,
+                timestamp_us=5_500_000,
+            ),
+        ],
+        observed_labels=["context"],
+        relevance_score=0.9,
+        relevance_threshold=0.85,
+        analyzer_version="ffmpeg-frame-probe-v2",
+        reviewed_by="reviewer",
+        review_note="The selected source span matches the requested context.",
+        provenance=provenance,
+    )
+    observation = TreatmentAssetObservation.model_validate(payload)
+    assert observation.source_out_us == 6_000_000
+    with pytest.raises(ValidationError, match="source span"):
+        TreatmentAssetObservation.model_validate({**payload, "source_out_us": 6_000_001})
+    with pytest.raises(ValidationError, match="inside"):
+        TreatmentAssetObservation.model_validate(
+            {
+                **payload,
+                "frames": [
+                    *payload["frames"][:-1],
+                    payload["frames"][-1].model_copy(update={"timestamp_us": 6_000_000}),
+                ],
+            }
+        )

@@ -30,7 +30,12 @@ class RemotionAdvancedRenderBackend:
 
     def render_batch(self, batch_path: Path, *, log_path: Path) -> None:
         script = find_repo_root() / "apps" / "renderer" / "scripts" / "render-advanced-hero.mjs"
-        run_remotion_script(script, batch_path, log_path=log_path)
+        run_remotion_script(
+            script,
+            batch_path,
+            log_path=log_path,
+            extra_env={"CLIPFORGE_RENDER_AUTHORITY": "advanced_service"},
+        )
 
 
 @dataclass

@@ -384,6 +384,7 @@ def _draft_card(
         "approval_review_id": draft.review_id,
         "approval_decision": None if approval is None else approval.decision,
         "approval_reviewer_id": None if approval is None else approval.reviewer_id,
+        "approval_reviewer_role": None if approval is None else approval.reviewer_role,
         "current_decision": None if effective is None else _decision(effective),
         "history": history,
     }
@@ -457,6 +458,7 @@ def _decision(review: ReviewDecision) -> dict[str, object]:
         "artifact_id": review.artifact_id,
         "decision": review.decision,
         "reviewer_id": review.reviewer_id,
+        "reviewer_role": review.reviewer_role,
         "created_at": review.created_at.isoformat(),
         "notes": review.notes,
         "automated": False,

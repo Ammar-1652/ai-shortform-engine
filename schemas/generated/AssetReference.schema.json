@@ -111,6 +111,14 @@
       "title": "Asset Id",
       "type": "string"
     },
+    "content_tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 24,
+      "title": "Content Tags",
+      "type": "array"
+    },
     "kind": {
       "$ref": "#/$defs/AssetKind"
     },

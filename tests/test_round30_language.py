@@ -23,6 +23,7 @@ from clipforge.language.providers import (
     license_is_allowed,
     normalized_language,
     provider_for,
+    selected_clip_provider_for,
 )
 from clipforge.language.registry import alignment_claim, alignment_identity_matches, capability_for
 from clipforge.language.service import (
@@ -94,8 +95,10 @@ def test_locale_normalization_and_closed_failures() -> None:
     french_backend = production_alignment_backend("fr-FR")
     assert french_backend.language_code == "fr"
     assert french_backend.model_name.endswith("french")
-    with pytest.raises(MediaError, match="alignment_not_claimed"):
-        production_alignment_backend("ar")
+    arabic_backend = production_alignment_backend("ar")
+    assert arabic_backend.language_code == "ar"
+    assert arabic_backend.model_name.endswith("arabic")
+    assert arabic_backend.checkpoint_sha256 == selected_clip_provider_for("ar").checkpoint_sha256
     with pytest.raises(MediaError, match="unsupported_language"):
         production_alignment_backend("zh-CN")
 
@@ -365,6 +368,22 @@ def test_character_pieces_collapse_onto_the_transcript_word() -> None:
     assert bounds == [(0, 41_000)]
     with pytest.raises(MediaError, match="does not match"):
         _collapse_alignment_tokens([word], [("hello", 0, 10)], source_offset=0)
+
+
+def test_orthographic_token_can_span_transcript_word_boundary() -> None:
+    from clipforge.hero.alignment import _collapse_alignment_tokens
+    from clipforge.schemas.media import TranscriptWord
+
+    words = [
+        TranscriptWord(word_id="w1", text=" Pac", start_us=0, end_us=1_000),
+        TranscriptWord(word_id="w2", text="10", start_us=1_000, end_us=2_000),
+    ]
+    bounds = _collapse_alignment_tokens(
+        words,
+        [("Pac-10", 0, 50_000)],
+        source_offset=100_000,
+    )
+    assert bounds == [(100_000, 130_000), (130_000, 150_000)]
 
 
 def test_fake_aligner_is_not_the_production_backend() -> None:

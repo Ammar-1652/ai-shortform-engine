@@ -1,0 +1,418 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "OverlayExclusionRegion": {
+      "additionalProperties": false,
+      "description": "One transformed region that a campaign overlay must avoid.",
+      "properties": {
+        "annotation_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotation Id"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "maximum": 1920,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "kind": {
+          "enum": [
+            "face",
+            "child_body",
+            "tablet",
+            "caption",
+            "context_line",
+            "source_logo",
+            "watermark",
+            "platform_rail"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "left": {
+          "anyOf": [
+            {
+              "maximum": 1080,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "present",
+            "absent_reviewed",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "top": {
+          "anyOf": [
+            {
+              "maximum": 1920,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 1080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "required": [
+        "kind",
+        "status"
+      ],
+      "title": "OverlayExclusionRegion",
+      "type": "object"
+    },
+    "OverlayExclusionSample": {
+      "additionalProperties": false,
+      "description": "One decoded or reviewed sample over the complete CTA animation.",
+      "properties": {
+        "cta_height": {
+          "maximum": 1920,
+          "minimum": 1,
+          "title": "Cta Height",
+          "type": "integer"
+        },
+        "cta_left": {
+          "maximum": 1080,
+          "minimum": 0,
+          "title": "Cta Left",
+          "type": "integer"
+        },
+        "cta_top": {
+          "maximum": 1920,
+          "minimum": 0,
+          "title": "Cta Top",
+          "type": "integer"
+        },
+        "cta_width": {
+          "maximum": 1080,
+          "minimum": 1,
+          "title": "Cta Width",
+          "type": "integer"
+        },
+        "exclusions": {
+          "items": {
+            "$ref": "#/$defs/OverlayExclusionRegion"
+          },
+          "maxItems": 128,
+          "minItems": 8,
+          "title": "Exclusions",
+          "type": "array"
+        },
+        "output_frame_index": {
+          "minimum": 0,
+          "title": "Output Frame Index",
+          "type": "integer"
+        },
+        "output_time_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Time Us",
+          "type": "integer"
+        },
+        "phase": {
+          "enum": [
+            "entrance",
+            "hold",
+            "exit",
+            "maximum_extent"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "sample_frame_relative_path": {
+          "default": "",
+          "maxLength": 512,
+          "title": "Sample Frame Relative Path",
+          "type": "string"
+        },
+        "sample_frame_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sample Frame Sha256",
+          "type": "string"
+        },
+        "sample_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample_id",
+        "phase",
+        "output_frame_index",
+        "output_time_us",
+        "sample_frame_sha256",
+        "cta_left",
+        "cta_top",
+        "cta_width",
+        "cta_height",
+        "exclusions"
+      ],
+      "title": "OverlayExclusionSample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Source-bound clearance proof for a moving campaign overlay.",
+  "properties": {
+    "campaign": {
+      "const": "tarteel",
+      "default": "tarteel",
+      "title": "Campaign",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "cta_end_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Cta End Us",
+      "type": "integer"
+    },
+    "cta_start_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Cta Start Us",
+      "type": "integer"
+    },
+    "decision": {
+      "enum": [
+        "clear",
+        "blocked"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "evidence_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "overlay_spec_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Overlay Spec Sha256",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "title": "Reviewed At",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/OverlayExclusionSample"
+      },
+      "maxItems": 32,
+      "minItems": 4,
+      "title": "Samples",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "time_map_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Time Map Sha256",
+      "type": "string"
+    },
+    "transform_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transform Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "source_asset_id",
+    "candidate_id",
+    "source_sha256",
+    "time_map_sha256",
+    "overlay_spec_sha256",
+    "transform_sha256",
+    "cta_start_us",
+    "cta_end_us",
+    "samples",
+    "decision",
+    "reviewer",
+    "reviewed_at",
+    "provenance"
+  ],
+  "title": "OverlayExclusionEvidence",
+  "type": "object"
+}

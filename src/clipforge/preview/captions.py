@@ -15,7 +15,7 @@ from clipforge.errors import MediaError
 from clipforge.preview.timing import frame_at_or_after
 from clipforge.schemas.candidates import CandidateEvidenceBundle
 from clipforge.schemas.media import Transcript, TranscriptSegment, TranscriptWord
-from clipforge.schemas.preview import RoughCaptionCue, RoughPreviewProfile
+from clipforge.schemas.preview import RoughCaptionCue, RoughCaptionWord, RoughPreviewProfile
 from clipforge.timeline import TimeMap
 
 _PUNCT = frozenset(".?!…\u3002\uff1f\uff01:")
@@ -28,6 +28,7 @@ class _Piece:
     source_end_us: int
     segment_ids: tuple[str, ...]
     word_ids: tuple[str, ...]
+    words: tuple[TranscriptWord, ...] = ()
 
 
 def plan_captions(
@@ -55,6 +56,26 @@ def plan_captions(
         end_frame = frame_at_or_after(output_end, frame_count)
         if start_frame >= end_frame:
             continue
+        cue_words: list[RoughCaptionWord] = []
+        for word in piece.words:
+            if word.start_us < bundle.source_start_us or word.end_us > bundle.source_end_us:
+                continue
+            word_start = time_map.source_to_output(word.start_us)
+            word_end = time_map.source_to_output(word.end_us)
+            word_start_frame = frame_at_or_after(word_start, frame_count)
+            word_end_frame = frame_at_or_after(word_end, frame_count)
+            if word_end <= word_start or word_end_frame <= word_start_frame:
+                continue
+            cue_words.append(
+                RoughCaptionWord(
+                    word_id=word.word_id,
+                    text=word.text,
+                    output_start_us=word_start,
+                    output_end_us=word_end,
+                    output_start_frame=word_start_frame,
+                    output_end_frame_exclusive=word_end_frame,
+                )
+            )
         cues.append(
             RoughCaptionCue(
                 cue_id=_cue_id(mining_id, bundle.candidate_id, index, source_start, source_end),
@@ -67,6 +88,7 @@ def plan_captions(
                 output_end_us=output_end,
                 output_start_frame=start_frame,
                 output_end_frame_exclusive=end_frame,
+                words=cue_words,
             )
         )
     _reject_overlap(cues)
@@ -144,6 +166,12 @@ def _chunk_words(
     chunks: list[_Piece] = []
     current: list[tuple[TranscriptWord, str]] = []
     for word, segment_id in ordered:
+        # Keep provisional cues on one TimeMap segment. A phrase spanning a
+        # jump cut would make the caption appear to drift across the new
+        # picture even when each word interval is individually valid.
+        if current and segment_id != current[-1][1]:
+            chunks.append(_from_words(current))
+            current = []
         if current and word.start_us - current[-1][0].end_us > profile.max_caption_gap_us:
             chunks.append(_from_words(current))
             current = []
@@ -180,6 +208,7 @@ def _from_words(words: list[tuple[TranscriptWord, str]]) -> _Piece:
         source_end_us=words[-1][0].end_us,
         segment_ids=tuple(dict.fromkeys(segment for _word, segment in words)),
         word_ids=tuple(word.word_id for word, _segment in words),
+        words=tuple(word for word, _segment in words),
     )
 
 

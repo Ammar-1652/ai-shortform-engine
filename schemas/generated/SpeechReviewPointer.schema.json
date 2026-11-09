@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "description": "Hash-bound pointer to the current immutable Codex speech review.",
+  "properties": {
+    "pointer_kind": {
+      "const": "codex_speech_review_current",
+      "default": "codex_speech_review_current",
+      "title": "Pointer Kind",
+      "type": "string"
+    },
+    "relative_path": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "review_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Review Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "relative_path",
+    "review_sha256"
+  ],
+  "title": "SpeechReviewPointer",
+  "type": "object"
+}

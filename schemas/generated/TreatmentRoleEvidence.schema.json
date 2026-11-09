@@ -1,0 +1,77 @@
+{
+  "additionalProperties": false,
+  "description": "Explicit presence/absence state for every protected visual role.",
+  "properties": {
+    "analyzer_version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Analyzer Version",
+      "type": "string"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Note",
+      "type": "string"
+    },
+    "region_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Region Ids",
+      "type": "array"
+    },
+    "role": {
+      "enum": [
+        "face",
+        "active_subject",
+        "source_text",
+        "caption",
+        "logo",
+        "cta",
+        "platform_safe",
+        "platform_rail",
+        "broll",
+        "motion_graphic"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "present",
+        "absent_reviewed",
+        "unknown"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "role",
+    "status",
+    "analyzer_version",
+    "note"
+  ],
+  "title": "TreatmentRoleEvidence",
+  "type": "object"
+}

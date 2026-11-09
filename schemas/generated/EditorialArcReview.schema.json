@@ -1,0 +1,343 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "EditorialArcReviewBeat": {
+      "additionalProperties": false,
+      "description": "Inspectible evidence for one source-grounded story beat.",
+      "properties": {
+        "beat": {
+          "enum": [
+            "hook",
+            "body",
+            "punch"
+          ],
+          "title": "Beat",
+          "type": "string"
+        },
+        "beat_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Beat Id",
+          "type": "string"
+        },
+        "continuity_to_next": {
+          "enum": [
+            "accepted",
+            "requires_review",
+            "not_applicable"
+          ],
+          "title": "Continuity To Next",
+          "type": "string"
+        },
+        "event_label": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Event Label",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "representative_frame_relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Representative Frame Relative Path",
+          "type": "string"
+        },
+        "representative_frame_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Representative Frame Sha256",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "segment_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Segment Id",
+          "type": "string"
+        },
+        "source_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source End Us",
+          "type": "integer"
+        },
+        "source_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Source Start Us",
+          "type": "integer"
+        },
+        "subject_label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Subject Label",
+          "type": "string"
+        },
+        "transcript_word_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Transcript Word Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "beat_id",
+        "segment_id",
+        "beat",
+        "source_start_us",
+        "source_end_us",
+        "transcript_word_ids",
+        "representative_frame_relative_path",
+        "representative_frame_sha256",
+        "subject_label",
+        "event_label",
+        "continuity_to_next",
+        "rationale"
+      ],
+      "title": "EditorialArcReviewBeat",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Immutable editorial review of hook/body/punch continuity and closure.",
+  "properties": {
+    "arc_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Arc Sha256",
+      "type": "string"
+    },
+    "beats": {
+      "items": {
+        "$ref": "#/$defs/EditorialArcReviewBeat"
+      },
+      "minItems": 3,
+      "title": "Beats",
+      "type": "array"
+    },
+    "body_development": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Body Development",
+      "type": "string"
+    },
+    "campaign": {
+      "default": "generic",
+      "enum": [
+        "tarteel",
+        "generic"
+      ],
+      "title": "Campaign",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "decision": {
+      "enum": [
+        "accepted",
+        "rejected"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "hook_promise": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Hook Promise",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/ArtifactProvenance"
+    },
+    "punch_payoff": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Punch Payoff",
+      "type": "string"
+    },
+    "review_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "title": "Reviewed At",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "reviewer_role": {
+      "anyOf": [
+        {
+          "enum": [
+            "codex_operator",
+            "human_reviewer"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reviewer Role"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "transcript_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transcript Sha256",
+      "type": "string"
+    },
+    "visual_analysis_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Visual Analysis Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "review_id",
+    "source_asset_id",
+    "candidate_id",
+    "source_sha256",
+    "transcript_sha256",
+    "visual_analysis_sha256",
+    "arc_sha256",
+    "hook_promise",
+    "body_development",
+    "punch_payoff",
+    "beats",
+    "decision",
+    "reviewer",
+    "reviewed_at",
+    "provenance"
+  ],
+  "title": "EditorialArcReview",
+  "type": "object"
+}

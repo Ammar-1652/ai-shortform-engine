@@ -1,4 +1,4 @@
-"""Profiles, hard compliance gates, rights, and human review.
+"""Profiles, hard compliance gates, rights, and role-labelled review.
 
 Compliance is not a weight. ``require_compliance_cleared`` fails closed when
 evidence is missing or any rule fails.
@@ -100,11 +100,35 @@ class AssetReference(Versioned):
     uri: str = Field(min_length=1, max_length=2048)
     kind: AssetKind
     license_record_id: EntityId
+    # Operator-confirmed content labels are part of the editorial asset
+    # contract.  A license proves that a file may be used; it does not prove
+    # that it is relevant to the spoken source.  Advanced Hero binds the
+    # reviewed placement to these labels before a B-roll layer is rendered.
+    content_tags: list[str] = Field(default_factory=list, max_length=24)
     provenance: ArtifactProvenance
+
+    @model_validator(mode="after")
+    def tags_are_plain(self) -> Self:
+        import re
+
+        cleaned: list[str] = []
+        for tag in self.content_tags:
+            value = " ".join(tag.split()).strip().casefold()
+            if not value or len(value) > 80 or re.search(r"[^\w\s%$'.-]", value):
+                raise ValueError("asset content tags must be short plain labels")
+            if value not in cleaned:
+                cleaned.append(value)
+        self.content_tags = cleaned
+        return self
 
 
 class ReviewDecision(Versioned):
-    """A human review. ``automated`` cannot be true in this schema version."""
+    """A review decision with an explicit operator role.
+
+    Codex may record source-grounded candidate, Hero, caption, and framing
+    decisions while operating the pipeline. Final approval remains human-only.
+    ``automated`` cannot be true in this schema version.
+    """
 
     review_id: EntityId
     project_id: EntityId
@@ -113,6 +137,7 @@ class ReviewDecision(Versioned):
     subject_kind: Literal["candidate", "hero", "caption", "framing", "final"]
     decision: Literal["approved", "rejected", "changes_requested"]
     reviewer_id: str = Field(min_length=1, max_length=200)
+    reviewer_role: Literal["codex_operator", "human_reviewer"] = "human_reviewer"
     created_at: AwareDatetime
     notes: str = ""
     automated: Literal[False] = False
@@ -135,6 +160,8 @@ class ReviewDecision(Versioned):
                 f"subject_kind {self.subject_kind} requires artifact_id. "
                 "The review is of a specific media version, including when the decision is rejected."
             )
+        if self.subject_kind == "final" and self.reviewer_role != "human_reviewer":
+            raise ValueError("final approval requires reviewer_role human_reviewer")
         return self
 
 

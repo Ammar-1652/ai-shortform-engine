@@ -23,6 +23,13 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing boundaries between the c
 - Local tools are called directly. Do not wrap ffmpeg, SQLite, or Remotion in an MCP server. Envato MCP is the planned exception because it is an external service, and it is not in scope until its round.
 - Do not add n8n, Redis, Postgres, Docker, Kubernetes, a cloud renderer, or a third-party clipping SaaS unless an ADR records a measured need.
 - Prefer deterministic media tools over an LLM that shells out ad-hoc ffmpeg.
+- Role boundary: Codex is the `codex_operator` editorial brain and invokes
+  typed Clipforge tools. The Clipforge services, ffmpeg/ffprobe, Remotion,
+  storage, rights checks, TimeMap, cache, QA, and delivery are the
+  `system_enforcer` muscles. A `human_reviewer` alone can watch and approve
+  the exact final artifact. Do not let a skill, MCP adapter, repository, or
+  agent write executable renderer code or bypass a typed boundary. See
+  `SKILLS.md` and ADR 0101.
 
 Material architecture changes need a new numbered ADR. Update `ARCHITECTURE.md` in the same change. Do not bypass a typed contract with a dict or a raw SQL blob that the models would reject.
 

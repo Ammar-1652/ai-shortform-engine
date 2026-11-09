@@ -199,6 +199,7 @@ def test_speech_evidence_failures_stay_non_live(
         assert load_speech_catalog(catalog) is None
     elif mutate == "absent_root":
         root = tmp_path / "missing-root"
+        monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(root))
         assert speech_evidence_root() is None
         assert root.is_dir() is False
     elif mutate == "missing_filename":
@@ -356,6 +357,48 @@ def test_symlink_evidence_root_is_rejected(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(link))
     assert speech_evidence_root() is None
     assert provider_for("en-US").live_status != "verified_live"
+
+
+def test_default_evidence_discovery_does_not_grant_live_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    root = tmp_path / ".local" / "clipforge-speech-evidence"
+    assert speech_evidence_root() is None
+    root.mkdir(parents=True)
+    assert speech_evidence_root() == root
+    assert provider_for("en-US").live_status != "verified_live"
+    # Arbitrary WAV bytes, even in the discovered directory, are not evidence.
+    (root / "en-speech.wav").write_bytes(_pcm_wav())
+    assert provider_for("en-US").live_status != "verified_live"
+
+
+@pytest.mark.parametrize("override", ["missing", "file", "link"])
+def test_explicit_invalid_evidence_root_never_falls_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, override: str
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    default = tmp_path / ".local" / "clipforge-speech-evidence"
+    default.mkdir(parents=True)
+    target = tmp_path / override
+    if override == "file":
+        target.write_text("not a directory", encoding="utf-8")
+    elif override == "link":
+        target.symlink_to(default, target_is_directory=True)
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(target))
+    assert speech_evidence_root() is None
+
+
+def test_default_symlink_evidence_root_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    real = tmp_path / "real"
+    real.mkdir()
+    parent = tmp_path / ".local"
+    parent.mkdir()
+    (parent / "clipforge-speech-evidence").symlink_to(real, target_is_directory=True)
+    assert speech_evidence_root() is None
 
 
 def test_wav_metadata_mismatch_stays_unbound(tmp_path: Path) -> None:

@@ -466,6 +466,9 @@ def list_artifact_ids(connection: sqlite3.Connection, project_id: str) -> list[s
 
 
 def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> None:
+    # Revalidate model_copy/model_construct callers before writing an authority
+    # decision. Those Pydantic operations do not run the model validators.
+    review = _validate(ReviewDecision, review.model_dump(mode="json"), f"review {review.review_id}")
     if review.artifact_id is not None:
         _reject_cross_project(
             connection,
@@ -483,8 +486,8 @@ def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> Non
         """
         INSERT INTO reviews (
             review_id, project_id, artifact_id, candidate_id, subject_kind, decision,
-            reviewer_id, schema_version, notes, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            reviewer_id, reviewer_role, schema_version, notes, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             data["review_id"],
@@ -494,6 +497,7 @@ def insert_review(connection: sqlite3.Connection, review: ReviewDecision) -> Non
             data["subject_kind"],
             data["decision"],
             data["reviewer_id"],
+            data["reviewer_role"],
             data["schema_version"],
             data["notes"],
             data["created_at"],
@@ -801,6 +805,7 @@ def _review_from_row(row: sqlite3.Row) -> ReviewDecision:
             "subject_kind": row["subject_kind"],
             "decision": row["decision"],
             "reviewer_id": row["reviewer_id"],
+            "reviewer_role": row["reviewer_role"],
             "created_at": row["created_at"],
             "notes": row["notes"],
             "automated": False,

@@ -1,15 +1,19 @@
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, staticFile, useCurrentFrame, Video } from "remotion";
 
 import { activeCaption } from "./captions.js";
 import { VIDEO_OBJECT_FIT } from "./layout.js";
-import { NEUTRAL_DARK, type RoughPreviewInput } from "./types.js";
+import { NEUTRAL_DARK, type RoughCaptionCue, type RoughPreviewInput } from "./types.js";
 import { parseRenderInput } from "./validation.js";
+import { captionFontFamily, useCaptionFonts } from "../captions/fonts.js";
+import { nextCaptionWord } from "../captions/word-matching.js";
 
 /**
  * One candidate, contained in a vertical review frame.
  *
  * Video and speech share `media_trim_frame` on the 30/1 preview grid.
- * Caption text is a React text node. There is no word highlight.
+ * Provisional ASR captions are phrase-only by default. The explicit reviewed
+ * word mode is a visual review aid and is never a substitute for alignment
+ * evidence in a Hero approval.
  */
 function stagedName(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
@@ -24,22 +28,104 @@ export function RoughPreview(raw: RoughPreviewInput) {
   const input = parseRenderInput(raw);
   const frame = useCurrentFrame();
   const caption = activeCaption(input.captions, frame);
+  const fontsReady = useCaptionFonts(
+    input.font_identity === "amiri-quran-local-v1" || input.font_identity === "concat-editorial-local-v1",
+    input.font_identity,
+  );
+  if (!fontsReady) return null;
+  const foregroundX = input.foreground_x_px ?? 0;
+  const foregroundY = input.foreground_y_px ?? 0;
+  const foregroundWidth = input.foreground_width_px ?? input.width;
+  const foregroundHeight = input.foreground_height_px ?? input.height;
+  const foreground = {
+    position: "absolute" as const,
+    left: foregroundX,
+    top: foregroundY,
+    width: foregroundWidth,
+    height: foregroundHeight,
+    overflow: "hidden" as const,
+    // Keep the portrait foreground mildly pushed in while the blurred copy
+    // supplies the surrounding canvas.  The transform is shared by the
+    // media and the campaign overlay wrapper so CTA/logo coordinates remain
+    // attached to the same source picture after the zoom.
+    transform: `scale(${(input.foreground_scale_permille ?? 1000) / 1000})`,
+    transformOrigin: "center center",
+  };
+  const containedForeground = input.background === "blurred-source-v1" &&
+    (foregroundWidth < input.width || foregroundHeight < input.height);
   return (
-    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK }}>
-      <AbsoluteFill>
-        <OffthreadVideo
-          src={staticFile(stagedName(input.video_path))}
-          trimBefore={input.media_trim_frame}
-          durationInFrames={input.duration_in_frames}
-          muted
-          style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT }}
-        />
+    <AbsoluteFill style={{ backgroundColor: NEUTRAL_DARK, overflow: "hidden" }}>
+      <AbsoluteFill style={{ overflow: "hidden" }}>
+        {input.background === "blurred-source-v1" ? (
+          <OffthreadVideo
+            src={staticFile(stagedName(input.video_path))}
+            trimBefore={input.media_trim_frame}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "blur(24px)",
+              transform: "scale(1.08)",
+              opacity: 0.72,
+            }}
+          />
+        ) : null}
+        {containedForeground ? (
+          <div style={foreground}>
+            <OffthreadVideo
+              src={staticFile(stagedName(input.video_path))}
+              trimBefore={input.media_trim_frame}
+              durationInFrames={input.duration_in_frames}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "fill", transform: `translateX(${input.video_offset_x_px}px)` }}
+            />
+          </div>
+        ) : (
+          <OffthreadVideo
+            src={staticFile(stagedName(input.video_path))}
+            trimBefore={input.media_trim_frame}
+            durationInFrames={input.duration_in_frames}
+            muted
+            style={{ width: "100%", height: "100%", objectFit: VIDEO_OBJECT_FIT, transform: `translateX(${input.video_offset_x_px}px) scale(${input.video_scale_permille / 1000})` }}
+          />
+        )}
         <Audio
           src={staticFile(stagedName(input.audio_path))}
           trimBefore={input.media_trim_frame}
           durationInFrames={input.duration_in_frames}
         />
       </AbsoluteFill>
+      {input.campaign_overlay ? (
+        <div style={containedForeground ? foreground : { position: "absolute", inset: 0, overflow: "hidden" }}>
+          {input.campaign_overlay.watermark_visibility === "source_visible_v1" ? null : (
+            <Img
+              src={staticFile(input.campaign_overlay.watermark_asset_name)}
+              style={{
+                position: "absolute",
+                top: 18,
+                right: 18,
+                width: `${input.campaign_overlay.watermark_width_permille / 10}%`,
+                height: "auto",
+                objectFit: "contain",
+                filter: "drop-shadow(0 3px 6px rgba(0,0,0,.55))",
+              }}
+            />
+          )}
+          <Sequence
+            from={Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000)}
+            durationInFrames={Math.max(
+              1,
+              Math.ceil(((input.campaign_overlay.cta_end_us - input.campaign_overlay.cta_start_us) * 30) / 1_000_000),
+            )}
+          >
+            <CampaignCta overlay={input.campaign_overlay} localFrame={frame - Math.floor((input.campaign_overlay.cta_start_us * 30) / 1_000_000)} />
+          </Sequence>
+        </div>
+      ) : null}
       {caption === null ? null : (
         <div
           style={{
@@ -54,7 +140,7 @@ export function RoughPreview(raw: RoughPreviewInput) {
           <div
             style={{
               color: "#ffffff",
-              fontFamily: "sans-serif",
+              fontFamily: captionFontFamily(input.font_identity),
               fontWeight: 700,
               fontSize: 42,
               lineHeight: 1.25,
@@ -66,10 +152,81 @@ export function RoughPreview(raw: RoughPreviewInput) {
               whiteSpace: "pre-wrap",
             }}
           >
-            {caption.text}
+          {input.word_highlight_mode === "reviewed" && caption.words.length > 0 ? (
+            <CaptionWords cue={caption} frame={frame} />
+          ) : caption.text}
           </div>
         </div>
       )}
     </AbsoluteFill>
+  );
+}
+
+function CampaignCta({
+  overlay,
+  localFrame,
+}: {
+  overlay: NonNullable<RoughPreviewInput["campaign_overlay"]>;
+  localFrame: number;
+}) {
+  const placement = {
+    position: "absolute" as const,
+    left: `${overlay.cta_left_permille / 10}%`,
+    top: `${overlay.cta_top_permille / 10}%`,
+    width: `${overlay.cta_width_permille / 10}%`,
+    height: "auto",
+    objectFit: "contain" as const,
+    zIndex: 12,
+  };
+  if (overlay.cta_render_mode === "alpha_video_v1") {
+    const durationInFrames = Math.max(
+      1,
+      Math.ceil(((overlay.cta_end_us - overlay.cta_start_us) * 30) / 1_000_000),
+    );
+    return (
+      <Video
+        src={staticFile(overlay.cta_asset_name)}
+        trimBefore={0}
+        durationInFrames={durationInFrames}
+        muted
+        style={placement}
+      />
+    );
+  }
+  if (overlay.cta_frame_prefix === undefined || overlay.cta_frame_count === undefined) {
+    throw new Error("PNG CTA overlay is missing its frame sequence");
+  }
+  const index = Math.min(overlay.cta_frame_count - 1, Math.max(0, localFrame));
+  const name = `${overlay.cta_frame_prefix}-${String(index + 1).padStart(4, "0")}.png`;
+  return (
+    <Img
+      src={staticFile(name)}
+      style={{
+        ...placement,
+      }}
+    />
+  );
+}
+
+function CaptionWords({ cue, frame }: { cue: RoughCaptionCue; frame: number }) {
+  let cursor = 0;
+  return (
+    <>
+      {cue.text.split(/(\s+)/).map((part, index) => {
+        if (/^\s+$/u.test(part)) return <span key={`${part}-${index}`}>{part}</span>;
+        const matched = nextCaptionWord(part, cue.words, cursor);
+        cursor = matched.nextCursor;
+        const word = matched.word;
+        const active = word !== undefined && frame >= word.output_start_frame && frame < word.output_end_frame_exclusive;
+        const color = word?.verification_status === "incorrect"
+          ? "#ff4d5f"
+          : word?.verification_status === "correct" && active
+            ? "#42d487"
+            : active
+              ? "#ffcf4a"
+              : "#ffffff";
+        return <span key={`${part}-${index}`} style={{ color }}>{part}</span>;
+      })}
+    </>
   );
 }

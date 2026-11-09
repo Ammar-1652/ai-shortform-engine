@@ -8,6 +8,7 @@ from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from clipforge.schemas.campaign import _plain
 from clipforge.schemas.common import EntityId, Versioned
+from clipforge.schemas.roles import WorkflowRolePolicy
 
 _SHA = r"^[0-9a-f]{64}$"
 RunStatus = Literal["succeeded", "partial", "blocked", "failed", "cancelled"]
@@ -184,6 +185,7 @@ class CampaignProductionRun(Versioned):
     sources: list[CampaignSourceRun]
     status: RunStatus
     reason_code: str = Field(min_length=1, max_length=80)
+    workflow_roles: WorkflowRolePolicy | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator(
         "voice_id",

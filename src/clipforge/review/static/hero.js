@@ -24,7 +24,7 @@ function decisionLabel(decision) {
   if (!decision) {
     return "none";
   }
-  return decision.decision + " by " + decision.reviewer_id + " at " + decision.created_at;
+  return decision.decision + " by " + decision.reviewer_id + " (" + (decision.reviewer_role || "human_reviewer") + ") at " + decision.created_at;
 }
 
 function renderBoard(board) {

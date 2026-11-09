@@ -11,6 +11,20 @@
       "title": "Kind",
       "type": "string"
     },
+    "left_display": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Left Display"
+    },
     "left_label": {
       "maxLength": 40,
       "minLength": 1,
@@ -22,6 +36,20 @@
       "minimum": 0,
       "title": "Left Value",
       "type": "integer"
+    },
+    "right_display": {
+      "anyOf": [
+        {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Right Display"
     },
     "right_label": {
       "maxLength": 40,

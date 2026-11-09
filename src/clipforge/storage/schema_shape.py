@@ -89,6 +89,7 @@ REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "subject_kind",
             "decision",
             "reviewer_id",
+            "reviewer_role",
             "schema_version",
             "notes",
             "created_at",

@@ -42,11 +42,13 @@ from clipforge.hero.identity import alignment_identity_config, digest_candidate,
 from clipforge.hero.integrity import hero_problems
 from clipforge.hero.plan import build_hero_plan
 from clipforge.hero.probe import probe_hero
+from clipforge.hero.render_checkpoint import render_checkpointed_hero_candidate, renderer_dependency_sha256
 from clipforge.hero.selection import approved_candidates, review_digest
-from clipforge.media.clock import us_to_seconds_str
+from clipforge.media.clock import seconds_text_to_us, us_to_seconds_str
 from clipforge.media.disk import read_disk, require_disk_budget
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_to_file_uri
+from clipforge.media.probe import read_ffprobe_json
 from clipforge.media.process import ProcessRunner
 from clipforge.media.tools import resolve_ffmpeg
 from clipforge.media.workspace import (
@@ -95,7 +97,15 @@ from clipforge.storage.repository import ArtifactRow
 from clipforge.timeline.framerate import FrameRate
 from clipforge.transcription.io import dump_json, publish_json
 
-_PROFILE = HeroProfile()
+_PROFILE = HeroProfile(
+    renderer_recipe_version="hero-draft-renderer-v2",
+    caption_style_version="hero-caption-style-v2",
+    caption_font_sha256=[
+        "b5d64817b6331723b5e59eaaa6db90057cbed58e9733f65687f110638192359f",
+        "faa5f3656a78b2e2d450d27fe8382c778bc2b6bb5ea29c986664a6a435056ceb",
+        "4e5462d2e8be880317b9f49b5b2da109ddb6a3563d91cc604b67f3535832a555",
+    ],
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +159,7 @@ def render_hero_drafts(
     alignment_backend: ForcedAlignmentBackend | None = None,
     allow_model_download: bool = False,
     created_by: str | None = None,
+    resume_hero_set_id: str | None = None,
 ) -> HeroRenderResult:
     """Render approved candidates. No approval is a no-op and writes nothing."""
     root = work_root.resolve()
@@ -194,7 +205,11 @@ def render_hero_drafts(
         if not chosen:
             return _noop(source_asset_id, tuple(excluded), started)
         identity = _live_identity(alignment_backend)
-        if not force and _cache_ready(database, inputs, current, reviews, active, identity):
+        if (
+            not force
+            and resume_hero_set_id is None
+            and _cache_ready(database, inputs, current, reviews, active, identity)
+        ):
             return _cache_result(database, inputs, current, tuple(excluded), started)
         if renderer.requires_browser:
             from clipforge.preview.browser import resolve_browser
@@ -207,7 +222,7 @@ def render_hero_drafts(
         job = _running_job(inputs, current, active, aligner, len(chosen), now)
         with database.transaction() as connection:
             insert_job(connection, job)
-        hero_set_id = str(uuid.uuid4())
+        hero_set_id = resume_hero_set_id or str(uuid.uuid4())
         run_dir: Path | None = None
         try:
             current = require_current_preview(database, source_asset_id, root)
@@ -218,7 +233,14 @@ def render_hero_drafts(
                 profile_fingerprint=rough.fingerprint(),
                 create_workspace=True,
             )
-            run_dir = inputs.pair.workspace.make_hero_run(hero_set_id)
+            if resume_hero_set_id is not None:
+                run_dir = inputs.pair.workspace.hero_run_dir(hero_set_id)
+                if run_dir.is_symlink() or not run_dir.is_dir():
+                    raise MediaError(f"Hero resume run {hero_set_id} is missing")
+                if (run_dir / "manifest.json").is_file():
+                    raise MediaError(f"Hero resume run {hero_set_id} is already complete")
+            else:
+                run_dir = inputs.pair.workspace.make_hero_run(hero_set_id)
             document, manifest = _render_run(
                 inputs,
                 current.artifact_id,
@@ -550,9 +572,6 @@ def _render_one(
     if renderer.requires_browser:
         from clipforge.preview.trim import stage_candidate_span
 
-        audio_path = staging / f"{candidate.candidate_id}.flac"
-        if not audio_path.is_file():
-            _trim_asr(inputs.asr_path, audio_path, segment.source_start_us, segment.source_end_us, root)
         staged = stage_candidate_span(
             inputs.proxy_path,
             inputs.asr_path,
@@ -567,7 +586,11 @@ def _render_one(
             log_path=run_dir / "logs" / f"{candidate.candidate_id}.trim.log",
         )
         video_name = staged.video_path.name
-        audio_name = audio_path.name
+        # The staged pair is one canonical trim transaction. Do not render a
+        # picture from ``stage_candidate_span`` beside a separately trimmed
+        # audio file: a second ffmpeg recipe can start on a different sample
+        # and reintroduce the reported AV drift at the first cut.
+        audio_name = staged.audio_path.name
         trim_frame = 0
     rendered = _render_input(
         candidate,
@@ -582,6 +605,8 @@ def _render_one(
         video_name=video_name,
         audio_name=audio_name,
         trim_frame=trim_frame,
+        source_width=inputs.pair.visual.proxy_width,
+        source_height=inputs.pair.visual.proxy_height,
     )
     input_path = directory / "render-input.json"
     publish_json(input_path, rendered, root, inputs.pair.workspace.partial_for(input_path))
@@ -603,7 +628,18 @@ def _render_one(
         + "\n",
         encoding="utf-8",
     )
-    renderer.render_batch(batch, log_path=run_dir / "logs" / f"{job.job_id}.log")
+    if renderer.requires_browser:
+        render_checkpointed_hero_candidate(
+            workspace=inputs.pair.workspace,
+            root=root,
+            run_dir=run_dir,
+            renderer=renderer,
+            render_input=rendered,
+            output=partial,
+            dependency_sha256=renderer_dependency_sha256(),
+        )
+    else:
+        renderer.render_batch(batch, log_path=run_dir / "logs" / f"{job.job_id}.log")
     if not partial.is_file() or partial.is_symlink():
         raise MediaError(f"renderer did not produce a Hero file for {candidate.candidate_id}")
     duration = candidate.time_map.to_time_map().total_output_duration()
@@ -649,6 +685,8 @@ def _render_input(
     video_name: str = "analysis.mp4",
     audio_name: str = "asr.flac",
     trim_frame: int | None = None,
+    source_width: int,
+    source_height: int,
 ) -> HeroRenderInput:
     if plan.edit_plan.stage != "hero":
         raise MediaError("Hero render refuses a plan whose stage is not hero")
@@ -677,6 +715,7 @@ def _render_input(
                         "text": word.text,
                         "output_start_frame": word.output_start_frame,
                         "output_end_frame_exclusive": word.output_end_frame_exclusive,
+                        "verification_status": word.verification_status,
                     }
                     for word in piece.words
                 ],
@@ -685,11 +724,15 @@ def _render_input(
     events = [_motion_payload(event, frame_count) for event in plan.edit_plan.motion_events]
     return HeroRenderInput(
         candidate_id=candidate.candidate_id,
+        renderer_recipe_version=profile.renderer_recipe_version,
         hero_set_id=hero_set_id,
         video_path=str(run_dir / "staging" / video_name),
         audio_path=str(run_dir / "staging" / audio_name),
         media_trim_frame=media_trim_frame(segment.source_start_us) if trim_frame is None else trim_frame,
         duration_in_frames=frame_count,
+        source_width=source_width,
+        source_height=source_height,
+        caption_font_sha256=profile.caption_font_sha256,
         alignment_sha256=alignment_sha256,
         edit_plan_sha256=edit_plan_sha256,
         time_map_sha256=digest_time_map(candidate.time_map),
@@ -833,8 +876,8 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
             str(source),
             "-ss",
             us_to_seconds_str(start_us),
-            "-to",
-            us_to_seconds_str(end_us),
+            "-t",
+            us_to_seconds_str(end_us - start_us),
             "-c:a",
             "flac",
             str(destination),
@@ -842,6 +885,23 @@ def _trim_asr(source: Path, destination: Path, start_us: int, end_us: int, root:
         log_path=None,
         check=True,
     )
+    probe = read_ffprobe_json(destination, ProcessRunner(), None)
+    streams = probe.get("streams")
+    audio = (
+        next(
+            (item for item in streams if isinstance(item, dict) and item.get("codec_type") == "audio"),
+            None,
+        )
+        if isinstance(streams, list)
+        else None
+    )
+    duration = seconds_text_to_us(audio.get("duration")) if isinstance(audio, dict) else None
+    expected = end_us - start_us
+    if duration is None or abs(duration - expected) > 100_000:
+        raise MediaError(
+            f"staged alignment speech duration {duration} us differs from {expected} us; "
+            "refusing a separately clocked Hero render"
+        )
 
 
 def _require_fresh_alignment(
@@ -1026,6 +1086,7 @@ def _document(
         rough_manifest_sha256=rough_manifest_sha256,
         profile=profile,
         profile_fingerprint=profile.fingerprint(),
+        renderer_recipe_version=profile.renderer_recipe_version,
         alignment_model=aligner.model_name,
         whisperx_version=aligner.whisperx_version,
         alignment_config_sha256=config,
@@ -1069,6 +1130,7 @@ def _cache_record(
         rough_manifest_sha256=document.rough_manifest_sha256,
         hero_input_sha256=document.hero_input_sha256,
         profile_fingerprint=document.profile_fingerprint,
+        renderer_recipe_version=document.renderer_recipe_version,
         alignment_model=document.alignment_model,
         whisperx_version=document.whisperx_version,
         alignment_config_sha256=document.alignment_config_sha256,

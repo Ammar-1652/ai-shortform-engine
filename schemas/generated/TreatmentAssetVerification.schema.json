@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "description": "Evidence returned only after an existing provider/rights boundary verifies an asset.",
+  "properties": {
+    "acquisition_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Acquisition Id",
+      "type": "string"
+    },
+    "license_evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "License Evidence Sha256",
+      "type": "string"
+    },
+    "media_kind": {
+      "enum": [
+        "graphic",
+        "audio"
+      ],
+      "title": "Media Kind",
+      "type": "string"
+    },
+    "provider": {
+      "enum": [
+        "envato",
+        "openverse",
+        "local"
+      ],
+      "title": "Provider",
+      "type": "string"
+    },
+    "provider_response_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Provider Response Sha256",
+      "type": "string"
+    },
+    "registered_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Registered Asset Id",
+      "type": "string"
+    },
+    "registered_asset_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Registered Asset Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selection_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Selection Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "verified",
+      "default": "verified",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider",
+    "provider_response_sha256",
+    "selection_id",
+    "acquisition_id",
+    "license_evidence_sha256",
+    "registered_asset_id",
+    "registered_asset_sha256",
+    "media_kind"
+  ],
+  "title": "TreatmentAssetVerification",
+  "type": "object"
+}

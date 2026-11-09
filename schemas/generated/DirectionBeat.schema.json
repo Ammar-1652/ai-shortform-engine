@@ -1,0 +1,110 @@
+{
+  "additionalProperties": false,
+  "description": "One hook/body/punch beat. Text is copied from the source evidence.",
+  "properties": {
+    "beat_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Beat Id",
+      "type": "string"
+    },
+    "display_text": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Text"
+    },
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "kind": {
+      "enum": [
+        "hook",
+        "body",
+        "punch"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "output_end_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output End Us"
+    },
+    "output_start_us": {
+      "anyOf": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Output Start Us"
+    },
+    "purpose": {
+      "enum": [
+        "context",
+        "contrast",
+        "consequence",
+        "payoff"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_segment_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Segment Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "beat_id",
+    "kind",
+    "purpose",
+    "source_segment_ids",
+    "evidence_ids"
+  ],
+  "title": "DirectionBeat",
+  "type": "object"
+}

@@ -226,7 +226,7 @@ def _handler(
                         },
                     )
                     return
-                context, decision, reviewer, notes = parse_decision_body(payload)
+                context, decision, reviewer, notes, reviewer_role = parse_decision_body(payload)
                 if context.source_asset_id != source_asset_id:
                     raise MediaError(
                         "the preview set changed while this review page was open; reload before saving"
@@ -244,6 +244,7 @@ def _handler(
                         decision=decision,
                         reviewer_id=reviewer,
                         notes=notes,
+                        reviewer_role=reviewer_role,
                     )
                     _send_json(
                         self,
@@ -254,6 +255,7 @@ def _handler(
                             "candidate_id": context.candidate_id,
                             "artifact_id": context.artifact_id,
                             "notes": notes,
+                            "reviewer_role": reviewer_role,
                             "automated": False,
                         },
                     )
@@ -266,6 +268,7 @@ def _handler(
                         decision=decision,
                         reviewer_id=reviewer,
                         notes=notes,
+                        reviewer_role=reviewer_role,
                     )
                 else:
                     review = record_decision(
@@ -275,6 +278,7 @@ def _handler(
                         decision=decision,
                         reviewer_id=reviewer,
                         notes=notes,
+                        reviewer_role=reviewer_role,
                     )
             except json.JSONDecodeError:
                 _send_json(self, 400, {"error": "review body is not valid JSON"})

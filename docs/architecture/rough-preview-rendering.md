@@ -23,17 +23,28 @@ The picture is `proxy/analysis.mp4`. The speech is `audio/asr.flac`. Both alread
 
 The preview trim is the 30/1 frame that contains the candidate start. Video and audio share that frame. Canonical bounds stored on the manifest stay exact. Quantization error is recorded as `duration_error_us` and must stay inside 100 ms.
 
-The canvas is 720×1280. The whole source frame is contained. Empty areas are `#111111`. There is no face crop and no speaker inference.
+The canvas is 720×1280. The whole source frame is contained. The default review background is
+`neutral-dark-v1` (`#111111`). An explicit comparison render may select
+`blurred-source-v1`: it draws the same staged source behind the contained foreground,
+cover-fills it, applies a bounded 24px blur and 0.72 opacity, and never stretches the
+foreground. The background choice is part of the render input and therefore the cache
+identity. There is no face crop and no speaker inference. A review-only variant may also
+use a bounded uniform `video_scale_permille` (1000–1250) and `video_offset_x_px`
+(-120–120); these are composition comparisons, not final portrait reframing.
+The Tarteel profile selects a bounded foreground rectangle and mild zoom on the
+contained source while keeping campaign overlays in that same foreground coordinate
+space. Its CTA start and face-safe position are deterministic and recorded in the
+render input.
 
 ## Captions
 
-`provisional-caption-v1` copies transcript text. Word mode chunks real word times: 8 words, 42 code points, 3 seconds, and a gap over 1.25 seconds, preferring a break after observed punctuation. Segment mode uses one cue per untimed segment and does not invent word times. Cues store source microseconds, output microseconds, and derived half-open frames. `timing_quality` is `provisional`. Overlapping cues fail the plan.
+`provisional-caption-v1` copies transcript text. Word mode chunks real word times: 8 words, 42 code points, 3 seconds, and a gap over 1.25 seconds, preferring a break after observed punctuation. Segment mode uses one cue per untimed segment and does not invent word times. Cues store source microseconds, output microseconds, and derived half-open frames. `timing_quality` is `provisional`; the renderer shows the grouped phrase only and never paints a moving word highlight from provisional ASR. Forced word motion belongs to the approved Hero/Advanced alignment path. Overlapping cues fail the plan.
 
-The overlay is bold system sans-serif, white on a dark plate, centered above the bottom safe area. Changes between cues are hard cuts. Text is a React text node.
+The overlay is bold system sans-serif, white on a dark plate, centered above the bottom safe area. Changes between cues are hard cuts. Text is a React text node. `word_highlight_mode=reviewed` is an explicit visual review aid: it uses stored word intervals and review statuses (green correct, red incorrect, gold unverified); it does not upgrade provisional ASR to forced alignment or approval evidence. A reviewed word payload must declare `word_timing_source` (`transcript-word-times-v1` or `reviewed-word-times-v1`); segment-only payloads cannot paint word highlights. Operators must use the transcript/alignment word intervals, never distribute words evenly across a subtitle phrase.
 
 ## Render
 
-Remotion 4.0.532 composites one `RoughPreview`. Python writes `candidates/<id>/render-input.json` and one batch file. Node bundles once per set and renders in order at concurrency 1. Staged media is a hard link of the proxy and the FLAC under the run directory, served to Remotion from that directory, then removed. The original source is not copied.
+Remotion 4.0.532 composites one `RoughPreview`. Python writes `candidates/<id>/render-input.json` and one batch file. Node bundles once per set and renders in order at concurrency 1. Staged media is a hard link of the proxy and the FLAC under the run directory, served to Remotion from that directory, then removed. For a Tarteel run, the validated alpha CTA and watermark are retained under the run's `staging/` directory because `preview verify` checks those exact evidence files; they remain inside the gitignored work root. The original source is not copied.
 
 Each MP4 is written to a partial path, probed, hashed, and renamed to `preview.mp4`. The manifest is published only after every candidate validates. The current artifact kind is `rough_preview_set_json`. The sidecar is `metadata/rough-preview.recipe.json`.
 

@@ -48,9 +48,28 @@ export function outputFrameCount(durationUs: number): number {
 
 export function windowAt(frame: number, windows: CropWindow[]): CropWindow {
   const time = frameStartUs(frame);
-  const found = windows.find((item) => time >= item.output_start_us && time < item.output_end_us);
+  const index = windows.findIndex((item) => time >= item.output_start_us && time < item.output_end_us);
+  if (index < 0) {
+    throw new Error("face_follow frame index drifted");
+  }
+  const found = windows[index];
+  const next = windows[index + 1];
   if (found === undefined) {
     throw new Error("face_follow frame index drifted");
+  }
+  // Reviewed manual windows are trajectory keyframes: move deterministically
+  // toward the next crop over this interval. Face-follow windows are already
+  // frame-quantized, so this leaves their per-frame path unchanged.
+  if (next !== undefined && found.output_end_us - found.output_start_us > 2 * Math.ceil(1_000_000 / FPS)) {
+    const progress = Math.max(
+      0,
+      Math.min(1, (time - found.output_start_us) / (found.output_end_us - found.output_start_us)),
+    );
+    return {
+      ...found,
+      source_x: Math.round(found.source_x + (next.source_x - found.source_x) * progress),
+      source_y: Math.round(found.source_y + (next.source_y - found.source_y) * progress),
+    };
   }
   return found;
 }

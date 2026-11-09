@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "asset_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Asset Ids",
+      "type": "array"
+    },
+    "asset_request_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Asset Request Ids",
+      "type": "array"
+    },
+    "duck_db": {
+      "default": 6.0,
+      "maximum": 18.0,
+      "minimum": 0.0,
+      "title": "Duck Db",
+      "type": "number"
+    },
+    "event_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Event Ids",
+      "type": "array"
+    },
+    "fallback": {
+      "default": "none",
+      "enum": [
+        "source_footage",
+        "clean_cut",
+        "hold",
+        "silence",
+        "none"
+      ],
+      "title": "Fallback",
+      "type": "string"
+    },
+    "gain_db": {
+      "default": -18.0,
+      "maximum": 0.0,
+      "minimum": -24.0,
+      "title": "Gain Db",
+      "type": "number"
+    },
+    "layer": {
+      "const": "sfx",
+      "default": "sfx",
+      "title": "Layer",
+      "type": "string"
+    },
+    "max_overlap_us": {
+      "default": 300000,
+      "maximum": 2000000,
+      "minimum": 0,
+      "title": "Max Overlap Us",
+      "type": "integer"
+    },
+    "omission_reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "dialogue_clarity",
+            "no_relevant_asset",
+            "face_collision",
+            "protected_region_collision",
+            "quiet_payoff",
+            "short_interval",
+            "no_semantic_cut",
+            "policy_preference",
+            "unsupported_capability",
+            "missing_evidence"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Omission Reason"
+    },
+    "purpose": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MotionPurpose"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rationale": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Rationale",
+      "type": "string"
+    },
+    "role": {
+      "anyOf": [
+        {
+          "enum": [
+            "accent",
+            "reveal",
+            "transition",
+            "reaction",
+            "settle"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Role"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "state": {
+      "enum": [
+        "use",
+        "omit_with_reason",
+        "blocked_by_policy",
+        "needs_review"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "state",
+    "rationale"
+  ],
+  "title": "SfxTreatmentDecision",
+  "type": "object"
+}

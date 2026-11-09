@@ -95,8 +95,11 @@
       "type": "integer"
     },
     "renderer_recipe_version": {
-      "const": "hero-draft-renderer-v1",
       "default": "hero-draft-renderer-v1",
+      "enum": [
+        "hero-draft-renderer-v1",
+        "hero-draft-renderer-v2"
+      ],
       "title": "Renderer Recipe Version",
       "type": "string"
     },

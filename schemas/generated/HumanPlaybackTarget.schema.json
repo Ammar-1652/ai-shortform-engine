@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "Exact playback identity displayed before a human records a decision.",
+  "properties": {
+    "advanced_artifact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Advanced Artifact Id",
+      "type": "string"
+    },
+    "advanced_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Advanced Manifest Sha256",
+      "type": "string"
+    },
+    "advanced_plan_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Advanced Plan Sha256",
+      "type": "string"
+    },
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Asset Id",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "video_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Video Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_id",
+    "source_asset_id",
+    "candidate_id",
+    "advanced_artifact_id",
+    "advanced_manifest_sha256",
+    "advanced_plan_sha256",
+    "source_sha256",
+    "video_sha256"
+  ],
+  "title": "HumanPlaybackTarget",
+  "type": "object"
+}

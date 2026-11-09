@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "OverlayExclusionRegion": {
+      "additionalProperties": false,
+      "description": "One transformed region that a campaign overlay must avoid.",
+      "properties": {
+        "annotation_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotation Id"
+        },
+        "height": {
+          "anyOf": [
+            {
+              "maximum": 1920,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height"
+        },
+        "kind": {
+          "enum": [
+            "face",
+            "child_body",
+            "tablet",
+            "caption",
+            "context_line",
+            "source_logo",
+            "watermark",
+            "platform_rail"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "left": {
+          "anyOf": [
+            {
+              "maximum": 1080,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "present",
+            "absent_reviewed",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "top": {
+          "anyOf": [
+            {
+              "maximum": 1920,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 1080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        }
+      },
+      "required": [
+        "kind",
+        "status"
+      ],
+      "title": "OverlayExclusionRegion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One decoded or reviewed sample over the complete CTA animation.",
+  "properties": {
+    "cta_height": {
+      "maximum": 1920,
+      "minimum": 1,
+      "title": "Cta Height",
+      "type": "integer"
+    },
+    "cta_left": {
+      "maximum": 1080,
+      "minimum": 0,
+      "title": "Cta Left",
+      "type": "integer"
+    },
+    "cta_top": {
+      "maximum": 1920,
+      "minimum": 0,
+      "title": "Cta Top",
+      "type": "integer"
+    },
+    "cta_width": {
+      "maximum": 1080,
+      "minimum": 1,
+      "title": "Cta Width",
+      "type": "integer"
+    },
+    "exclusions": {
+      "items": {
+        "$ref": "#/$defs/OverlayExclusionRegion"
+      },
+      "maxItems": 128,
+      "minItems": 8,
+      "title": "Exclusions",
+      "type": "array"
+    },
+    "output_frame_index": {
+      "minimum": 0,
+      "title": "Output Frame Index",
+      "type": "integer"
+    },
+    "output_time_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Output Time Us",
+      "type": "integer"
+    },
+    "phase": {
+      "enum": [
+        "entrance",
+        "hold",
+        "exit",
+        "maximum_extent"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "sample_frame_relative_path": {
+      "default": "",
+      "maxLength": 512,
+      "title": "Sample Frame Relative Path",
+      "type": "string"
+    },
+    "sample_frame_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sample Frame Sha256",
+      "type": "string"
+    },
+    "sample_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Sample Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "sample_id",
+    "phase",
+    "output_frame_index",
+    "output_time_us",
+    "sample_frame_sha256",
+    "cta_left",
+    "cta_top",
+    "cta_width",
+    "cta_height",
+    "exclusions"
+  ],
+  "title": "OverlayExclusionSample",
+  "type": "object"
+}

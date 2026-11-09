@@ -59,7 +59,8 @@ def wrap_caption(text: str, *, language: str, width: int = 12) -> list[str]:
     profile = require_language(language)
     if width < 1:
         raise ValueError("caption width must be positive")
-    if not text or text.strip() != text:
+    text = " ".join(text.split()) if profile.language != "ja" else text.strip()
+    if not text:
         raise ValueError("caption text is empty")
     if profile.language == "ja":
         return _wrap_cjk(text, width)
@@ -68,7 +69,7 @@ def wrap_caption(text: str, *, language: str, width: int = 12) -> list[str]:
 
 def _wrap_words(text: str, width: int) -> list[str]:
     """Wrap on spaces. Currency and numeric tokens stay intact. Text is not reversed."""
-    words = text.split(" ")
+    words = text.split()
     if any(not word for word in words):
         raise ValueError("caption text is empty")
     lines: list[str] = []

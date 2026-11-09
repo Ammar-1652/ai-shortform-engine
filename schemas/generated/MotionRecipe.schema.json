@@ -1,0 +1,280 @@
+{
+  "$defs": {
+    "MotionParameter": {
+      "additionalProperties": false,
+      "description": "A bounded declarative parameter; arbitrary code is not a parameter type.",
+      "properties": {
+        "default_value": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Value"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum"
+        },
+        "name": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "value_type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "color"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value_type"
+      ],
+      "title": "MotionParameter",
+      "type": "object"
+    },
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "An allowlisted recipe routed to a local Remotion component.",
+  "properties": {
+    "attention_cost": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Attention Cost",
+      "type": "string"
+    },
+    "compatible_languages": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Compatible Languages",
+      "type": "array"
+    },
+    "compatible_profiles": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Compatible Profiles",
+      "type": "array"
+    },
+    "component_id": {
+      "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+      "title": "Component Id",
+      "type": "string"
+    },
+    "duration_max_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Duration Max Us",
+      "type": "integer"
+    },
+    "duration_min_us": {
+      "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+      "maximum": 604800000000,
+      "minimum": 0,
+      "title": "Duration Min Us",
+      "type": "integer"
+    },
+    "fallback_component_id": {
+      "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+      "title": "Fallback Component Id",
+      "type": "string"
+    },
+    "local_modifications": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Local Modifications",
+      "type": "array"
+    },
+    "optional_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Optional Inputs",
+      "type": "array"
+    },
+    "overuse_warning": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Overuse Warning",
+      "type": "string"
+    },
+    "parameters": {
+      "items": {
+        "$ref": "#/$defs/MotionParameter"
+      },
+      "maxItems": 32,
+      "title": "Parameters",
+      "type": "array"
+    },
+    "purposes": {
+      "items": {
+        "$ref": "#/$defs/MotionPurpose"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Purposes",
+      "type": "array"
+    },
+    "readability_risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Readability Risk",
+      "type": "string"
+    },
+    "recipe_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Recipe Id",
+      "type": "string"
+    },
+    "recipe_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Recipe Sha256",
+      "type": "string"
+    },
+    "recipe_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "reference_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "required_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Required Inputs",
+      "type": "array"
+    },
+    "scene_intents": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Scene Intents",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "reference_only",
+        "experimental",
+        "approved",
+        "blocked"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "supports_captions": {
+      "title": "Supports Captions",
+      "type": "boolean"
+    },
+    "supports_rtl": {
+      "title": "Supports Rtl",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "recipe_id",
+    "reference_id",
+    "recipe_version",
+    "state",
+    "scene_intents",
+    "purposes",
+    "component_id",
+    "fallback_component_id",
+    "duration_min_us",
+    "duration_max_us",
+    "attention_cost",
+    "readability_risk",
+    "supports_rtl",
+    "supports_captions",
+    "overuse_warning",
+    "recipe_sha256"
+  ],
+  "title": "MotionRecipe",
+  "type": "object"
+}

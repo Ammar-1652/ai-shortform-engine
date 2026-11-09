@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "One transformed region that a campaign overlay must avoid.",
+  "properties": {
+    "annotation_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Annotation Id"
+    },
+    "height": {
+      "anyOf": [
+        {
+          "maximum": 1920,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Height"
+    },
+    "kind": {
+      "enum": [
+        "face",
+        "child_body",
+        "tablet",
+        "caption",
+        "context_line",
+        "source_logo",
+        "watermark",
+        "platform_rail"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "left": {
+      "anyOf": [
+        {
+          "maximum": 1080,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Left"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "present",
+        "absent_reviewed",
+        "unknown"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "top": {
+      "anyOf": [
+        {
+          "maximum": 1920,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Top"
+    },
+    "width": {
+      "anyOf": [
+        {
+          "maximum": 1080,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Width"
+    }
+  },
+  "required": [
+    "kind",
+    "status"
+  ],
+  "title": "OverlayExclusionRegion",
+  "type": "object"
+}

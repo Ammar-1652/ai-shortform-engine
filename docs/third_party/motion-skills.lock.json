@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "purpose": "Audited editorial guidance only; production rendering remains Clipforge deterministic code.",
+  "license_sha256": "33d6cd35a20903b5e968a76a1e584a7aeae2c83e3e58ea58ecc50b889b83e668",
+  "packs": [
+    {
+      "repository": "https://github.com/iart-ai/tiktok-video-skills",
+      "commit": "2a775336b5a638cbf8a61dbd785f9a1b649be016",
+      "license": "MIT",
+      "selected_paths": {
+        "skills/short-form-video/SKILL.md": "27a55d05cded4d39efad74220e8a17aed22cf4b5cac0804f50754f307283ce15",
+        "skills/caption-animation/SKILL.md": "734b05774507cf841836293c1673984cd10159c5e15cf7e6d4fe3217bd7829be"
+      }
+    },
+    {
+      "repository": "https://github.com/iart-ai/motion-design-skills",
+      "commit": "3c129f769d90a1328c209c386492333c9ac62312",
+      "license": "MIT",
+      "selected_paths": {
+        "skills/motion-art-direction/SKILL.md": "0337edf7c93b8e130bd7658e3d43f546c46f333cacbb2bb970613d65d340c5de",
+        "skills/animation-principles/SKILL.md": "21637766f8ae115f427ab086ec903106b3dfa5eac7fdf05d9926e4b557bff892",
+        "skills/shot-composition/SKILL.md": "c2bbedc1d615ba9969755054bae4fb9d6733df17226b8010b02e064e7838f0c1",
+        "skills/remotion-video/SKILL.md": "93221d5e32d15ee0031e05226d65f56972e7cd75e9fda034265f8feb450c58fe"
+      }
+    },
+    {
+      "repository": "https://github.com/iart-ai/kinetic-typography-skills",
+      "commit": "fccc94bd325d824235ee9e715e65abde57b6513a",
+      "license": "MIT",
+      "selected_paths": {
+        "skills/kinetic-typography/SKILL.md": "0e45dfdf8393137b61fcccf5c681c05dcde053076c5dd61f7b6ca0765290f77e",
+        "skills/kinetic-typography/references/reveal-recipes.md": "7681788d8b11be94a195b732d0cc4be25ee745b88c421211a0848b268c9eb493"
+      }
+    }
+  ],
+  "adaptations": [
+    "Use canonical microsecond TimeMap intervals and integer frame boundaries.",
+    "Do not use CSS timers, random values, blind character splitting, CDN fonts, music, or network fetches.",
+    "Treat hook and pacing advice as editorial heuristics; never invent source claims or retention guarantees.",
+    "Arabic is animated as shaped whole runs/lines and Japanese uses the existing grapheme-aware layout."
+  ]
+}

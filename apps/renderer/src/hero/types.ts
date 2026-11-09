@@ -1,9 +1,11 @@
 /** Facts Python already decided for one Hero draft. This is not the rough preview. */
 
 export type HeroWord = {
+  readonly word_id?: string;
   readonly text: string;
   readonly output_start_frame: number;
   readonly output_end_frame_exclusive: number;
+  readonly verification_status?: "unverified" | "correct" | "incorrect";
 };
 
 export type HeroCaption = {
@@ -34,6 +36,7 @@ export type HeroMotionEvent = {
 export type HeroDraftInput = {
   readonly schema_version?: "1.0.0";
   readonly composition_id: "HeroDraft";
+  readonly renderer_recipe_version?: "hero-draft-renderer-v1" | "hero-draft-renderer-v2";
   readonly candidate_id: string;
   readonly hero_set_id: string;
   readonly video_path: string;
@@ -44,6 +47,9 @@ export type HeroDraftInput = {
   readonly fps_denominator: 1;
   readonly width: 1080;
   readonly height: 1920;
+  readonly source_width: number;
+  readonly source_height: number;
+  readonly caption_font_sha256?: readonly string[];
   readonly video_fit: "contain";
   readonly background: "neutral-dark-v1";
   readonly language?: string;

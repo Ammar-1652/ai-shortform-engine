@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "rule_id": "policy-tarteel-delivery",
+  "name": "Tarteel delivery rules",
+  "description": "Official source, no added audio, exact first caption line, fully visible watermark, and alpha-composited official CTA are mandatory.",
+  "severity": "block"
+}

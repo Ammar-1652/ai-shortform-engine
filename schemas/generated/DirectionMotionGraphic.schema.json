@@ -1,0 +1,138 @@
+{
+  "$defs": {
+    "MotionPurpose": {
+      "enum": [
+        "number",
+        "comparison",
+        "product_feature",
+        "process_step",
+        "concept",
+        "visual_reveal",
+        "key_phrase",
+        "data",
+        "ui_interaction"
+      ],
+      "title": "MotionPurpose",
+      "type": "string"
+    },
+    "OutputInterval": {
+      "additionalProperties": false,
+      "description": "An interval on the output timeline produced by the candidate's time map.",
+      "properties": {
+        "clock": {
+          "const": "output",
+          "default": "output",
+          "title": "Clock",
+          "type": "string"
+        },
+        "output_end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output End Us",
+          "type": "integer"
+        },
+        "output_start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Output Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output_start_us",
+        "output_end_us"
+      ],
+      "title": "OutputInterval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A native Remotion illustration tied to exact spoken evidence.\n\nThis is deliberately not an asset placement: it has no downloaded bytes,\nremote URL, or executable payload. ``template`` selects one audited\nrenderer component and ``display_text`` is copied from the evidence named\nbelow.  The lower caption lane is reserved, so an illustration cannot be\nused as a decorative replacement for readable captions.",
+  "properties": {
+    "display_text": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Display Text",
+      "type": "string"
+    },
+    "graphic_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Graphic Id",
+      "type": "string"
+    },
+    "height": {
+      "maximum": 560,
+      "minimum": 180,
+      "title": "Height",
+      "type": "integer"
+    },
+    "interval": {
+      "$ref": "#/$defs/OutputInterval"
+    },
+    "purpose": {
+      "$ref": "#/$defs/MotionPurpose"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "template": {
+      "enum": [
+        "credit_card",
+        "travel_postcard",
+        "business_identity",
+        "business_spotlight",
+        "quran_challenge"
+      ],
+      "title": "Template",
+      "type": "string"
+    },
+    "width": {
+      "maximum": 840,
+      "minimum": 220,
+      "title": "Width",
+      "type": "integer"
+    },
+    "x": {
+      "maximum": 812,
+      "minimum": 48,
+      "title": "X",
+      "type": "integer"
+    },
+    "y": {
+      "maximum": 1240,
+      "minimum": 120,
+      "title": "Y",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "graphic_id",
+    "template",
+    "interval",
+    "source_evidence_ids",
+    "purpose",
+    "display_text",
+    "x",
+    "y",
+    "width",
+    "height"
+  ],
+  "title": "DirectionMotionGraphic",
+  "type": "object"
+}

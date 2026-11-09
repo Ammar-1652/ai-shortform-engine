@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "description": "Reviewed source-text replacement for one forced word interval.",
+  "properties": {
+    "display_text": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Display Text",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_word_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Word Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_word_id",
+    "display_text"
+  ],
+  "title": "TarteelDisplayCorrection",
+  "type": "object"
+}

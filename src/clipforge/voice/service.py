@@ -243,8 +243,9 @@ def require_bound_narration(
     document = _load(work_root.resolve(), artifact_id)
     if document.project_id != project_id or document.source_asset_id != source_asset_id:
         raise VoiceError("narration asset belongs to a different project or source")
-    # A voiceover may be shorter than the Hero. It must not run past the edit.
-    if document.duration_us > target_duration_us + 100_000:
+    # The advanced render currently declares the whole edit as the narration window.
+    # Refuse implicit padding, truncation, stretching, or looping in either direction.
+    if abs(document.duration_us - target_duration_us) > 100_000:
         raise VoiceError("narration duration does not match the advanced plan")
     path = _audio_path(work_root.resolve(), artifact_id)
     return document.audio_sha256, path

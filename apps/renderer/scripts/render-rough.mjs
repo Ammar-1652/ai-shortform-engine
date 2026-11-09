@@ -95,6 +95,32 @@ for (const item of batch.items) {
   const audioName = stagedBasename(input.audio_path);
   contained(path.join(stagingDir, videoName), stagingDir);
   contained(path.join(stagingDir, audioName), stagingDir);
+  if (input.campaign_overlay) {
+    const overlay = input.campaign_overlay;
+    for (const key of ["watermark_asset_name"]) {
+      const value = overlay[key];
+      if (typeof value !== "string" || stagedBasename(value) !== value) {
+        throw new Error(`campaign overlay ${key} is not a safe staged name`);
+      }
+      contained(path.join(stagingDir, value), stagingDir);
+    }
+    if (overlay.cta_background_removal !== "chroma_key_v1" || (overlay.cta_render_mode !== "alpha_video_v1" && overlay.cta_render_mode !== "alpha_png_sequence_v1") || overlay.cta_frame_rate !== 30 || overlay.watermark_mode !== "alpha_v1" || overlay.cta_position !== "foreground_attention_v1" || overlay.overlay_coordinate_space !== "foreground_v1" || (overlay.watermark_position !== "foreground_top_right_v1" && overlay.watermark_position !== "top_right") || overlay.sizing_method !== "source_frame_scan_v1" || !/^[0-9a-f]{64}$/.test(overlay.sizing_measurement_sha256 ?? "") || !Number.isInteger(overlay.cta_width_permille) || overlay.cta_width_permille < 80 || overlay.cta_width_permille > 600) {
+      throw new Error("unsupported campaign overlay contract");
+    }
+    if (overlay.cta_render_mode === "alpha_video_v1") {
+      if (typeof overlay.cta_asset_name !== "string" || stagedBasename(overlay.cta_asset_name) !== overlay.cta_asset_name) {
+        throw new Error("campaign overlay CTA alpha video name is invalid");
+      }
+      contained(path.join(stagingDir, overlay.cta_asset_name), stagingDir);
+    } else {
+      if (typeof overlay.cta_frame_prefix !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(overlay.cta_frame_prefix) || !Number.isInteger(overlay.cta_frame_count) || overlay.cta_frame_count < 1 || overlay.cta_frame_count > 600) {
+        throw new Error("campaign overlay CTA frame sequence is invalid");
+      }
+      for (let index = 1; index <= overlay.cta_frame_count; index += 1) {
+        contained(path.join(stagingDir, `${overlay.cta_frame_prefix}-${String(index).padStart(4, "0")}.png`), stagingDir);
+      }
+    }
+  }
   if (!Number.isInteger(item.h264Crf) || item.h264Crf < 0 || item.h264Crf > 51) {
     throw new Error("render batch h264Crf must be an integer from 0 to 51");
   }
@@ -162,6 +188,7 @@ for (const item of batch.items) {
     audioCodec: "aac",
     overwrite: true,
     muted: false,
+    frameRange: item.frameRange,
     timeoutInMilliseconds,
   });
   renderSeconds += (Date.now() - started) / 1000;

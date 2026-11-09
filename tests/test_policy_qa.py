@@ -12,7 +12,11 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from clipforge.hero.advanced_backend import FakeAdvancedRenderBackend
-from clipforge.hero.advanced_service import plan_advanced_candidate, render_advanced_drafts
+from clipforge.hero.advanced_service import (
+    default_advanced_profile,
+    plan_advanced_candidate,
+    render_advanced_drafts,
+)
 from clipforge.policy.engine import PolicyContext, evaluate_policy
 from clipforge.policy.loader import PolicyError, load_catalog, resolve_profile
 from clipforge.qa.service import QAError, gate_qa, list_qa, run_qa, show_qa, verify_qa
@@ -325,16 +329,27 @@ def test_cancelled_qa_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 def _ready_advanced(tmp_path: Path):
     fixture, candidate_id = _approved(tmp_path)
+    legacy = default_advanced_profile().model_copy(
+        update={
+            "caption_algorithm_version": "advanced-caption-v1",
+            "typography_version": "advanced-typography-v1",
+            "diagram_version": "advanced-diagram-v1",
+            "renderer_recipe_version": "advanced-hero-renderer-v1",
+            "motion_library_version": "advanced-motion-v1",
+        }
+    )
     plan_advanced_candidate(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
         candidate_id=candidate_id,
         work_root=fixture.work,
+        profile=legacy,
     )
     render_advanced_drafts(
         database=fixture.database,
         source_asset_id=SOURCE_ID,
         work_root=fixture.work,
+        profile=legacy,
         backend=FakeAdvancedRenderBackend(),
     )
     with fixture.database.transaction() as connection:

@@ -61,6 +61,10 @@ class PublishProfile(Versioned):
     video_codec: Literal["h264"] = "h264"
     audio_codec: Literal["aac"] = "aac"
     output_use: Literal["commercial"] = "commercial"
+    audio_loudness_lufs: float = -16
+    audio_true_peak_dbfs: float = -1.5
+    audio_lra_lu: float = 11
+    audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
 
     def fingerprint(self) -> str:
         raw = json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
@@ -107,6 +111,11 @@ class PublishPackageDocument(Versioned):
     profile_id: Literal["local-delivery-v1"] = "local-delivery-v1"
     profile_fingerprint: str = Field(pattern=_SHA)
     destination: Literal["local"] = "local"
+    reframing_strategy: str = Field(default="contain", min_length=1, max_length=40)
+    audio_loudness_lufs: float = -16
+    audio_true_peak_dbfs: float = -1.5
+    audio_lra_lu: float = 11
+    audio_mix_version: Literal["advanced-audio-mix-v1"] = "advanced-audio-mix-v1"
     caption_mode: CaptionMode
     cache_fingerprint: str = Field(pattern=_SHA)
     delivery_status: Literal["succeeded"] = "succeeded"

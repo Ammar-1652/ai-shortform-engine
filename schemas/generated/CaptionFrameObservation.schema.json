@@ -1,0 +1,54 @@
+{
+  "additionalProperties": false,
+  "description": "A frame may simultaneously own several cue/word boundary roles.",
+  "properties": {
+    "cue_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cue Id"
+    },
+    "phase": {
+      "enum": [
+        "before",
+        "start",
+        "middle",
+        "end",
+        "after",
+        "first",
+        "last",
+        "word_start",
+        "word_end"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "word_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Word Id"
+    }
+  },
+  "required": [
+    "phase"
+  ],
+  "title": "CaptionFrameObservation",
+  "type": "object"
+}

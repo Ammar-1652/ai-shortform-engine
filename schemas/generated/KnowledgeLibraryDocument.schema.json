@@ -1,0 +1,1381 @@
+{
+  "$defs": {
+    "EditorialGuidanceCard": {
+      "additionalProperties": false,
+      "description": "An actionable, bounded editorial instruction for Codex.",
+      "properties": {
+        "authority": {
+          "enum": [
+            "system_invariant",
+            "campaign_policy",
+            "upstream_guidance",
+            "operator_observation",
+            "human_feedback",
+            "analytics"
+          ],
+          "title": "Authority",
+          "type": "string"
+        },
+        "avoid_when": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Avoid When",
+          "type": "array"
+        },
+        "capability_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Capability Ids",
+          "type": "array"
+        },
+        "card_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Card Id",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "coordination": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Coordination",
+          "type": "array"
+        },
+        "evaluation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Evaluation Ids",
+          "type": "array"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "implementation": {
+          "enum": [
+            "guidance_only",
+            "supported",
+            "needs_component",
+            "incompatible",
+            "retired"
+          ],
+          "title": "Implementation",
+          "type": "string"
+        },
+        "intent": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Intent",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Limitations",
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 32,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "prerequisites": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "revision": {
+          "default": 1,
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/KnowledgeScope"
+        },
+        "source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "captured",
+            "analyzed",
+            "proposed",
+            "evaluated",
+            "active",
+            "superseded",
+            "withdrawn"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        },
+        "supersedes_card_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supersedes Card Id"
+        },
+        "title": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "triggers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Triggers",
+          "type": "array"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "card_id",
+        "title",
+        "authority",
+        "state",
+        "implementation",
+        "source_ids",
+        "intent",
+        "triggers",
+        "steps",
+        "avoid_when",
+        "limitations",
+        "content_sha256",
+        "updated_at"
+      ],
+      "title": "EditorialGuidanceCard",
+      "type": "object"
+    },
+    "EditorialStyleCard": {
+      "additionalProperties": false,
+      "description": "A coordinated story, visual, motion, caption, and audio direction.",
+      "properties": {
+        "audio_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Audio Rules",
+          "type": "array"
+        },
+        "caption_style_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption Style Id"
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "ending_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Ending Rules",
+          "type": "array"
+        },
+        "evaluation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Evaluation Ids",
+          "type": "array"
+        },
+        "guidance_card_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Guidance Card Ids",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Limitations",
+          "type": "array"
+        },
+        "motion_recipe_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Motion Recipe Ids",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "narrative_pattern_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Narrative Pattern Ids",
+          "type": "array"
+        },
+        "observation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Observation Ids",
+          "type": "array"
+        },
+        "pacing_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Pacing Rules",
+          "type": "array"
+        },
+        "reference_analysis_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reference Analysis Ids",
+          "type": "array"
+        },
+        "reference_analysis_sha256": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reference Analysis Sha256",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/KnowledgeScope"
+        },
+        "source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "captured",
+            "analyzed",
+            "proposed",
+            "evaluated",
+            "active",
+            "superseded",
+            "withdrawn"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "style_card_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Style Card Id",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "visual_identity": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Visual Identity",
+          "type": "array"
+        }
+      },
+      "required": [
+        "style_card_id",
+        "name",
+        "state",
+        "source_ids",
+        "pacing_rules",
+        "audio_rules",
+        "ending_rules",
+        "limitations",
+        "confidence",
+        "content_sha256",
+        "updated_at"
+      ],
+      "title": "EditorialStyleCard",
+      "type": "object"
+    },
+    "KnowledgeConflict": {
+      "additionalProperties": false,
+      "description": "A conflict that must be resolved before guidance enters a context.",
+      "properties": {
+        "conflict_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Conflict Id",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "scope",
+            "policy",
+            "timing",
+            "license",
+            "implementation",
+            "evidence",
+            "copy"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "record_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 2,
+          "title": "Record Ids",
+          "type": "array"
+        },
+        "resolution_note": {
+          "anyOf": [
+            {
+              "maxLength": 700,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Note"
+        },
+        "resolved_by": {
+          "anyOf": [
+            {
+              "enum": [
+                "system_enforcer",
+                "codex_operator",
+                "human_reviewer"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved By"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "unresolved",
+            "resolved",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "winning_record_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Winning Record Id"
+        }
+      },
+      "required": [
+        "conflict_id",
+        "record_ids",
+        "kind",
+        "description",
+        "status",
+        "updated_at"
+      ],
+      "title": "KnowledgeConflict",
+      "type": "object"
+    },
+    "KnowledgeEvaluationCase": {
+      "additionalProperties": false,
+      "description": "A scenario that proves a guidance card selects or rejects correctly.",
+      "properties": {
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "evaluation_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Evaluation Id",
+          "type": "string"
+        },
+        "expected_outcome": {
+          "enum": [
+            "select",
+            "reject",
+            "warn",
+            "needs_review"
+          ],
+          "title": "Expected Outcome",
+          "type": "string"
+        },
+        "expected_reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Expected Reason",
+          "type": "string"
+        },
+        "fixture_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixture Path"
+        },
+        "input_tags": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 24,
+          "title": "Input Tags",
+          "type": "array"
+        },
+        "scenario": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Scenario",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 180,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evaluation_id",
+        "title",
+        "scenario",
+        "expected_outcome",
+        "expected_reason",
+        "content_sha256"
+      ],
+      "title": "KnowledgeEvaluationCase",
+      "type": "object"
+    },
+    "KnowledgeRelease": {
+      "additionalProperties": false,
+      "description": "An immutable set of admitted cards used to build direction context.",
+      "properties": {
+        "conflict_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Conflict Ids",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "enum": [
+            "codex_operator",
+            "system_enforcer",
+            "human_reviewer"
+          ],
+          "title": "Created By",
+          "type": "string"
+        },
+        "evaluation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Evaluation Ids",
+          "type": "array"
+        },
+        "guidance_card_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Guidance Card Ids",
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "motion_recipe_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Motion Recipe Ids",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "narrative_pattern_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Narrative Pattern Ids",
+          "type": "array"
+        },
+        "observation_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Observation Ids",
+          "type": "array"
+        },
+        "release_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Release Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "active",
+            "retired"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "style_card_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Style Card Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "release_id",
+        "name",
+        "state",
+        "source_ids",
+        "manifest_sha256",
+        "created_at",
+        "created_by"
+      ],
+      "title": "KnowledgeRelease",
+      "type": "object"
+    },
+    "KnowledgeScope": {
+      "additionalProperties": false,
+      "description": "Scope limits keep a useful pattern from becoming a universal claim.",
+      "properties": {
+        "campaign_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Campaign Ids",
+          "type": "array"
+        },
+        "genres": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Genres",
+          "type": "array"
+        },
+        "languages": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Languages",
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Platforms",
+          "type": "array"
+        },
+        "profile_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Profile Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "KnowledgeScope",
+      "type": "object"
+    },
+    "KnowledgeSource": {
+      "additionalProperties": false,
+      "description": "A pinned repository, page, policy, or authorized reference source.",
+      "properties": {
+        "allowed_uses": {
+          "items": {
+            "enum": [
+              "analysis",
+              "guidance",
+              "code",
+              "asset_reuse"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Allowed Uses",
+          "type": "array"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attribution"
+        },
+        "captured_at": {
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "kind": {
+          "enum": [
+            "repository",
+            "web_page",
+            "reference_video",
+            "reference_audio",
+            "campaign_document",
+            "internal_policy"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "license_id": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Id"
+        },
+        "license_url": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "License Url"
+        },
+        "locator": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "permission": {
+          "enum": [
+            "analysis_allowed",
+            "reuse_allowed",
+            "blocked",
+            "unknown"
+          ],
+          "title": "Permission",
+          "type": "string"
+        },
+        "repository_commit": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository Commit"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selected_paths": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Selected Paths",
+          "type": "array"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Source Version",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "kind",
+        "title",
+        "locator",
+        "permission",
+        "captured_at",
+        "source_version"
+      ],
+      "title": "KnowledgeSource",
+      "type": "object"
+    },
+    "NarrativePattern": {
+      "additionalProperties": false,
+      "description": "A source-grounded hook/body/payoff structure.",
+      "properties": {
+        "body_shape": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Body Shape",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "continuity_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Continuity Rules",
+          "type": "array"
+        },
+        "evidence_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "guidance_card_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Guidance Card Ids",
+          "type": "array"
+        },
+        "hook_shape": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Hook Shape",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Pattern Id",
+          "type": "string"
+        },
+        "payoff_shape": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Payoff Shape",
+          "type": "string"
+        },
+        "reject_when": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Reject When",
+          "type": "array"
+        },
+        "repetition_rules": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Repetition Rules",
+          "type": "array"
+        },
+        "required_source_facts": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Required Source Facts",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/KnowledgeScope"
+        },
+        "source_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "state": {
+          "enum": [
+            "captured",
+            "analyzed",
+            "proposed",
+            "evaluated",
+            "active",
+            "superseded",
+            "withdrawn"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern_id",
+        "name",
+        "state",
+        "source_ids",
+        "hook_shape",
+        "body_shape",
+        "payoff_shape",
+        "required_source_facts",
+        "continuity_rules",
+        "reject_when",
+        "content_sha256"
+      ],
+      "title": "NarrativePattern",
+      "type": "object"
+    },
+    "ReferenceObservation": {
+      "additionalProperties": false,
+      "description": "One observed fact from an authorized reference or local artifact.",
+      "properties": {
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "evidence_kind": {
+          "enum": [
+            "observed",
+            "heuristic",
+            "technical",
+            "viewer_review",
+            "performance"
+          ],
+          "title": "Evidence Kind",
+          "type": "string"
+        },
+        "evidence_paths": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Evidence Paths",
+          "type": "array"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceTimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "enum": [
+            "visual",
+            "audio",
+            "speech",
+            "caption",
+            "narrative",
+            "pacing",
+            "identity",
+            "rights"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 12,
+          "title": "Limitations",
+          "type": "array"
+        },
+        "method": {
+          "enum": [
+            "frame_probe",
+            "contact_sheet",
+            "audio_probe",
+            "transcript",
+            "human_watch",
+            "metadata"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "observation": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Observation",
+          "type": "string"
+        },
+        "observation_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observation_id",
+        "source_id",
+        "kind",
+        "observation",
+        "method",
+        "confidence",
+        "evidence_kind",
+        "content_sha256"
+      ],
+      "title": "ReferenceObservation",
+      "type": "object"
+    },
+    "SourceTimeRange": {
+      "additionalProperties": false,
+      "description": "A source-clock interval. Both ends are integer microseconds and ``end_us`` is later than ``start_us``.",
+      "properties": {
+        "end_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "End Us",
+          "type": "integer"
+        },
+        "start_us": {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "title": "Start Us",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_us",
+        "end_us"
+      ],
+      "title": "SourceTimeRange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Strict on-disk bundle for one knowledge-library release.",
+  "properties": {
+    "conflicts": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeConflict"
+      },
+      "maxItems": 128,
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "evaluations": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeEvaluationCase"
+      },
+      "maxItems": 256,
+      "title": "Evaluations",
+      "type": "array"
+    },
+    "guidance_cards": {
+      "items": {
+        "$ref": "#/$defs/EditorialGuidanceCard"
+      },
+      "maxItems": 256,
+      "title": "Guidance Cards",
+      "type": "array"
+    },
+    "narrative_patterns": {
+      "items": {
+        "$ref": "#/$defs/NarrativePattern"
+      },
+      "maxItems": 128,
+      "title": "Narrative Patterns",
+      "type": "array"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/ReferenceObservation"
+      },
+      "maxItems": 256,
+      "title": "Observations",
+      "type": "array"
+    },
+    "releases": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeRelease"
+      },
+      "maxItems": 64,
+      "title": "Releases",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeSource"
+      },
+      "maxItems": 128,
+      "title": "Sources",
+      "type": "array"
+    },
+    "style_cards": {
+      "items": {
+        "$ref": "#/$defs/EditorialStyleCard"
+      },
+      "maxItems": 128,
+      "title": "Style Cards",
+      "type": "array"
+    }
+  },
+  "title": "KnowledgeLibraryDocument",
+  "type": "object"
+}

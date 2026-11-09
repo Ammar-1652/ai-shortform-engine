@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from clipforge.candidates.constants import JOB_CANDIDATE, KIND_CANDIDATE
 from clipforge.candidates.engine import reset_stage_calls, stage_calls
-from clipforge.candidates.service import default_profile, mine_source
+from clipforge.candidates.service import default_profile, mine_source, profile_for_project
 from clipforge.candidates.show import format_candidate, format_candidate_list, load_candidate_document
 from clipforge.candidates.verify import verify_candidate
 from clipforge.cli.main import app
@@ -54,6 +54,16 @@ from tests.candidate_support import (
 
 pytestmark = pytest.mark.candidate
 runner = CliRunner()
+
+
+def test_tarteel_profile_prefers_long_context_for_hook_body_punch() -> None:
+    generic = default_profile()
+    tarteel = profile_for_project(generic, "profile-tarteel-campaign")
+    assert (tarteel.preferred_min_duration_us, tarteel.preferred_max_duration_us) == (40_000_000, 45_000_000)
+    assert tarteel.hard_min_duration_us == 25_000_000
+    assert tarteel.hard_max_duration_us == 55_000_000
+    assert tarteel.boundary_padding_us == 120_000
+    assert tarteel.fingerprint() != generic.fingerprint()
 
 
 def _reserve(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -204,7 +214,7 @@ def test_mine_caches_and_verify_lists(tmp_path: Path, monkeypatch: pytest.Monkey
     doctor = runner.invoke(app, ["candidate", "doctor", "--work-dir", str(work)])
     assert doctor.exit_code == 0
     assert "candidate-mining" in doctor.stdout
-    assert "schema_version: 6" in doctor.stdout
+    assert "schema_version: 7" in doctor.stdout
 
 
 def test_force_keeps_the_previous_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,0 +1,81 @@
+{
+  "additionalProperties": false,
+  "description": "Source-bound, allowlisted palette for an editorial frame treatment.",
+  "properties": {
+    "accent_hex": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Accent Hex",
+      "type": "string"
+    },
+    "analyzer_version": {
+      "const": "source-frame-palette-v1",
+      "default": "source-frame-palette-v1",
+      "title": "Analyzer Version",
+      "type": "string"
+    },
+    "backdrop_alt_hex": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Backdrop Alt Hex",
+      "type": "string"
+    },
+    "backdrop_hex": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Backdrop Hex",
+      "type": "string"
+    },
+    "dominant_hex": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Dominant Hex",
+      "type": "string"
+    },
+    "family": {
+      "enum": [
+        "olive",
+        "sage",
+        "charcoal"
+      ],
+      "title": "Family",
+      "type": "string"
+    },
+    "primary_hex": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Primary Hex",
+      "type": "string"
+    },
+    "sample_times_us": {
+      "items": {
+        "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+        "maximum": 604800000000,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Sample Times Us",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_sha256",
+    "family",
+    "dominant_hex",
+    "primary_hex",
+    "accent_hex",
+    "backdrop_hex",
+    "backdrop_alt_hex",
+    "sample_times_us"
+  ],
+  "title": "FramePaletteSpec",
+  "type": "object"
+}

@@ -46,6 +46,24 @@ def probe_hero(path: Path, *, expected_duration_us: int) -> PreviewProbe:
         raise MediaError(
             f"{path.name} duration differs from the time map by {error} us, past {DURATION_TOLERANCE_US} us"
         )
+    audio_duration = seconds_text_to_us(audio.get("duration"))
+    if audio_duration is None or audio_duration <= 0:
+        raise MediaError(f"{path.name} has no measurable audio duration")
+    audio_error = audio_duration - expected_duration_us
+    if abs(audio_error) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"{path.name} audio duration differs from the time map by {audio_error} us, "
+            f"past {DURATION_TOLERANCE_US} us; refusing an AV-unsynchronized output"
+        )
+    av_delta = audio_duration - duration
+    if abs(av_delta) > DURATION_TOLERANCE_US:
+        raise MediaError(
+            f"{path.name} audio/video streams differ by {av_delta} us, "
+            f"past {DURATION_TOLERANCE_US} us; refusing an AV-unsynchronized output"
+        )
+    audio_start = seconds_text_to_us(audio.get("start_time"))
+    if audio_start is not None and abs(audio_start) > DURATION_TOLERANCE_US:
+        raise MediaError(f"{path.name} audio starts at {audio_start} us instead of zero")
     codec = audio.get("codec_name")
     if codec != "aac":
         raise MediaError(f"{path.name} audio codec is {codec!r}, expected aac")

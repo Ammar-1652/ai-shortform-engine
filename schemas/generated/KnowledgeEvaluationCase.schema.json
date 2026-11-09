@@ -1,0 +1,91 @@
+{
+  "additionalProperties": false,
+  "description": "A scenario that proves a guidance card selects or rejects correctly.",
+  "properties": {
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "evaluation_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Evaluation Id",
+      "type": "string"
+    },
+    "expected_outcome": {
+      "enum": [
+        "select",
+        "reject",
+        "warn",
+        "needs_review"
+      ],
+      "title": "Expected Outcome",
+      "type": "string"
+    },
+    "expected_reason": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Expected Reason",
+      "type": "string"
+    },
+    "fixture_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fixture Path"
+    },
+    "input_tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 24,
+      "title": "Input Tags",
+      "type": "array"
+    },
+    "scenario": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Scenario",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "title": {
+      "maxLength": 180,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evaluation_id",
+    "title",
+    "scenario",
+    "expected_outcome",
+    "expected_reason",
+    "content_sha256"
+  ],
+  "title": "KnowledgeEvaluationCase",
+  "type": "object"
+}

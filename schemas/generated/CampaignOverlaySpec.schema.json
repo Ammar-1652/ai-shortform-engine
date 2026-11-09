@@ -1,0 +1,220 @@
+{
+  "additionalProperties": false,
+  "description": "Source-bound branding required by a campaign delivery profile.\n\nThe renderer receives safe staging names only. Asset ids and hashes stay\nin the typed plan/catalogue, so an overlay cannot be swapped after QA.\nTarteel CTA clips are green-screen files; ``chroma_key_v1`` records that\nthe green background was removed before Remotion compositing.",
+  "properties": {
+    "campaign_id": {
+      "const": "tarteel",
+      "default": "tarteel",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "cta_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Cta Asset Id",
+      "type": "string"
+    },
+    "cta_asset_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Cta Asset Name",
+      "type": "string"
+    },
+    "cta_asset_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cta Asset Sha256",
+      "type": "string"
+    },
+    "cta_background_removal": {
+      "const": "chroma_key_v1",
+      "default": "chroma_key_v1",
+      "title": "Cta Background Removal",
+      "type": "string"
+    },
+    "cta_clearance": {
+      "const": "faces_and_captions_clear_v1",
+      "default": "faces_and_captions_clear_v1",
+      "title": "Cta Clearance",
+      "type": "string"
+    },
+    "cta_end_us": {
+      "exclusiveMinimum": 0,
+      "title": "Cta End Us",
+      "type": "integer"
+    },
+    "cta_frame_count": {
+      "anyOf": [
+        {
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cta Frame Count"
+    },
+    "cta_frame_prefix": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cta Frame Prefix"
+    },
+    "cta_frame_rate": {
+      "const": 30,
+      "default": 30,
+      "title": "Cta Frame Rate",
+      "type": "integer"
+    },
+    "cta_left_permille": {
+      "default": 80,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Cta Left Permille",
+      "type": "integer"
+    },
+    "cta_position": {
+      "default": "foreground_attention_v1",
+      "enum": [
+        "foreground_attention_v1",
+        "top_left_brand_rail_v1"
+      ],
+      "title": "Cta Position",
+      "type": "string"
+    },
+    "cta_render_mode": {
+      "default": "alpha_video_v1",
+      "enum": [
+        "alpha_video_v1",
+        "alpha_png_sequence_v1"
+      ],
+      "title": "Cta Render Mode",
+      "type": "string"
+    },
+    "cta_start_us": {
+      "minimum": 0,
+      "title": "Cta Start Us",
+      "type": "integer"
+    },
+    "cta_top_permille": {
+      "default": 360,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Cta Top Permille",
+      "type": "integer"
+    },
+    "cta_width_permille": {
+      "default": 240,
+      "maximum": 600,
+      "minimum": 80,
+      "title": "Cta Width Permille",
+      "type": "integer"
+    },
+    "first_post_caption_line": {
+      "const": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+      "default": "\u0627\u0634\u062a\u0631\u0643 \u0641\u064a \u0642\u0646\u0627\u0629 \u062a\u0631\u062a\u064a\u0644 \u0639\u0644\u0649 \u0627\u0644\u064a\u0648\u062a\u064a\u0648\u0628: @tarteelarabic",
+      "title": "First Post Caption Line",
+      "type": "string"
+    },
+    "overlay_coordinate_space": {
+      "default": "foreground_v1",
+      "enum": [
+        "foreground_v1",
+        "canvas_v1"
+      ],
+      "title": "Overlay Coordinate Space",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sizing_measurement_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Sizing Measurement Sha256",
+      "type": "string"
+    },
+    "sizing_method": {
+      "default": "legacy_fixed_v1",
+      "enum": [
+        "source_frame_scan_v1",
+        "legacy_fixed_v1"
+      ],
+      "title": "Sizing Method",
+      "type": "string"
+    },
+    "watermark_asset_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Watermark Asset Id",
+      "type": "string"
+    },
+    "watermark_asset_name": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Watermark Asset Name",
+      "type": "string"
+    },
+    "watermark_asset_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Watermark Asset Sha256",
+      "type": "string"
+    },
+    "watermark_mode": {
+      "const": "alpha_v1",
+      "default": "alpha_v1",
+      "title": "Watermark Mode",
+      "type": "string"
+    },
+    "watermark_position": {
+      "default": "foreground_top_right_v1",
+      "enum": [
+        "foreground_top_right_v1",
+        "top_right"
+      ],
+      "title": "Watermark Position",
+      "type": "string"
+    },
+    "watermark_visibility": {
+      "default": "overlay_required_v1",
+      "enum": [
+        "overlay_required_v1",
+        "source_visible_v1"
+      ],
+      "title": "Watermark Visibility",
+      "type": "string"
+    },
+    "watermark_width_permille": {
+      "default": 55,
+      "maximum": 280,
+      "minimum": 24,
+      "title": "Watermark Width Permille",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "cta_asset_id",
+    "cta_asset_sha256",
+    "cta_asset_name",
+    "cta_start_us",
+    "cta_end_us",
+    "watermark_asset_id",
+    "watermark_asset_sha256",
+    "watermark_asset_name"
+  ],
+  "title": "CampaignOverlaySpec",
+  "type": "object"
+}

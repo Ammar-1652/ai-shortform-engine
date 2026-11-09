@@ -637,6 +637,12 @@ CREATE INDEX idx_editorial_label_sets_artifact
 """
 
 
+REVIEW_ROLES_SQL = """
+ALTER TABLE reviews ADD COLUMN reviewer_role TEXT NOT NULL DEFAULT 'human_reviewer'
+    CHECK (reviewer_role IN ('codex_operator', 'human_reviewer'));
+"""
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial", INITIAL_SQL),
     Migration(2, "rights_and_lineage", RIGHTS_AND_LINEAGE_SQL, precheck_rights_and_lineage),
@@ -644,5 +650,6 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "source_manifests", SOURCE_MANIFESTS_SQL),
     Migration(5, "analytics_outcomes", ANALYTICS_SQL),
     Migration(6, "analytics_labels", ANALYTICS_LABELS_SQL),
+    Migration(7, "review_roles", REVIEW_ROLES_SQL),
 )
 CURRENT_SCHEMA_VERSION = MIGRATIONS[-1].version

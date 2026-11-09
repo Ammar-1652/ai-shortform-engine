@@ -1,0 +1,492 @@
+{
+  "schema_version": "1.0.0",
+  "sources": [
+    {
+      "source_id": "source-motion-direction-skill",
+      "kind": "internal_policy",
+      "title": "Clipforge motion direction skill",
+      "locator": ".codex/skills/clipforge-motion-direction/SKILL.md",
+      "selected_paths": [
+        ".codex/skills/clipforge-motion-direction/SKILL.md"
+      ],
+      "permission": "analysis_allowed",
+      "allowed_uses": [
+        "analysis",
+        "guidance"
+      ],
+      "content_sha256": "7f63211a92050542ae7a85073a9dc8a00645daffb55731f20f1df8f6bec23b4d",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "source_version": "working-tree"
+    },
+    {
+      "source_id": "source-tarteel-style-library",
+      "kind": "campaign_document",
+      "title": "Tarteel campaign style library",
+      "locator": ".codex/skills/clipforge-motion-direction/references/tarteel-style-library.md",
+      "selected_paths": [
+        ".codex/skills/clipforge-motion-direction/references/tarteel-style-library.md"
+      ],
+      "permission": "analysis_allowed",
+      "allowed_uses": [
+        "analysis",
+        "guidance"
+      ],
+      "content_sha256": "efee93a232146086565acda271aa0fbb0d6087147de4777b7097b522cb2a2828",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "source_version": "working-tree"
+    },
+    {
+      "source_id": "source-iart-motion-skills-lock",
+      "kind": "repository",
+      "title": "Pinned iart-ai motion skill references",
+      "locator": "docs/third_party/motion-skills.lock.json",
+      "repository_commit": "pinned-commits-in-lock",
+      "selected_paths": [
+        "docs/third_party/motion-skills.lock.json"
+      ],
+      "license_id": "MIT-per-selected-pack",
+      "license_url": "https://opensource.org/license/mit/",
+      "attribution": "See docs/third_party/motion-skills.lock.json",
+      "permission": "analysis_allowed",
+      "allowed_uses": [
+        "analysis",
+        "guidance"
+      ],
+      "content_sha256": "5dbdae6dcb48a4f9d3c0643d2173a17565045dce68023baaa8c5773276c40e6b",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "source_version": "lock-1.0.0"
+    },
+    {
+      "source_id": "source-clipforge-native-motion",
+      "kind": "internal_policy",
+      "title": "Clipforge native Remotion motion components",
+      "locator": "apps/renderer/src/hero/ConcatMotion.tsx",
+      "selected_paths": [
+        "apps/renderer/src/hero/ConcatMotion.tsx"
+      ],
+      "permission": "reuse_allowed",
+      "allowed_uses": [
+        "code",
+        "guidance"
+      ],
+      "content_sha256": "089d6d05aba484d18fe9be2838fe0131a48cca40429c170e7103b20656feec69",
+      "captured_at": "2026-10-24T00:00:00Z",
+      "source_version": "working-tree"
+    }
+  ],
+  "observations": [],
+  "evaluations": [
+    {
+      "evaluation_id": "eval-complete-arc-required",
+      "title": "A hook must belong to the same story",
+      "scenario": "A strong reaction from one participant is followed by a different participant's unrelated explanation.",
+      "input_tags": [
+        "reaction",
+        "hook",
+        "unrelated"
+      ],
+      "expected_outcome": "reject",
+      "expected_reason": "Reject because the opening does not have setup, continuity, and a payoff in the same source arc.",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "content_sha256": "41c183ee0f88414dc6e19b3f492be718bf3faa2175b76da5f98cee60631b1bf2"
+    },
+    {
+      "evaluation_id": "eval-caption-speech-safe",
+      "title": "Caption timing must follow speech",
+      "scenario": "A proposed cut begins inside a spoken word and would remove the leading phoneme.",
+      "input_tags": [
+        "caption",
+        "alignment",
+        "cut"
+      ],
+      "expected_outcome": "reject",
+      "expected_reason": "Reject and move the boundary to a complete forced-word interval.",
+      "source_ids": [
+        "source-motion-direction-skill"
+      ],
+      "content_sha256": "6b710ede87ed2d6155cf5591aa4f6d9b8f6e44c4768114589984f2e68cbb1e31"
+    },
+    {
+      "evaluation_id": "eval-purposeful-motion",
+      "title": "Motion needs a communication purpose",
+      "scenario": "A decorative whoosh or chart is proposed without a source-grounded event or value.",
+      "input_tags": [
+        "motion",
+        "graphic",
+        "sfx"
+      ],
+      "expected_outcome": "reject",
+      "expected_reason": "Omit the layer because it does not clarify a source fact or narrative beat.",
+      "source_ids": [
+        "source-motion-direction-skill",
+        "source-iart-motion-skills-lock",
+        "source-clipforge-native-motion"
+      ],
+      "content_sha256": "7bc5f980df24b82789d0ad2a08b59beb15a5cd2d0bcf9bc5a16e7eb26c00dda9"
+    },
+    {
+      "evaluation_id": "eval-tarteel-challenge-fit",
+      "title": "Challenge reveal needs complete evidence",
+      "scenario": "The source contains a question, a participant attempt, and a visible result or reaction.",
+      "input_tags": [
+        "challenge",
+        "question",
+        "reaction",
+        "tarteel"
+      ],
+      "expected_outcome": "select",
+      "expected_reason": "Select the challenge/question reveal pattern because the source contains setup, attempt, and resolution.",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "content_sha256": "7f6d80f8651a970cf18bce48416da063b31193c24fed7c44a57d6591e4d2b220"
+    },
+    {
+      "evaluation_id": "eval-no-viral-claim",
+      "title": "Reference popularity is not causal proof",
+      "scenario": "A reference clip is described as viral but has no verified views, retention, or posting data.",
+      "input_tags": [
+        "reference",
+        "performance"
+      ],
+      "expected_outcome": "warn",
+      "expected_reason": "Keep craft observations but label performance evidence unavailable.",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "content_sha256": "24123b2978c0891a97ecf99b55b254e3685f1fb63d559d6defd1eb84d78eb603"
+    }
+  ],
+  "guidance_cards": [
+    {
+      "card_id": "guidance-complete-arc-hook-v1",
+      "title": "Flash-forward hooks must resolve in the same arc",
+      "authority": "upstream_guidance",
+      "state": "active",
+      "implementation": "guidance_only",
+      "source_ids": [
+        "source-tarteel-style-library",
+        "source-motion-direction-skill"
+      ],
+      "evaluation_ids": [
+        "eval-complete-arc-required",
+        "eval-tarteel-challenge-fit"
+      ],
+      "intent": "Create curiosity with a strong moment while preserving a coherent setup, escalation, and payoff.",
+      "triggers": [
+        "source contains a complete question or reaction arc",
+        "a later moment is stronger than the natural opening"
+      ],
+      "prerequisites": [
+        "source spans for hook, setup, and payoff are present",
+        "each occurrence has its own speech-safe caption timing"
+      ],
+      "steps": [
+        "Identify the strongest source-grounded phrase or reaction.",
+        "Verify that the body supplies the context for that moment.",
+        "Place the complete arc in output order and declare any intentional repeat.",
+        "Reject the treatment when the hook and body use unrelated participants or claims."
+      ],
+      "parameters": {
+        "hook_duration_us": "600000-2500000",
+        "repeat_limit": "one intentional repeat"
+      },
+      "coordination": [
+        "preserve canonical TimeMap order for each output occurrence",
+        "keep faces, app proof, and captions visible",
+        "use a transition only when the reviewed arc supports it"
+      ],
+      "avoid_when": [
+        "the hook needs missing context",
+        "the body changes subject or meaning",
+        "the source has no defensible payoff"
+      ],
+      "limitations": [
+        "This is an editorial heuristic, not a retention guarantee.",
+        "A reference clip without outcome data cannot prove performance."
+      ],
+      "capability_ids": [
+        "candidate-mine",
+        "direction-plan",
+        "advanced-hero-plan"
+      ],
+      "revision": 1,
+      "updated_at": "2026-10-24T00:00:00Z",
+      "content_sha256": "984c8f27d730261e64bfb8dc1812543f409ffff7ae974b22429044f8db1b044f"
+    },
+    {
+      "card_id": "guidance-speech-safe-captions-v1",
+      "title": "Cuts and captions follow complete spoken words",
+      "authority": "system_invariant",
+      "state": "active",
+      "implementation": "supported",
+      "source_ids": [
+        "source-motion-direction-skill"
+      ],
+      "evaluation_ids": [
+        "eval-caption-speech-safe"
+      ],
+      "intent": "Keep picture, speech, and captions synchronized at every cut and cue boundary.",
+      "triggers": [
+        "a candidate uses a jump cut",
+        "a caption or alignment interval changes"
+      ],
+      "prerequisites": [
+        "selected-clip forced alignment exists",
+        "the current TimeMap digest is available"
+      ],
+      "steps": [
+        "Use integer-microsecond forced-word intervals.",
+        "Move cut boundaries outside spoken words.",
+        "Remap captions and audio through the current TimeMap.",
+        "Inspect first, interior, and final cue edges in the encoded MP4."
+      ],
+      "parameters": {
+        "clock": "canonical output microseconds",
+        "short_word_min_hold_us": "readable minimum from profile"
+      },
+      "coordination": [
+        "Arabic uses shaped runs and RTL layout",
+        "caption readability outranks decorative motion",
+        "changed TimeMap invalidates caption and render evidence"
+      ],
+      "avoid_when": [
+        "alignment is approximate for a final Hero render",
+        "a cut would split a word or duplicate a speech interval"
+      ],
+      "limitations": [
+        "Alignment evidence does not identify an active speaker.",
+        "OCR is supplementary and cannot replace alignment evidence."
+      ],
+      "capability_ids": [
+        "align",
+        "advanced-hero-plan",
+        "qa-viewer-evidence"
+      ],
+      "revision": 1,
+      "updated_at": "2026-10-24T00:00:00Z",
+      "content_sha256": "08b096586ca71e9c596f3bd45d33475192605f9ca0fd61378d2cb86ac22ab923"
+    },
+    {
+      "card_id": "guidance-purposeful-motion-v1",
+      "title": "Motion must clarify a source-grounded event",
+      "authority": "upstream_guidance",
+      "state": "active",
+      "implementation": "supported",
+      "source_ids": [
+        "source-motion-direction-skill",
+        "source-iart-motion-skills-lock"
+      ],
+      "evaluation_ids": [
+        "eval-purposeful-motion"
+      ],
+      "intent": "Choose motion by communication purpose instead of filling every interval with effects.",
+      "triggers": [
+        "a scene needs emphasis",
+        "a source fact needs a diagram or reveal"
+      ],
+      "prerequisites": [
+        "the source evidence names the fact or beat",
+        "the selected component is allowlisted and deterministic"
+      ],
+      "steps": [
+        "Name the MotionPurpose and source evidence.",
+        "Select an approved recipe compatible with the locale and safe region.",
+        "Use the smallest effect that clarifies the beat.",
+        "Render a pilot and remove the layer if it competes with speech or faces."
+      ],
+      "parameters": {
+        "effect_density": "bounded by the selected preset",
+        "fallback": "caption emphasis or no effect"
+      },
+      "coordination": [
+        "never cover a required caption or face",
+        "never invent numeric diagrams or labels",
+        "sound accents may overlap speech only with an explicit mix decision"
+      ],
+      "avoid_when": [
+        "the event has no source evidence",
+        "the layer is decorative filler",
+        "the selected component requires a missing dependency"
+      ],
+      "limitations": [
+        "Motion guidance does not prove viewer retention.",
+        "Ready-made components still require license and deterministic-runtime checks."
+      ],
+      "capability_ids": [
+        "direction-plan",
+        "advanced-hero-plan",
+        "advanced-hero-render"
+      ],
+      "revision": 1,
+      "updated_at": "2026-10-24T00:00:00Z",
+      "content_sha256": "3c5ed4895ce0785b4c319c9e85f986cb390c715c6349b281deb87deb8954b7b3"
+    },
+    {
+      "card_id": "guidance-reference-performance-honesty-v1",
+      "title": "Separate craft observations from performance claims",
+      "authority": "upstream_guidance",
+      "state": "active",
+      "implementation": "guidance_only",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "evaluation_ids": [
+        "eval-no-viral-claim"
+      ],
+      "intent": "Use reference videos to learn observable craft without inventing causal retention or reach claims.",
+      "triggers": [
+        "an operator calls a reference viral",
+        "a style card is built from supplied clips"
+      ],
+      "prerequisites": [
+        "reference permission and source hash are recorded",
+        "outcomes are kept separate from visual/audio observations"
+      ],
+      "steps": [
+        "Record what is visibly or audibly observed.",
+        "Record unknowns such as missing analytics or mixed audio stems.",
+        "Use verified outcomes only when analytics evidence supplies them.",
+        "Scope the resulting style card to its evidence and source domain."
+      ],
+      "parameters": {
+        "performance_status": "unavailable_without_analytics"
+      },
+      "coordination": [
+        "reference analysis may guide Codex but cannot approve a render",
+        "unsupported claims remain excluded from captions and graphics"
+      ],
+      "avoid_when": [
+        "the reference lacks permission",
+        "a metric is inferred from appearance or popularity alone"
+      ],
+      "limitations": [
+        "A craft pattern is not a universal platform rule.",
+        "One reference cannot establish a causal performance result."
+      ],
+      "capability_ids": [
+        "editorial-analyze-reference",
+        "editorial-style-card"
+      ],
+      "revision": 1,
+      "updated_at": "2026-10-24T00:00:00Z",
+      "content_sha256": "5867283382b1b86bea81e306d58d6ace44d814a566a7014064f7d4441393b394"
+    }
+  ],
+  "narrative_patterns": [
+    {
+      "pattern_id": "pattern-flashforward-complete-arc-v1",
+      "name": "Flash-forward payoff with complete arc",
+      "state": "active",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "guidance_card_ids": [
+        "guidance-complete-arc-hook-v1"
+      ],
+      "evidence_ids": [],
+      "hook_shape": "Strong complete phrase, answer, mistake, or reaction from the same story.",
+      "body_shape": "Return to the setup, preserve the speaker and participant continuity, and show the attempt.",
+      "payoff_shape": "Reach the original moment and finish on the source's result or reaction.",
+      "required_source_facts": [
+        "hook source span",
+        "setup source span",
+        "payoff or reaction source span"
+      ],
+      "continuity_rules": [
+        "hook and body must belong to one coherent source arc",
+        "each output occurrence retains its own speech and caption evidence"
+      ],
+      "repetition_rules": [
+        "repeat the hook at most once and mark it as intentional"
+      ],
+      "reject_when": [
+        "the hook and body use unrelated participants",
+        "the result is absent or promised without evidence"
+      ],
+      "content_sha256": "21350926ce101820d4a2d0201eaa903b21fdf6765f4aa1bcaaf30f2b09d07379"
+    }
+  ],
+  "style_cards": [
+    {
+      "style_card_id": "style-tarteel-challenge-readable-v1",
+      "name": "Tarteel challenge readable",
+      "state": "active",
+      "source_ids": [
+        "source-tarteel-style-library"
+      ],
+      "guidance_card_ids": [
+        "guidance-complete-arc-hook-v1",
+        "guidance-speech-safe-captions-v1",
+        "guidance-purposeful-motion-v1",
+        "guidance-reference-performance-honesty-v1"
+      ],
+      "narrative_pattern_ids": [
+        "pattern-flashforward-complete-arc-v1"
+      ],
+      "motion_recipe_ids": [],
+      "caption_style_id": "quran-readable-v2",
+      "visual_identity": [
+        "deep emerald",
+        "antique gold",
+        "parchment cream",
+        "face-safe framing",
+        "upper context lane",
+        "lower speech caption lane"
+      ],
+      "pacing_rules": [
+        "open on a complete question, reaction, or challenge",
+        "use purposeful cuts between setup, attempt, and result",
+        "keep a readable final result hold"
+      ],
+      "audio_rules": [
+        "speech remains dominant",
+        "SFX are sparse and source-grounded",
+        "music remains prohibited unless policy changes"
+      ],
+      "ending_rules": [
+        "end on the demonstrated result or reaction",
+        "CTA cannot cover faces, app proof, or captions"
+      ],
+      "limitations": [
+        "reference clips have no verified retention or view data",
+        "Arabic and Quran text retain their separate evidence gates"
+      ],
+      "confidence": "medium",
+      "updated_at": "2026-10-24T00:00:00Z",
+      "content_sha256": "3a3b7520b5dad7691683fe8c54e94b8aff4aa9ff20baf244defb079bf83266b6"
+    }
+  ],
+  "conflicts": [],
+  "releases": [
+    {
+      "release_id": "knowledge-release-v1",
+      "name": "Clipforge editorial knowledge release 1",
+      "state": "active",
+      "source_ids": [
+        "source-motion-direction-skill",
+        "source-tarteel-style-library",
+        "source-iart-motion-skills-lock",
+        "source-clipforge-native-motion"
+      ],
+      "guidance_card_ids": [
+        "guidance-complete-arc-hook-v1",
+        "guidance-speech-safe-captions-v1",
+        "guidance-purposeful-motion-v1",
+        "guidance-reference-performance-honesty-v1"
+      ],
+      "narrative_pattern_ids": [
+        "pattern-flashforward-complete-arc-v1"
+      ],
+      "style_card_ids": [
+        "style-tarteel-challenge-readable-v1"
+      ],
+      "conflict_ids": [],
+      "created_at": "2026-10-24T00:00:00Z",
+      "created_by": "codex_operator",
+      "manifest_sha256": "7731cbab57a107caf94d8e27e128a115b81c8ac5c62214c9e856529b1f6fd629"
+    }
+  ]
+}

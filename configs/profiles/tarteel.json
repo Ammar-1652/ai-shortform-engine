@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "profile-tarteel-campaign",
+  "name": "Tarteel campaign",
+  "mode": "paid_campaign",
+  "objective": "Official Tarteel sources with mandatory readable branding and reviewed CTA compositing.",
+  "policy_ids": ["policy-asset-rights", "policy-source-rights", "policy-tarteel-delivery"]
+}

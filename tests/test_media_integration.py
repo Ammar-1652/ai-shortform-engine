@@ -13,11 +13,19 @@ from clipforge.cli.main import app
 from clipforge.errors import MediaError
 from clipforge.media import recipes
 from clipforge.media.ingest import IngestResult, ingest_source
+from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.prepare import prepare_source
 from clipforge.media.process import ProcessRunner
 from clipforge.media.verify import verify_source
 from clipforge.schemas.jobs import JobStatus
-from clipforge.storage import Database, get_source_manifest, list_jobs, list_source_assets, update_job
+from clipforge.storage import (
+    Database,
+    get_asset_license_record,
+    get_source_manifest,
+    list_jobs,
+    list_source_assets,
+    update_job,
+)
 from tests.media_factory import require_ffmpeg, run_ffmpeg, synth_video
 
 pytestmark = pytest.mark.media
@@ -74,6 +82,32 @@ def test_landscape_prepare_is_cached_on_the_second_run(tmp_path: Path) -> None:
     assert again.source_asset_id == ingested.source_asset_id
     with database.connect() as connection:
         assert len(list_source_assets(connection, project_id)) == 1
+
+
+def test_external_rights_evidence_is_staged_inside_work_root(tmp_path: Path) -> None:
+    database, project_id = _project(tmp_path)
+    source = synth_video(tmp_path, "evidence-source.mp4", audio=False, duration="1")
+    external_evidence = tmp_path / "operator-rights.txt"
+    external_evidence.write_text("operator asserted ownership", encoding="utf-8")
+    work = tmp_path / "work"
+    ingested = ingest_source(
+        database=database,
+        project_id=project_id,
+        source=str(source),
+        rights_status="owned",
+        rights_evidence=str(external_evidence),
+        rights_name="Operator-owned source",
+        confirm_rights=True,
+        work_root=work,
+    )
+    with database.connect() as connection:
+        asset = list_source_assets(connection, project_id)[0]
+        record = get_asset_license_record(connection, asset.license_record_id)
+    assert asset.source_asset_id == ingested.source_asset_id
+    staged = path_from_file_uri(record.evidence_uri or "")
+    assert staged.is_file()
+    assert staged.is_relative_to(work.resolve())
+    assert staged.read_text(encoding="utf-8") == external_evidence.read_text(encoding="utf-8")
 
 
 def test_portrait_square_and_no_audio(tmp_path: Path) -> None:

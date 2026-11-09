@@ -1,0 +1,395 @@
+{
+  "schema_version": "1.0.0",
+  "presets": [
+    {
+      "preset_id": "clean_explainer",
+      "narrative_structure": [
+        "question",
+        "explanation",
+        "takeaway"
+      ],
+      "camera_language": [
+        "subject_safe_hold",
+        "gentle_push"
+      ],
+      "motion_recipe_ids": [
+        "motion-context-reveal-v1",
+        "motion-caption-emphasis-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Speech remains dominant; one accent per beat."
+      ],
+      "reject_when": [
+        "No clear explanation or takeaway."
+      ],
+      "preset_sha256": "3e5732594016a8bebf90c487c6b8ae3ff65f5c25bd9f2c04f4dc25162fcf0bb7",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "context",
+            "proof",
+            "process"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 1,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    },
+    {
+      "preset_id": "proof_comparison",
+      "narrative_structure": [
+        "claim",
+        "evidence",
+        "difference",
+        "conclusion"
+      ],
+      "camera_language": [
+        "stable_state",
+        "match_cut"
+      ],
+      "motion_recipe_ids": [
+        "motion-graphic-data-v1",
+        "motion-concat-dissolve-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Impact only at evidence reveal; no music."
+      ],
+      "reject_when": [
+        "No comparable facts or units."
+      ],
+      "preset_sha256": "007ee87e9834c3cd95e7e1aeb924125799c8b6e0569b7a17fb508a6006e5c717",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "proof",
+            "contrast",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 3,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    },
+    {
+      "preset_id": "story_reveal",
+      "narrative_structure": [
+        "curiosity",
+        "context",
+        "reveal",
+        "reaction"
+      ],
+      "camera_language": [
+        "restrained_push",
+        "settle"
+      ],
+      "motion_recipe_ids": [
+        "motion-hook-card-v1",
+        "motion-punch-card-v1",
+        "motion-concat-dissolve-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Keep silence before the reveal when source supports it."
+      ],
+      "reject_when": [
+        "Hook and payoff are unrelated."
+      ],
+      "preset_sha256": "25896cc8277d861ab17edcebd1429d0f02c1d1fe3acaabcaede9c114b3be3479",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "context",
+            "reaction",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    },
+    {
+      "preset_id": "transformation",
+      "narrative_structure": [
+        "problem",
+        "steps",
+        "result"
+      ],
+      "camera_language": [
+        "progressive_crop",
+        "directional_move"
+      ],
+      "motion_recipe_ids": [
+        "motion-caption-emphasis-process-v1",
+        "motion-graphic-concept-v1",
+        "motion-concat-push-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "Step accents are sparse and speech-safe."
+      ],
+      "reject_when": [
+        "No visible sequence or result."
+      ],
+      "preset_sha256": "b7a894bfd388c5d62cf13405d7b080a3b7dfe00c7d3fbac019d6c50c337e4915",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "process",
+            "result",
+            "contrast"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.85
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "allowed",
+          "max_per_30s": 3,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 3,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    },
+    {
+      "preset_id": "quote_emotion",
+      "narrative_structure": [
+        "strong_quote",
+        "context",
+        "reaction",
+        "close"
+      ],
+      "camera_language": [
+        "face_safe_hold",
+        "minimal_drift"
+      ],
+      "motion_recipe_ids": [
+        "motion-caption-emphasis-payoff-v1",
+        "motion-context-reveal-takeaway-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_whole_run",
+      "audio_rules": [
+        "Voice-first mix; sparse accents."
+      ],
+      "reject_when": [
+        "Quote needs invented context."
+      ],
+      "preset_sha256": "2751a52af4b5199ae7f58a392d406eb199441eb75f35b196e335d09039f40afd",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "eligible",
+          "roles": [
+            "reaction",
+            "context"
+          ],
+          "min_meaningful_beats": 0,
+          "max_consecutive_beats": 1,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "allowed",
+          "min_events": 0,
+          "max_events": 3,
+          "max_scale_delta": 0.05,
+          "max_subject_drift_px": 64
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 1,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 1,
+          "max_gain_db": -20,
+          "speech_duck_db": 8,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    },
+    {
+      "preset_id": "product_cta",
+      "narrative_structure": [
+        "problem",
+        "demonstration",
+        "benefit",
+        "action"
+      ],
+      "camera_language": [
+        "product_safe_follow",
+        "cta_hold"
+      ],
+      "motion_recipe_ids": [
+        "motion-hook-card-proof-v1",
+        "motion-punch-card-result-v1",
+        "motion-context-reveal-takeaway-v1"
+      ],
+      "allowed_style_ids": [
+        "editorial-clean-v1",
+        "kinetic-caption-v1",
+        "premium-minimal-v1"
+      ],
+      "caption_mode": "phrase_active_word",
+      "audio_rules": [
+        "CTA cue is short, restrained, and clear."
+      ],
+      "reject_when": [
+        "CTA would obscure faces or proof."
+      ],
+      "preset_sha256": "5b2a541a4bbae4276274b5e6a1be32903343163355f3dc0f9fa127c985e82719",
+      "treatment_policy": {
+        "beat_coverage": "required_decision",
+        "broll": {
+          "mode": "preferred",
+          "roles": [
+            "product_detail",
+            "process",
+            "result"
+          ],
+          "min_meaningful_beats": 1,
+          "max_consecutive_beats": 2,
+          "relevance_threshold": 0.9
+        },
+        "camera": {
+          "mode": "preferred",
+          "min_events": 1,
+          "max_events": 4,
+          "max_scale_delta": 0.08,
+          "max_subject_drift_px": 80
+        },
+        "transitions": {
+          "mode": "sparse",
+          "max_per_30s": 2,
+          "forbid_on_word_boundary": true,
+          "fallback": "clean_cut"
+        },
+        "sfx": {
+          "mode": "accent_only",
+          "max_cues_per_30s": 2,
+          "max_gain_db": -18,
+          "speech_duck_db": 6,
+          "forbid_on_continuous_dialogue": true
+        },
+        "motion_graphics": "disabled"
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "fallback": {
+      "const": "clean_cut",
+      "default": "clean_cut",
+      "title": "Fallback",
+      "type": "string"
+    },
+    "forbid_on_word_boundary": {
+      "default": true,
+      "title": "Forbid On Word Boundary",
+      "type": "boolean"
+    },
+    "max_per_30s": {
+      "default": 3,
+      "maximum": 12,
+      "minimum": 0,
+      "title": "Max Per 30S",
+      "type": "integer"
+    },
+    "mode": {
+      "enum": [
+        "sparse",
+        "allowed",
+        "blocked"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mode"
+  ],
+  "title": "TransitionPolicy",
+  "type": "object"
+}

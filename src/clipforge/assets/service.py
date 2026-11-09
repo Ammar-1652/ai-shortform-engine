@@ -62,7 +62,12 @@ def search_assets(
     now = datetime.now(UTC)
     hits: list[AssetSearchHit] = []
     for row in rows:
-        hit = _normalize(row, campaign_id=campaign_id, now=now)
+        hit = _normalize(
+            row,
+            campaign_id=campaign_id,
+            now=now,
+            requested_asset_type=filters.get("asset_type"),
+        )
         if hit is not None:
             hits.append(hit)
     return hits
@@ -196,7 +201,13 @@ def verify_asset(work_root: Path, hit: AssetSearchHit) -> str:
     return "PASS asset"
 
 
-def _normalize(row: dict[str, object], *, campaign_id: str, now: datetime) -> AssetSearchHit | None:
+def _normalize(
+    row: dict[str, object],
+    *,
+    campaign_id: str,
+    now: datetime,
+    requested_asset_type: str | None = None,
+) -> AssetSearchHit | None:
     item_id = _text(row, "item_id", "id", "itemId")
     title = _text(row, "title", "name")
     item_url = _https(row, "item_url", "url", "itemUrl")
@@ -219,7 +230,10 @@ def _normalize(row: dict[str, object], *, campaign_id: str, now: datetime) -> As
         item_id=item_id,
         title=title,
         item_url=item_url,
-        asset_type=_asset_type(row.get("asset_type") or row.get("item_type") or row.get("type")),
+        asset_type=_asset_type(
+            row.get("asset_type") or row.get("item_type") or row.get("type"),
+            requested_asset_type=requested_asset_type,
+        ),
         category=_text(row, "category"),
         format=formats,
         compatible_software=software,
@@ -276,13 +290,15 @@ def _number(value: object) -> float | None:
     return None
 
 
-def _asset_type(value: object) -> Literal["video", "audio", "image", "graphic", "template", "unknown"]:
-    if not isinstance(value, str):
-        return "unknown"
-    lowered = value.lower().replace("_", "-")
+def _asset_type(
+    value: object,
+    *,
+    requested_asset_type: str | None = None,
+) -> Literal["video", "audio", "image", "graphic", "template", "font", "unknown"]:
+    lowered = value.lower().replace("_", "-") if isinstance(value, str) else ""
     if "video" in lowered:
         return "video"
-    if "audio" in lowered or "music" in lowered:
+    if "audio" in lowered or "music" in lowered or "sound-effect" in lowered:
         return "audio"
     if lowered in {"image", "photo", "photos"}:
         return "image"
@@ -290,6 +306,10 @@ def _asset_type(value: object) -> Literal["video", "audio", "image", "graphic", 
         return "graphic"
     if "template" in lowered:
         return "template"
+    if "font" in lowered:
+        return "font"
+    if requested_asset_type in {"video", "audio", "image", "graphic", "template", "font"}:
+        return requested_asset_type  # type: ignore[return-value]
     return "unknown"
 
 

@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "description": "A source or campaign fact made available in a direction context.",
+  "properties": {
+    "evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "fact_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Fact Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "source",
+        "campaign",
+        "transcript",
+        "visual",
+        "alignment",
+        "rights",
+        "capability"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "text": {
+      "maxLength": 700,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    },
+    "verified": {
+      "default": false,
+      "title": "Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "fact_id",
+    "kind",
+    "text"
+  ],
+  "title": "ContextFact",
+  "type": "object"
+}

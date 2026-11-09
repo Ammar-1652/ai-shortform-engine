@@ -198,12 +198,21 @@ def _production(
     file_sha256: str,
 ) -> AlignmentEvidence:
     from clipforge.hero.alignment import _measure_checkpoint_and_manifest
-    from clipforge.language.providers import canonical_locale, normalized_language, provider_for
+    from clipforge.language.providers import (
+        canonical_locale,
+        normalized_language,
+        provider_for,
+        selected_clip_provider_for,
+    )
 
     locale = canonical_locale(document.locale)
     if not locale:
         return _from_document(document, "unsupported_language", "unsupported_language", file_sha256=file_sha256)
-    record = provider_for(locale)
+    record = (
+        selected_clip_provider_for(locale)
+        if document.alignment_scope == "selected_clip"
+        else provider_for(locale)
+    )
     if record.live_status == "unsupported_language" or record.provider_name == "none":
         status = record.live_status if record.live_status == "unsupported_language" else "alignment_not_claimed"
         return _from_document(document, status, status, file_sha256=file_sha256)

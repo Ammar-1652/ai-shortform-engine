@@ -1,0 +1,81 @@
+{
+  "additionalProperties": false,
+  "description": "Stable summary used by CLI, cache, and review payloads.",
+  "properties": {
+    "beat_count": {
+      "maximum": 32,
+      "minimum": 1,
+      "title": "Beat Count",
+      "type": "integer"
+    },
+    "blocked_layers": {
+      "items": {
+        "enum": [
+          "broll",
+          "camera",
+          "transition",
+          "sfx",
+          "motion_graphics"
+        ],
+        "type": "string"
+      },
+      "maxItems": 160,
+      "title": "Blocked Layers",
+      "type": "array"
+    },
+    "omitted_layers": {
+      "items": {
+        "enum": [
+          "broll",
+          "camera",
+          "transition",
+          "sfx",
+          "motion_graphics"
+        ],
+        "type": "string"
+      },
+      "maxItems": 160,
+      "title": "Omitted Layers",
+      "type": "array"
+    },
+    "provider_request_count": {
+      "default": 0,
+      "maximum": 256,
+      "minimum": 0,
+      "title": "Provider Request Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "treatment_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Treatment Fingerprint",
+      "type": "string"
+    },
+    "used_layers": {
+      "items": {
+        "enum": [
+          "broll",
+          "camera",
+          "transition",
+          "sfx",
+          "motion_graphics"
+        ],
+        "type": "string"
+      },
+      "maxItems": 160,
+      "title": "Used Layers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "treatment_fingerprint",
+    "beat_count"
+  ],
+  "title": "TreatmentPlanSummary",
+  "type": "object"
+}

@@ -1,0 +1,92 @@
+{
+  "additionalProperties": false,
+  "description": "Codex-supported reaction annotation displayed beside spoken words.",
+  "properties": {
+    "annotation_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Annotation Id",
+      "type": "string"
+    },
+    "emoji": {
+      "enum": [
+        "\ud83d\ude02",
+        "\ud83d\ude2e",
+        "\ud83e\udd29",
+        "\ud83d\ude22",
+        "\ud83d\udc4f",
+        "\ud83d\udd25",
+        "\u2728",
+        "\ud83d\ude04"
+      ],
+      "title": "Emoji",
+      "type": "string"
+    },
+    "emotion": {
+      "enum": [
+        "laughter",
+        "surprise",
+        "excitement",
+        "sadness",
+        "applause",
+        "fire",
+        "celebration"
+      ],
+      "title": "Emotion",
+      "type": "string"
+    },
+    "evidence_note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Evidence Note",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_window_us": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "title": "Source Window Us",
+      "type": "array"
+    },
+    "source_word_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Source Word Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "annotation_id",
+    "source_word_ids",
+    "source_window_us",
+    "emotion",
+    "emoji",
+    "evidence_note"
+  ],
+  "title": "SpeechEmotionAnnotation",
+  "type": "object"
+}

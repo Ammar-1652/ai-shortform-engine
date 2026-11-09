@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +17,7 @@ from clipforge.errors import MediaError, StorageError
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import (
     normalize_evidence_reference,
+    path_from_file_uri,
     path_to_file_uri,
     require_local_media_file,
 )
@@ -75,6 +78,8 @@ def ingest_source(
 ) -> IngestResult:
     """Probe, hash, and store a referenced source. The file is not copied."""
     path = require_local_media_file(source)
+    root = work_root.resolve()
+    root.mkdir(parents=True, exist_ok=True)
     status = _require_asserted_rights(rights_status, confirm_rights)
     evidence = normalize_evidence_reference(rights_evidence)
     name = rights_name.strip()
@@ -84,8 +89,6 @@ def ingest_source(
         raise MediaError(f"filename is longer than 512 characters: {path.name}")
     actor = _actor(recorded_by)
     active = runner or ProcessRunner()
-    root = work_root.resolve()
-    root.mkdir(parents=True, exist_ok=True)
     log_path = root / "tmp" / f"probe-{uuid.uuid4().hex}.log"
     ensure_within(root, log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,6 +111,7 @@ def ingest_source(
                 return _result(existing, deduplicated=True)
             source_asset_id = str(uuid.uuid4())
             license_record_id = str(uuid.uuid4())
+            evidence = _stage_local_evidence(root, evidence, source_asset_id)
             workspace = SourceWorkspace(root, project_id, source_asset_id)
             workspace.ensure()
             probe_path = workspace.metadata_file("ffprobe.json")
@@ -182,6 +186,38 @@ def ingest_source(
     except StorageError as exc:
         raise MediaError(str(exc)) from exc
     return _result(manifest, deduplicated=False)
+
+
+def _stage_local_evidence(root: Path, evidence_uri: str, source_asset_id: str) -> str:
+    """Keep local rights evidence inside the work root before persistence.
+
+    Source media remains referenced in place, but a rights record must be
+    portable and delivery-safe. Remote evidence URLs stay URLs and continue to
+    require an independently accessible policy path; local evidence outside
+    the work root is copied once into a confined, source-bound evidence file.
+    """
+    if not evidence_uri.startswith("file:"):
+        return evidence_uri
+    source = path_from_file_uri(evidence_uri)
+    if source.is_symlink():
+        raise MediaError("rights evidence must not be a symlink")
+    resolved = source.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        destination = root / "rights-evidence" / f"{source_asset_id}-{source.name}"
+        ensure_within(root, destination)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        partial = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.partial")
+        ensure_within(root, partial)
+        try:
+            shutil.copyfile(resolved, partial)
+            os.replace(partial, destination)
+        finally:
+            if partial.exists():
+                partial.unlink()
+        return path_to_file_uri(destination)
+    return path_to_file_uri(resolved)
 
 
 def _require_asserted_rights(raw: str, confirm_rights: bool) -> RightsStatus:

@@ -28,6 +28,7 @@ from clipforge.campaign.aggregate import (
 )
 from clipforge.campaign.antoine import CAMPAIGN_ID
 from clipforge.campaign.board import open_campaign_board
+from clipforge.campaign.checkpoint import CheckpointError, find_checkpoint_for_final_run, load_checkpoint
 from clipforge.campaign.operator import (
     doctor_text as operator_doctor_text,
 )
@@ -90,6 +91,7 @@ from clipforge.schemas.whop_discovery import WhopLiveDiscoveryRequest
 from clipforge.storage import Database
 
 campaign_app = typer.Typer(no_args_is_help=True, help="Campaign policy, inventory, and production runs.")
+checkpoint_app = typer.Typer(no_args_is_help=True, help="Inspect durable campaign execution checkpoints.")
 operator_app = typer.Typer(no_args_is_help=True, help="Local operator selection and board.")
 acquire_app = typer.Typer(no_args_is_help=True, help="Acquire selected sources into the work root.")
 whop_app = typer.Typer(
@@ -97,6 +99,7 @@ whop_app = typer.Typer(
     help="Import a local Whop snapshot or discover through an enabled connector.",
 )
 campaign_app.add_typer(operator_app, name="operator")
+campaign_app.add_typer(checkpoint_app, name="checkpoint")
 operator_app.add_typer(acquire_app, name="acquire")
 operator_app.add_typer(whop_app, name="whop")
 auth_app = typer.Typer(
@@ -203,6 +206,45 @@ def campaign_show(
         typer.echo(show_campaign_run(resolve_work_dir(work_dir), campaign_id))
     except (ClipforgeError, OSError) as exc:
         _fail(exc)
+
+
+@checkpoint_app.command("show")
+def checkpoint_show(
+    checkpoint_id: Annotated[str, typer.Argument()],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Print one durable execution checkpoint without changing it."""
+    try:
+        typer.echo(load_checkpoint(resolve_work_dir(work_dir), checkpoint_id).model_dump_json(indent=2))
+    except (CheckpointError, OSError) as exc:
+        _fail(exc)
+
+
+@checkpoint_app.command("verify")
+def checkpoint_verify(
+    checkpoint_id: Annotated[str, typer.Argument()],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Verify checkpoint hash and structure without repairing it."""
+    try:
+        checkpoint = load_checkpoint(resolve_work_dir(work_dir), checkpoint_id)
+    except (CheckpointError, OSError) as exc:
+        _fail(exc)
+    typer.echo(f"PASS execution_checkpoint {checkpoint.checkpoint_id}")
+    typer.echo(f"status: {checkpoint.status}")
+    typer.echo(f"completed_sources: {len(checkpoint.completed_source_ids)}/{len(checkpoint.source_ids)}")
+
+
+@checkpoint_app.command("find")
+def checkpoint_find(
+    campaign_run_id: Annotated[str, typer.Argument()],
+    work_dir: Annotated[Path | None, typer.Option("--work-dir")] = None,
+) -> None:
+    """Find the checkpoint that produced a campaign run."""
+    checkpoint = find_checkpoint_for_final_run(resolve_work_dir(work_dir), campaign_run_id)
+    if checkpoint is None:
+        _fail(CheckpointError("no execution checkpoint is bound to that campaign run"))
+    typer.echo(checkpoint.checkpoint_id)
 
 
 @campaign_app.command("inventory")

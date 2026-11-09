@@ -1,0 +1,193 @@
+{
+  "$defs": {
+    "DecisionAlternative": {
+      "additionalProperties": false,
+      "description": "A guidance, style, or recipe candidate that was rejected.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "guidance",
+            "pattern",
+            "style",
+            "motion",
+            "asset",
+            "audio"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "priority_rule": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Priority Rule",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 700,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "record_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "kind",
+        "reason",
+        "priority_rule"
+      ],
+      "title": "DecisionAlternative",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Reviewable explanation of the guidance used by a direction plan.",
+  "properties": {
+    "context_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Context Id",
+      "type": "string"
+    },
+    "context_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Context Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "deviations": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Deviations",
+      "type": "array"
+    },
+    "direction_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Direction Id"
+    },
+    "operator_role": {
+      "enum": [
+        "codex_operator",
+        "human_reviewer"
+      ],
+      "title": "Operator Role",
+      "type": "string"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Reasons",
+      "type": "array"
+    },
+    "rejected": {
+      "items": {
+        "$ref": "#/$defs/DecisionAlternative"
+      },
+      "maxItems": 64,
+      "title": "Rejected",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "selected_guidance_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Selected Guidance Ids",
+      "type": "array"
+    },
+    "selected_motion_recipe_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Selected Motion Recipe Ids",
+      "type": "array"
+    },
+    "selected_pattern_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Selected Pattern Ids",
+      "type": "array"
+    },
+    "selected_style_card_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "title": "Selected Style Card Ids",
+      "type": "array"
+    },
+    "source_evidence_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Source Evidence Ids",
+      "type": "array"
+    },
+    "trace_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Trace Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "trace_id",
+    "context_id",
+    "reasons",
+    "context_sha256",
+    "operator_role",
+    "created_at"
+  ],
+  "title": "EditorialDecisionTrace",
+  "type": "object"
+}

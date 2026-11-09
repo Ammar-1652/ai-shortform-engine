@@ -1,0 +1,95 @@
+{
+  "additionalProperties": false,
+  "description": "A reviewed spelling correction that keeps the observed source word.",
+  "properties": {
+    "corrected_text": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Corrected Text",
+      "type": "string"
+    },
+    "correction_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Correction Id",
+      "type": "string"
+    },
+    "evidence_kind": {
+      "enum": [
+        "listening_context",
+        "campaign_subtitle",
+        "canonical_quran"
+      ],
+      "title": "Evidence Kind",
+      "type": "string"
+    },
+    "locale": {
+      "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$",
+      "title": "Locale",
+      "type": "string"
+    },
+    "original_text": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Original Text",
+      "type": "string"
+    },
+    "review_note": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Review Note",
+      "type": "string"
+    },
+    "reviewer": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Reviewer",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_window_us": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "description": "Integer microseconds on the clock named by the parent field. Not seconds or frames.",
+          "maximum": 604800000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      ],
+      "title": "Source Window Us",
+      "type": "array"
+    },
+    "source_word_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Word Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "correction_id",
+    "source_word_id",
+    "source_window_us",
+    "original_text",
+    "corrected_text",
+    "locale",
+    "evidence_kind",
+    "reviewer",
+    "review_note"
+  ],
+  "title": "TarteelArabicCorrection",
+  "type": "object"
+}

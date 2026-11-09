@@ -23,6 +23,28 @@ from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.time import digest_time_map
 
 
+def _alignment_identity_complete(alignment: ForcedAlignmentDocument) -> bool:
+    """Return whether an alignment has the Round 30 provider identity.
+
+    Older sidecars still validate because the identity fields have defaults for
+    read compatibility. They must not fall through to a misleading plan hash
+    mismatch: without the identity, the only safe recovery is to run ``hero
+    align`` again under the current provider.
+    """
+
+    if alignment.model_name == "fake-forced-align-v1":
+        return bool(alignment.binding_sha256)
+    return all(
+        (
+            alignment.binding_sha256,
+            alignment.model_revision,
+            alignment.checkpoint_sha256,
+            alignment.manifest_sha256,
+            alignment.alignment_status,
+        )
+    )
+
+
 def hero_problems(
     document: HeroDraftSetDocument,
     record: HeroCacheRecord,
@@ -244,6 +266,11 @@ def _alignment_file(
         problems.append(f"{candidate_id} alignment TimeMap does not match the candidate")
     if any(word.alignment_quality != "forced" for word in alignment.words):
         problems.append(f"{candidate_id} alignment is not forced")
+    identity_complete = _alignment_identity_complete(alignment)
+    if not identity_complete:
+        problems.append(
+            f"{candidate_id} alignment uses a legacy provider identity; rerun hero align before planning"
+        )
     plan_path = path.parent / "plan.json"
     if plan_path.is_file() and not plan_path.is_symlink():
         try:
@@ -253,7 +280,7 @@ def _alignment_file(
         else:
             if plan.edit_plan.stage != "hero":
                 problems.append(f"{candidate_id} plan is not a Hero plan")
-            if plan.alignment_sha256 != digest_alignment(alignment):
+            if identity_complete and plan.alignment_sha256 != digest_alignment(alignment):
                 problems.append(f"{candidate_id} plan is not bound to this alignment")
     return problems
 

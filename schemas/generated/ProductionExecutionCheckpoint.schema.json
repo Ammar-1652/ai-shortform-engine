@@ -1,0 +1,937 @@
+{
+  "$defs": {
+    "ArtifactProvenance": {
+      "additionalProperties": false,
+      "description": "Required lineage for stored media decisions and derived artifacts.\n\n``source_asset_ids`` is empty only for records that are not derived from a\nsource video (for example a newly created project). Derived media must list\nthe source.",
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Created By",
+          "type": "string"
+        },
+        "inputs_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputs Sha256"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "parent_artifact_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Parent Artifact Ids",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_asset_ids": {
+          "items": {
+            "description": "Stable id. UUID text is the usual value.",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Source Asset Ids",
+          "type": "array"
+        },
+        "tool": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "tool_version": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Tool Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "created_at",
+        "created_by",
+        "tool",
+        "tool_version"
+      ],
+      "title": "ArtifactProvenance",
+      "type": "object"
+    },
+    "CampaignCandidateRecord": {
+      "additionalProperties": false,
+      "description": "Why one candidate was kept. The runner does not approve it.",
+      "properties": {
+        "advanced_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advanced Artifact Id"
+        },
+        "alignment_status": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Alignment Status",
+          "type": "string"
+        },
+        "candidate_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "caption_quality": {
+          "default": "provisional",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Caption Quality",
+          "type": "string"
+        },
+        "delivery_status": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Delivery Status",
+          "type": "string"
+        },
+        "hero_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hero Artifact Id"
+        },
+        "hero_review_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hero Review Id"
+        },
+        "narration_status": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Narration Status",
+          "type": "string"
+        },
+        "preview_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preview Artifact Id"
+        },
+        "qa_status": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Qa Status",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "review_decision": {
+          "default": "not_recorded",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Review Decision",
+          "type": "string"
+        },
+        "review_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Id"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "score": {
+          "default": "unavailable",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Score",
+          "type": "string"
+        },
+        "selection_reason": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Selection Reason",
+          "type": "string"
+        },
+        "source_end_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source End Us"
+        },
+        "source_start_us": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Start Us"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "rank",
+        "selection_reason",
+        "alignment_status",
+        "narration_status",
+        "qa_status",
+        "delivery_status"
+      ],
+      "title": "CampaignCandidateRecord",
+      "type": "object"
+    },
+    "CampaignSourceRun": {
+      "additionalProperties": false,
+      "description": "Evidence for one authorized source inside a campaign run.",
+      "properties": {
+        "advanced_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Advanced Artifact Id"
+        },
+        "broll_status": {
+          "default": "absent",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Broll Status",
+          "type": "string"
+        },
+        "cache_status": {
+          "default": "miss",
+          "enum": [
+            "hit",
+            "miss",
+            "mixed"
+          ],
+          "title": "Cache Status",
+          "type": "string"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/CampaignCandidateRecord"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "delivery_files_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Files Sha256"
+        },
+        "delivery_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Id"
+        },
+        "delivery_manifest_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Manifest Sha256"
+        },
+        "hero_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hero Artifact Id"
+        },
+        "narration_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Narration Artifact Id"
+        },
+        "narration_audio_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Narration Audio Sha256"
+        },
+        "qa_set_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qa Set Id"
+        },
+        "qa_set_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qa Set Sha256"
+        },
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "requested_locale": {
+          "default": "",
+          "title": "Requested Locale",
+          "type": "string"
+        },
+        "rights_state": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Rights State",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sfx_status": {
+          "default": "absent",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Sfx Status",
+          "type": "string"
+        },
+        "source_asset_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Asset Id"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/CampaignStageRecord"
+          },
+          "title": "Stages",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "partial",
+            "blocked",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_sha256",
+        "rights_state",
+        "stages",
+        "candidates",
+        "status",
+        "reason_code"
+      ],
+      "title": "CampaignSourceRun",
+      "type": "object"
+    },
+    "CampaignStageRecord": {
+      "additionalProperties": false,
+      "description": "One stage for one source. A cache hit still names the producer it reused.",
+      "properties": {
+        "artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Id"
+        },
+        "artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Artifact Sha256"
+        },
+        "cache_hit": {
+          "default": false,
+          "title": "Cache Hit",
+          "type": "boolean"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Job Id"
+        },
+        "reason_code": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "source_verify",
+            "ingest",
+            "media_prepare",
+            "transcribe",
+            "vision",
+            "mine",
+            "preview",
+            "review",
+            "align",
+            "hero_plan",
+            "hero_render",
+            "advanced",
+            "qa",
+            "narration",
+            "delivery"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "partial",
+            "blocked",
+            "failed",
+            "cancelled",
+            "not_run"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "status",
+        "reason_code"
+      ],
+      "title": "CampaignStageRecord",
+      "type": "object"
+    },
+    "RunStageReceipt": {
+      "additionalProperties": false,
+      "description": "One verified stage result. It carries facts, never a filesystem path.",
+      "properties": {
+        "attempt": {
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "dependency_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Dependency Sha256",
+          "type": "string"
+        },
+        "input_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "output_artifact_id": {
+          "anyOf": [
+            {
+              "description": "Stable id. UUID text is the usual value.",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Artifact Id"
+        },
+        "output_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reason_code": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:-]+$",
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "run_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "stage": {
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:-]+$",
+          "title": "Stage",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "running",
+            "succeeded",
+            "failed",
+            "blocked",
+            "cancelled",
+            "stale",
+            "needs_review"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "source_id",
+        "stage",
+        "status",
+        "attempt",
+        "reason_code",
+        "updated_at"
+      ],
+      "title": "RunStageReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Durable progress for one production request.\n\nThe checkpoint is a recovery index. The campaign production manifest and\nexisting artifact rows remain the delivery authority.",
+  "properties": {
+    "campaign_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Campaign Id",
+      "type": "string"
+    },
+    "checkpoint_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Checkpoint Id",
+      "type": "string"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    },
+    "completed_source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "title": "Completed Source Ids",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "current_source_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Source Id"
+    },
+    "current_stage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Stage"
+    },
+    "final_campaign_run_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Campaign Run Id"
+    },
+    "language": {
+      "default": "en-US",
+      "title": "Language",
+      "type": "string"
+    },
+    "narration_enabled": {
+      "default": false,
+      "title": "Narration Enabled",
+      "type": "boolean"
+    },
+    "project_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactProvenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "release_fingerprint": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Release Fingerprint",
+      "type": "string"
+    },
+    "release_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Release Id"
+    },
+    "request_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Fingerprint",
+      "type": "string"
+    },
+    "run_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Source Ids",
+      "type": "array"
+    },
+    "source_locales": {
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$": {
+          "type": "string"
+        }
+      },
+      "propertyNames": {
+        "description": "Stable id. UUID text is the usual value."
+      },
+      "title": "Source Locales",
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/CampaignSourceRun"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "stage_receipts": {
+      "items": {
+        "$ref": "#/$defs/RunStageReceipt"
+      },
+      "title": "Stage Receipts",
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "running",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "stale",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "checkpoint_id",
+    "run_id",
+    "campaign_id",
+    "project_id",
+    "request_fingerprint",
+    "source_ids",
+    "status",
+    "checkpoint_sha256",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "ProductionExecutionCheckpoint",
+  "type": "object"
+}

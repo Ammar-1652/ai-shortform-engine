@@ -88,6 +88,12 @@
       "pattern": "^[0-9a-f]{64}$",
       "title": "Target Manifest Sha256",
       "type": "string"
+    },
+    "treatment_audio_measurement_sha256": {
+      "default": "",
+      "pattern": "^$|^[0-9a-f]{64}$",
+      "title": "Treatment Audio Measurement Sha256",
+      "type": "string"
     }
   },
   "required": [

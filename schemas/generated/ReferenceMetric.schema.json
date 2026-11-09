@@ -1,0 +1,113 @@
+{
+  "additionalProperties": false,
+  "description": "One measured or explicitly unavailable reference-video metric.",
+  "properties": {
+    "evidence_kind": {
+      "enum": [
+        "observed",
+        "heuristic",
+        "technical",
+        "viewer_review",
+        "performance"
+      ],
+      "title": "Evidence Kind",
+      "type": "string"
+    },
+    "limitation": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Limitation"
+    },
+    "method": {
+      "enum": [
+        "ffprobe",
+        "frame_probe",
+        "audio_probe",
+        "transcript",
+        "human_watch",
+        "unavailable"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "name": {
+      "enum": [
+        "duration",
+        "audio_duration",
+        "integrated_loudness",
+        "true_peak",
+        "hook_duration",
+        "first_visual_change",
+        "shot_count",
+        "median_shot_duration",
+        "cut_density",
+        "words_per_second",
+        "caption_line_count",
+        "caption_position",
+        "transition_class",
+        "sfx_timing",
+        "silence_windows",
+        "motion_intensity",
+        "payoff_position",
+        "cta_hold"
+      ],
+      "title": "Name",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "enum": [
+            "microseconds",
+            "cuts_per_minute",
+            "words_per_second",
+            "lines",
+            "ratio",
+            "LUFS",
+            "dBFS",
+            "count"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "required": [
+    "name",
+    "evidence_kind",
+    "method"
+  ],
+  "title": "ReferenceMetric",
+  "type": "object"
+}

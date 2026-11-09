@@ -1,0 +1,32 @@
+{
+  "source_repository": "https://github.com/jub0t/Concat",
+  "source_commit": "60ecb4a1fda62501f67afaf7e036143c95f196f8",
+  "source_license": "AGPL-3.0-or-later (upstream application; not copied)",
+  "font_license": "SIL Open Font License 1.1",
+  "files": [
+    {
+      "file": "HankenGrotesk-SemiBold.ttf",
+      "upstream_path": "src/crates/concat-text/fonts/HankenGrotesk-SemiBold.ttf",
+      "license_evidence": "LICENSE-HankenGrotesk.txt",
+      "sha256": "4f70ae1dd1c951e80603732344f18507d6a6932a3df9f7f6d8a91d4495d41e17"
+    },
+    {
+      "file": "Anton-Regular.ttf",
+      "upstream_path": "src/crates/concat-text/fonts/Anton-Regular.ttf",
+      "license_evidence": "LICENSE-Anton.txt",
+      "sha256": "a4ba3a92350ebb031da0cb47630ac49eb265082ca1bc0450442f4a83ab947cab"
+    },
+    {
+      "file": "SpaceGrotesk-Bold.ttf",
+      "upstream_path": "src/crates/concat-text/fonts/SpaceGrotesk-Bold.ttf",
+      "license_evidence": "LICENSE-SpaceGrotesk.txt",
+      "sha256": "42c2abe5fddba9a6da76fabab653246fcf48daa3ae3fc6251e61f8215fdda006"
+    },
+    {
+      "file": "NotoSansArabicUI-Concat.ttf",
+      "upstream_path": "src/crates/concat-text/fonts/NotoSansArabicUI-Concat.ttf",
+      "license_evidence": "LICENSE-NotoSansArabicUI.txt",
+      "sha256": "9187fa244db5f50201cfb0ede30ae7269651d090290f164c0703403fd0fab1b2"
+    }
+  ]
+}

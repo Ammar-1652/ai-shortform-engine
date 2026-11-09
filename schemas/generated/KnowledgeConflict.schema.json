@@ -1,0 +1,116 @@
+{
+  "additionalProperties": false,
+  "description": "A conflict that must be resolved before guidance enters a context.",
+  "properties": {
+    "conflict_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Conflict Id",
+      "type": "string"
+    },
+    "description": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "scope",
+        "policy",
+        "timing",
+        "license",
+        "implementation",
+        "evidence",
+        "copy"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "record_ids": {
+      "items": {
+        "description": "Stable id. UUID text is the usual value.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 2,
+      "title": "Record Ids",
+      "type": "array"
+    },
+    "resolution_note": {
+      "anyOf": [
+        {
+          "maxLength": 700,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolution Note"
+    },
+    "resolved_by": {
+      "anyOf": [
+        {
+          "enum": [
+            "system_enforcer",
+            "codex_operator",
+            "human_reviewer"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolved By"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "unresolved",
+        "resolved",
+        "rejected"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "winning_record_id": {
+      "anyOf": [
+        {
+          "description": "Stable id. UUID text is the usual value.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Winning Record Id"
+    }
+  },
+  "required": [
+    "conflict_id",
+    "record_ids",
+    "kind",
+    "description",
+    "status",
+    "updated_at"
+  ],
+  "title": "KnowledgeConflict",
+  "type": "object"
+}

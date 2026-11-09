@@ -21,6 +21,16 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from clipforge.campaign.antoine import CAMPAIGN_ID, inventory_sources, selected_files
+from clipforge.campaign.checkpoint import (
+    CheckpointError,
+    append_stage_receipt,
+    execution_id,
+    execution_lock,
+    find_checkpoint_for_final_run,
+    load_checkpoint,
+    stage_receipts,
+    write_checkpoint,
+)
 from clipforge.campaign.providers import CampaignError
 from clipforge.errors import MediaError, StorageError
 from clipforge.hero.advanced_assets import confine_file_uri, confine_work_path
@@ -39,6 +49,7 @@ from clipforge.language.registry import (
 from clipforge.media.hashing import sha256_file
 from clipforge.media.local_file import path_from_file_uri
 from clipforge.media.workspace import SourceWorkspace, mkdir_contained, reject_symlink_chain
+from clipforge.publish.errors import PublishError
 from clipforge.publish.service import explain_package
 from clipforge.review.service import effective_review
 from clipforge.schemas.advanced import AdvancedHeroPlanDocument
@@ -53,11 +64,13 @@ from clipforge.schemas.campaign_run import (
     StageName,
     StageStatus,
 )
+from clipforge.schemas.execution import ProductionExecutionCheckpoint
 from clipforge.schemas.governance import ReviewDecision
 from clipforge.schemas.hero import ForcedAlignmentDocument
 from clipforge.schemas.jobs import JobRecord, JobStatus
 from clipforge.schemas.provenance import ArtifactProvenance
 from clipforge.schemas.reframe import ReframePlanDocument
+from clipforge.schemas.roles import WorkflowRolePolicy
 from clipforge.schemas.voice import NarrationAudioArtifact
 from clipforge.storage import (
     Database,
@@ -195,6 +208,7 @@ def plan_campaign(
     else:
         status, reason = "partial", "planned"
     return CampaignProductionRun(
+        workflow_roles=WorkflowRolePolicy(),
         campaign_run_id=f"plan-{fingerprint[:16]}",
         project_id="unresolved",
         campaign_id=campaign_id,
@@ -222,7 +236,7 @@ def plan_campaign(
     )
 
 
-def run_campaign(
+def _run_campaign_unlocked(
     database: Database,
     work_root: Path,
     *,
@@ -247,31 +261,139 @@ def run_campaign(
     if planned.reason_code == "rights_not_allowed":
         raise CampaignError("campaign source rights are not allowed", code="rights_not_allowed")
     root = work_root.resolve()
+    from clipforge.operator.release import save_release
+
+    release = save_release(root)
     bound = [_bind_one(database, item.source_id) for item in planned.sources]
     _reject_mixed(bound)
-    sources = [
-        _execute_source(
-            database,
-            root,
-            planned_source,
-            item,
-            narration_enabled=narration_enabled and planned_source.source_id == _NARRATION_SOURCE,
-            language=(source_locales or {}).get(planned_source.source_id, language),
-            narration_probe=narration_probe,
+    checkpoint_id = (
+        execution_id(planned.fingerprint)
+        if not force
+        else execution_id(_digest({"request": planned.fingerprint, "attempt": str(uuid4())}))
+    )
+    checkpoint = None
+    if not force:
+        try:
+            checkpoint = load_checkpoint(root, checkpoint_id)
+        except CheckpointError:
+            checkpoint = None
+        if checkpoint is not None and (
+            checkpoint.request_fingerprint != planned.fingerprint
+            or checkpoint.release_fingerprint != release.fingerprint
+        ):
+            checkpoint = None
+    if checkpoint is None or force:
+        now = datetime.now(UTC)
+        checkpoint, _ = write_checkpoint(
+            ProductionExecutionCheckpoint(
+                checkpoint_id=checkpoint_id,
+                run_id=checkpoint_id,
+                campaign_id=planned.campaign_id,
+                project_id=_project_of(bound),
+                request_fingerprint=planned.fingerprint,
+                release_id=release.release_id,
+                release_fingerprint=release.fingerprint,
+                source_ids=[item.source_id for item in planned.sources],
+                status="running",
+                checkpoint_sha256=_ZERO,
+                created_at=now,
+                updated_at=now,
+            ),
+            root=root,
         )
-        for planned_source, item in zip(planned.sources, bound, strict=True)
-    ]
+    assert checkpoint is not None
+    completed = {item.source_id: item for item in checkpoint.sources}
+    sources: list[CampaignSourceRun] = []
+    for planned_source, item in zip(planned.sources, bound, strict=True):
+        previous = completed.get(planned_source.source_id)
+        if previous is not None and _checkpoint_source_reusable(database, root, planned, previous, item):
+            source = previous
+        else:
+            checkpoint = _write_checkpoint_progress(
+                checkpoint,
+                root=root,
+                source_id=planned_source.source_id,
+                sources=sources,
+                status="running",
+            )
+            try:
+                source = _execute_source(
+                    database,
+                    root,
+                    planned_source,
+                    item,
+                    narration_enabled=narration_enabled and planned_source.source_id == _NARRATION_SOURCE,
+                    language=(source_locales or {}).get(planned_source.source_id, language),
+                    narration_probe=narration_probe,
+                )
+            except Exception as exc:
+                checkpoint = _write_checkpoint_progress(
+                    checkpoint,
+                    root=root,
+                    source_id=planned_source.source_id,
+                    sources=sources,
+                    status="failed",
+                )
+                raise CampaignError(
+                    f"campaign source {planned_source.source_id} failed; resume the execution checkpoint",
+                    code="stage_failed",
+                ) from exc
+            for receipt in stage_receipts(
+                run_id=checkpoint.run_id,
+                source=source,
+                dependency_sha256=checkpoint.release_fingerprint or checkpoint.request_fingerprint,
+            ):
+                append_stage_receipt(root, receipt)
+        sources.append(source)
+        checkpoint = _write_checkpoint_progress(
+            checkpoint,
+            root=root,
+            source_id=None,
+            sources=sources,
+            status="running" if len(sources) < len(planned.sources) else "needs_review",
+        )
     document = _assemble(planned, sources, _project_of(bound))
     if not force:
         cached = _cached_run(root, document.fingerprint)
         if cached is not None and _evidence_current(database, root, cached):
+            checkpoint = _write_checkpoint_progress(
+                checkpoint,
+                root=root,
+                source_id=None,
+                sources=list(cached.sources),
+                status="succeeded",
+                final_campaign_run_id=cached.campaign_run_id,
+            )
             return cached
     _invalidate_stale(database, root, planned.campaign_id, invalidation_hook)
     _publish(database, root, document, created_by, replace_job=False, promotion_hook=promotion_hook)
+    checkpoint = _write_checkpoint_progress(
+        checkpoint,
+        root=root,
+        source_id=None,
+        sources=sources,
+        status="succeeded" if document.status == "succeeded" else "needs_review",
+        final_campaign_run_id=document.campaign_run_id,
+    )
     return document
 
 
-def resume_campaign(
+def run_campaign(
+    database: Database,
+    work_root: Path,
+    **kwargs: object,
+) -> CampaignProductionRun:
+    """Serialize one campaign controller attempt under the kernel lock."""
+    root = work_root.resolve()
+    try:
+        with execution_lock(root):
+            return _run_campaign_unlocked(database, root, **kwargs)  # type: ignore[arg-type]
+    except MediaError as exc:
+        code = "symlink" if "symlink" in str(exc) else "execution_invalid"
+        raise CampaignError(str(exc), code=code) from exc
+
+
+def _resume_campaign_unlocked(
     database: Database,
     work_root: Path,
     campaign_run_id: str,
@@ -282,9 +404,34 @@ def resume_campaign(
 ) -> CampaignProductionRun:
     """Retry sources that are not fully verified. A verified source stays cached."""
     root = work_root.resolve()
+    from clipforge.operator.release import save_release
+
+    release = save_release(root)
     current = _read(root, campaign_run_id)
     bound = [_bind_one(database, item.source_id) for item in current.sources]
     _reject_mixed(bound)
+    checkpoint = find_checkpoint_for_final_run(root, campaign_run_id)
+    if checkpoint is not None and checkpoint.release_fingerprint != release.fingerprint:
+        checkpoint = None
+    if checkpoint is None:
+        now = datetime.now(UTC)
+        checkpoint, _ = write_checkpoint(
+            ProductionExecutionCheckpoint(
+                checkpoint_id=execution_id(current.fingerprint),
+                run_id=execution_id(current.fingerprint),
+                campaign_id=current.campaign_id,
+                project_id=current.project_id,
+                request_fingerprint=current.fingerprint,
+                release_id=release.release_id,
+                release_fingerprint=release.fingerprint,
+                source_ids=list(current.source_ids),
+                status="running",
+                checkpoint_sha256=_ZERO,
+                created_at=now,
+                updated_at=now,
+            ),
+            root=root,
+        )
     sources: list[CampaignSourceRun] = []
     changed = False
     for source, item in zip(current.sources, bound, strict=True):
@@ -295,10 +442,17 @@ def resume_campaign(
             and blocker is None
         ):
             sources.append(source)
+            checkpoint = _write_checkpoint_progress(
+                checkpoint,
+                root=root,
+                source_id=None,
+                sources=sources,
+                status="running",
+            )
             continue
         changed = True
-        sources.append(
-            _execute_source(
+        try:
+            refreshed = _execute_source(
                 database,
                 root,
                 source,
@@ -307,8 +461,41 @@ def resume_campaign(
                 language=source.requested_locale or current.language,
                 narration_probe=narration_probe,
             )
+        except Exception as exc:
+            checkpoint = _write_checkpoint_progress(
+                checkpoint,
+                root=root,
+                source_id=source.source_id,
+                sources=sources,
+                status="failed",
+            )
+            raise CampaignError(
+                f"campaign source {source.source_id} failed; resume the execution checkpoint",
+                code="stage_failed",
+            ) from exc
+        sources.append(refreshed)
+        for receipt in stage_receipts(
+            run_id=checkpoint.run_id,
+            source=refreshed,
+            dependency_sha256=checkpoint.release_fingerprint or checkpoint.request_fingerprint,
+        ):
+            append_stage_receipt(root, receipt)
+        checkpoint = _write_checkpoint_progress(
+            checkpoint,
+            root=root,
+            source_id=None,
+            sources=sources,
+            status="running",
         )
     if not changed:
+        checkpoint = _write_checkpoint_progress(
+            checkpoint,
+            root=root,
+            source_id=None,
+            sources=sources,
+            status="succeeded",
+            final_campaign_run_id=current.campaign_run_id,
+        )
         return current
     project_id = current.project_id if current.project_id != "unresolved" else _project_of(bound)
     document = _assemble(current, sources, project_id)
@@ -324,7 +511,30 @@ def resume_campaign(
         replace_job=True,
         promotion_hook=promotion_hook,
     )
+    checkpoint = _write_checkpoint_progress(
+        checkpoint,
+        root=root,
+        source_id=None,
+        sources=sources,
+        status="succeeded" if document.status == "succeeded" else "needs_review",
+        final_campaign_run_id=document.campaign_run_id,
+    )
     return document
+
+
+def resume_campaign(
+    database: Database,
+    work_root: Path,
+    campaign_run_id: str,
+    **kwargs: object,
+) -> CampaignProductionRun:
+    root = work_root.resolve()
+    try:
+        with execution_lock(root):
+            return _resume_campaign_unlocked(database, root, campaign_run_id, **kwargs)  # type: ignore[arg-type]
+    except MediaError as exc:
+        code = "symlink" if "symlink" in str(exc) else "execution_invalid"
+        raise CampaignError(str(exc), code=code) from exc
 
 
 def verify_campaign_run(database: Database, work_root: Path, campaign_run_id: str) -> str:
@@ -496,7 +706,13 @@ def _observe(
         language=language,
         probe=narration_probe,
     )
-    package, package_reason = _package(database, root, binding)
+    package, package_reason = _package(database, root, binding, check_final=False)
+    final_reason = (
+        _final_package_blocker(database, root, binding, package)
+        if package is not None and package_reason is None
+        else None
+    )
+    delivery_reason = package_reason or final_reason
     reviews = _reviews(database, root, binding, package)
     review_decision = reviews.decision
     review_ok = reviews.ok
@@ -511,7 +727,7 @@ def _observe(
             narration=narration,
             narration_enabled=narration_enabled,
             review_ok=review_ok,
-            package_reason=package_reason,
+            package_reason=delivery_reason,
             language=language,
         )
         for stage in STAGES
@@ -536,7 +752,7 @@ def _observe(
             alignment_status=claim if package.alignment_sha256 else "alignment_not_claimed",
             narration_status=narration.reason if narration_enabled else "narration_not_requested",
             qa_status="pass" if package.qa_set_sha256 else "missing",
-            delivery_status="blocked" if package_reason else "succeeded",
+            delivery_status="blocked" if delivery_reason else "succeeded",
         )
     required = [
         item for item in stages if _stage_required(item.stage, narration_enabled=narration_enabled, claim=claim)
@@ -549,12 +765,14 @@ def _observe(
         status, reason = "blocked", "missing_artifact"
     elif not review_ok:
         status, reason = "blocked", reviews.reason
-    elif all(item.status == "succeeded" for item in required):
-        status, reason = "succeeded", "none"
     elif any(item.status == "failed" for item in required):
         status, reason = "failed", next(item.reason_code for item in required if item.status == "failed")
     elif any(item.status == "blocked" for item in required):
         status, reason = "blocked", next(item.reason_code for item in required if item.status == "blocked")
+    elif final_reason:
+        status, reason = "blocked", final_reason
+    elif all(item.status == "succeeded" for item in required):
+        status, reason = "succeeded", "none"
     else:
         status, reason = "partial", "stage_incomplete"
     hero_id = _artifact_id(database, binding, "hero_draft_set_json")
@@ -947,7 +1165,9 @@ def _project_of(bound: list[_Bound]) -> str:
     return "unresolved"
 
 
-def _package(database: Database, root: Path, binding: SourceBinding) -> tuple[_Package | None, str | None]:
+def _package(
+    database: Database, root: Path, binding: SourceBinding, *, check_final: bool = True
+) -> tuple[_Package | None, str | None]:
     row = _artifact_row(database, binding, "publish_package_json")
     if row is None:
         return None, "delivery_missing"
@@ -987,7 +1207,37 @@ def _package(database: Database, root: Path, binding: SourceBinding) -> tuple[_P
         return built, reason
     if producer:
         return built, producer
-    from clipforge.review.final_gate import package_blocker
+    return built, _final_package_blocker(database, root, binding, built) if check_final else None
+
+
+def _final_package_blocker(
+    database: Database, root: Path, binding: SourceBinding, built: _Package
+) -> str | None:
+    """One shared approval gate after underlying package facts are checked."""
+    from clipforge.publish.preflight import preflight_delivery
+    from clipforge.review.final_gate import evidence_for_facts, package_blocker
+
+    # Rebuild the current delivery evidence before accepting a campaign cache
+    # hit when this is a full Advanced Hero package. Older campaign fixtures
+    # intentionally exercise the aggregate runner without an Advanced plan;
+    # preserve their existing package checks until that plan exists.
+    current_evidence: dict[str, str] | None = None
+    advanced_plan_path = SourceWorkspace(root, binding.project_id, binding.source_asset_id).advanced_plan_file(
+        built.candidate_id
+    )
+    if advanced_plan_path.is_file() and not advanced_plan_path.is_symlink():
+        try:
+            facts = preflight_delivery(
+                database,
+                root,
+                binding.source_asset_id,
+                built.candidate_id,
+                probe=False,
+                require_final=True,
+            )
+        except PublishError as exc:
+            return exc.category
+        current_evidence = evidence_for_facts(facts)
 
     advanced_id = built.advanced_artifact_id or ""
     blocked = package_blocker(
@@ -999,8 +1249,9 @@ def _package(database: Database, root: Path, binding: SourceBinding) -> tuple[_P
         qa_set_sha256=built.qa_set_sha256,
         source_sha256=binding.source_sha256,
         delivery_manifest_sha256=built.manifest_sha256,
+        current_evidence=current_evidence,
     )
-    return built, blocked
+    return blocked
 
 
 def _files_sha256(document: object) -> str:
@@ -1524,6 +1775,83 @@ def _assemble(
         }
     )
     return document.model_copy(update={"fingerprint": _evidence_fingerprint(document)})
+
+
+def _write_checkpoint_progress(
+    checkpoint: ProductionExecutionCheckpoint,
+    *,
+    root: Path,
+    source_id: str | None,
+    sources: list[CampaignSourceRun],
+    status: str,
+    final_campaign_run_id: str | None = None,
+) -> ProductionExecutionCheckpoint:
+    """Persist source and stage progress after each bounded controller step."""
+    receipts = list(checkpoint.stage_receipts)
+    known = {
+        (item.source_id, item.stage, item.status, item.output_artifact_id, item.output_sha256)
+        for item in receipts
+    }
+    for source in sources:
+        for receipt in stage_receipts(
+            run_id=checkpoint.run_id,
+            source=source,
+            dependency_sha256=checkpoint.release_fingerprint or checkpoint.request_fingerprint,
+        ):
+            key = (
+                receipt.source_id,
+                receipt.stage,
+                receipt.status,
+                receipt.output_artifact_id,
+                receipt.output_sha256,
+            )
+            if key not in known:
+                receipts.append(receipt)
+                known.add(key)
+    completed = sorted({source.source_id for source in sources if source.status == "succeeded"})
+    updated = checkpoint.model_copy(
+        update={
+            "completed_source_ids": completed,
+            "sources": list(sources),
+            "stage_receipts": receipts,
+            "status": status,
+            "current_source_id": source_id,
+            "final_campaign_run_id": final_campaign_run_id,
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    written, _ = write_checkpoint(updated, root=root)
+    return written
+
+
+def _checkpoint_source_reusable(
+    database: Database,
+    root: Path,
+    planned: CampaignProductionRun,
+    source: CampaignSourceRun,
+    bound: _Bound,
+) -> bool:
+    """Reuse a completed source only after the normal evidence verifier passes."""
+    if source.status != "succeeded" or bound.binding is None:
+        return False
+    if source.source_sha256 != bound.binding.source_sha256:
+        return False
+    candidate_document = planned.model_copy(
+        update={
+            "campaign_run_id": f"checkpoint-{source.source_id}",
+            "project_id": bound.binding.project_id,
+            "source_ids": [source.source_id],
+            "sources": [source],
+            "completed_at": planned.created_at,
+            "status": "succeeded",
+            "reason_code": "checkpoint_reuse",
+        }
+    )
+    try:
+        _verify_source(database, root, candidate_document, source, bound)
+    except CampaignError:
+        return False
+    return True
 
 
 def _roll_up(sources: list[CampaignSourceRun]) -> tuple[RunStatus, str]:
@@ -2107,7 +2435,7 @@ def _verify_source(
         raise CampaignError("campaign source no longer matches the run", code=code)
     if source.delivery_id is None or source.delivery_manifest_sha256 is None:
         raise CampaignError("campaign delivery evidence is missing", code="delivery_missing")
-    package, package_reason = _package(database, root, bound.binding)
+    package, package_reason = _package(database, root, bound.binding, check_final=False)
     if package_reason or package is None:
         raise CampaignError("delivery package is not intact", code=package_reason or "delivery_missing")
     align = next(item for item in source.stages if item.stage == "align")
@@ -2174,6 +2502,11 @@ def _verify_source(
             raise CampaignError("campaign artifact is not a local file", code=reason)
         if digest != stage.artifact_sha256:
             raise CampaignError("campaign artifact hash changed", code=_change_code(stage.stage))
+    # Preserve the most specific underlying stale-evidence reason before the
+    # aggregate approval digest. This still runs on every successful verify.
+    final_problem = _final_package_blocker(database, root, bound.binding, package)
+    if final_problem:
+        raise CampaignError("campaign final approval is not current", code=final_problem)
 
 
 def _verify_narration(

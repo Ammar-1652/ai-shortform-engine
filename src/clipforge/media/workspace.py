@@ -145,11 +145,21 @@ class SourceWorkspace:
     def advanced_root(self) -> Path:
         return _join(self.source_root, "advanced-hero")
 
+    def advanced_review_root(self) -> Path:
+        """Storage namespace for review-only Advanced drafts."""
+        return _join(self.advanced_root(), "review-drafts")
+
     def advanced_run_dir(self, advanced_set_id: str) -> Path:
         return _join(self.advanced_root(), "runs", _segment(advanced_set_id))
 
+    def advanced_review_run_dir(self, advanced_set_id: str) -> Path:
+        return _join(self.advanced_review_root(), "runs", _segment(advanced_set_id))
+
     def advanced_sidecar(self) -> Path:
         return self.metadata_file("advanced-hero.recipe.json")
+
+    def advanced_review_sidecar(self) -> Path:
+        return self.metadata_file("advanced-hero-review.recipe.json")
 
     def advanced_lock_path(self) -> Path:
         return _join(self.source_root, "tmp", "advanced-hero.lock")
@@ -162,6 +172,53 @@ class SourceWorkspace:
 
     def advanced_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "plan.json")
+
+    def advanced_review_plan_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "plan.json")
+
+    def advanced_alignment_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "alignment.json")
+
+    def advanced_review_alignment_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "alignment.json")
+
+    def advanced_arc_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "editorial-arc.json")
+
+    def advanced_review_arc_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "editorial-arc.json")
+
+    def direction_file(self, candidate_id: str) -> Path:
+        """Validated editorial direction for one promoted candidate."""
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "direction.json")
+
+    def advanced_pilot_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_root(), "plans", _segment(candidate_id), "pilot.json")
+
+    def advanced_review_pilot_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "pilot.json")
+
+    def advanced_review_direction_file(self, candidate_id: str) -> Path:
+        return _join(self.advanced_review_root(), "plans", _segment(candidate_id), "direction.json")
+
+    def treatment_evidence_file(self, candidate_id: str, direction_sha256: str = "") -> Path:
+        suffix = f"-{direction_sha256[:16]}" if direction_sha256 else ""
+        return _join(
+            self.advanced_root(),
+            "plans",
+            _segment(candidate_id),
+            f"treatment-evidence{suffix}.json",
+        )
+
+    def advanced_review_treatment_evidence_file(self, candidate_id: str, direction_sha256: str = "") -> Path:
+        """Immutable treatment evidence for an unapproved review draft."""
+        suffix = f"-{direction_sha256[:16]}" if direction_sha256 else ""
+        return _join(
+            self.advanced_review_root(),
+            "plans",
+            _segment(candidate_id),
+            f"treatment-evidence{suffix}.json",
+        )
 
     def reframe_plan_file(self, candidate_id: str) -> Path:
         return _join(self.advanced_root(), "plans", _segment(candidate_id), "reframe.json")
@@ -194,6 +251,12 @@ class SourceWorkspace:
         _mkdir_contained(root, path.parent)
         return path
 
+    def prepare_advanced_review_file(self, path: Path) -> Path:
+        root = self.root.resolve()
+        _mkdir_contained(root, self.advanced_review_root())
+        _mkdir_contained(root, path.parent)
+        return path
+
     def make_advanced_run(self, advanced_set_id: str) -> Path:
         self.ensure()
         root = self.root.resolve()
@@ -204,6 +267,23 @@ class SourceWorkspace:
             raise MediaError(
                 f"advanced Hero run {advanced_set_id} already exists. "
                 "A new run uses a new id and does not overwrite an existing run."
+            )
+        _mkdir_contained(root, run)
+        _mkdir_contained(root, _join(run, "logs"))
+        _mkdir_contained(root, _join(run, "candidates"))
+        _mkdir_contained(root, _join(run, "staging"))
+        return run
+
+    def make_advanced_review_run(self, advanced_set_id: str) -> Path:
+        self.ensure()
+        root = self.root.resolve()
+        _mkdir_contained(root, self.advanced_review_root())
+        _mkdir_contained(root, _join(self.advanced_review_root(), "runs"))
+        run = self.advanced_review_run_dir(advanced_set_id)
+        if run.exists() or run.is_symlink():
+            raise MediaError(
+                f"advanced review run {advanced_set_id} already exists. "
+                "A new review run uses a new id and does not overwrite an existing run."
             )
         _mkdir_contained(root, run)
         _mkdir_contained(root, _join(run, "logs"))

@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "description": "A guidance, style, or recipe candidate that was rejected.",
+  "properties": {
+    "kind": {
+      "enum": [
+        "guidance",
+        "pattern",
+        "style",
+        "motion",
+        "asset",
+        "audio"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "priority_rule": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Priority Rule",
+      "type": "string"
+    },
+    "reason": {
+      "maxLength": 700,
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "record_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "record_id",
+    "kind",
+    "reason",
+    "priority_rule"
+  ],
+  "title": "DecisionAlternative",
+  "type": "object"
+}

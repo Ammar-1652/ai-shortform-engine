@@ -1,0 +1,110 @@
+{
+  "additionalProperties": false,
+  "description": "A reviewed source for a normalized motion recipe.",
+  "properties": {
+    "attribution": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attribution"
+    },
+    "captured_at": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Captured At",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "license_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "License Id"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "maxLength": 1000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Notes"
+    },
+    "permission": {
+      "enum": [
+        "reference_only",
+        "reuse_allowed",
+        "blocked"
+      ],
+      "title": "Permission",
+      "type": "string"
+    },
+    "reference_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Reference Id",
+      "type": "string"
+    },
+    "reference_kind": {
+      "enum": [
+        "repository_recipe",
+        "skill_guidance",
+        "local_component",
+        "reference_video"
+      ],
+      "title": "Reference Kind",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 180,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "reference_id",
+    "source_id",
+    "title",
+    "reference_kind",
+    "permission",
+    "content_sha256",
+    "captured_at"
+  ],
+  "title": "MotionReference",
+  "type": "object"
+}

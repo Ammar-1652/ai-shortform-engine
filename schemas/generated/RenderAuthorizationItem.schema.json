@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "One service-issued composition input accepted by the renderer.",
+  "properties": {
+    "candidate_id": {
+      "description": "Stable id. UUID text is the usual value.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "input_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "output_relative_path": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Output Relative Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "staged_sha256": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Staged Sha256",
+      "type": "object"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "input_sha256",
+    "output_relative_path",
+    "staged_sha256"
+  ],
+  "title": "RenderAuthorizationItem",
+  "type": "object"
+}

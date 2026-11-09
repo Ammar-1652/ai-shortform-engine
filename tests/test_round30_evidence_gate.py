@@ -32,7 +32,7 @@ def test_removed_speech_root_invalidates_campaign_verification(
     assert first.status == "succeeded"
     package = world.work / "deliveries" / "delivery-before" / "manifest.json"
     before = package.read_bytes()
-    monkeypatch.delenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", raising=False)
+    monkeypatch.setenv("CLIPFORGE_SPEECH_EVIDENCE_ROOT", str(tmp_path / "missing-evidence"))
     with pytest.raises(CampaignError) as blocked:
         verify_campaign_run(world.database, world.work, first.campaign_run_id)
     assert blocked.value.code == "speech_evidence_missing"

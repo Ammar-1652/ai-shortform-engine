@@ -164,11 +164,13 @@ def speech_catalog_path() -> Path:
 
 
 def speech_evidence_root() -> Path | None:
-    """External directory named by CLIPFORGE_SPEECH_EVIDENCE_ROOT, if it is a real directory."""
+    """Locate external evidence without substituting for an explicit override.
+
+    Discovery selects a directory only. The provider still measures its WAV
+    bytes, catalog binding and model identity before granting live status.
+    """
     raw = os.environ.get("CLIPFORGE_SPEECH_EVIDENCE_ROOT", "").strip()
-    if not raw:
-        return None
-    root = Path(raw)
+    root = Path(raw) if raw else Path.home() / ".local" / "clipforge-speech-evidence"
     if not root.is_dir() or root.is_symlink():
         return None
     return root

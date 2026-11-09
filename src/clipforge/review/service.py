@@ -25,6 +25,7 @@ from clipforge.preview.integrity import preview_problems
 from clipforge.preview.service import default_profile
 from clipforge.schemas.governance import ReviewDecision, require_rights_cleared
 from clipforge.schemas.preview import RoughPreviewCacheRecord, RoughPreviewSetDocument
+from clipforge.schemas.roles import WorkflowRole
 from clipforge.storage import (
     Database,
     find_artifact,
@@ -54,6 +55,7 @@ _REQUEST_KEYS = frozenset(
         "candidate_id",
         "decision",
         "reviewer_id",
+        "reviewer_role",
         "notes",
         "automated",
         "subject_kind",
@@ -258,6 +260,7 @@ def record_decision(
     decision: str,
     reviewer_id: str,
     notes: str,
+    reviewer_role: str = WorkflowRole.HUMAN_REVIEWER.value,
 ) -> ReviewDecision:
     """Insert one review row. Previous rows are left untouched."""
     if decision not in DECISIONS:
@@ -280,6 +283,7 @@ def record_decision(
             "subject_kind": "candidate",
             "decision": decision,
             "reviewer_id": reviewer,
+            "reviewer_role": reviewer_role,
             "created_at": datetime.now(UTC),
             "notes": notes,
             "automated": False,
@@ -295,7 +299,7 @@ def record_decision(
     return review
 
 
-def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str]:
+def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str, str]:
     """Reject unknown keys, automated approval, and malformed review bodies."""
     if not isinstance(payload, dict):
         raise MediaError("review body must be a JSON object")
@@ -310,6 +314,12 @@ def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str
     reviewer = payload.get("reviewer_id")
     if not isinstance(reviewer, str):
         raise MediaError("reviewer_id must not be blank")
+    reviewer_role = payload.get("reviewer_role", WorkflowRole.HUMAN_REVIEWER.value)
+    if reviewer_role not in {
+        WorkflowRole.CODEX_OPERATOR.value,
+        WorkflowRole.HUMAN_REVIEWER.value,
+    }:
+        raise MediaError("reviewer_role must be codex_operator or human_reviewer")
     notes = payload.get("notes", "")
     if notes is None:
         notes = ""
@@ -348,7 +358,7 @@ def parse_decision_body(payload: object) -> tuple[DecisionContext, str, str, str
             if not str(getattr(context, key)).strip():
                 raise MediaError(f"{key} is required")
         _require_hero_identifiers(context)
-    return context, decision, reviewer, notes
+    return context, decision, reviewer, notes, reviewer_role
 
 
 def record_hero_decision(
@@ -359,6 +369,7 @@ def record_hero_decision(
     decision: str,
     reviewer_id: str,
     notes: str,
+    reviewer_role: str = WorkflowRole.HUMAN_REVIEWER.value,
 ) -> ReviewDecision:
     """Append one Hero-draft review. It does not publish and it does not replace the rough decision."""
     from clipforge.hero.constants import KIND_HERO
@@ -388,6 +399,7 @@ def record_hero_decision(
                 "subject_kind": "hero",
                 "decision": decision,
                 "reviewer_id": reviewer,
+                "reviewer_role": reviewer_role,
                 "created_at": datetime.now(UTC),
                 "notes": notes,
                 "automated": False,
@@ -467,6 +479,7 @@ def decision_json(review: ReviewDecision) -> dict[str, object]:
         "artifact_id": review.artifact_id,
         "decision": review.decision,
         "reviewer_id": review.reviewer_id,
+        "reviewer_role": review.reviewer_role,
         "created_at": review.created_at.isoformat(),
         "notes": review.notes,
         "automated": False,

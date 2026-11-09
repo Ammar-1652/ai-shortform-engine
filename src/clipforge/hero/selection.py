@@ -20,6 +20,10 @@ def review_digest(review: ReviewDecision) -> str:
         "reviewer_id": review.reviewer_id,
         "subject_kind": review.subject_kind,
     }
+    # Pre-role human reviews retain their recorded digest. Codex editorial
+    # decisions are distinct and cannot be substituted for those approvals.
+    if review.reviewer_role != "human_reviewer":
+        payload["reviewer_role"] = review.reviewer_role
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 

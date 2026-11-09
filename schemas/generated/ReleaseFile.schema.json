@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "relative_path": {
+      "title": "Relative Path",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "relative_path",
+    "sha256",
+    "size_bytes"
+  ],
+  "title": "ReleaseFile",
+  "type": "object"
+}

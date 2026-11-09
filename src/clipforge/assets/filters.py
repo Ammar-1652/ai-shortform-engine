@@ -8,7 +8,9 @@ from clipforge.assets.mcp_client import AssetError
 
 _ITEM_TYPES = {
     "video": "stock-video",
-    "audio": "music",
+    "audio": "sound-effects",
+    "sound_effect": "sound-effects",
+    "font": "fonts",
     "image": "photos",
     "graphic": "graphics",
     "template": "video-templates",
@@ -52,6 +54,14 @@ SUPPORTED_ENVATO_FIELDS: dict[str, dict[str, str]] = {
     "search_music": {
         "min_duration": "min_media_length",
         "max_duration": "max_media_length",
+    },
+    "search_sound_effects": {
+        "category": "categories",
+        "min_duration": "min_media_length",
+        "max_duration": "max_media_length",
+    },
+    "search_fonts": {
+        "category": "categories",
     },
 }
 MAX_PER_PAGE = 5
@@ -197,7 +207,15 @@ def _item_type(filters: dict[str, str]) -> str | None:
     if asset:
         return _ITEM_TYPES.get(asset, asset)
     category = filters.get("category")
-    if category in {"stock-video", "music", "sound-effects", "photos", "graphics", "video-templates"}:
+    if category in {
+        "stock-video",
+        "music",
+        "sound-effects",
+        "fonts",
+        "photos",
+        "graphics",
+        "video-templates",
+    }:
         return category
     return None
 
