@@ -154,7 +154,7 @@ def captions_review(
         alignment = ForcedAlignmentDocument.model_validate_json(alignment_path.read_text(encoding="utf-8"))
         if document.corrections:
             apply_speech_corrections(alignment, document, time_map=hero_plan.edit_plan.time_map)
-        validate_speech_verifications(document, alignment=alignment)
+        validate_speech_verifications(document, alignment=alignment, root=root)
         source_word_ids = {word.word_id for word in alignment.words}
         for verification in document.verifications:
             if not set(verification.source_word_ids) <= source_word_ids:

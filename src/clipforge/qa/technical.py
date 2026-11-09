@@ -450,6 +450,18 @@ def _direction(inputs: TechnicalInputs) -> QACheck:
     """Bind the direction artifact and style recipe into the QA evidence."""
     lines: list[str] = []
     for plan in inputs.plans:
+        if (
+            inputs.document.profile.codex_speech_review_required
+            and inputs.document.profile.renderer_recipe_version != "advanced-hero-renderer-v1"
+            and plan.direction_id
+            and plan.style_id not in {"", "legacy-v1"}
+            and not plan.speech_review_sha256
+        ):
+            return _check(
+                "direction",
+                False,
+                f"candidate={plan.candidate_id} blocker=codex_speech_review_missing",
+            )
         if not plan.direction_id:
             if inputs.document.profile.renderer_recipe_version in {
                 "advanced-hero-renderer-directed-v2",

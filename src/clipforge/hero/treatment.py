@@ -328,21 +328,64 @@ def _visual_evidence(
         and item.output_region is not None
         and _intervals_overlap(item.interval, interval)
     ]
+    motion_graphic_regions = [
+        TreatmentRegion(
+            region_id=f"motion-graphic:{item.graphic_id}",
+            role="motion_graphic",
+            interval=item.interval,
+            x=item.x,
+            y=item.y,
+            width=item.width,
+            height=item.height,
+            source="render_input",
+        )
+        for item in option.motion_graphics
+        if _intervals_overlap(item.interval, interval)
+    ]
+    # Platform chrome changes between applications. Keep both rails explicit
+    # in the geometry evidence so later camera/overlay checks cannot mistake
+    # the central safe band for the whole viewer-visible canvas.
+    platform_rails = [
+        TreatmentRegion(
+            region_id="platform-rail-top",
+            role="platform_rail",
+            interval=interval,
+            x=0,
+            y=0,
+            width=1080,
+            height=270,
+            source="platform_profile",
+        ),
+        TreatmentRegion(
+            region_id="platform-rail-bottom",
+            role="platform_rail",
+            interval=interval,
+            x=0,
+            y=1560,
+            width=1080,
+            height=360,
+            source="platform_profile",
+        ),
+    ]
+    all_regions = [*base_regions, *platform_rails, *native_regions, *broll_regions, *motion_graphic_regions]
     if visual is None or not scene_ids:
         return TreatmentVisualEvidence(
             visual_scene_ids=scene_ids,
-            protected_region_ids=[item.region_id for item in base_regions + native_regions],
+            protected_region_ids=[item.region_id for item in all_regions],
             collision_status="unknown",
             relevance_status="unknown",
-            regions=[*base_regions, *native_regions, *broll_regions],
+            regions=all_regions,
             note="visual geometry was not available for deterministic treatment planning",
         )
     faces = [item for item in visual.face_detection_samples if item.scene_id in scene_ids]
     protected = [
         "platform-safe-region",
         "caption-lane",
+        "platform-rail-top",
+        "platform-rail-bottom",
         *[item.region_id for item in native_regions],
         *[item.region_id for item in broll_regions],
+        *[item.region_id for item in motion_graphic_regions],
     ]
     protected.extend(f"face:{scene_id}" for scene_id in sorted({item.scene_id for item in faces}))
     if not faces:
@@ -351,7 +394,7 @@ def _visual_evidence(
             protected_region_ids=protected,
             collision_status="clear",
             relevance_status="unknown",
-            regions=[*base_regions, *native_regions, *broll_regions],
+            regions=all_regions,
             note="reviewed scenes contain no detected face geometry",
         )
     edge_face = any(
@@ -367,9 +410,7 @@ def _visual_evidence(
         collision_status="blocked" if edge_face else "clear",
         relevance_status="unknown",
         regions=[
-            *base_regions,
-            *native_regions,
-            *broll_regions,
+            *all_regions,
             *[
                 TreatmentRegion(
                     region_id=f"face:{sample.scene_id}",
@@ -400,7 +441,7 @@ def _camera_collides_regions(
     protected = [
         item
         for item in regions
-        if item.role in {"face", "active_subject", "source_text", "logo", "cta", "broll"}
+        if item.role in {"face", "active_subject", "source_text", "logo", "cta", "broll", "motion_graphic"}
     ]
     for event in selected:
         scale_delta = max(event.scale_start_permille, event.scale_end_permille) / 1000 - 1

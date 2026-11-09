@@ -31,6 +31,7 @@ def validate_speech_verifications(
     review: TarteelSpeechReview,
     *,
     alignment: ForcedAlignmentDocument,
+    root: Path | None = None,
 ) -> None:
     """Require every marked sensitive span to match one exact verification.
 
@@ -65,6 +66,16 @@ def validate_speech_verifications(
         if len(matches) != 1:
             raise MediaError(f"sensitive speech interval requires one exact verification: {interval.span_id}")
         verification = matches[0]
+        if verification.snapshot_relative_path:
+            if root is None:
+                raise MediaError("speech verification snapshot validation requires the work root")
+            snapshot = confine_work_path(
+                root.resolve(), verification.snapshot_relative_path, label="speech verification snapshot"
+            )
+            if snapshot.is_symlink() or not snapshot.is_file():
+                raise MediaError("speech verification snapshot must be a regular file")
+            if sha256_file(snapshot) != verification.snapshot_sha256:
+                raise MediaError("speech verification snapshot hash changed")
         if _verified_phrase(verification.expected_text) != _verified_phrase(interval.observed_text):
             raise MediaError(f"sensitive verification text differs from reviewed speech: {interval.span_id}")
         used_verifications.add(verification.verification_id)
@@ -203,6 +214,7 @@ def validate_speech_captions(
     alignment: ForcedAlignmentDocument,
     time_map: TimeMapDocument,
     captions: list[TypographyEvent],
+    root: Path | None = None,
 ) -> None:
     """Prove reviewed audible text is retained and rendered exactly once.
 
@@ -218,7 +230,7 @@ def validate_speech_captions(
         or alignment.time_map_sha256 != digest_time_map(time_map)
     ):
         raise MediaError("speech review differs from alignment identity, audio, locale, or TimeMap")
-    validate_speech_verifications(review, alignment=alignment)
+    validate_speech_verifications(review, alignment=alignment, root=root)
     validate_caption_word_coverage(alignment.words, (word for cue in captions for word in cue.words))
     for cue in captions:
         if _display_phrase(cue.text) != _display_phrase(list(cue.words)):

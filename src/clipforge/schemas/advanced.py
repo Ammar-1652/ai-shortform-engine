@@ -393,6 +393,16 @@ class AdvancedHeroProfile(Versioned):
                 raise ValueError("choose the legacy singular crop or manual_windows, not both")
         elif self.manual_window is not None or self.manual_windows:
             raise ValueError("a manual window is only stored for the manual_window strategy")
+        # The speech-review bypass is an explicit compatibility switch for
+        # immutable v1 artifacts only.  New clean/directed recipes must carry
+        # Codex's source-grounded display-text review before they can be used
+        # for a viewer-facing render.
+        if not self.codex_speech_review_required and self.renderer_recipe_version != (
+            "advanced-hero-renderer-v1"
+        ):
+            raise ValueError(
+                "codex_speech_review_required may be disabled only for the legacy v1 renderer recipe"
+            )
         return self
 
     def fingerprint(self) -> str:

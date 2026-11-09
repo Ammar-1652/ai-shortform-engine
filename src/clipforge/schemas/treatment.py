@@ -35,7 +35,9 @@ TreatmentRegionRole = Literal[
     "logo",
     "cta",
     "platform_safe",
+    "platform_rail",
     "broll",
+    "motion_graphic",
 ]
 
 

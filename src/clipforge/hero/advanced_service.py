@@ -472,7 +472,8 @@ def plan_advanced_candidate(
                 time_map=context.hero_plan.edit_plan.time_map,
             )
         elif (
-            stored_direction is not None
+            active.codex_speech_review_required
+            and stored_direction is not None
             and stored_direction.style_id not in {"", "legacy-v1"}
             and not allow_unapproved
         ):
@@ -619,6 +620,7 @@ def plan_advanced_candidate(
             alignment=canonical_caption_alignment,
             time_map=render_hero_plan.edit_plan.time_map,
             captions=plan.captions,
+            root=root,
         )
         reviewed_captions = apply_speech_review_emojis(
             speech_review,
@@ -786,7 +788,13 @@ def render_advanced_drafts(
                 root,
                 require_hero_approval=not draft_only,
             )
-            _require_plan_binding(database, plan, context, allow_unapproved=draft_only)
+            _require_plan_binding(
+                database,
+                plan,
+                context,
+                profile=active,
+                allow_unapproved=draft_only,
+            )
             _require_plan_assets(database, inputs.pair.workspace, plan, root)
             _require_production_direction(plan, renderer, inputs.pair.workspace, database=database)
         if (
@@ -2709,7 +2717,13 @@ def _reviewed_caption_alignment(plan: AdvancedHeroPlanDocument, context: _Contex
         raise MediaError("advanced plan is stale: reviewed caption alignment changed")
     if retained_recitation(speech[0], plan.time_map) and not plan.quran_review_sha256:
         raise MediaError("retained Quran recitation requires canonical review evidence")
-    validate_speech_captions(speech[0], alignment=alignment, time_map=plan.time_map, captions=plan.captions)
+    validate_speech_captions(
+        speech[0],
+        alignment=alignment,
+        time_map=plan.time_map,
+        captions=plan.captions,
+        root=context.workspace.root,
+    )
     expected_captions = _captions(alignment, plan.candidate_id, style_id=plan.style_id)
     expected_captions = apply_speech_review_emojis(
         speech[0],
@@ -2821,9 +2835,19 @@ def _require_plan_binding(
     plan: AdvancedHeroPlanDocument,
     context: _Context,
     *,
+    profile: AdvancedHeroProfile | None = None,
     allow_unapproved: bool = False,
 ) -> None:
     """Fail closed when the stored plan no longer matches the current producers."""
+    active_profile = profile or default_advanced_profile()
+    if (
+        active_profile.codex_speech_review_required
+        and plan.direction_id
+        and plan.style_id not in {"", "legacy-v1"}
+        and not plan.speech_review_sha256
+        and not allow_unapproved
+    ):
+        raise MediaError("clean Advanced Hero production requires a Codex speech review bound to the plan")
     if plan.reframing_strategy not in {"contain", "center_crop", "face_follow", "manual_window"}:
         strategy = plan.reframing_strategy
         raise MediaError(f"advanced render does not support reframing strategy {strategy}")

@@ -837,6 +837,17 @@ def _plan(
         raise PublishError("advanced plan alignment does not match", category="artifact_changed")
     if plan.profile_fingerprint != document.profile_fingerprint:
         raise PublishError("advanced plan profile does not match", category="artifact_changed")
+    if (
+        document.profile.codex_speech_review_required
+        and document.profile.renderer_recipe_version != "advanced-hero-renderer-v1"
+        and plan.direction_id
+        and plan.style_id not in {"", "legacy-v1"}
+        and not plan.speech_review_sha256
+    ):
+        raise PublishError(
+            "clean Advanced Hero delivery requires a Codex speech review",
+            category="stale_final_review",
+        )
     return plan
 
 

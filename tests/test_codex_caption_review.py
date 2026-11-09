@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from clipforge.campaign.quran import load_codex_speech_review
-from clipforge.campaign.speech import apply_speech_review_emojis
+from clipforge.campaign.speech import apply_speech_review_emojis, validate_speech_verifications
 from clipforge.errors import MediaError
 from clipforge.schemas.advanced import TypographyEvent
 from clipforge.schemas.campaign import (
@@ -99,6 +99,128 @@ def test_sensitive_text_verification_accepts_url_or_snapshot() -> None:
     )
     assert by_url.status == "verified"
     assert by_snapshot.snapshot_sha256 == "d" * 64
+
+
+def test_sensitive_text_verification_rejects_url_fragment() -> None:
+    with pytest.raises(ValueError, match="fragment"):
+        SpeechVerification(
+            verification_id="verification-fragment",
+            subject_kind="quotation",
+            source_word_ids=["word-1"],
+            expected_text="That is the verified quote.",
+            source_url="https://example.test/quote#fragment",
+            note="The fragment is not a stable source identity.",
+        )
+
+
+def test_local_sensitive_snapshot_is_hash_and_root_bound(tmp_path: Path) -> None:
+    snapshot = tmp_path / "evidence" / "quote.txt"
+    snapshot.parent.mkdir()
+    snapshot.write_text("That is the verified quote.\n", encoding="utf-8")
+    import hashlib
+
+    review = _review().model_copy(
+        update={
+            "intervals": [
+                _review()
+                .intervals[0]
+                .model_copy(update={"subject_kind": "quotation", "subject_word_ids": ["word-1"]})
+            ],
+            "verifications": [
+                SpeechVerification(
+                    verification_id="verification-local",
+                    subject_kind="quotation",
+                    source_word_ids=["word-1"],
+                    expected_text="That is exciting! 🤩",
+                    snapshot_relative_path="evidence/quote.txt",
+                    snapshot_sha256=hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                    note="The local snapshot is inside the work root and hash bound.",
+                )
+            ],
+        }
+    )
+    alignment = ForcedAlignmentDocument(
+        alignment_id="alignment-1",
+        project_id="project-1",
+        source_asset_id="source-1",
+        candidate_id="candidate-1",
+        transcript_id="transcript-1",
+        transcript_sha256="c" * 64,
+        asr_audio_sha256="b" * 64,
+        time_map_sha256=digest_time_map(_time_map()),
+        review_id="review-1",
+        review_digest="d" * 64,
+        rough_preview_artifact_id="rough-1",
+        model_name="forced-align-test",
+        whisperx_version="test",
+        device="cpu",
+        config_sha256="e" * 64,
+        words=[
+            AlignedWord(
+                word_id="word-1",
+                candidate_id="candidate-1",
+                text=" That is exciting! 🤩",
+                source_start_us=0,
+                source_end_us=500_000,
+                output_start_us=0,
+                output_end_us=500_000,
+                output_start_frame=0,
+                output_end_frame_exclusive=15,
+            )
+        ],
+        provenance=ArtifactProvenance(
+            created_at=datetime.now(UTC),
+            created_by="test",
+            tool="test",
+            tool_version="1",
+            source_asset_ids=["source-1"],
+        ),
+    )
+    validate_speech_verifications(review, alignment=alignment, root=tmp_path)
+    snapshot.write_text("changed\n", encoding="utf-8")
+    with pytest.raises(MediaError, match="snapshot hash changed"):
+        validate_speech_verifications(review, alignment=alignment, root=tmp_path)
+
+
+def test_generic_review_loader_rejects_changed_snapshot(tmp_path: Path) -> None:
+    import hashlib
+
+    snapshot = tmp_path / "evidence" / "quote.txt"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text("verified\n", encoding="utf-8")
+    review = _review().model_copy(
+        update={
+            "verifications": [
+                SpeechVerification(
+                    verification_id="verification-local",
+                    subject_kind="quotation",
+                    source_word_ids=["word-1"],
+                    expected_text="That is exciting! 🤩",
+                    snapshot_relative_path="evidence/quote.txt",
+                    snapshot_sha256=hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+                    note="local evidence",
+                )
+            ],
+            "intervals": [
+                _review()
+                .intervals[0]
+                .model_copy(update={"subject_kind": "quotation", "subject_word_ids": ["word-1"]})
+            ],
+        }
+    )
+    path = tmp_path / "editorial/speech-reviews/source-1/candidate-1/speech-review.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(review.model_dump_json(), encoding="utf-8")
+    snapshot.write_text("changed\n", encoding="utf-8")
+    with pytest.raises(MediaError, match="snapshot hash changed"):
+        load_codex_speech_review(
+            tmp_path,
+            source_asset_id="source-1",
+            candidate_id="candidate-1",
+            source_sha256="a" * 64,
+            raw_asr_sha256="b" * 64,
+            transcript_sha256="c" * 64,
+        )
 
 
 def test_sensitive_interval_requires_matching_verification() -> None:

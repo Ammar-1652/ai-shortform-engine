@@ -163,7 +163,13 @@ def verify_caption_coverage_report(
             correction_path = _safe(root, output.parent / "arabic-corrections.json")
             if sha256_file(correction_path) != render_input.arabic_corrections_sha256:
                 raise MediaError("caption evidence Arabic corrections are stale")
-        validate_speech_captions(speech, alignment=alignment, time_map=time_map, captions=render_input.captions)
+        validate_speech_captions(
+            speech,
+            alignment=alignment,
+            time_map=time_map,
+            captions=render_input.captions,
+            root=root,
+        )
 
 
 def write_caption_coverage_report(

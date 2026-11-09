@@ -474,6 +474,7 @@ def advanced_pilot(
         _pilot_path,
         _read_model,
         _require_plan_binding,
+        default_advanced_profile,
     )
     from clipforge.media.hashing import sha256_file
     from clipforge.schemas.advanced import AdvancedHeroPlanDocument, advanced_fingerprint
@@ -490,7 +491,13 @@ def advanced_pilot(
         )
         plan_path = _advanced_plan_path(context.workspace, candidate_id, review_only=draft_only)
         plan = _read_model(plan_path, AdvancedHeroPlanDocument, "Advanced Hero plan")
-        _require_plan_binding(database, plan, context, allow_unapproved=draft_only)
+        _require_plan_binding(
+            database,
+            plan,
+            context,
+            profile=default_advanced_profile(),
+            allow_unapproved=draft_only,
+        )
     except (ClipforgeError, ValidationError) as exc:
         _fail(exc)
     plan_digest = advanced_fingerprint(plan.model_dump(mode="json"))

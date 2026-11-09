@@ -60,7 +60,9 @@
             "logo",
             "cta",
             "platform_safe",
-            "broll"
+            "platform_rail",
+            "broll",
+            "motion_graphic"
           ],
           "title": "Role",
           "type": "string"

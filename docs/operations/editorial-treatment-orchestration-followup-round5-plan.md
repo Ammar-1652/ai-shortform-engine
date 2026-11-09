@@ -1,9 +1,9 @@
 # Editorial treatment orchestration follow-up round 5
 
-**Review date:** 2026-11-09  
-**Reviewed head:** `14ffe04b45087663bd23d46539490c7175a89aa8`  
-**Branch:** `round-36-editorial-knowledge-engine`  
-**PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)  
+**Review date:** 2026-11-09
+**Reviewed head:** `14ffe04b45087663bd23d46539490c7175a89aa8`
+**Branch:** `round-36-editorial-knowledge-engine`
+**PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
 **Status:** `REVIEW OPEN — AUTOMATED CHECKS GREEN; IMPLEMENTATION GAPS AND EXTERNAL GATES REMAIN`
 

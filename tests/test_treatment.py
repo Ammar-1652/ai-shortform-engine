@@ -9,7 +9,7 @@ from clipforge.hero.advanced_service import default_advanced_profile
 from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
 from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.schemas.advanced import AudioMixEvent
-from clipforge.schemas.direction import DirectionAssetPlacement
+from clipforge.schemas.direction import DirectionAssetPlacement, DirectionMotionGraphic
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
     BrollTreatmentDecision,
@@ -110,6 +110,33 @@ def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
     )
     assert unrelated.treatment_decisions[0].visual_evidence is not None
     assert unrelated.treatment_decisions[0].visual_evidence.relevance_status == "unrelated"
+
+
+def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:
+    option = _document().options[0]
+    graphic = DirectionMotionGraphic(
+        graphic_id="graphic-1",
+        template="business_identity",
+        interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_evidence_ids=[option.evidence[0].evidence_id],
+        purpose=MotionPurpose.CONCEPT,
+        display_text="verified",
+        x=120,
+        y=420,
+        width=480,
+        height=240,
+    )
+    treated = materialize_treatment(
+        option.model_copy(update={"motion_graphics": [graphic]}),
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+    )
+    evidence = treated.treatment_decisions[0].visual_evidence
+    assert evidence is not None
+    roles = {item.role for item in evidence.regions}
+    assert "motion_graphic" in roles
+    assert "platform_rail" in roles
+    assert "motion-graphic:graphic-1" in evidence.protected_region_ids
 
 
 def test_face_collision_removes_camera_event_from_render_treatment() -> None:

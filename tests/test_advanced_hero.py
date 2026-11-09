@@ -1634,6 +1634,25 @@ def test_profile_disallows_music() -> None:
     assert profile.fingerprint() == again.fingerprint()
 
 
+def test_profile_speech_review_bypass_is_legacy_only() -> None:
+    current = default_advanced_profile()
+    with pytest.raises(ValidationError, match="legacy v1 renderer recipe"):
+        AdvancedHeroProfile.model_validate(
+            {
+                **current.model_dump(mode="json"),
+                "codex_speech_review_required": False,
+            }
+        )
+    legacy = AdvancedHeroProfile.model_validate(
+        {
+            **current.model_dump(mode="json"),
+            "renderer_recipe_version": "advanced-hero-renderer-v1",
+            "codex_speech_review_required": False,
+        }
+    )
+    assert legacy.codex_speech_review_required is False
+
+
 def test_profile_fingerprint_binds_time_map_staging_recipe() -> None:
     current = default_advanced_profile()
     legacy = current.model_copy(update={"staging_recipe_version": "time-map-v1-audio-envelope"})

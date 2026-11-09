@@ -214,6 +214,7 @@ def load_codex_speech_review(
             continue
         if review.reviewer_role != "codex_operator":
             raise MediaError("generic speech review must be recorded by codex_operator")
+        _validate_codex_snapshot_evidence(root, review)
         if source_sha256 and review.source_sha256 != source_sha256:
             raise MediaError("Codex speech review is stale: source hash differs")
         if raw_asr_sha256 and review.raw_asr_sha256 != raw_asr_sha256:
@@ -224,6 +225,23 @@ def load_codex_speech_review(
     if len(matches) > 1:
         raise MediaError(f"multiple Codex speech review sidecars found for {candidate_id}")
     return matches[0] if matches else None
+
+
+def _validate_codex_snapshot_evidence(root: Path, review: TarteelSpeechReview) -> None:
+    """Validate every local generic verification before exposing the review.
+
+    The speech validator also binds a sensitive verification to its aligned
+    words. This loader-level check closes the earlier gap where a review could
+    be loaded with a missing or changed local snapshot before alignment was
+    available.
+    """
+    for verification in review.verifications:
+        if not verification.snapshot_relative_path:
+            continue
+        path = root / verification.snapshot_relative_path
+        _confined_regular_path(root, path)
+        if sha256_file(path) != verification.snapshot_sha256:
+            raise MediaError("Codex speech verification snapshot hash changed")
 
 
 def validate_tarteel_speech_review_ranges(

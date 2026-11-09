@@ -270,6 +270,12 @@ class SpeechVerification(Versioned):
                 raise ValueError("sensitive text verification URL must be a valid http(s) URL")
             if parsed.username or parsed.password or parsed.port is not None:
                 raise ValueError("sensitive text verification URL cannot contain credentials or a custom port")
+            if parsed.fragment:
+                raise ValueError("sensitive text verification URL cannot contain a fragment")
+            if any(character.isspace() or ord(character) < 0x20 for character in self.source_url):
+                raise ValueError(
+                    "sensitive text verification URL cannot contain whitespace or control characters"
+                )
         if bool(self.snapshot_relative_path) != bool(self.snapshot_sha256):
             raise ValueError("sensitive text snapshot path and hash must be supplied together")
         if not self.source_url and not self.snapshot_relative_path:
