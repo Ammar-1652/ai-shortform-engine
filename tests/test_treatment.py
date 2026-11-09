@@ -165,13 +165,17 @@ def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:
 
 
 def test_visual_evidence_uses_measured_source_text_rectangle() -> None:
-    option = _document().options[0].model_copy(
-        update={
-            "evidence": [
-                item.model_copy(update={"visual_scene_ids": ["scene-1"]})
-                for item in _document().options[0].evidence
-            ]
-        }
+    option = (
+        _document()
+        .options[0]
+        .model_copy(
+            update={
+                "evidence": [
+                    item.model_copy(update={"visual_scene_ids": ["scene-1"]})
+                    for item in _document().options[0].evidence
+                ]
+            }
+        )
     )
     native = SourceNativeText(
         region_id="native-1",
