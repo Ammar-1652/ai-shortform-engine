@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `73a0043ff2f61f2ff62270974267ce79af6536ab`
+**Reviewed head:** `2a761a87320c6d11ef18bdfe141ccf65817ca882`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `73a0043ff2f61f2ff62270974267ce79af6536ab`.
+- PR #38 is still draft/open at exact head `2a761a87320c6d11ef18bdfe141ccf65817ca882`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
@@ -248,7 +248,7 @@ registered. A queued job cannot be reported as green.
 1. Register an authorized runner with the required labels and repository
    access, without placing credentials in the repository.
 2. Rerun CI on exact head
-   `73a0043ff2f61f2ff62270974267ce79af6536ab`.
+   `2a761a87320c6d11ef18bdfe141ccf65817ca882`.
 3. Record completed job names and conclusions. If the runner remains absent,
    keep CI status `QUEUED` and the round open.
 
