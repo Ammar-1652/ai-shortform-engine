@@ -84,6 +84,7 @@ def binding_for_direction(direction: DirectionDocument) -> TreatmentAssetBinding
             purpose=MotionPurpose.CONCEPT,
             relevance_note="Reviewed source context",
             asset_tags=["context"],
+                output_region=DirectionPlacementRegion(x=120, y=520, width=720, height=400),
         ),
         acquired,
     )
@@ -102,6 +103,18 @@ def binding_for_direction(direction: DirectionDocument) -> TreatmentAssetBinding
                     relative_path="editorial/treatment-observations/observation-1/frames/frame-000.jpg",
                     sha256="a" * 64,
                     timestamp_us=0,
+                )
+            ],
+            regions=[
+                TreatmentRegion(
+                    region_id="broll:asset-1",
+                    role="broll",
+                    interval=placement.interval,
+                    x=120,
+                    y=520,
+                    width=720,
+                    height=400,
+                    source="render_input",
                 )
             ],
             observed_labels=["context"],
@@ -160,6 +173,22 @@ def test_revision_fulfills_pending_request_without_hand_editing_placement() -> N
     assert all(
         item.dependency_fingerprint == treatment_fingerprint(selected) for item in selected.treatment_decisions
     )
+
+
+def test_revision_rejects_visual_binding_without_final_geometry() -> None:
+    parent = pending_direction()
+    binding = binding_for_direction(parent)
+    assert binding.observation is not None
+    missing_geometry = binding.model_copy(
+        update={"observation": binding.observation.model_copy(update={"regions": []})}
+    )
+    with pytest.raises(MediaError, match="final output geometry"):
+        apply_treatment_bindings(
+            parent,
+            [missing_geometry],
+            parent_direction_sha256="d" * 64,
+            binding_paths=[("binding-1", "editorial/treatment-bindings/binding-1.json", "e" * 64)],
+        )
 
 
 def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence() -> None:

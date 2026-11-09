@@ -79,7 +79,7 @@ def test_treatment_fingerprint_changes_when_camera_changes() -> None:
     assert treatment_fingerprint(treated) != treatment_fingerprint(changed)
 
 
-def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
+def test_broll_relevance_stays_unknown_until_decoded_observation() -> None:
     option = _document().options[0]
     placement = DirectionAssetPlacement(
         placement_id="placement-1",
@@ -99,7 +99,7 @@ def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
         require_asset_selection=False,
     )
     assert related.treatment_decisions[0].visual_evidence is not None
-    assert related.treatment_decisions[0].visual_evidence.relevance_status == "related"
+    assert related.treatment_decisions[0].visual_evidence.relevance_status == "unknown"
     unrelated = materialize_treatment(
         option.model_copy(
             update={"asset_placements": [placement.model_copy(update={"asset_tags": ["ocean"]})]}
@@ -109,7 +109,7 @@ def test_broll_relevance_is_related_or_unrelated_from_reviewed_tags() -> None:
         require_asset_selection=False,
     )
     assert unrelated.treatment_decisions[0].visual_evidence is not None
-    assert unrelated.treatment_decisions[0].visual_evidence.relevance_status == "unrelated"
+    assert unrelated.treatment_decisions[0].visual_evidence.relevance_status == "unknown"
 
 
 def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:

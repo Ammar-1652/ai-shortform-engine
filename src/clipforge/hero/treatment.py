@@ -471,6 +471,15 @@ def _placement_relevance_status(
 ) -> tuple[Literal["related", "unrelated", "unknown"], float | None]:
     if not placements:
         return "unknown", None
+    # Asset catalog tags are discovery metadata. They are not decoded proof
+    # that the selected bytes depict the source-grounded concept. A binding
+    # observation supplies the measured relevance later; until then the
+    # decision remains unknown and cannot pass the treatment policy gate.
+    if any(
+        placement.observation_id is None or not placement.geometry_dependency_sha256
+        for placement in placements
+    ):
+        return "unknown", None
     evidence = {item.evidence_id: item for item in option.evidence}
     source_terms = set(_terms(" ".join(evidence[item].source_text for item in beat.evidence_ids)))
     asset_terms = {term.casefold() for placement in placements for term in placement.asset_tags if term.strip()}

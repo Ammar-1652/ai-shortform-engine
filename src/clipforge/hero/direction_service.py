@@ -142,6 +142,10 @@ def apply_treatment_bindings(
                     raise MediaError(
                         "verified visual treatment binding is missing decoded observation evidence"
                     )
+                if not any(region.role == "broll" for region in observation.regions):
+                    raise MediaError(
+                        "verified visual treatment binding is missing final output geometry"
+                    )
                 evidence = decision.visual_evidence
                 if evidence is None:
                     raise MediaError("visual treatment decision is missing its evidence container")
