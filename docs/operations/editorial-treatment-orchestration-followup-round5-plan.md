@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `3db3e1e684f989c7ec456b2c821e2dbb7157eb24`
+**Reviewed head:** `73a0043ff2f61f2ff62270974267ce79af6536ab`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `df09083dc3a5e965ea33f0b7d6a6bc8b4ae0cc93`.
+- PR #38 is still draft/open at exact head `73a0043ff2f61f2ff62270974267ce79af6536ab`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
@@ -37,7 +37,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 
 ## Round-5 implementation update
 
-Commit `3db3e1e684f989c7ec456b2c821e2dbb7157eb24` (plus its parents
+Commit `73a0043ff2f61f2ff62270974267ce79af6536ab` (plus its parents
 `9cbcfe0`, `55fa31c`, `3008ffe`, and `1cd7888`) implements the code-level corrections that can be
 verified locally:
 
@@ -68,6 +68,11 @@ verified locally:
 - **Source-native text binding strengthened:** new source-native annotations
   may carry the measured post-transform rectangle and dependency hash; legacy
   annotations remain readable with their explicit legacy geometry mode.
+- **Protected-role status strengthened:** every treatment beat records explicit
+  present, reviewed-absent, or unknown states for faces, active subject, source
+  text, logo, CTA, captions, platform rails, B-roll, and motion graphics.
+  Decoded B-roll observations upgrade the B-roll role with their region and
+  evidence ids.
 
 The focused suite for these changes passed, and the exact-head full validation
 passed with **989 Python tests, 2 skips, 18 browser/Remotion tests, and 64
@@ -243,7 +248,7 @@ registered. A queued job cannot be reported as green.
 1. Register an authorized runner with the required labels and repository
    access, without placing credentials in the repository.
 2. Rerun CI on exact head
-   `df09083dc3a5e965ea33f0b7d6a6bc8b4ae0cc93`.
+   `73a0043ff2f61f2ff62270974267ce79af6536ab`.
 3. Record completed job names and conclusions. If the runner remains absent,
    keep CI status `QUEUED` and the round open.
 
