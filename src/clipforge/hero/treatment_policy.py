@@ -51,6 +51,37 @@ def evaluate_treatment_policy(
             findings.append(
                 _error("treatment_collision_blocked", f"visual collision blocks beat {decision.beat_id}")
             )
+        role_state = (
+            next(
+                (item.status for item in evidence.role_evidence if item.role == "broll"),
+                "unknown",
+            )
+            if evidence is not None
+            else "unknown"
+        )
+        if role_state != "present":
+            findings.append(
+                _error("broll_geometry_unproven", f"B-roll geometry is unproven on beat {decision.beat_id}")
+            )
+
+    if option.motion_graphics:
+        graphic_role_states = {
+            item.status
+            for decision in option.treatment_decisions
+            for item in (decision.visual_evidence.role_evidence if decision.visual_evidence else [])
+            if item.role == "motion_graphic"
+        }
+        if graphic_role_states != {"present"}:
+            findings.append(_error("motion_graphic_geometry_unproven", "motion graphic geometry is unproven"))
+    if option.source_native_text_status == "annotated":
+        source_role_states = {
+            item.status
+            for decision in option.treatment_decisions
+            for item in (decision.visual_evidence.role_evidence if decision.visual_evidence else [])
+            if item.role == "source_text"
+        }
+        if source_role_states != {"present"}:
+            findings.append(_error("source_text_geometry_unproven", "source-native text geometry is unproven"))
 
     consecutive = 0
     for decision in option.treatment_decisions:

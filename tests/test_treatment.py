@@ -202,6 +202,51 @@ def test_visual_evidence_uses_measured_source_text_rectangle() -> None:
     assert region.analyzer_version == "source-native-transform-v1"
 
 
+def test_policy_blocks_unknown_motion_graphic_geometry() -> None:
+    option = _document().options[0]
+    graphic = DirectionMotionGraphic(
+        graphic_id="graphic-policy-1",
+        template="business_identity",
+        interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        source_evidence_ids=[option.evidence[0].evidence_id],
+        purpose=MotionPurpose.CONCEPT,
+        display_text="verified",
+        x=120,
+        y=420,
+        width=480,
+        height=240,
+    )
+    treated = materialize_treatment(
+        option.model_copy(update={"motion_graphics": [graphic]}),
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+    )
+    decision = treated.treatment_decisions[0]
+    assert decision.visual_evidence is not None
+    role_evidence = [
+        item.model_copy(update={"status": "unknown", "region_ids": []})
+        if item.role == "motion_graphic"
+        else item
+        for item in decision.visual_evidence.role_evidence
+    ]
+    invalid = treated.model_copy(
+        update={
+            "treatment_decisions": [
+                decision.model_copy(
+                    update={
+                        "visual_evidence": decision.visual_evidence.model_copy(
+                            update={"role_evidence": role_evidence}
+                        )
+                    }
+                ),
+                *treated.treatment_decisions[1:],
+            ]
+        }
+    )
+    findings = evaluate_treatment_policy(invalid, PresetCatalog.load().find("clean_explainer").treatment_policy)
+    assert any(item.code == "motion_graphic_geometry_unproven" for item in findings)
+
+
 def test_face_collision_removes_camera_event_from_render_treatment() -> None:
     option = (
         _document()
