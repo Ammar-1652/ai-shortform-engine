@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `b7a3234f465e96c8134a1c1ebed63c0de8f9b1d0`
+**Reviewed head:** `5b4f44500238b568f7332cd0ef4ad694d3480760`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `b7a3234f465e96c8134a1c1ebed63c0de8f9b1d0`.
+- PR #38 is still draft/open at exact head `5b4f44500238b568f7332cd0ef4ad694d3480760`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
