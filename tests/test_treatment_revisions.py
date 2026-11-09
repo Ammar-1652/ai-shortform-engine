@@ -84,7 +84,7 @@ def binding_for_direction(direction: DirectionDocument) -> TreatmentAssetBinding
             purpose=MotionPurpose.CONCEPT,
             relevance_note="Reviewed source context",
             asset_tags=["context"],
-                output_region=DirectionPlacementRegion(x=120, y=520, width=720, height=400),
+            output_region=DirectionPlacementRegion(x=120, y=520, width=720, height=400),
         ),
         acquired,
     )

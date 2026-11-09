@@ -1,11 +1,11 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `1cd7888a0c7c48257e9dc1883382de3e7652350f`
+**Reviewed head:** `3008ffe6a0a6f11427e739651e78a4ce6ea58c24`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
-**Status:** `REVIEW OPEN — R5-1/R5-2 IMPLEMENTED; R5-3 PARTIALLY IMPLEMENTED; EXTERNAL GATES REMAIN`
+**Status:** `REVIEW OPEN — R5-1/R5-2 IMPLEMENTED; R5-3 CORE GATES IMPLEMENTED; EXTERNAL GATES REMAIN`
 
 This document records the result of a fresh review of the round-4 deep
 implementation. It is a fixing plan for the remaining work; it does not claim
@@ -36,8 +36,8 @@ that round 4 is complete and it does not approve or deliver an artifact.
 
 ## Round-5 implementation update
 
-Commit `1cd7888a0c7c48257e9dc1883382de3e7652350f` implements the first three
-code-level corrections that can be verified locally:
+Commit `3008ffe6a0a6f11427e739651e78a4ce6ea58c24` (plus its parent
+`1cd7888`) implements the code-level corrections that can be verified locally:
 
 - **R5-1 implemented:** generic Codex speech reviews now validate local
   snapshot bytes at load time and at aligned-span validation. Paths are
@@ -55,8 +55,10 @@ code-level corrections that can be verified locally:
   output-space motion-graphic rectangles and explicit top/bottom platform
   rails. Camera collision protection includes authored motion graphics, and
   the geometry is included in the generated treatment schemas and fingerprints.
-  Campaign CTA/logo clearance continues to use the existing decoded
-  `OverlayExclusionEvidence` gate.
+  Catalog tags cannot mark B-roll as related before decoded observation
+  evidence exists, and a verified visual binding without final output geometry
+  is rejected. Campaign CTA/logo clearance continues to use the existing
+  decoded `OverlayExclusionEvidence` gate.
 
 The focused suite for these changes passed, and the exact-head full validation
 passed with **985 Python tests, 2 skips, 18 browser/Remotion tests, and 64
@@ -148,13 +150,15 @@ the hash, and every gate reports the same result.
 
 ### R5-3 — Complete output-space protected-region and relevance evidence
 
-**Status:** geometry is partially implemented in `1cd7888`; the full decoded
-role/relevance acceptance remains open.
+**Status:** core geometry and relevance gates are implemented in `3008ffe`;
+the full decoded role/trajectory acceptance remains open.
 
-The current code now emits motion-graphic and platform-rail rectangles in the
-typed output-space evidence and protects authored graphics during camera
-collision checks. Full decoded active-subject/logo/CTA extrema and a
-frame-backed semantic relevance evaluator still require a follow-up round.
+The current code emits motion-graphic and platform-rail rectangles in the typed
+output-space evidence, protects authored graphics during camera collision
+checks, requires decoded observation evidence before a B-roll decision can be
+related, and rejects visual bindings without final geometry. Full decoded
+active-subject/logo/CTA extrema and a frame-backed semantic relevance evaluator
+still require a follow-up round.
 
 **Fix steps:**
 

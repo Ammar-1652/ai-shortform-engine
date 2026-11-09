@@ -476,8 +476,7 @@ def _placement_relevance_status(
     # observation supplies the measured relevance later; until then the
     # decision remains unknown and cannot pass the treatment policy gate.
     if any(
-        placement.observation_id is None or not placement.geometry_dependency_sha256
-        for placement in placements
+        placement.observation_id is None or not placement.geometry_dependency_sha256 for placement in placements
     ):
         return "unknown", None
     evidence = {item.evidence_id: item for item in option.evidence}
