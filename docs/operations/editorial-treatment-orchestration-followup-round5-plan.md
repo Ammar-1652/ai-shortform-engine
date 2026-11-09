@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `55fa31c71b95b417d084b26703afc7b04850b81a`
+**Reviewed head:** `3db3e1e684f989c7ec456b2c821e2dbb7157eb24`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `d96d7e8f175ba6f220158d2ce6324cb7a0ea4eb6`.
+- PR #38 is still draft/open at exact head `3db3e1e684f989c7ec456b2c821e2dbb7157eb24`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
@@ -37,8 +37,8 @@ that round 4 is complete and it does not approve or deliver an artifact.
 
 ## Round-5 implementation update
 
-Commit `55fa31c71b95b417d084b26703afc7b04850b81a` (plus its parents
-`3008ffe` and `1cd7888`) implements the code-level corrections that can be
+Commit `3db3e1e684f989c7ec456b2c821e2dbb7157eb24` (plus its parents
+`9cbcfe0`, `55fa31c`, `3008ffe`, and `1cd7888`) implements the code-level corrections that can be
 verified locally:
 
 - **R5-1 implemented:** generic Codex speech reviews now validate local
@@ -65,9 +65,12 @@ verified locally:
   version, confidence, transform dependency, and paired sample timestamps and
   frame hashes where the source observation provides them. Malformed evidence
   is rejected before it can enter a treatment bundle.
+- **Source-native text binding strengthened:** new source-native annotations
+  may carry the measured post-transform rectangle and dependency hash; legacy
+  annotations remain readable with their explicit legacy geometry mode.
 
 The focused suite for these changes passed, and the exact-head full validation
-passed with **987 Python tests, 2 skips, 18 browser/Remotion tests, and 64
+passed with **989 Python tests, 2 skips, 18 browser/Remotion tests, and 64
 renderer tests**. No generated schema drift or orphaned render process was
 observed.
 
