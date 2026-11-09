@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `75ff25e03e2eee56f1090cee8a7c8bb6093264f6`
+**Reviewed head:** `55fa31c71b95b417d084b26703afc7b04850b81a`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `88d61414c661a77ef4c5cceb3343560148b62763`.
+- PR #38 is still draft/open at exact head `55fa31c71b95b417d084b26703afc7b04850b81a`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
@@ -37,8 +37,9 @@ that round 4 is complete and it does not approve or deliver an artifact.
 
 ## Round-5 implementation update
 
-Commit `3008ffe6a0a6f11427e739651e78a4ce6ea58c24` (plus its parent
-`1cd7888`) implements the code-level corrections that can be verified locally:
+Commit `55fa31c71b95b417d084b26703afc7b04850b81a` (plus its parents
+`3008ffe` and `1cd7888`) implements the code-level corrections that can be
+verified locally:
 
 - **R5-1 implemented:** generic Codex speech reviews now validate local
   snapshot bytes at load time and at aligned-span validation. Paths are
@@ -60,9 +61,13 @@ Commit `3008ffe6a0a6f11427e739651e78a4ce6ea58c24` (plus its parent
   evidence exists, and a verified visual binding without final output geometry
   is rejected. Campaign CTA/logo clearance continues to use the existing
   decoded `OverlayExclusionEvidence` gate.
+- **Evidence binding strengthened:** output-space regions now carry analyzer
+  version, confidence, transform dependency, and paired sample timestamps and
+  frame hashes where the source observation provides them. Malformed evidence
+  is rejected before it can enter a treatment bundle.
 
 The focused suite for these changes passed, and the exact-head full validation
-passed with **986 Python tests, 2 skips, 18 browser/Remotion tests, and 64
+passed with **987 Python tests, 2 skips, 18 browser/Remotion tests, and 64
 renderer tests**. No generated schema drift or orphaned render process was
 observed.
 
