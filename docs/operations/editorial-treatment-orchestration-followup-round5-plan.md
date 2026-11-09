@@ -28,7 +28,7 @@ that round 4 is complete and it does not approve or deliver an artifact.
 - `final review verify` currently fails with `unsafe_path`; `publish plan`
   fails with `license evidence path escapes the work root`. The source record
   predates the new ingest staging repair and is intentionally immutable.
-- PR #38 is still draft/open at exact head `3db3e1e684f989c7ec456b2c821e2dbb7157eb24`.
+- PR #38 is still draft/open at exact head `df09083dc3a5e965ea33f0b7d6a6bc8b4ae0cc93`.
   Its `verify-python` check is **QUEUED** because
   no registered self-hosted runner with the required labels is available.
 - The owned proof MP4 and decoded evidence exist under the ignored operation
@@ -243,7 +243,7 @@ registered. A queued job cannot be reported as green.
 1. Register an authorized runner with the required labels and repository
    access, without placing credentials in the repository.
 2. Rerun CI on exact head
-   `d96d7e8f175ba6f220158d2ce6324cb7a0ea4eb6`.
+   `df09083dc3a5e965ea33f0b7d6a6bc8b4ae0cc93`.
 3. Record completed job names and conclusions. If the runner remains absent,
    keep CI status `QUEUED` and the round open.
 
