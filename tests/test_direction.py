@@ -17,6 +17,7 @@ from clipforge.schemas.direction import (
     DirectionEvidence,
     DirectionMotionGraphic,
     DirectionOption,
+    DirectionPlacementRegion,
     DirectionTransitionSpec,
     SourceNativeText,
 )
@@ -573,4 +574,16 @@ def test_source_native_text_is_reviewed_and_scene_bound() -> None:
     with pytest.raises(ValidationError, match="requires annotations"):
         DirectionOption.model_validate(
             {**document.options[1].model_dump(mode="json"), "source_native_text_status": "annotated"}
+        )
+
+
+def test_measured_source_native_text_requires_geometry_dependency() -> None:
+    with pytest.raises(ValidationError, match="geometry dependency hash"):
+        SourceNativeText(
+            region_id="native-title-2",
+            interval=OutputInterval(output_start_us=0, output_end_us=900_000),
+            text="The source",
+            visual_scene_ids=["scene-1"],
+            note="Measured post-transform source title.",
+            output_region=DirectionPlacementRegion(x=100, y=300, width=500, height=120),
         )

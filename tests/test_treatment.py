@@ -9,7 +9,12 @@ from clipforge.hero.advanced_service import default_advanced_profile
 from clipforge.hero.treatment import materialize_treatment, summarize_treatment, treatment_fingerprint
 from clipforge.hero.treatment_policy import evaluate_treatment_policy
 from clipforge.schemas.advanced import AudioMixEvent
-from clipforge.schemas.direction import DirectionAssetPlacement, DirectionMotionGraphic
+from clipforge.schemas.direction import (
+    DirectionAssetPlacement,
+    DirectionMotionGraphic,
+    DirectionPlacementRegion,
+    SourceNativeText,
+)
 from clipforge.schemas.editorial import MotionPurpose, OutputInterval
 from clipforge.schemas.treatment import (
     BrollTreatmentDecision,
@@ -157,6 +162,36 @@ def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:
     graphic_region = next(item for item in evidence.regions if item.role == "motion_graphic")
     assert graphic_region.analyzer_version == "remotion-render-input-v1"
     assert graphic_region.confidence == 1.0
+
+
+def test_visual_evidence_uses_measured_source_text_rectangle() -> None:
+    option = _document().options[0].model_copy(
+        update={
+            "evidence": [
+                item.model_copy(update={"visual_scene_ids": ["scene-1"]})
+                for item in _document().options[0].evidence
+            ]
+        }
+    )
+    native = SourceNativeText(
+        region_id="native-1",
+        interval=OutputInterval(output_start_us=0, output_end_us=1_000_000),
+        text="source title",
+        visual_scene_ids=["scene-1"],
+        note="Measured after the portrait transform.",
+        output_region=DirectionPlacementRegion(x=140, y=360, width=600, height=120),
+        geometry_dependency_sha256="f" * 64,
+    )
+    treated = materialize_treatment(
+        option.model_copy(update={"source_native_text": [native]}),
+        _aligned_words(),
+        PresetCatalog.load().find("clean_explainer"),
+    )
+    evidence = treated.treatment_decisions[0].visual_evidence
+    assert evidence is not None
+    region = next(item for item in evidence.regions if item.region_id == "native-1")
+    assert (region.x, region.y, region.width, region.height) == (140, 360, 600, 120)
+    assert region.analyzer_version == "source-native-transform-v1"
 
 
 def test_face_collision_removes_camera_event_from_render_treatment() -> None:

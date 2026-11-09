@@ -418,6 +418,17 @@ class SourceNativeText(Versioned):
     text: str = Field(min_length=1, max_length=200)
     visual_scene_ids: list[EntityId] = Field(min_length=1)
     note: str = Field(min_length=1, max_length=500)
+    # New directed plans may bind the measured post-transform rectangle. The
+    # optional field keeps historical annotations readable while preventing a
+    # renderer from pretending source-space coordinates are final-space facts.
+    output_region: DirectionPlacementRegion | None = None
+    geometry_dependency_sha256: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def measured_region_has_dependency(self) -> Self:
+        if self.output_region is not None and not self.geometry_dependency_sha256:
+            raise ValueError("measured source-native text requires a geometry dependency hash")
+        return self
 
 
 class DirectionOption(Versioned):

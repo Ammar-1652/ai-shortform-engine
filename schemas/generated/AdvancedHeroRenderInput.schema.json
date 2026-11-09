@@ -722,6 +722,50 @@
       "title": "DiagramPayload",
       "type": "object"
     },
+    "DirectionPlacementRegion": {
+      "additionalProperties": false,
+      "description": "Reviewed output-space rectangle for a visual asset placement.",
+      "properties": {
+        "height": {
+          "exclusiveMinimum": 0,
+          "maximum": 1920,
+          "title": "Height",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "width": {
+          "exclusiveMinimum": 0,
+          "maximum": 1080,
+          "title": "Width",
+          "type": "integer"
+        },
+        "x": {
+          "maximum": 1080,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 1920,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "DirectionPlacementRegion",
+      "type": "object"
+    },
     "EmphasisEvent": {
       "additionalProperties": false,
       "description": "One forced word selected by a named rule. Text is copied.",
@@ -1295,6 +1339,12 @@
       "additionalProperties": false,
       "description": "Reviewed text already present in source footage.\n\nThis annotation never paints or removes source pixels. It only gives the\ndeterministic renderer enough evidence to suppress a duplicate optional\ntypography card when the source itself already displays the same phrase.",
       "properties": {
+        "geometry_dependency_sha256": {
+          "default": "",
+          "pattern": "^$|^[0-9a-f]{64}$",
+          "title": "Geometry Dependency Sha256",
+          "type": "string"
+        },
         "interval": {
           "$ref": "#/$defs/OutputInterval"
         },
@@ -1303,6 +1353,17 @@
           "minLength": 1,
           "title": "Note",
           "type": "string"
+        },
+        "output_region": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DirectionPlacementRegion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "region_id": {
           "description": "Stable id. UUID text is the usual value.",

@@ -303,11 +303,16 @@ def _visual_evidence(
             region_id=item.region_id,
             role="source_text",
             interval=item.interval,
-            x=96,
-            y=300,
-            width=824,
-            height=180,
-            source="visual_analysis",
+            x=item.output_region.x if item.output_region is not None else 96,
+            y=item.output_region.y if item.output_region is not None else 300,
+            width=item.output_region.width if item.output_region is not None else 824,
+            height=item.output_region.height if item.output_region is not None else 180,
+            source="render_input" if item.output_region is not None else "visual_analysis",
+            confidence=1.0 if item.output_region is not None else None,
+            analyzer_version=(
+                "source-native-transform-v1" if item.output_region is not None else "source-native-legacy-v1"
+            ),
+            geometry_dependency_sha256=item.geometry_dependency_sha256,
         )
         for item in option.source_native_text
         if any(scene_id in scene_ids for scene_id in item.visual_scene_ids)
