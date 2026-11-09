@@ -147,6 +147,7 @@ from clipforge.schemas.treatment import (
     TreatmentPlanSummary,
     TreatmentPolicyFinding,
     TreatmentRegion,
+    TreatmentRoleEvidence,
     TreatmentVisualEvidence,
 )
 
@@ -270,6 +271,7 @@ __all__ = [
     "TreatmentPolicy",
     "TreatmentPolicyFinding",
     "TreatmentRegion",
+    "TreatmentRoleEvidence",
     "TreatmentVisualEvidence",
     "Versioned",
     "assert_schemas_current",

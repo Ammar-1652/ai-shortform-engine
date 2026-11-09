@@ -235,6 +235,9 @@ def test_visual_observation_region_is_bound_and_propagated_to_collision_evidence
     assert region.x == 120
     assert region.analyzer_version == "ffmpeg-frame-probe-v2"
     assert region.sample_frame_sha256s == ["a" * 64]
+    broll_role = next(item for item in evidence.role_evidence if item.role == "broll")
+    assert broll_role.status == "present"
+    assert broll_role.region_ids == ["broll:asset-1"]
 
 
 @pytest.mark.parametrize("change", ["query_terms", "role", "source_evidence_ids"])

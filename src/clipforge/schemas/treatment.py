@@ -39,6 +39,7 @@ TreatmentRegionRole = Literal[
     "broll",
     "motion_graphic",
 ]
+TreatmentRoleStatus = Literal["present", "absent_reviewed", "unknown"]
 
 
 class TreatmentLayerDecision(Versioned):
@@ -228,6 +229,25 @@ class TreatmentRegion(Versioned):
         return self
 
 
+class TreatmentRoleEvidence(Versioned):
+    """Explicit presence/absence state for every protected visual role."""
+
+    role: TreatmentRegionRole
+    status: TreatmentRoleStatus
+    region_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
+    analyzer_version: str = Field(min_length=1, max_length=80)
+    note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def state_matches_regions(self) -> Self:
+        if self.status == "present" and not self.region_ids:
+            raise ValueError("present treatment role evidence requires region ids")
+        if self.status == "absent_reviewed" and self.region_ids:
+            raise ValueError("reviewed-absent treatment role cannot carry region ids")
+        return self
+
+
 class TreatmentObservationFrame(Versioned):
     relative_path: str = Field(pattern=r"^editorial/treatment-observations/[A-Za-z0-9._:/-]+\.jpg$")
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -285,6 +305,7 @@ class TreatmentVisualEvidence(Versioned):
     relevance_threshold: float | None = Field(default=None, ge=0, le=1)
     evidence_ids: list[EntityId] = Field(default_factory=list, max_length=16)
     regions: list[TreatmentRegion] = Field(default_factory=list, max_length=32)
+    role_evidence: list[TreatmentRoleEvidence] = Field(default_factory=list, max_length=16)
     note: str = Field(min_length=1, max_length=500)
 
     @model_validator(mode="after")
@@ -295,6 +316,9 @@ class TreatmentVisualEvidence(Versioned):
             raise ValueError("relevance status requires evidence ids")
         if self.relevance_status != "unknown" and self.relevance_score is None:
             raise ValueError("relevance status requires a numeric relevance score")
+        roles = [item.role for item in self.role_evidence]
+        if len(roles) != len(set(roles)):
+            raise ValueError("treatment role evidence must contain one state per role")
         return self
 
 

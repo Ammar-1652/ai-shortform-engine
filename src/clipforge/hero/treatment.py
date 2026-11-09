@@ -28,6 +28,8 @@ from clipforge.schemas.treatment import (
     TreatmentLayer,
     TreatmentPlanSummary,
     TreatmentRegion,
+    TreatmentRegionRole,
+    TreatmentRoleEvidence,
     TreatmentVisualEvidence,
 )
 from clipforge.schemas.vision import VisualAnalysisDocument
@@ -389,6 +391,7 @@ def _visual_evidence(
             collision_status="unknown",
             relevance_status="unknown",
             regions=all_regions,
+            role_evidence=_role_evidence(option, all_regions, faces_present=False, visual_available=False),
             note="visual geometry was not available for deterministic treatment planning",
         )
     faces = [item for item in visual.face_detection_samples if item.scene_id in scene_ids]
@@ -409,6 +412,7 @@ def _visual_evidence(
             collision_status="clear",
             relevance_status="unknown",
             regions=all_regions,
+            role_evidence=_role_evidence(option, all_regions, faces_present=False, visual_available=True),
             note="reviewed scenes contain no detected face geometry",
         )
     edge_face = any(
@@ -418,67 +422,101 @@ def _visual_evidence(
         or item.bounding_box.y + item.bounding_box.height > 0.88
         for item in faces
     )
+    final_regions = [
+        *all_regions,
+        *[_face_region(sample, visual, interval) for sample in faces],
+    ]
     return TreatmentVisualEvidence(
         visual_scene_ids=scene_ids,
         protected_region_ids=protected,
         collision_status="blocked" if edge_face else "clear",
         relevance_status="unknown",
-        regions=[
-            *all_regions,
-            *[
-                TreatmentRegion(
-                    region_id=f"face:{sample.scene_id}",
-                    role="face",
-                    interval=interval,
-                    x=round(sample.bounding_box.x * 1080),
-                    y=round(sample.bounding_box.y * 1920),
-                    width=max(1, round(sample.bounding_box.width * 1080)),
-                    height=max(1, round(sample.bounding_box.height * 1920)),
-                    source="visual_analysis",
-                    sample_timestamps_us=(
-                        [sample.timestamp_us]
-                        if next(
-                            (
-                                frame
-                                for frame in visual.frame_evidence
-                                if frame.scene_id == sample.scene_id
-                                and frame.actual_timestamp_us == sample.timestamp_us
-                            ),
-                            None,
-                        )
-                        is not None
-                        else []
-                    ),
-                    sample_frame_sha256s=(
-                        [
-                            next(
-                                frame.sha256
-                                for frame in visual.frame_evidence
-                                if frame.scene_id == sample.scene_id
-                                and frame.actual_timestamp_us == sample.timestamp_us
-                            )
-                        ]
-                        if any(
-                            frame.scene_id == sample.scene_id
-                            and frame.actual_timestamp_us == sample.timestamp_us
-                            for frame in visual.frame_evidence
-                        )
-                        else []
-                    ),
-                    confidence=sample.confidence,
-                    analyzer_version="visual-analysis-face-v1",
-                    geometry_dependency_sha256=hashlib.sha256(
-                        f"{sample.detection_id}:{sample.timestamp_us}:{sample.bounding_box.model_dump_json()}".encode()
-                    ).hexdigest(),
-                )
-                for sample in faces
-            ],
-        ],
+        regions=final_regions,
+        role_evidence=_role_evidence(option, final_regions, faces_present=True, visual_available=True),
         note=(
             "face geometry is too close to a frame edge for a bounded camera move"
             if edge_face
             else "face geometry remains inside the camera protection envelope"
         ),
+    )
+
+
+def _role_evidence(
+    option: DirectionOption,
+    regions: Sequence[TreatmentRegion],
+    *,
+    faces_present: bool,
+    visual_available: bool,
+) -> list[TreatmentRoleEvidence]:
+    """Make absence and uncertainty explicit instead of inferring from empty lists."""
+    by_role: dict[str, list[str]] = {}
+    for region in regions:
+        by_role.setdefault(region.role, []).append(region.region_id)
+
+    def state(role: TreatmentRegionRole, *, absent: bool = False) -> TreatmentRoleEvidence:
+        ids = by_role.get(role, [])
+        if ids:
+            return TreatmentRoleEvidence(
+                role=role,
+                status="present",
+                region_ids=ids,
+                analyzer_version="treatment-region-v1",
+                note="measured output-space regions are present",
+            )
+        if absent:
+            return TreatmentRoleEvidence(
+                role=role,
+                status="absent_reviewed",
+                analyzer_version="treatment-policy-v1",
+                note="the selected direction contains no layer for this role",
+            )
+        return TreatmentRoleEvidence(
+            role=role,
+            status="unknown",
+            analyzer_version="treatment-review-required-v1",
+            note="the role has not been measured for this beat",
+        )
+
+    source_text_absent = option.source_native_text_status == "reviewed_absent"
+    return [
+        state("face", absent=visual_available and not faces_present),
+        state("active_subject"),
+        state("source_text", absent=source_text_absent),
+        state("logo"),
+        state("cta"),
+        state("caption"),
+        state("platform_safe"),
+        state("platform_rail"),
+        state("broll", absent=not any(item.kind == "graphic" for item in option.asset_placements)),
+        state("motion_graphic", absent=not option.motion_graphics),
+    ]
+
+
+def _face_region(sample: Any, visual: VisualAnalysisDocument, interval: OutputInterval) -> TreatmentRegion:
+    frame = next(
+        (
+            item
+            for item in visual.frame_evidence
+            if item.scene_id == sample.scene_id and item.actual_timestamp_us == sample.timestamp_us
+        ),
+        None,
+    )
+    return TreatmentRegion(
+        region_id=f"face:{sample.scene_id}",
+        role="face",
+        interval=interval,
+        x=round(sample.bounding_box.x * 1080),
+        y=round(sample.bounding_box.y * 1920),
+        width=max(1, round(sample.bounding_box.width * 1080)),
+        height=max(1, round(sample.bounding_box.height * 1920)),
+        source="visual_analysis",
+        sample_timestamps_us=[sample.timestamp_us] if frame is not None else [],
+        sample_frame_sha256s=[frame.sha256] if frame is not None else [],
+        confidence=sample.confidence,
+        analyzer_version="visual-analysis-face-v1",
+        geometry_dependency_sha256=hashlib.sha256(
+            f"{sample.detection_id}:{sample.timestamp_us}:{sample.bounding_box.model_dump_json()}".encode()
+        ).hexdigest(),
     )
 
 

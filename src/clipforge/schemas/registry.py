@@ -343,6 +343,7 @@ from clipforge.schemas.treatment import (
     TreatmentPlanSummary,
     TreatmentPolicyFinding,
     TreatmentRegion,
+    TreatmentRoleEvidence,
     TreatmentVisualEvidence,
 )
 from clipforge.schemas.vision import (
@@ -543,6 +544,7 @@ CONTRACT_MODELS: tuple[type[BaseModel], ...] = (
     TreatmentEvidenceBundle,
     TreatmentPolicyFinding,
     TreatmentRegion,
+    TreatmentRoleEvidence,
     TreatmentVisualEvidence,
     TreatmentAssetRequest,
     TransitionTreatmentDecision,

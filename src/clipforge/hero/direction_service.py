@@ -32,6 +32,7 @@ from clipforge.schemas.direction import (
 from clipforge.schemas.editorial_knowledge import EditorialDecisionTrace
 from clipforge.schemas.hero import AlignedWord
 from clipforge.schemas.time import TimeMapDocument
+from clipforge.schemas.treatment import TreatmentRoleEvidence
 from clipforge.storage import Database
 from clipforge.transcription.io import publish_json
 
@@ -161,6 +162,45 @@ def apply_treatment_bindings(
                         "relevance_threshold": observation.relevance_threshold,
                         "evidence_ids": sorted(set([*evidence.evidence_ids, *observation.source_evidence_ids])),
                         "regions": list(evidence_regions.values()),
+                        "role_evidence": [
+                            (
+                                item.model_copy(
+                                    update={
+                                        "status": "present",
+                                        "region_ids": sorted(
+                                            {
+                                                *item.region_ids,
+                                                *[
+                                                    region.region_id
+                                                    for region in observation.regions
+                                                    if region.role == "broll"
+                                                ],
+                                            }
+                                        ),
+                                        "evidence_ids": sorted(
+                                            {*item.evidence_ids, *observation.source_evidence_ids}
+                                        ),
+                                        "analyzer_version": observation.analyzer_version,
+                                        "note": "decoded observation supplied final output geometry",
+                                    }
+                                )
+                                if item.role == "broll"
+                                else item
+                            )
+                            for item in evidence.role_evidence
+                        ]
+                        or [
+                            TreatmentRoleEvidence(
+                                role="broll",
+                                status="present",
+                                region_ids=[
+                                    region.region_id for region in observation.regions if region.role == "broll"
+                                ],
+                                evidence_ids=observation.source_evidence_ids,
+                                analyzer_version=observation.analyzer_version,
+                                note="decoded observation supplied final output geometry",
+                            )
+                        ],
                         "note": (
                             "Decoded observation matched the selected asset to the source-grounded beat; "
                             f"reviewed by {observation.reviewed_by}."

@@ -162,6 +162,10 @@ def test_visual_evidence_protects_motion_graphics_and_platform_rails() -> None:
     graphic_region = next(item for item in evidence.regions if item.role == "motion_graphic")
     assert graphic_region.analyzer_version == "remotion-render-input-v1"
     assert graphic_region.confidence == 1.0
+    role_states = {item.role: item.status for item in evidence.role_evidence}
+    assert role_states["motion_graphic"] == "present"
+    assert role_states["logo"] == "unknown"
+    assert role_states["cta"] == "unknown"
 
 
 def test_visual_evidence_uses_measured_source_text_rectangle() -> None:

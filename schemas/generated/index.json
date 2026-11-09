@@ -162,6 +162,7 @@
     "TreatmentEvidenceBundle",
     "TreatmentPolicyFinding",
     "TreatmentRegion",
+    "TreatmentRoleEvidence",
     "TreatmentVisualEvidence",
     "TreatmentAssetRequest",
     "TransitionTreatmentDecision",
