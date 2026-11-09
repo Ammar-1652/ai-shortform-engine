@@ -1,7 +1,7 @@
 # Editorial treatment orchestration follow-up round 5
 
 **Review date:** 2026-11-09
-**Reviewed head:** `3008ffe6a0a6f11427e739651e78a4ce6ea58c24`
+**Reviewed head:** `75ff25e03e2eee56f1090cee8a7c8bb6093264f6`
 **Branch:** `round-36-editorial-knowledge-engine`
 **PR:** [#38](https://github.com/Ammar-1652/ai-shortform-engine/pull/38)
 **Base:** `origin/main` as recorded by the branch  
@@ -61,7 +61,7 @@ Commit `3008ffe6a0a6f11427e739651e78a4ce6ea58c24` (plus its parent
   decoded `OverlayExclusionEvidence` gate.
 
 The focused suite for these changes passed, and the exact-head full validation
-passed with **985 Python tests, 2 skips, 18 browser/Remotion tests, and 64
+passed with **986 Python tests, 2 skips, 18 browser/Remotion tests, and 64
 renderer tests**. No generated schema drift or orphaned render process was
 observed.
 
